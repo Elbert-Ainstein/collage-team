@@ -1,4 +1,6 @@
-import { useNavigate } from "react-router-dom";
+"use client";
+
+import { useRouter } from "next/navigation";
 import { useStore } from "@/store";
 import { Icon } from "@/components";
 import type { Role } from "@/types";
@@ -6,11 +8,11 @@ import type { Role } from "@/types";
 export function RoleRail() {
   const role = useStore((s) => s.role);
   const setRole = useStore((s) => s.setRole);
-  const navigate = useNavigate();
+  const router = useRouter();
 
   function switchTo(next: Role) {
     setRole(next);
-    navigate(next === "instructor" ? "/i/dashboard" : "/s/activities");
+    router.push(next === "instructor" ? "/i/dashboard" : "/s/activities");
   }
 
   return (

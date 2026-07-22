@@ -1,5 +1,6 @@
-import { useNavigate } from "react-router-dom";
-import "./student.css";
+"use client";
+
+import { useRouter } from "next/navigation";
 import { useStore } from "@/store";
 import { Icon, PageHeader, Panel, StatusBadge } from "@/components";
 import { STAGE_META } from "@/components/StageChip";
@@ -16,7 +17,7 @@ function currentStage(a: Activity): Stage {
 
 export function MyActivities() {
   const activities = useStore((s) => s.activities);
-  const navigate = useNavigate();
+  const router = useRouter();
   useStore((s) => s.originals); // reactivity
 
   return (
@@ -32,7 +33,7 @@ export function MyActivities() {
             <Panel key={a.id} pad={false}>
               <button
                 className="activity-card"
-                onClick={() => navigate(isActive ? "/s/prep" : "/s/prep")}
+                onClick={() => router.push(isActive ? "/s/prep" : "/s/prep")}
                 disabled={!isActive}
                 style={{ opacity: isActive ? 1 : 0.6 }}
               >

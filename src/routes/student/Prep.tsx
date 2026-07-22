@@ -1,6 +1,7 @@
+"use client";
+
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import "./student.css";
+import { useRouter } from "next/navigation";
 import { activityById, useStore } from "@/store";
 import { Alert, Button, Icon, PageHeader, Panel, StageChip, StatusBadge, AiBadge } from "@/components";
 import { saveDraftPrep, submitPrep, validatePrep } from "@/services/responseService";
@@ -10,7 +11,7 @@ import { MAYA } from "@/seed";
 import type { Question, Upload } from "@/types";
 
 export function Prep() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const activityId = useStore((s) => s.currentActivityId);
   const activity = useStore((s) => activityById(s, activityId))!;
   const original = useStore((s) => s.originals.find((r) => r.memberId === MAYA.id && r.activityId === activityId));
@@ -46,7 +47,7 @@ export function Prep() {
       flaggedSymbols: result.flaggedSymbols,
     };
     saveDraftPrep(MAYA.id, activityId, answers, up);
-    navigate("/s/ocr");
+    router.push("/s/ocr");
   }
 
   function handleSubmit() {
@@ -57,7 +58,7 @@ export function Prep() {
     }
     try {
       submitPrep(MAYA.id, activityId, answers, upload);
-      navigate("/s/confirm");
+      router.push("/s/confirm");
     } catch (e) {
       if (e instanceof RuleViolation) setError(e.message);
     }
@@ -106,7 +107,7 @@ export function Prep() {
             upload={upload}
             onChange={(v) => update(q.n, v)}
             onUpload={handleUpload}
-            onReviewOcr={() => navigate("/s/ocr")}
+            onReviewOcr={() => router.push("/s/ocr")}
           />
         </Panel>
       ))}
@@ -138,7 +139,7 @@ export function Prep() {
           <span className="lock-note">
             <Icon name="lock" size="sm" /> Original locked · cannot be edited
           </span>
-          <Button variant="primary" iconRight="arrow_forward" onClick={() => navigate("/s/discussion")}>
+          <Button variant="primary" iconRight="arrow_forward" onClick={() => router.push("/s/discussion")}>
             Continue to team stage
           </Button>
         </div>

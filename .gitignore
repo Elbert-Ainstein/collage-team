@@ -1,9 +1,11 @@
 node_modules
-dist
-dist-ssr
+.next
+out
+build
 *.local
 .DS_Store
 coverage
 playwright-report
 test-results
-.vite
+.vercel
+dist

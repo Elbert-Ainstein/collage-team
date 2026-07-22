@@ -1,6 +1,7 @@
-import { useNavigate } from "react-router-dom";
-import "./student.css";
-import "./teamStage.css";
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { memberById, teamOfMember, useStore } from "@/store";
 import { Alert, Avatar, Button, ConfirmationCard, Icon, PageHeader, Panel, StatusBadge } from "@/components";
 import {
@@ -13,13 +14,18 @@ import { canAccessTeamStage } from "@/services/responseService";
 import { MAYA } from "@/seed";
 
 export function Participation() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const activityId = useStore((s) => s.currentActivityId);
   const team = useStore((s) => teamOfMember(s, MAYA.id))!;
   useStore((s) => s.collectives);
+  useStore((s) => s.originals);
+  const gated = !canAccessTeamStage(MAYA.id, activityId);
 
-  if (!canAccessTeamStage(MAYA.id, activityId)) {
-    navigate("/s/prep");
+  useEffect(() => {
+    if (gated) router.push("/s/prep");
+  }, [gated, router]);
+
+  if (gated) {
     return null;
   }
 
@@ -39,7 +45,7 @@ export function Participation() {
           { label: "Shared response", value: <><Icon name="lock" size="sm" /> Locked</> },
         ]}
         actions={
-          <Button variant="primary" onClick={() => navigate("/s/activities")}>
+          <Button variant="primary" onClick={() => router.push("/s/activities")}>
             Back to activities
           </Button>
         }

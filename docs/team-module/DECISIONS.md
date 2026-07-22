@@ -3,6 +3,18 @@
 Where the spec is silent (per §Working agreements), the simplest behavior consistent
 with the §4 hard rules is chosen and recorded here.
 
+## D7 — Framework: Next.js (App Router), client-rendered, still frontend-only
+Migrated from Vite + react-router to **Next.js App Router** at the user's request, keeping
+the app frontend-only (no route handlers, no server data). Routes are file-based under
+`app/` (`i/*` instructor, `s/*` student); `app/layout.tsx` (server) mounts the client
+`AppShell`. Route pages are thin: student pages re-export the client screen as default;
+instructor pages render the `Stub`. Everything interactive is a client component (`"use client"`);
+the store persists to `localStorage`, guarded for SSR (`typeof window` / noop storage on the
+server). Guard redirects (prep gate) use `useEffect` + `router.push`, never during render.
+Vite entry logic (`?reset`, dev store exposure) moved to a client `Boot` component. Dev/prod
+env reads switched from `import.meta.env` to `process.env`. No business-rule or §11 change —
+the services/store/tests are untouched; all 16 rule tests still pass.
+
 ## D1 — Frontend-only build; rules enforced in a client "services" layer
 The kickoff assumed a backend enforcing §11 at the API (403/409). The user scoped this
 to **frontend only**. There is no server, so the `src/services/*` layer plays the API's

@@ -2,7 +2,8 @@
 // TEAM_MODULE_* flag so the classroom beta can hide it cleanly. Flags default
 // OFF for deferred features → they render a real-layout "coming soon" stub.
 //
-// Override in dev via Vite env, e.g. VITE_TEAM_MODULE_ORAL=on
+// To force a flag on for a build, add a static NEXT_PUBLIC_* read below (Next only
+// inlines statically-referenced env vars).
 
 type FlagKey =
   | "TEAM_MODULE_AI_GENERATION"
@@ -21,15 +22,20 @@ const DEFAULTS: Record<FlagKey, boolean> = {
   TEAM_MODULE_PEER_EVAL: false,
 };
 
-function read(key: FlagKey): boolean {
-  const env = import.meta.env?.[`VITE_${key}`];
-  if (env === "on" || env === "true" || env === "1") return true;
-  if (env === "off" || env === "false" || env === "0") return false;
-  return DEFAULTS[key];
+// Static per-flag overrides (extend as the pilot needs to reveal a stub).
+const OVERRIDES: Partial<Record<FlagKey, boolean>> = {
+  TEAM_MODULE_AI_GENERATION: parseFlag(process.env.NEXT_PUBLIC_TEAM_MODULE_AI_GENERATION),
+  TEAM_MODULE_ORAL: parseFlag(process.env.NEXT_PUBLIC_TEAM_MODULE_ORAL),
+};
+
+function parseFlag(v: string | undefined): boolean | undefined {
+  if (v === "on" || v === "true" || v === "1") return true;
+  if (v === "off" || v === "false" || v === "0") return false;
+  return undefined;
 }
 
 export function flag(key: FlagKey): boolean {
-  return read(key);
+  return OVERRIDES[key] ?? DEFAULTS[key];
 }
 
 export type { FlagKey };

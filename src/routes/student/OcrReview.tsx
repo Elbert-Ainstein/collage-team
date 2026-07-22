@@ -1,13 +1,14 @@
+"use client";
+
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import "./student.css";
+import { useRouter } from "next/navigation";
 import { useStore } from "@/store";
 import { Alert, Button, Icon, PageHeader, Panel, AiBadge, StatusBadge } from "@/components";
 import { confirmOcr } from "@/services/responseService";
 import { MAYA } from "@/seed";
 
 export function OcrReview() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const activityId = useStore((s) => s.currentActivityId);
   const original = useStore((s) => s.originals.find((r) => r.memberId === MAYA.id && r.activityId === activityId));
   const upload = original?.upload;
@@ -24,7 +25,7 @@ export function OcrReview() {
 
   function confirm() {
     confirmOcr(MAYA.id, activityId, text);
-    navigate("/s/prep");
+    router.push("/s/prep");
   }
 
   return (
@@ -33,7 +34,7 @@ export function OcrReview() {
         title="Review the transcription"
         subtitle="The original image is always kept — this text is just an interpretation your team can read."
         actions={
-          <Button variant="ghost" icon="arrow_back" onClick={() => navigate("/s/prep")}>
+          <Button variant="ghost" icon="arrow_back" onClick={() => router.push("/s/prep")}>
             Back to prep
           </Button>
         }

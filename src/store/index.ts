@@ -74,7 +74,7 @@ const noopStorage: StateStorage = {
   setItem: () => {},
   removeItem: () => {},
 };
-const isTest = import.meta.env?.MODE === "test";
+const isTest = process.env.NODE_ENV === "test";
 
 export const useStore = create<AppState>()(
   persist(

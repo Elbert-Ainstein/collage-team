@@ -1,7 +1,7 @@
+"use client";
+
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import "./student.css";
-import "./teamStage.css";
+import { useRouter } from "next/navigation";
 import { activityById, useStore } from "@/store";
 import { Alert, Button, ConfirmationCard, Icon, PageHeader, Panel, StatusBadge } from "@/components";
 import { canAccessTeamStage } from "@/services/responseService";
@@ -10,7 +10,7 @@ import { OriginalsRail } from "./OriginalsRail";
 import { MAYA } from "@/seed";
 
 export function IndividualFinal() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const activityId = useStore((s) => s.currentActivityId);
   const activity = useStore((s) => activityById(s, activityId))!;
   useStore((s) => s.individualFinals);
@@ -23,7 +23,7 @@ export function IndividualFinal() {
         <PageHeader title="My final individual response" />
         <Alert variant="warning" icon="lock">
           Submit your individual preparation first.{" "}
-          <a onClick={() => navigate("/s/prep")} style={{ color: "var(--navy)", cursor: "pointer", fontWeight: 600 }}>
+          <a onClick={() => router.push("/s/prep")} style={{ color: "var(--navy)", cursor: "pointer", fontWeight: 600 }}>
             Go to prep →
           </a>
         </Alert>
@@ -42,7 +42,7 @@ export function IndividualFinal() {
           { label: "Grade", value: "Awaiting rubric-based grading" },
         ]}
         actions={
-          <Button variant="primary" onClick={() => navigate("/s/activities")}>
+          <Button variant="primary" onClick={() => router.push("/s/activities")}>
             Back to activities
           </Button>
         }

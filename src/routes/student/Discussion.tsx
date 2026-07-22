@@ -1,7 +1,7 @@
+"use client";
+
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import "./student.css";
-import "./teamStage.css";
+import { useRouter } from "next/navigation";
 import { activityById, memberById, teamOfMember, useStore } from "@/store";
 import { Alert, Avatar, Button, Icon, PageHeader, Panel, SectionLabel, StageChip, StatusBadge, AiBadge } from "@/components";
 import { canAccessTeamStage, getTeammateOriginals } from "@/services/responseService";
@@ -9,7 +9,7 @@ import { MAYA } from "@/seed";
 import type { OriginalResponse, Question } from "@/types";
 
 export function Discussion() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const activityId = useStore((s) => s.currentActivityId);
   const activity = useStore((s) => activityById(s, activityId))!;
   const team = useStore((s) => teamOfMember(s, MAYA.id))!;
@@ -23,7 +23,7 @@ export function Discussion() {
         <PageHeader title="Team discussion" />
         <Alert variant="warning" icon="lock">
           Submit your <strong>individual preparation</strong> before entering the team stage.{" "}
-          <a onClick={() => navigate("/s/prep")} style={{ color: "var(--navy)", cursor: "pointer", fontWeight: 600 }}>
+          <a onClick={() => router.push("/s/prep")} style={{ color: "var(--navy)", cursor: "pointer", fontWeight: 600 }}>
             Go to prep →
           </a>
         </Alert>
@@ -116,7 +116,7 @@ export function Discussion() {
 
       <ModePanel
         mode={activity.mode}
-        onOpen={() => navigate(activity.mode === "COLLECTIVE" ? "/s/collective" : "/s/individual")}
+        onOpen={() => router.push(activity.mode === "COLLECTIVE" ? "/s/collective" : "/s/individual")}
       />
     </>
   );

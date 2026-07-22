@@ -1,4 +1,7 @@
-import { useNavigate } from "react-router-dom";
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { activityById, useStore } from "@/store";
 import { Alert, Button, ConfirmationCard, Icon, StatusBadge } from "@/components";
 import type { ReceiptRow } from "@/components";
@@ -6,13 +9,17 @@ import { getOriginal } from "@/services/responseService";
 import { MAYA } from "@/seed";
 
 export function PrepConfirm() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const activityId = useStore((s) => s.currentActivityId);
   const activity = useStore((s) => activityById(s, activityId))!;
+  useStore((s) => s.originals); // reactivity
   const original = getOriginal(MAYA.id, activityId);
 
+  useEffect(() => {
+    if (!original?.locked) router.push("/s/prep");
+  }, [original?.locked, router]);
+
   if (!original?.locked) {
-    navigate("/s/prep");
     return null;
   }
 
@@ -49,10 +56,10 @@ export function PrepConfirm() {
       receipt={receipt}
       actions={
         <>
-          <Button variant="secondary" onClick={() => navigate("/s/activities")}>
+          <Button variant="secondary" onClick={() => router.push("/s/activities")}>
             Back to activities
           </Button>
-          <Button variant="primary" iconRight="arrow_forward" onClick={() => navigate("/s/discussion")}>
+          <Button variant="primary" iconRight="arrow_forward" onClick={() => router.push("/s/discussion")}>
             Continue to team stage
           </Button>
         </>

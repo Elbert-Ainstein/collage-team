@@ -1,3 +1,5 @@
+"use client";
+
 import { memberById, teamOfMember, useStore } from "@/store";
 import { Avatar, Icon, SectionLabel } from "@/components";
 import { getTeammateOriginals } from "@/services/responseService";

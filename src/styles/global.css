@@ -1,6 +1,11 @@
-/* Design-system entry (fonts, figma tokens, typography, reset) then our bridge. */
+/* Design-system entry (fonts, figma tokens, typography, reset) then our bridge,
+   then all app/component/route styles — imported once here for the Next layout. */
 @import "./ds/styles.css";
 @import "./tokens.css";
+@import "../components/components.css";
+@import "../shell/app.css";
+@import "../routes/student/student.css";
+@import "../routes/student/teamStage.css";
 
 html,
 body,

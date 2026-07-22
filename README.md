@@ -9,12 +9,14 @@ for the backend; a `services/` layer enforces the business rules the way an API 
 [`docs/team-module/DECISIONS.md`](docs/team-module/DECISIONS.md).
 
 ## Stack
-React 18 · TypeScript · Vite · React Router · Zustand · Vitest · Playwright.
+React 18 · TypeScript · **Next.js (App Router)** · Zustand · Vitest · Playwright.
+Client-rendered and frontend-only — no route handlers, no server data (see DECISIONS D7).
 
 ## Run
 ```bash
 npm install
 npm run dev            # http://localhost:5180  (boots into the §9 demo, student role)
+npm run build          # next production build
 npm run test           # rule-enforcement + unit tests (Vitest)
 npm run typecheck
 ```
@@ -28,15 +30,18 @@ npm run typecheck
 
 ## Layout
 ```
+app/          Next App Router route tree (i/* instructor, s/* student) — thin pages
+              that render the screen components; layout.tsx mounts the shell
 src/
-  app/        shell (role rail, sidebar, top bar), router
-  routes/     student/ + instructor/ screens
+  shell/      AppShell + role rail, sidebar, top bar, Boot (client chrome)
+  routes/     student/ + instructor/ screen components
   components/ §8 shared inventory
   services/   rule enforcement (immutability, prep gate, privacy) + mock OCR/AI adapters
-  store/      Zustand store (persisted)
+  store/      Zustand store (persisted to localStorage)
   seed/       §9 seed data
   types/      §3 data model
   flags/      TEAM_MODULE_* feature flags
+  styles/     global.css (imports the _ds design system + all app styles)
 tests/rules/  the priority §11 rule-enforcement suite
 ```
 

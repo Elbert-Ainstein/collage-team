@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useState } from "react";
 import { memberById, teamOfMember, useStore } from "@/store";
 import type { Member } from "@/types";

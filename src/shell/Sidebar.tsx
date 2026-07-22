@@ -1,4 +1,7 @@
-import { NavLink } from "react-router-dom";
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { activityById, useStore } from "@/store";
 import { Avatar, Icon, StatusBadge } from "@/components";
 import { canAccessTeamStage } from "@/services/responseService";
@@ -121,6 +124,7 @@ function StudentNav() {
 }
 
 function NavItem({ entry }: { entry: NavEntry }) {
+  const pathname = usePathname();
   if (entry.locked) {
     return (
       <div className="nav-item nav-item--locked" title={entry.lockReason}>
@@ -130,8 +134,9 @@ function NavItem({ entry }: { entry: NavEntry }) {
       </div>
     );
   }
+  const isActive = pathname === entry.to;
   return (
-    <NavLink to={entry.to} className={({ isActive }) => `nav-item ${isActive ? "nav-item--active" : ""}`}>
+    <Link href={entry.to} className={`nav-item ${isActive ? "nav-item--active" : ""}`}>
       <Icon name={entry.icon} size="sm" />
       {entry.label}
       {entry.tag === "soon" && (
@@ -139,7 +144,7 @@ function NavItem({ entry }: { entry: NavEntry }) {
           <StatusBadge variant="outline">soon</StatusBadge>
         </span>
       )}
-    </NavLink>
+    </Link>
   );
 }
 

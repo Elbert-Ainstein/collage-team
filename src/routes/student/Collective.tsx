@@ -1,7 +1,7 @@
+"use client";
+
 import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import "./student.css";
-import "./teamStage.css";
+import { useRouter } from "next/navigation";
 import { activityById, teamOfMember, useStore } from "@/store";
 import { Alert, Avatar, Button, Icon, PageHeader, Panel, StatusBadge } from "@/components";
 import { canAccessTeamStage } from "@/services/responseService";
@@ -11,7 +11,7 @@ import { OriginalsRail } from "./OriginalsRail";
 import { MAYA, SEED_TEAM_3 } from "@/seed";
 
 export function Collective() {
-  const navigate = useNavigate();
+  const router = useRouter();
   const activityId = useStore((s) => s.currentActivityId);
   const activity = useStore((s) => activityById(s, activityId))!;
   const team = useStore((s) => teamOfMember(s, MAYA.id))!;
@@ -29,7 +29,7 @@ export function Collective() {
         <PageHeader title="Team's final response" />
         <Alert variant="warning" icon="lock">
           Submit your individual preparation first.{" "}
-          <a onClick={() => navigate("/s/prep")} style={{ color: "var(--navy)", cursor: "pointer", fontWeight: 600 }}>
+          <a onClick={() => router.push("/s/prep")} style={{ color: "var(--navy)", cursor: "pointer", fontWeight: 600 }}>
             Go to prep →
           </a>
         </Alert>
@@ -114,7 +114,7 @@ export function Collective() {
             </Alert>
           </div>
           <div style={{ marginTop: 12 }}>
-            <Button variant="primary" iconRight="arrow_forward" onClick={() => navigate("/s/participation")}>
+            <Button variant="primary" iconRight="arrow_forward" onClick={() => router.push("/s/participation")}>
               Confirm &amp; review
             </Button>
             {activity.collectiveSettings.startBlankWorkspace && (

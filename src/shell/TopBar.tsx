@@ -1,4 +1,6 @@
-import { useLocation } from "react-router-dom";
+"use client";
+
+import { usePathname } from "next/navigation";
 import { useStore } from "@/store";
 import { Icon } from "@/components";
 import { SEED_TEAM_3 } from "@/seed";
@@ -27,8 +29,8 @@ const CONTEXT_LABELS: Record<string, string> = {
 export function TopBar() {
   const course = useStore((s) => s.course);
   const role = useStore((s) => s.role);
-  const loc = useLocation();
-  const leaf = loc.pathname.split("/").filter(Boolean).pop() ?? "";
+  const pathname = usePathname();
+  const leaf = pathname.split("/").filter(Boolean).pop() ?? "";
   const context = CONTEXT_LABELS[leaf] ?? "";
 
   return (
