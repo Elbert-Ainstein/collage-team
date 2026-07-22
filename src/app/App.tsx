@@ -11,6 +11,11 @@ import { MyActivities } from "@/routes/student/MyActivities";
 import { Prep } from "@/routes/student/Prep";
 import { OcrReview } from "@/routes/student/OcrReview";
 import { PrepConfirm } from "@/routes/student/PrepConfirm";
+// Student — M2 team stage
+import { Discussion } from "@/routes/student/Discussion";
+import { Collective } from "@/routes/student/Collective";
+import { Participation } from "@/routes/student/Participation";
+import { IndividualFinal } from "@/routes/student/IndividualFinal";
 
 export function App() {
   const role = useStore((s) => s.role);
@@ -45,10 +50,10 @@ export function App() {
               <Route path="/s/prep" element={<Prep />} />
               <Route path="/s/ocr" element={<OcrReview />} />
               <Route path="/s/confirm" element={<PrepConfirm />} />
-              <Route path="/s/discussion" element={<Stub title="Team discussion" milestone="M2" />} />
-              <Route path="/s/collective" element={<Stub title="Team's final response" milestone="M2" />} />
-              <Route path="/s/individual" element={<Stub title="My final response" milestone="M2" />} />
-              <Route path="/s/participation" element={<Stub title="Participation" milestone="M2" />} />
+              <Route path="/s/discussion" element={<Discussion />} />
+              <Route path="/s/collective" element={<Collective />} />
+              <Route path="/s/individual" element={<IndividualFinal />} />
+              <Route path="/s/participation" element={<Participation />} />
               <Route path="/s/grades" element={<Stub title="Grades & feedback" milestone="M3" />} />
 
               <Route path="*" element={<Navigate to="/" replace />} />

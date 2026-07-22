@@ -34,6 +34,12 @@ A real Mathpix/Anthropic implementation can replace either behind the same inter
 No websocket server exists. The collective workspace (M2) will simulate presence /
 "X is editing" deterministically. Real multi-client sync is a v1.1 item behind the interface.
 
+## D6 — Dev store exposure + INDIVIDUAL-mode demo toggle
+In dev only (`import.meta.env.DEV`), the Zustand store is exposed as `window.__store`
+for debugging and for demoing the INDIVIDUAL variant (spec §9: "demo the INDIVIDUAL
+variant via a prop/toggle"). Mode is switched by updating the activity — the same thing
+the instructor builder's Submission-mode tab will do in M3. Not shipped in production.
+
 ## D5 — Design system consumed as-is
 `docs/team-module/design/_ds` is copied to `src/styles/ds` and imported wholesale (fonts,
 figma tokens, typography, reset). Spec §1 stage/status colors are named in `src/styles/tokens.css`
