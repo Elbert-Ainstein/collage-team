@@ -1,0 +1,48 @@
+# Collage AI — Team Learning Module
+
+A team- and project-based learning engine modeled on Harvard's AP 50 (Prof. Kelly Miller).
+Two roles (Instructor / Student), four-stage activity pipeline, immutable originals,
+completeness-vs-correctness grading, AI-suggested rubric grading, OCR review.
+
+**This is a frontend-only build.** An in-memory store (persisted to the browser) stands in
+for the backend; a `services/` layer enforces the business rules the way an API would. See
+[`docs/team-module/DECISIONS.md`](docs/team-module/DECISIONS.md).
+
+## Stack
+React 18 · TypeScript · Vite · React Router · Zustand · Vitest · Playwright.
+
+## Run
+```bash
+npm install
+npm run dev            # http://localhost:5180  (boots into the §9 demo, student role)
+npm run test           # rule-enforcement + unit tests (Vitest)
+npm run typecheck
+```
+- Switch roles with the far-left rail (🎓 Instructor / 👤 Student).
+- Reset the demo to seed: append `?reset` to any URL.
+
+## Source of truth
+- Spec: [`docs/team-module/frontend_build_spec.md`](docs/team-module/frontend_build_spec.md)
+- Approved design: `docs/team-module/design/` (screenshots, `.dc.html`, `_ds` tokens)
+- Decisions / deferred: `docs/team-module/DECISIONS.md`, `docs/team-module/TODO-deferred.md`
+
+## Layout
+```
+src/
+  app/        shell (role rail, sidebar, top bar), router
+  routes/     student/ + instructor/ screens
+  components/ §8 shared inventory
+  services/   rule enforcement (immutability, prep gate, privacy) + mock OCR/AI adapters
+  store/      Zustand store (persisted)
+  seed/       §9 seed data
+  types/      §3 data model
+  flags/      TEAM_MODULE_* feature flags
+tests/rules/  the priority §11 rule-enforcement suite
+```
+
+## Milestones
+- **M1 (done)** — shell, routing, role switch, tokens, shared components; student prep flow
+  (prep → OCR review → submit-and-lock); immutability + prep-gate enforced & tested.
+- M2 — team stage (discussion, collective/individual workspaces, participation, privacy).
+- M3 — instructor core (builder, roster, teams, AI-suggested grading, gradebook, grade view).
+- M4 — dashboard/library, ◇ stubs, states, responsive, Playwright, seed-reset, deploy.

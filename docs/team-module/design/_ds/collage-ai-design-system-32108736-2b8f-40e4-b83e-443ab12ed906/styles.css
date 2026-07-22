@@ -1,0 +1,9 @@
+/* ============================================================
+   Collage AI Design System — global entry point.
+   Consumers link THIS file. It is an @import manifest only.
+   ============================================================ */
+
+@import "./tokens/fonts.css";
+@import "./tokens/fig-tokens.css";   /* full Figma variable system (brand + radix + tw + shadcn `mode`) */
+@import "./tokens/typography.css";
+@import "./tokens/base.css";

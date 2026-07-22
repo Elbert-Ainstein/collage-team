@@ -1,0 +1,53 @@
+/* ============================================================
+   Team Learning Module — token bridge.
+   Maps frontend_build_spec.md §1 onto the Collage _ds variable system.
+   The _ds provides the brand ramp + shadcn structure; here we name the
+   semantic stage/status colors the spec calls for so components read cleanly.
+   ============================================================ */
+
+:root {
+  /* Canvas / surface (spec §1) */
+  --app-bg: #f5f1e6; /* warm cream canvas */
+  --surface: #ffffff;
+  --surface-border: #e5e5e5;
+  --divider-on-cream: #e7e1d2;
+  --surface-radius: 14px;
+  --surface-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+
+  /* Text */
+  --navy: #002341;
+  --ink: #0a0a0a;
+  --muted: #737373;
+  --muted-2: #9a9a9a;
+
+  /* Stage colors — {fg} on {soft bg} */
+  --stage-prep-fg: #0382ed;
+  --stage-prep-bg: #eaf4fe;
+  --stage-discussion-fg: #8a3ffc;
+  --stage-discussion-bg: #f4ecfe;
+  --stage-collective-fg: #ff6713;
+  --stage-collective-bg: #fff0e6;
+  --stage-individual-fg: #002341;
+  --stage-individual-bg: #e9eef3;
+  --stage-assessment-fg: #0e7c57;
+  --stage-assessment-bg: #e7f5ef;
+
+  /* Status / semantic */
+  --warning-fg: #b45309;
+  --warning-bg: #fff4e5;
+  --danger-fg: #b91c1c;
+  --danger-bg: #fdecec;
+  --success-fg: #0e7c57;
+  --success-bg: #e7f5ef;
+  --sky-fg: #0369a1;
+  --sky-bg: #e0f2fe;
+  --lavender-fg: #7c3aed;
+  --lavender-bg: #f3e8ff;
+
+  /* AI sparkle */
+  --ai: #ff6713;
+
+  --sidebar-w: 288px;
+  --rail-w: 64px;
+  --content-max: 1180px;
+}

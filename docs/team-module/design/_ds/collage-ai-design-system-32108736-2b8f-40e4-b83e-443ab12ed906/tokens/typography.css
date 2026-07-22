@@ -1,0 +1,60 @@
+/* ============================================================
+   Collage AI — Typography
+   Roles: Geist = body & UI (primary), Copernicus = headings (secondary),
+   Caveat = playful accent (sparing), Geist Mono = code/metrics.
+   Copernicus is self-hosted (see tokens/fonts.css); serif stack keeps
+   system serif fallbacks for resilience only.
+   ============================================================ */
+
+:root {
+  /* ---- Font stacks (semantic) ---- */
+  --font-sans:   "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-serif:  "Copernicus Trial", "Newsreader", "Iowan Old Style", Georgia, "Times New Roman", serif;
+  --font-mono:   "Geist Mono", ui-monospace, "SF Mono", "Roboto Mono", Menlo, Consolas, monospace;
+  --font-accent: "Caveat", "Segoe Script", cursive;
+
+  /* Role aliases */
+  --font-body:    var(--font-sans);
+  --font-heading: var(--font-serif);
+  --font-ui:      var(--font-sans);
+
+  /* ---- Type scale (px) — shadcn-aligned ---- */
+  --text-2xs:  10px;
+  --text-xs:   12px;
+  --text-sm:   14px;   /* body / UI default */
+  --text-base: 16px;
+  --text-lg:   18px;
+  --text-xl:   20px;
+  --text-2xl:  24px;
+  --text-3xl:  30px;
+  --text-4xl:  36px;   /* component / page titles */
+  --text-5xl:  48px;
+  --text-6xl:  60px;
+  --text-7xl:  72px;
+
+  /* ---- Line heights (px, matched to scale) ---- */
+  --leading-xs:   16px;
+  --leading-sm:   20px;
+  --leading-base: 24px;
+  --leading-lg:   28px;
+  --leading-xl:   28px;
+  --leading-2xl:  32px;
+  --leading-3xl:  36px;
+  --leading-4xl:  40px;
+  --leading-5xl:  1.05;
+  --leading-tight: 1.1;
+  --leading-snug:  1.3;
+  --leading-normal: 1.5;
+
+  /* ---- Weights ---- */
+  --weight-light:    300;
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+  --weight-bold:     700;
+
+  /* ---- Tracking ---- */
+  --tracking-tight:  -0.02em;
+  --tracking-normal: 0;
+  --tracking-wide:   0.02em;
+}

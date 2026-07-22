@@ -1,0 +1,1498 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="_ds/collage-ai-design-system-32108736-2b8f-40e4-b83e-443ab12ed906/tokens/fonts.css">
+  <link rel="stylesheet" href="_ds/collage-ai-design-system-32108736-2b8f-40e4-b83e-443ab12ed906/tokens/fig-tokens.css">
+  <link rel="stylesheet" href="_ds/collage-ai-design-system-32108736-2b8f-40e4-b83e-443ab12ed906/tokens/typography.css">
+  <link rel="stylesheet" href="_ds/collage-ai-design-system-32108736-2b8f-40e4-b83e-443ab12ed906/tokens/base.css">
+  <link rel="stylesheet" href="_ds/collage-ai-design-system-32108736-2b8f-40e4-b83e-443ab12ed906/styles.css">
+  <script src="_ds/collage-ai-design-system-32108736-2b8f-40e4-b83e-443ab12ed906/_ds_bundle.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body { font-family: Geist, system-ui, sans-serif; color: #0A0A0A; background: #F5F1E6; }
+    a { color: #0382ED; text-decoration: none; }
+    a:hover { color: #002341; }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-thumb { background: #d9d3c4; border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
+    ::-webkit-scrollbar-thumb:hover { background: #c4bda9; background-clip: content-box; }
+  </style>
+</helmet>
+{{ app }}
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:860},&quot;startRole&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;instructor&quot;,&quot;student&quot;],&quot;default&quot;:&quot;instructor&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Demo&quot;},&quot;submissionMode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;COLLECTIVE&quot;,&quot;INDIVIDUAL&quot;],&quot;default&quot;:&quot;COLLECTIVE&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Demo&quot;}}">
+class Component extends DCLogic {
+  h = (...a) => React.createElement(...a);
+  C() { return window.CollageAIDesignSystem_321087 || {}; }
+
+  STAGE = {
+    prep:       { icon: 'IconPersonOutlined',     tint: '#0382ED', soft: '#EAF4FE', label: 'Individual prep' },
+    discuss:    { icon: 'IconGroupsOutlined',     tint: '#8A3FFC', soft: '#F4ECFE', label: 'Team discussion' },
+    collective: { icon: 'IconGroupOutlined',      tint: '#FF6713', soft: '#FFF0E6', label: 'Collective submission' },
+    individual: { icon: 'IconAssignmentOutlined', tint: '#002341', soft: '#E9EEF3', label: 'Individual final' },
+    assess:     { icon: 'IconGradeOutlined',      tint: '#0E7C57', soft: '#E7F5EF', label: 'Assessment' },
+  };
+
+  data = {
+    course: { name: 'Introduction to Engineering', code: 'ENGR 101', term: 'Fall 2026', students: 24, teams: 6 },
+    activity: {
+      title: 'Bridge Design Decision',
+      objective: 'Evaluate structural options against site constraints and justify a load-bearing decision.',
+      due: 'Individual due Wed 11:59pm · Team stage Thu in class',
+      questions: [
+        { n: 1, type: 'Multiple choice', prompt: 'Which bridge structure is most appropriate for the proposed 90 m span over a deep gorge?', options: ['Beam bridge', 'Arch bridge', 'Suspension bridge', 'Cable-stayed bridge'] },
+        { n: 2, type: 'Long response', prompt: 'Explain the reasoning behind your structural choice with reference to the site constraints.' },
+        { n: 3, type: 'Numerical', prompt: 'Calculate the expected axial load (kN) on one main cable at midspan.' },
+        { n: 4, type: 'Handwritten upload', prompt: 'Upload your written calculations supporting Q3.' },
+        { n: 5, type: 'Short response', prompt: 'Identify one important design tradeoff in your chosen structure.' },
+      ],
+    },
+    team: { name: 'Team 3', number: 3 },
+    members: [
+      { id: 'mc', name: 'Maya Chen', initials: 'MC', me: true, tint: '#0382ED' },
+      { id: 'lo', name: 'Liam Ortiz', initials: 'LO', tint: '#8A3FFC' },
+      { id: 'pn', name: 'Priya Nair', initials: 'PN', tint: '#0E7C57' },
+      { id: 'sw', name: 'Sam Whitfield', initials: 'SW', tint: '#FF6713' },
+    ],
+    // original individual responses per member, keyed by question index
+    originals: {
+      mc: { q1: 'Suspension bridge', q2: 'The 90 m span and deep gorge rule out beam and arch; a suspension bridge carries the long span efficiently in tension.', q3: '≈ 1,180 kN', q5: 'Suspension needs large anchorages — costly on this rock.', status: 'Complete', done: true },
+      lo: { q1: 'Cable-stayed bridge', q2: 'Cable-stayed is cheaper than suspension at this span and stiffer under moving loads, which matters for the gorge wind.', q3: '≈ 1,050 kN', q5: 'More deck deflection under asymmetric load.', status: 'Complete', done: true },
+      pn: { q1: 'Suspension bridge', q2: 'Suspension handles the span; tension members are efficient. I was unsure about anchorage into the rock.', q3: '≈ 1,210 kN', q5: 'Long construction time.', status: 'Complete', done: true },
+      sw: { q1: 'Arch bridge', q2: 'An arch uses the gorge walls as abutments and is durable, though I am not certain 90 m is within range.', q3: '≈ 1,400 kN', q5: 'High formwork cost during construction.', status: 'Needs review', done: true },
+    },
+    rubric: [
+      { c: 'Correct structure choice', pts: 4, desc: 'Selects a structure appropriate to span and site.' },
+      { c: 'Quality of reasoning', pts: 6, desc: 'Justification references constraints and tradeoffs.' },
+      { c: 'Load calculation accuracy', pts: 6, desc: 'Correct method, values and arithmetic.' },
+      { c: 'Units & assumptions', pts: 2, desc: 'States units and reasonable assumptions.' },
+      { c: 'Tradeoff analysis', pts: 2, desc: 'Identifies a meaningful design tradeoff.' },
+    ],
+    oralRubric: [
+      { c: 'Clarity of explanation', pts: 3, desc: 'Presents the reasoning clearly and audibly.' },
+      { c: 'Depth of understanding', pts: 4, desc: 'Shows genuine grasp of the underlying concept.' },
+      { c: 'Responds to follow-up', pts: 3, desc: 'Handles a probing question on the spot.' },
+    ],
+  };
+
+  teamMembers(n) {
+    if (n === 3) return this.data.members;
+    const pool = [
+      [['Ada R.', 'AR', '#0382ED'], ['Ben T.', 'BT', '#8A3FFC'], ['Cara F.', 'CF', '#0E7C57'], ['Diego L.', 'DL', '#FF6713']],
+      [['Erin N.', 'EN', '#0382ED'], ['Fatima O.', 'FO', '#8A3FFC'], ['Gus K.', 'GK', '#0E7C57'], ['Hana P.', 'HP', '#FF6713']],
+      [['Ivan V.', 'IV', '#0382ED'], ['Jo W.', 'JW', '#8A3FFC'], ['Kai M.', 'KM', '#0E7C57']],
+      [['Lena S.', 'LS', '#0382ED'], ['Marco D.', 'MD', '#8A3FFC'], ['Nia B.', 'NB', '#0E7C57'], ['Omar H.', 'OH', '#FF6713']],
+      [['Pia R.', 'PR', '#0382ED'], ['Quinn A.', 'QA', '#8A3FFC'], ['Rafe T.', 'RT', '#0E7C57']],
+    ];
+    const set = pool[(n - 1) % pool.length];
+    return set.map(m => ({ id: m[1].toLowerCase(), name: m[0], initials: m[1], tint: m[2] }));
+  }
+
+  state = {
+    role: 'instructor',
+    screen: 'i-dashboard',
+    mode: 'COLLECTIVE', // COLLECTIVE | INDIVIDUAL
+    ready: false,
+    // student flow state
+    resp: { q1: '', q2: '', q3: '', q5: '' },
+    ocrCorrected: false,
+    prepSubmitted: false,
+    collectiveText: '',
+    individualText: '',
+    participation: { mc: true, lo: false, pn: false, sw: false },
+    // instructor
+    rosterStep: 1,
+    aiGenerated: false,
+    grades: {}, // per student criterion overrides
+  };
+
+  componentDidMount() {
+    const p = this.props || {};
+    const patch = {};
+    if (p.startRole === 'student') { patch.role = 'student'; patch.screen = 's-activities'; }
+    if (p.submissionMode === 'INDIVIDUAL' || p.submissionMode === 'COLLECTIVE') patch.mode = p.submissionMode;
+    if (this.C().Button) this.setState({ ready: true, ...patch });
+    else { Object.assign(this.state, patch); this._t = setInterval(() => { if (this.C().Button) { clearInterval(this._t); this.setState({ ready: true }); } }, 60); }
+  }
+  componentWillUnmount() { if (this._t) clearInterval(this._t); }
+
+  go(screen) { this.setState({ screen }); const m = document.getElementById('tlp-main'); if (m) m.scrollTop = 0; }
+  set(patch) { this.setState(patch); }
+
+  icon(name, size = 18, color) { const { Icon } = this.C(); return Icon ? this.h(Icon, { name, size, style: color ? { color } : undefined }) : null; }
+
+  // ---- shared UI helpers ----
+  pageHead(title, subtitle, actions) {
+    return this.h('div', { style: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 24, marginBottom: 24, flexWrap: 'wrap' } },
+      this.h('div', null,
+        this.h('h1', { style: { fontFamily: '"Copernicus Trial", Georgia, serif', fontSize: 30, fontWeight: 600, letterSpacing: '-0.02em', margin: 0, color: '#002341' } }, title),
+        subtitle ? this.h('p', { style: { margin: '6px 0 0', color: '#737373', fontSize: 15, maxWidth: 680 } }, subtitle) : null,
+      ),
+      actions ? this.h('div', { style: { display: 'flex', gap: 10, flexWrap: 'wrap' } }, actions) : null,
+    );
+  }
+
+  stageChip(key, opts = {}) {
+    const s = this.STAGE[key];
+    return this.h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: opts.big ? '6px 12px' : '3px 9px', borderRadius: 999, background: s.soft, color: s.tint, fontSize: opts.big ? 13 : 12, fontWeight: 600, border: `1px solid ${s.tint}22` } },
+      this.icon(s.icon, opts.big ? 16 : 14), s.label);
+  }
+
+  statCard(label, value, icon, tint, sub) {
+    return this.h('div', { style: { background: '#fff', border: '1px solid #E5E5E5', borderRadius: 14, padding: 18, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', flex: '1 1 160px', minWidth: 150 } },
+      this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 } },
+        this.h('span', { style: { width: 30, height: 30, borderRadius: 8, background: tint + '18', color: tint, display: 'grid', placeItems: 'center' } }, this.icon(icon, 18)),
+        this.h('span', { style: { color: '#737373', fontSize: 13, fontWeight: 500 } }, label)),
+      this.h('div', { style: { fontSize: 28, fontWeight: 700, color: '#0A0A0A', fontFamily: '"Copernicus Trial", serif' } }, value),
+      sub ? this.h('div', { style: { color: '#9a9a9a', fontSize: 12, marginTop: 2 } }, sub) : null,
+    );
+  }
+
+  panel(children, style = {}) {
+    return this.h('div', { style: { background: '#fff', border: '1px solid #E5E5E5', borderRadius: 14, boxShadow: '0 1px 2px rgba(0,0,0,0.04)', ...style } }, children);
+  }
+
+  avatar(m, size = 30) {
+    return this.h('span', { style: { width: size, height: size, borderRadius: '50%', background: m.tint, color: '#fff', display: 'inline-grid', placeItems: 'center', fontSize: size * 0.38, fontWeight: 700, flex: '0 0 auto' } }, m.initials);
+  }
+
+  btn(label, opts = {}) {
+    const { Button } = this.C();
+    return this.h(Button, { variant: opts.variant || 'primary', size: opts.size, onClick: opts.onClick, disabled: opts.disabled,
+      startIcon: opts.icon ? this.icon(opts.icon, 16) : undefined, fullWidth: opts.fullWidth }, label);
+  }
+
+  sparkle(label) {
+    return this.h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 6, color: '#FF6713', fontWeight: 600, fontSize: 13 } }, this.icon('IconAutoAwesomeOutlined', 15, '#FF6713'), label);
+  }
+
+  // ---- navigation ----
+  navModel() {
+    const s = this.state.screen;
+    if (this.state.role === 'instructor') {
+      return [
+        { label: 'Teaching', items: [
+          { icon: 'IconDashboardOutlined', label: 'Course dashboard', k: 'i-dashboard' },
+          { icon: 'IconLibraryBooksOutlined', label: 'Activity library', k: 'i-library' },
+        ]},
+        { label: 'Roster & teams', items: [
+          { icon: 'IconGroupOutlined', label: 'Roster & import', k: 'i-roster' },
+          { icon: 'IconGroupsOutlined', label: 'Team management', k: 'i-teams' },
+        ]},
+        { label: 'Authoring', items: [
+          { icon: 'IconEditOutlined', label: 'Activity builder', k: 'i-builder' },
+          { icon: 'IconAutoAwesomeOutlined', label: 'AI generation', k: 'i-ai' },
+          { icon: 'IconChecklistOutlined', label: 'Rubric builder', k: 'i-rubric' },
+        ]},
+        { label: 'Class & assessment', items: [
+          { icon: 'IconInsertChartOutlined', label: 'Live dashboard', k: 'i-live' },
+          { icon: 'IconGradeOutlined', label: 'Grading', k: 'i-grading' },
+          { icon: 'IconAnalyticsOutlined', label: 'Results & analytics', k: 'i-results' },
+        ]},
+      ].map(sec => ({ label: sec.label, items: sec.items.map(it => ({ icon: it.icon, label: it.label, active: s === it.k, onClick: () => this.go(it.k) })) }));
+    }
+    const finalK = this.state.mode === 'COLLECTIVE' ? 's-collective' : 's-individual';
+    return [
+      { label: 'Learn', items: [
+        { icon: 'IconAutoStoriesOutlined', label: 'My activities', k: 's-activities' },
+      ]},
+      { label: 'Bridge Design Decision', items: [
+        { icon: 'IconPersonOutlined', label: 'Individual prep', k: 's-question' },
+        { icon: 'IconGroupsOutlined', label: 'Team discussion', k: 's-discussion' },
+        { icon: 'IconAssignmentOutlined', label: 'Final submission', k: finalK },
+        { icon: 'IconGradeOutlined', label: 'Grades & feedback', k: 's-grades' },
+      ]},
+    ].map(sec => ({ label: sec.label, items: sec.items.map(it => ({ icon: it.icon, label: it.label, active: s === it.k || (it.k === finalK && s === 's-participation'), onClick: () => this.go(it.k) })) }));
+  }
+
+  renderSidebar() {
+    const { AppSidebar } = this.C();
+    const role = this.state.role;
+    const rail = [
+      { icon: 'IconSchoolOutlined', title: 'Instructor', active: role === 'instructor', onClick: () => this.setState({ role: 'instructor', screen: 'i-dashboard' }) },
+      { icon: 'IconPersonOutlined', title: 'Student', active: role === 'student', onClick: () => this.setState({ role: 'student', screen: 's-activities' }) },
+    ];
+    const user = role === 'instructor'
+      ? { name: 'Dr. Elena Alvarez', email: 'Instructor · ENGR 101', initials: 'EA' }
+      : { name: 'Maya Chen', email: 'Student · Team 3', initials: 'MC' };
+    return this.h(AppSidebar, { railItems: rail, sections: this.navModel(), user, width: 288, style: { flex: '0 0 auto', height: '100vh' } });
+  }
+
+  renderScreen() {
+    const fn = this['screen_' + this.state.screen.replace(/-/g, '_')];
+    if (fn) return fn.call(this);
+    return this.h('div', { style: { padding: 40, color: '#737373' } }, 'Screen coming up.');
+  }
+
+  renderVals() {
+    if (!this.state.ready) {
+      return { app: this.h('div', { style: { display: 'grid', placeItems: 'center', height: '100vh', color: '#002341', fontFamily: 'Geist' } }, 'Loading…') };
+    }
+    const app = this.h('div', { style: { display: 'flex', minHeight: '100vh', background: '#F5F1E6' } },
+      this.renderSidebar(),
+      this.h('main', { id: 'tlp-main', style: { flex: 1, height: '100vh', overflowY: 'auto' } },
+        this.renderTopBar(),
+        this.h('div', { style: { maxWidth: 1180, margin: '0 auto', padding: '28px 36px 80px' } }, this.renderScreen()),
+      ),
+    );
+    return { app };
+  }
+
+  renderTopBar() {
+    const role = this.state.role;
+    return this.h('div', { style: { position: 'sticky', top: 0, zIndex: 20, background: 'rgba(245,241,230,0.85)', backdropFilter: 'blur(8px)', borderBottom: '1px solid #E7E1D2', padding: '12px 36px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' } },
+      this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, color: '#737373', fontSize: 13 } },
+        this.h('span', { style: { fontWeight: 600, color: '#002341' } }, this.data.course.code),
+        this.icon('IconChevronRightOutlined', 16, '#c4bda9'),
+        this.h('span', null, role === 'instructor' ? 'Instructor workspace' : 'Bridge Design Decision')),
+      this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 14 } },
+        role === 'student' ? this.h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#737373' } },
+          this.icon('IconGroupsOutlined', 16, '#8A3FFC'), 'Team 3') : null,
+        this.icon('IconNotificationsOutlined', 20, '#737373'),
+        this.icon('IconHelpOutlineOutlined', 20, '#737373')),
+    );
+  }
+
+  // ================= INSTRUCTOR: DASHBOARD =================
+  screen_i_dashboard() {
+    const { Badge } = this.C();
+    return this.h(React.Fragment, null,
+      this.pageHead('Course dashboard', `${this.data.course.name} · ${this.data.course.term}`,
+        [this.btn('New activity', { icon: 'IconAddOutlined', onClick: () => this.go('i-builder') }),
+         this.btn('Import roster', { variant: 'outline', icon: 'IconFileUploadOutlined', onClick: () => this.go('i-roster') })]),
+      this.h('div', { style: { display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 22 } },
+        this.statCard('Students', '24', 'IconGroupOutlined', '#0382ED', 'across 6 teams'),
+        this.statCard('Prep complete', '21 / 24', 'IconCheckCircleOutlined', '#0E7C57', '88% ready'),
+        this.statCard('Needs review', '3', 'IconWarningAmberOutlined', '#FF6713', 'flagged submissions'),
+        this.statCard('Awaiting grade', '4 teams', 'IconGradeOutlined', '#8A3FFC', 'Bridge activity'),
+      ),
+      this.h('div', { style: { display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 18 } },
+        this.panel(this.h('div', { style: { padding: 22 } },
+          this.h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } },
+            this.h('h3', { style: { margin: 0, fontSize: 16, color: '#002341' } }, 'Active activity'),
+            this.h(Badge, { variant: 'orange' }, 'Team stage today')),
+          this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 14, padding: 16, background: '#FAF7EF', borderRadius: 12, border: '1px solid #EFE9DA' } },
+            this.h('span', { style: { width: 46, height: 46, borderRadius: 10, background: '#002341', color: '#FCF8EC', display: 'grid', placeItems: 'center' } }, this.icon('IconAssignmentOutlined', 24)),
+            this.h('div', { style: { flex: 1 } },
+              this.h('div', { style: { fontWeight: 600, fontSize: 15, color: '#002341' } }, this.data.activity.title),
+              this.h('div', { style: { color: '#737373', fontSize: 13, marginTop: 2 } }, this.data.activity.due)),
+            this.btn('Open live view', { size: 'sm', onClick: () => this.go('i-live') })),
+          this.h('div', { style: { display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' } },
+            this.stageChip('prep'), this.icon('IconArrowForwardOutlined', 16, '#c4bda9'),
+            this.stageChip('discuss'), this.icon('IconArrowForwardOutlined', 16, '#c4bda9'),
+            this.stageChip(this.state.mode === 'COLLECTIVE' ? 'collective' : 'individual'), this.icon('IconArrowForwardOutlined', 16, '#c4bda9'),
+            this.stageChip('assess')),
+        )),
+        this.panel(this.h('div', { style: { padding: 22 } },
+          this.h('h3', { style: { margin: '0 0 12px', fontSize: 16, color: '#002341' } }, 'Prep by team'),
+          this.h('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
+            [['Team 1',4],['Team 2',4],['Team 3',4],['Team 4',3],['Team 5',3],['Team 6',3]].map(([t,n]) =>
+              this.h('div', { key: t, style: { display: 'flex', alignItems: 'center', gap: 10 } },
+                this.h('span', { style: { width: 58, fontSize: 13, color: '#525252' } }, t),
+                this.h('div', { style: { flex: 1, height: 8, borderRadius: 6, background: '#EFE9DA', overflow: 'hidden' } },
+                  this.h('div', { style: { width: (n/4*100)+'%', height: '100%', background: n===4 ? '#0E7C57' : '#FF6713' } })),
+                this.h('span', { style: { fontSize: 12, color: '#737373', width: 30, textAlign: 'right' } }, n+'/4'))),
+          ))),
+      ),
+    );
+  }
+
+  // ================= INSTRUCTOR: ACTIVITY LIBRARY =================
+  screen_i_library() {
+    const { Badge } = this.C();
+    const rows = [
+      { t: 'Bridge Design Decision', mode: 'COLLECTIVE', status: 'Team stage today', tint: 'orange', q: 5 },
+      { t: 'Statics Warm-up: Free-body Diagrams', mode: 'INDIVIDUAL', status: 'Grading', tint: 'lavender', q: 4 },
+      { t: 'Materials Selection Case', mode: 'INDIVIDUAL', status: 'Draft', tint: 'secondary', q: 6 },
+      { t: 'Truss Analysis Project Milestone', mode: 'COLLECTIVE', status: 'Scheduled', tint: 'sky', q: 3 },
+    ];
+    return this.h(React.Fragment, null,
+      this.pageHead('Activity library', 'Every activity keeps individual prep, discussion and assessed work structurally separate.',
+        [this.btn('Create manually', { icon: 'IconEditOutlined', variant: 'outline', onClick: () => this.go('i-builder') }),
+         this.btn('Generate with AI', { icon: 'IconAutoAwesomeOutlined', onClick: () => this.go('i-ai') })]),
+      this.h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 } },
+        rows.map((r, i) => this.panel(this.h('div', { style: { padding: 20, cursor: 'pointer' }, onClick: () => this.go('i-builder') },
+          this.h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 } },
+            this.h('span', { style: { width: 40, height: 40, borderRadius: 10, background: '#EAF4FE', color: '#0382ED', display: 'grid', placeItems: 'center' } }, this.icon('IconAssignmentOutlined', 22)),
+            this.h(Badge, { variant: r.tint }, r.status)),
+          this.h('div', { style: { fontWeight: 600, fontSize: 16, color: '#002341', marginBottom: 6 } }, r.t),
+          this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, color: '#737373', fontSize: 13 } },
+            this.h('span', null, r.q + ' questions'),
+            this.h('span', { style: { color: '#d9d3c4' } }, '·'),
+            this.h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 5 } },
+              this.icon(r.mode === 'COLLECTIVE' ? 'IconGroupOutlined' : 'IconAssignmentOutlined', 15, r.mode === 'COLLECTIVE' ? '#FF6713' : '#002341'),
+              r.mode === 'COLLECTIVE' ? 'Collective submission' : 'Individual submission'))),
+        { key: i })),
+      ),
+    );
+  }
+
+  activityBanner(stageKey, note) {
+    const s = this.STAGE[stageKey];
+    return this.panel(this.h('div', { style: { padding: 20, display: 'flex', alignItems: 'center', gap: 16, borderLeft: `4px solid ${s.tint}` } },
+      this.h('span', { style: { width: 44, height: 44, borderRadius: 10, background: s.soft, color: s.tint, display: 'grid', placeItems: 'center', flex: '0 0 auto' } }, this.icon(s.icon, 24)),
+      this.h('div', { style: { flex: 1 } },
+        this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } }, this.stageChip(stageKey), this.h('span', { style: { fontWeight: 600, color: '#002341' } }, this.data.activity.title)),
+        this.h('div', { style: { color: '#737373', fontSize: 13, marginTop: 4 } }, note || this.data.activity.objective)),
+    ), { marginBottom: 20 });
+  }
+
+  // ================= STUDENT: ACTIVITY LIST =================
+  screen_s_activities() {
+    const { Badge } = this.C();
+    const items = [
+      { t: 'Bridge Design Decision', stage: 'discuss', due: 'Team stage open now', badge: ['Team discussion', 'lavender'], k: 's-discussion', progress: 'Prep complete · 5/5' },
+      { t: 'Statics Warm-up: Free-body Diagrams', stage: 'assess', due: 'Graded — feedback released', badge: ['Graded', 'success'], k: 's-grades', progress: 'Individual · 18/20' },
+      { t: 'Materials Selection Case', stage: 'prep', due: 'Individual prep due Mon 11:59pm', badge: ['Not started', 'secondary'], k: 's-question', progress: 'Opens Fri' },
+    ];
+    return this.h(React.Fragment, null,
+      this.pageHead('My activities', 'Introduction to Engineering · Team 3'),
+      this.h('div', { style: { display: 'flex', flexDirection: 'column', gap: 14 } },
+        items.map((it, i) => {
+          const s = this.STAGE[it.stage];
+          return this.panel(this.h('div', { style: { padding: 20, display: 'flex', alignItems: 'center', gap: 16, cursor: 'pointer' }, onClick: () => this.go(it.k) },
+            this.h('span', { style: { width: 46, height: 46, borderRadius: 10, background: s.soft, color: s.tint, display: 'grid', placeItems: 'center', flex: '0 0 auto' } }, this.icon(s.icon, 24)),
+            this.h('div', { style: { flex: 1 } },
+              this.h('div', { style: { fontWeight: 600, fontSize: 16, color: '#002341' } }, it.t),
+              this.h('div', { style: { color: '#737373', fontSize: 13, marginTop: 3 } }, it.due + ' · ' + it.progress)),
+            this.h(Badge, { variant: it.badge[1] }, it.badge[0]),
+            this.icon('IconChevronRightOutlined', 20, '#c4bda9')),
+          { key: i });
+        }),
+      ),
+    );
+  }
+
+  // ================= STUDENT: INDIVIDUAL QUESTION =================
+  screen_s_question() {
+    const { Textarea, Input, RadioGroup, Radio, Badge, Button } = this.C();
+    const qs = this.data.activity.questions;
+    const answered = ['q1','q2','q3','q5'].filter(k => this.state.resp[k]).length + (this.state.ocrCorrected ? 1 : 0);
+    const setResp = (k, v) => this.setState(st => ({ resp: { ...st.resp, [k]: v } }));
+    const qCard = (q) => {
+      let body;
+      if (q.n === 1) body = this.h(RadioGroup, { value: this.state.resp.q1, onChange: v => setResp('q1', v) }, q.options.map((o, i) => this.h(Radio, { key: i, value: o, label: o })));
+      else if (q.n === 4) body = this.h('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
+        this.h('div', { onClick: () => this.go('s-ocr'), style: { border: '1.5px dashed #cdd9e3', borderRadius: 12, padding: 22, textAlign: 'center', cursor: 'pointer', background: this.state.ocrCorrected ? '#E7F5EF' : '#F7FAFD' } },
+          this.icon(this.state.ocrCorrected ? 'IconCheckCircleOutlined' : 'IconFileUploadOutlined', 26, this.state.ocrCorrected ? '#0E7C57' : '#0382ED'),
+          this.h('div', { style: { fontWeight: 600, color: '#002341', marginTop: 6 } }, this.state.ocrCorrected ? 'calc_bridge_load.jpg — OCR confirmed' : 'Upload a photo or PDF of your calculations'),
+          this.h('div', { style: { color: '#737373', fontSize: 13, marginTop: 2 } }, this.state.ocrCorrected ? 'Tap to review the transcription again' : 'We run OCR so your team can read it during discussion')),
+        this.state.ocrCorrected ? this.sparkle('OCR transcription ready · you reviewed 2 flagged symbols') : null);
+      else if (q.n === 3) body = this.h(Input, { placeholder: 'e.g. 1180 kN', value: this.state.resp.q3, onChange: e => setResp('q3', e.target.value), style: { maxWidth: 220 } });
+      else { const k = 'q' + q.n; body = this.h(Textarea, { rows: q.n === 2 ? 4 : 2, placeholder: 'Type your response…', value: this.state.resp[k], onChange: e => setResp(k, e.target.value) }); }
+      return this.panel(this.h('div', { style: { padding: 22 } },
+        this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 } },
+          this.h('span', { style: { width: 26, height: 26, borderRadius: 7, background: '#002341', color: '#FCF8EC', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 700 } }, q.n),
+          this.h(Badge, { variant: 'outline' }, q.type)),
+        this.h('div', { style: { fontWeight: 500, fontSize: 15, color: '#0A0A0A', marginBottom: 14, lineHeight: 1.5 } }, q.prompt),
+        body),
+      { key: q.n, marginBottom: 14 });
+    };
+    return this.h(React.Fragment, null,
+      this.pageHead('Individual preparation', 'Work on this independently before class. Your original answers are saved and shown to your team — you cannot change them afterward.'),
+      this.activityBanner('prep', 'Assessed for completeness, not correctness. Due Wed 11:59pm.'),
+      this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, color: '#737373', fontSize: 13 } },
+        this.icon('IconCheckCircleOutlineOutlined', 16, '#0E7C57'),
+        this.h('span', null, 'Autosaved just now'),
+        this.h('span', { style: { color: '#d9d3c4' } }, '·'),
+        this.h('span', null, answered + ' of 5 attempted')),
+      qs.map(qCard),
+      this.h('div', { style: { position: 'sticky', bottom: 0, background: 'linear-gradient(transparent, #F5F1E6 40%)', paddingTop: 16, display: 'flex', justifyContent: 'flex-end', gap: 10 } },
+        this.h(Button, { variant: 'outline' }, 'Save draft'),
+        this.h(Button, { onClick: () => this.go('s-confirm'), startIcon: this.icon('IconLockOutlined', 16) }, 'Submit preparation')),
+    );
+  }
+
+  // ================= STUDENT: OCR REVIEW =================
+  screen_s_ocr() {
+    const { Textarea, Badge, Button, Alert } = this.C();
+    return this.h(React.Fragment, null,
+      this.pageHead('Review your written work', 'Check the transcription of your upload. The original image is always kept — this text is just an interpretation your team can read.',
+        [this.btn('Back to activity', { variant: 'ghost', icon: 'IconArrowBackOutlined', onClick: () => this.go('s-question') })]),
+      this.h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 } },
+        this.panel(this.h('div', { style: { padding: 18 } },
+          this.h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 } },
+            this.h('span', { style: { fontWeight: 600, color: '#002341' } }, 'Original upload'),
+            this.h(Badge, { variant: 'outline' }, 'calc_bridge_load.jpg')),
+          this.h('div', { style: { borderRadius: 10, border: '1px solid #E5E5E5', background: '#FBFAF6', padding: 20, minHeight: 300, fontFamily: 'Geist Mono, monospace', fontSize: 13, color: '#334', lineHeight: 1.9 } },
+            this.h('div', { style: { transform: 'rotate(-1.2deg)', color: '#1a2a3a' } },
+              this.h('div', null, 'Span L = 90 m,  w = 32 kN/m'),
+              this.h('div', null, 'W = w·L = 32 × 90 = 2880 kN'),
+              this.h('div', null, 'Sag ratio  d/L = 1/10 → d = 9 m'),
+              this.h('div', { style: { color: '#b06a00' } }, 'H = W·L / (8d) = 2880×90 / 72 = 3600 kN'),
+              this.h('div', null, 'T_max = √(H² + (W/2)²) ≈ 1180 kN per cable'))),
+          this.h('div', { style: { display: 'flex', gap: 8, marginTop: 12, color: '#737373', fontSize: 12 } }, this.icon('IconImageOutlined', 15), 'Page 1 of 1 · handwritten')),
+        ),
+        this.panel(this.h('div', { style: { padding: 18 } },
+          this.h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 } },
+            this.h('span', { style: { fontWeight: 600, color: '#002341' } }, 'OCR transcription'),
+            this.sparkle('Auto-transcribed')),
+          this.h(Alert, { variant: 'warning', title: '2 symbols were uncertain' }, 'We highlighted where the handwriting was hard to read. Please correct anything wrong.'),
+          this.h('div', { style: { marginTop: 12 } },
+            this.h(Textarea, { rows: 9, defaultValue: 'Span L = 90 m, w = 32 kN/m\nW = w·L = 32 × 90 = 2880 kN\nSag ratio d/L = 1/10 → d = 9 m\nH = W·L / (8d) = 3600 kN\nT_max = √(H² + (W/2)²) ≈ 1180 kN per cable' })),
+          this.h('div', { style: { display: 'flex', justifyContent: 'flex-end', marginTop: 14 } },
+            this.h(Button, { onClick: () => { this.setState({ ocrCorrected: true }); this.go('s-question'); }, startIcon: this.icon('IconCheckOutlined', 16) }, 'Confirm transcription'))),
+        ),
+      ),
+    );
+  }
+
+  // ================= STUDENT: SUBMISSION CONFIRMATION =================
+  screen_s_confirm() {
+    const { Button, Badge } = this.C();
+    this._prepDone = true;
+    const row = (icon, tint, label, val) => this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0', borderBottom: '1px solid #F0ECE0' } },
+      this.icon(icon, 18, tint), this.h('span', { style: { color: '#525252', fontSize: 14, flex: 1 } }, label), this.h('span', { style: { fontWeight: 600, color: '#002341', fontSize: 14 } }, val));
+    return this.h('div', { style: { maxWidth: 620, margin: '0 auto' } },
+      this.panel(this.h('div', { style: { padding: 32, textAlign: 'center' } },
+        this.h('span', { style: { width: 64, height: 64, borderRadius: '50%', background: '#E7F5EF', color: '#0E7C57', display: 'inline-grid', placeItems: 'center', marginBottom: 14 } }, this.icon('IconCheckCircleOutlined', 38)),
+        this.h('h2', { style: { fontFamily: '"Copernicus Trial", serif', fontSize: 26, color: '#002341', margin: '0 0 6px' } }, 'Preparation submitted'),
+        this.h('p', { style: { color: '#737373', margin: '0 0 20px' } }, 'Your original response is locked and preserved. Your team will see it during the discussion.'),
+        this.h('div', { style: { textAlign: 'left' } },
+          row('IconAccessTimeOutlined', '#0382ED', 'Submitted', 'Wed 9:42 PM'),
+          row('IconChecklistOutlined', '#0E7C57', 'Completeness', 'Complete — 5/5 attempted'),
+          row('IconGradeOutlined', '#8A3FFC', 'Preparation credit', 'Awarded (5 pts)'),
+          row('IconLockOutlined', '#737373', 'Original response', 'Locked · cannot be edited')),
+        this.h('div', { style: { display: 'flex', gap: 10, marginTop: 22, justifyContent: 'center' } },
+          this.h(Button, { variant: 'outline', onClick: () => this.go('s-activities') }, 'Back to activities'),
+          this.h(Button, { onClick: () => this.go('s-discussion'), endIcon: this.icon('IconArrowForwardOutlined', 16) }, 'Continue to team stage')),
+        this.h('div', { style: { marginTop: 18, padding: 12, background: '#EAF4FE', borderRadius: 10, fontSize: 13, color: '#334', display: 'flex', gap: 8, alignItems: 'flex-start', textAlign: 'left' } },
+          this.icon('IconInfoOutlined', 16, '#0382ED'),
+          this.h('span', null, 'This submission is assessed for completeness, not correctness. It will be shown to your team during discussion.'))),
+      ),
+    );
+  }
+
+  qNav(current, onPick) {
+    return this.h('div', { style: { display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' } },
+      this.data.activity.questions.map((q, i) => this.h('button', { key: i, onClick: () => onPick(i),
+        style: { border: '1px solid ' + (i === current ? '#002341' : '#E1DAC9'), background: i === current ? '#002341' : '#fff', color: i === current ? '#FCF8EC' : '#525252', borderRadius: 9, padding: '7px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Geist' } },
+        'Q' + q.n)));
+  }
+
+  origAnswer(m, q) {
+    const o = this.data.originals[m.id];
+    if (q.n === 4) return this.h('div', null,
+      this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', background: '#FBFAF6', border: '1px solid #EFE9DA', borderRadius: 8, marginBottom: 8 } },
+        this.icon('IconImageOutlined', 16, '#0382ED'), this.h('span', { style: { fontSize: 12, color: '#525252' } }, 'calc_' + m.id + '.jpg'), this.sparkle('OCR')),
+      this.h('div', { style: { fontFamily: 'Geist Mono, monospace', fontSize: 12, color: '#334', lineHeight: 1.7, whiteSpace: 'pre-wrap' } }, 'T_max = √(H² + (W/2)²)\n≈ ' + (o.q3 || '—') + ' per cable'));
+    const v = o['q' + q.n];
+    return this.h('div', { style: { fontSize: 13.5, color: '#333', lineHeight: 1.55 } }, v || this.h('span', { style: { color: '#aaa' } }, '— not attempted'));
+  }
+
+  // ================= STUDENT: TEAM DISCUSSION =================
+  screen_s_discussion() {
+    const { Badge, Alert, Button } = this.C();
+    const dq = this.state.dq ?? 0;
+    const q = this.data.activity.questions[dq];
+    const memberCard = (m) => {
+      const o = this.data.originals[m.id];
+      return this.panel(this.h('div', { style: { padding: 16 } },
+        this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 } },
+          this.avatar(m, 34),
+          this.h('div', { style: { flex: 1 } },
+            this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 7 } },
+              this.h('span', { style: { fontWeight: 600, fontSize: 14, color: '#002341' } }, m.name),
+              m.me ? this.h(Badge, { variant: 'sky' }, 'You') : null),
+            this.h('div', { style: { fontSize: 11.5, color: '#9a9a9a' } }, 'Submitted Wed · original')),
+          this.h(Badge, { variant: o.status === 'Complete' ? 'success' : 'warning' }, o.status)),
+        this.origAnswer(m, q)),
+      { key: m.id, style: { background: m.me ? '#F7FBFF' : '#fff', border: m.me ? '1px solid #cfe6fb' : '1px solid #E5E5E5' } });
+    };
+    const s = this.STAGE[this.state.mode === 'COLLECTIVE' ? 'collective' : 'individual'];
+    return this.h(React.Fragment, null,
+      this.pageHead('Team discussion', 'Compare everyone\u2019s original reasoning, then discuss in person. You only see original prep — never what teammates change now.'),
+      this.activityBanner('discuss', 'Team 3 · Maya, Liam, Priya, Sam'),
+      this.h(Alert, { variant: 'info', title: 'Original responses are read-only' }, 'These are the answers your teammates submitted before class. Post-discussion work stays private until it is submitted.'),
+      this.h('div', { style: { height: 18 } }),
+      this.qNav(dq, i => this.setState({ dq: i })),
+      this.panel(this.h('div', { style: { padding: 18, display: 'flex', gap: 12, alignItems: 'flex-start' } },
+        this.h('span', { style: { width: 26, height: 26, borderRadius: 7, background: '#002341', color: '#FCF8EC', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 700, flex: '0 0 auto' } }, q.n),
+        this.h('div', null,
+          this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 } }, this.h(Badge, { variant: 'outline' }, q.type), this.h('span', { style: { fontSize: 12, color: '#0E7C57', display: 'inline-flex', alignItems: 'center', gap: 4 } }, this.icon('IconGradeOutlined', 14), 'Objective: justify a load-bearing decision')),
+          this.h('div', { style: { fontWeight: 500, fontSize: 15, color: '#0A0A0A', lineHeight: 1.5 } }, q.prompt))),
+      { marginBottom: 16 }),
+      this.h('div', { style: { fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#8a8577', margin: '4px 0 10px' } }, 'Your team\u2019s original responses'),
+      this.h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 22 } }, this.data.members.map(memberCard)),
+      this.panel(this.h('div', { style: { padding: 22, borderLeft: '4px solid ' + s.tint } },
+        this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 } },
+          this.stageChip(this.state.mode === 'COLLECTIVE' ? 'collective' : 'individual', { big: true }),
+          this.h('span', { style: { fontSize: 12, color: '#737373' } }, 'set by your instructor')),
+        this.h('div', { style: { fontSize: 14, color: '#444', lineHeight: 1.6, marginBottom: 14, maxWidth: 640 } },
+          this.state.mode === 'COLLECTIVE'
+            ? 'After discussing, your team creates one shared submission. It receives a team grade based on the rubric.'
+            : 'After discussing, each of you privately submits a final response. Each receives an individual grade based on the rubric.'),
+        this.h(Button, { onClick: () => this.go(this.state.mode === 'COLLECTIVE' ? 's-collective' : 's-individual'), endIcon: this.icon('IconArrowForwardOutlined', 16) },
+          this.state.mode === 'COLLECTIVE' ? 'Open shared workspace' : 'Open my private response')),
+      ),
+    );
+  }
+
+  areaLabel(txt, tint) {
+    return this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: tint || '#8a8577', margin: '4px 0 10px' } },
+      this.h('span', { style: { width: 8, height: 8, borderRadius: 2, background: tint || '#c4bda9' } }), txt);
+  }
+
+  miniOriginals() {
+    return this.h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+      this.data.members.map(m => this.h('div', { key: m.id, style: { display: 'flex', gap: 10, alignItems: 'flex-start', padding: 10, background: '#FBFAF6', borderRadius: 9, border: '1px solid #EFE9DA' } },
+        this.avatar(m, 26),
+        this.h('div', { style: { flex: 1 } },
+          this.h('div', { style: { fontSize: 12.5, fontWeight: 600, color: '#002341' } }, m.name.split(' ')[0] + (m.me ? ' (you)' : '') + ' · ' + this.data.originals[m.id].q1),
+          this.h('div', { style: { fontSize: 12, color: '#666', marginTop: 2, lineHeight: 1.4 } }, this.data.originals[m.id].q2)))));
+  }
+
+  // ================= STUDENT: COLLECTIVE WORKSPACE =================
+  screen_s_collective() {
+    const { Textarea, Button, Badge, Alert } = this.C();
+    const present = this.data.members.slice(0, 3);
+    return this.h(React.Fragment, null,
+      this.pageHead('Team\u2019s final response', 'One shared answer for Team 3. Everyone can contribute; one member submits it for a shared grade.',
+        [this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#737373' } }, this.icon('IconAutorenewOutlined', 15, '#0E7C57'), 'Autosaved')]),
+      this.activityBanner('collective', 'Shared workspace · starts blank until your team writes together'),
+      this.h('div', { style: { display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20, alignItems: 'start' } },
+        this.h('div', null,
+          this.areaLabel('Your original responses', '#0382ED'),
+          this.miniOriginals(),
+          this.h('div', { style: { marginTop: 10, fontSize: 12, color: '#9a9a9a', display: 'flex', gap: 6, alignItems: 'flex-start' } }, this.icon('IconLockOutlined', 14), 'Originals stay read-only. Nothing is copied in automatically.')),
+        this.h('div', null,
+          this.areaLabel('Your team\u2019s final response', '#FF6713'),
+          this.panel(this.h('div', { style: { padding: 18 } },
+            this.h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 } },
+              this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 6 } },
+                present.map(m => this.h('span', { key: m.id, title: m.name, style: { marginRight: -8 } }, this.avatar(m, 26))),
+                this.h('span', { style: { fontSize: 12, color: '#737373', marginLeft: 14 } }, 'Liam is editing')),
+              this.h('span', { style: { fontSize: 12, color: '#9a9a9a', display: 'inline-flex', gap: 5, alignItems: 'center' } }, this.icon('IconAccessTimeOutlined', 14), 'Edited 2:14 PM')),
+            this.h(Textarea, { rows: 10, placeholder: 'Write your team\u2019s agreed response here…', value: this.state.collectiveText, onChange: e => this.setState({ collectiveText: e.target.value }) }),
+            this.h('div', { style: { display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' } },
+              this.h(Button, { variant: 'outline', size: 'sm', startIcon: this.icon('IconFileUploadOutlined', 15) }, 'Attach final calculations'),
+              this.h(Button, { variant: 'ghost', size: 'sm', startIcon: this.icon('IconContentCopyOutlined', 15) }, 'Copy selected original in')))),
+          this.h('div', { style: { height: 14 } }),
+          this.h(Alert, { variant: 'default', title: 'Participation & submission' }, 'All members confirm participation, then one member submits for the whole team.'),
+          this.h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14 } },
+            this.h(Button, { variant: 'outline', onClick: () => this.go('s-discussion') }, 'Back to discussion'),
+            this.h(Button, { onClick: () => this.go('s-participation'), endIcon: this.icon('IconArrowForwardOutlined', 16) }, 'Confirm & review'))),
+      ),
+    );
+  }
+
+  submittedCard(title, lines, mode) {
+    const { Button, Badge } = this.C();
+    return this.h('div', { style: { maxWidth: 560, margin: '0 auto' } },
+      this.panel(this.h('div', { style: { padding: 30, textAlign: 'center' } },
+        this.h('span', { style: { width: 60, height: 60, borderRadius: '50%', background: '#E7F5EF', color: '#0E7C57', display: 'inline-grid', placeItems: 'center', marginBottom: 12 } }, this.icon('IconCheckCircleOutlined', 34)),
+        this.h('h2', { style: { fontFamily: '"Copernicus Trial", serif', fontSize: 24, color: '#002341', margin: '0 0 6px' } }, title),
+        this.h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8, textAlign: 'left', marginTop: 16 } },
+          lines.map((l, i) => this.h('div', { key: i, style: { display: 'flex', gap: 10, alignItems: 'center', fontSize: 14, color: '#444' } }, this.icon(l[0], 17, l[2] || '#0E7C57'), l[1]))),
+        this.h('div', { style: { display: 'flex', gap: 10, marginTop: 22, justifyContent: 'center' } },
+          this.h(Button, { variant: 'outline', onClick: () => this.go('s-activities') }, 'Back to activities'),
+          this.h(Button, { onClick: () => this.go('s-grades') }, 'View status')))));
+  }
+
+  // ================= STUDENT: PRIVATE INDIVIDUAL WORKSPACE =================
+  screen_s_individual() {
+    const { Textarea, Button, Alert } = this.C();
+    if (this.state.indSubmitted) return this.submittedCard('Final response submitted', [
+      ['IconLockOutlined', 'Private · your teammates cannot see this response', '#737373'],
+      ['IconAssignmentOutlined', 'Original prep preserved separately — not overwritten', '#0382ED'],
+      ['IconGradeOutlined', 'Awaiting rubric-based grading', '#8A3FFC'],
+      ['IconAccessTimeOutlined', 'Submitted Thu 1:58 PM', '#0E7C57'],
+    ], 'INDIVIDUAL');
+    return this.h(React.Fragment, null,
+      this.pageHead('My final individual response', 'After discussing, write your own revised answer. This is private — teammates never see it, and it does not replace your original prep.',
+        [this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#737373' } }, this.icon('IconAutorenewOutlined', 15, '#0E7C57'), 'Autosaved')]),
+      this.activityBanner('individual', 'Private response · graded individually against the rubric'),
+      this.h('div', { style: { display: 'grid', gridTemplateColumns: '320px 1fr', gap: 20, alignItems: 'start' } },
+        this.h('div', null,
+          this.areaLabel('Your original responses', '#0382ED'),
+          this.miniOriginals(),
+          this.h('div', { style: { marginTop: 10, fontSize: 12, color: '#9a9a9a', display: 'flex', gap: 6, alignItems: 'flex-start' } }, this.icon('IconLockOutlined', 14), 'Your original prep is kept and never overwritten.')),
+        this.h('div', null,
+          this.areaLabel('Your final individual response', '#002341'),
+          this.panel(this.h('div', { style: { padding: 18 } },
+            this.h(Alert, { variant: 'default', icon: this.icon('IconLockOutlined', 16, '#002341'), title: 'Private to you' }, 'Teammates cannot see what you write here. You may revise until the deadline.'),
+            this.h('div', { style: { height: 12 } }),
+            this.h(Textarea, { rows: 9, placeholder: 'Write your revised answer after the discussion…', value: this.state.individualText, onChange: e => this.setState({ individualText: e.target.value }) }),
+            this.h(Button, { variant: 'outline', size: 'sm', startIcon: this.icon('IconFileUploadOutlined', 15), style: { marginTop: 12 } }, 'Upload final calculations'))),
+          this.h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14 } },
+            this.h(Button, { variant: 'outline', onClick: () => this.go('s-discussion') }, 'Back to discussion'),
+            this.h(Button, { onClick: () => this.setState({ indSubmitted: true }), startIcon: this.icon('IconLockOutlined', 16) }, 'Submit for grading'))),
+      ),
+    );
+  }
+
+  // ================= STUDENT: PARTICIPATION CONFIRMATION =================
+  screen_s_participation() {
+    const { Button, Badge, Switch, Alert } = this.C();
+    if (this.state.teamSubmitted) return this.submittedCard('Team response submitted', [
+      ['IconGroupOutlined', 'Submitted on behalf of Team 3 by Maya Chen', '#FF6713'],
+      ['IconChecklistOutlined', 'All 4 members confirmed participation', '#0E7C57'],
+      ['IconGradeOutlined', 'Awaiting team rubric grade', '#8A3FFC'],
+      ['IconLockOutlined', 'Shared response locked', '#737373'],
+    ], 'COLLECTIVE');
+    const conf = this.state.participation;
+    const allConf = this.data.members.every(m => conf[m.id]);
+    const toggle = (id, v) => this.setState(st => ({ participation: { ...st.participation, [id]: v } }));
+    return this.h('div', { style: { maxWidth: 720, margin: '0 auto' } },
+      this.pageHead('Confirm participation', 'Each member confirms they contributed. Then one member submits the team\u2019s shared response for grading.'),
+      this.panel(this.h('div', { style: { padding: 22 } },
+        this.h('div', { style: { fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#8a8577', marginBottom: 12 } }, 'Team 3 members'),
+        this.h('div', { style: { display: 'flex', flexDirection: 'column', gap: 10 } },
+          this.data.members.map(m => this.h('div', { key: m.id, style: { display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', border: '1px solid #EFE9DA', borderRadius: 10, background: conf[m.id] ? '#F3FAF6' : '#fff' } },
+            this.avatar(m, 32),
+            this.h('div', { style: { flex: 1 } }, this.h('div', { style: { fontWeight: 600, fontSize: 14, color: '#002341' } }, m.name + (m.me ? ' (you)' : '')), this.h('div', { style: { fontSize: 12, color: '#9a9a9a' } }, conf[m.id] ? 'Confirmed contribution' : 'Awaiting confirmation')),
+            conf[m.id] ? this.h(Badge, { variant: 'success', startIcon: this.icon('IconCheckOutlined', 13) }, 'Confirmed') : null,
+            this.h(Switch, { checked: !!conf[m.id], onChange: v => toggle(m.id, v) })))),
+        this.h('div', { style: { height: 16 } }),
+        allConf ? this.h(Alert, { variant: 'success', title: 'All members confirmed' }, 'You can now submit the shared response.') : this.h(Alert, { variant: 'warning', title: 'Waiting on confirmations' }, 'Every member must confirm before the team can submit.'),
+        this.h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 } },
+          this.h(Button, { variant: 'outline', onClick: () => this.go('s-collective') }, 'Back to workspace'),
+          this.h(Button, { disabled: !allConf, onClick: () => this.setState({ teamSubmitted: true }), startIcon: this.icon('IconSendOutlined', 16) }, 'Submit for team'))),
+      ),
+    );
+  }
+
+  // ================= STUDENT: GRADES & FEEDBACK =================
+  screen_s_grades() {
+    const { Badge, Alert } = this.C();
+    const collective = this.state.mode === 'COLLECTIVE';
+    const scores = { 'Correct structure choice': 4, 'Quality of reasoning': 5, 'Load calculation accuracy': 5, 'Units & assumptions': 2, 'Tradeoff analysis': 1 };
+    const total = Object.values(scores).reduce((a, b) => a + b, 0);
+    const fb = {
+      'Correct structure choice': 'Suspension is well justified for the 90 m span.',
+      'Quality of reasoning': 'Strong link to constraints; could weigh cable-stayed alternative more.',
+      'Load calculation accuracy': 'Method and arithmetic correct; T_max ≈ 1180 kN verified.',
+      'Units & assumptions': 'Units stated throughout; sag ratio assumption reasonable.',
+      'Tradeoff analysis': 'Tradeoff noted but not developed — expand on anchorage cost.',
+    };
+    return this.h(React.Fragment, null,
+      this.pageHead('Grades & feedback', collective ? 'Bridge Design Decision · shared team grade' : 'Bridge Design Decision · your individual grade'),
+      this.activityBanner('assess', collective ? 'Team 3 rubric result · released by Dr. Alvarez' : 'Your rubric result · released by Dr. Alvarez'),
+      this.h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20, alignItems: 'start' } },
+        this.panel(this.h('div', { style: { padding: 22 } },
+          this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 } }, this.h('h3', { style: { margin: 0, fontSize: 16, color: '#002341' } }, 'Rubric breakdown'), this.h(Badge, { variant: 'outline' }, 'Instructor-approved')),
+          this.h('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
+            this.data.rubric.map((r, i) => this.h('div', { key: i, style: { borderBottom: '1px solid #F0ECE0', paddingBottom: 12 } },
+              this.h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 } },
+                this.h('span', { style: { fontWeight: 600, fontSize: 14, color: '#002341' } }, r.c),
+                this.h('span', { style: { fontFamily: 'Geist Mono, monospace', fontSize: 13, fontWeight: 600, color: scores[r.c] === r.pts ? '#0E7C57' : '#b06a00' } }, scores[r.c] + ' / ' + r.pts)),
+              this.h('div', { style: { fontSize: 13, color: '#666', lineHeight: 1.5 } }, fb[r.c]))))),
+        ),
+        this.h('div', null,
+          this.panel(this.h('div', { style: { padding: 22, textAlign: 'center' } },
+            this.h('div', { style: { fontSize: 13, color: '#737373', marginBottom: 4 } }, collective ? 'Team grade' : 'Your grade'),
+            this.h('div', { style: { fontFamily: '"Copernicus Trial", serif', fontSize: 44, fontWeight: 700, color: '#002341' } }, total + ' / 20'),
+            this.h(Badge, { variant: collective ? 'orange' : 'default' }, collective ? 'Shared across Team 3' : 'Individual grade'))),
+          this.h('div', { style: { height: 14 } }),
+          this.h(Alert, { variant: 'info', icon: this.icon('IconAutoAwesomeOutlined', 16, '#0382ED'), title: 'How this was graded' }, 'AI suggested scores against the rubric with evidence from your submission; your instructor reviewed and approved them.'),
+          collective ? null : this.h('div', { style: { marginTop: 14 } }, this.h(Badge, { variant: 'lavender' }, 'Original prep preserved — completeness credit awarded separately'))),
+      ),
+    );
+  }
+
+  stepper(steps, current) {
+    return this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 22, flexWrap: 'wrap' } },
+      steps.map((label, i) => this.h(React.Fragment, { key: i },
+        this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+          this.h('span', { style: { width: 26, height: 26, borderRadius: '50%', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 700, background: i < current ? '#0E7C57' : i === current ? '#002341' : '#E7E1D2', color: i <= current ? '#fff' : '#9a8f78' } }, i < current ? this.icon('IconCheckOutlined', 15) : i + 1),
+          this.h('span', { style: { fontSize: 13, fontWeight: i === current ? 700 : 500, color: i === current ? '#002341' : '#9a8f78' } }, label)),
+        i < steps.length - 1 ? this.h('span', { style: { width: 26, height: 2, background: '#E7E1D2' } }) : null)));
+  }
+
+  // ================= INSTRUCTOR: ROSTER IMPORT =================
+  screen_i_roster() {
+    const { Button, Badge, Select, Table, Alert } = this.C();
+    const step = this.state.rosterStep;
+    const steps = ['Upload', 'Map columns', 'Validate', 'Confirm'];
+    let body;
+    if (step === 0) body = this.panel(this.h('div', { style: { padding: 28 } },
+      this.h('div', { onClick: () => this.setState({ rosterStep: 1 }), style: { border: '1.5px dashed #cdd9e3', borderRadius: 14, padding: 40, textAlign: 'center', cursor: 'pointer', background: '#F7FAFD' } },
+        this.icon('IconFileUploadOutlined', 34, '#0382ED'),
+        this.h('div', { style: { fontWeight: 600, color: '#002341', marginTop: 8, fontSize: 15 } }, 'Drop a CSV or Excel roster, or click to browse'),
+        this.h('div', { style: { color: '#737373', fontSize: 13, marginTop: 4 } }, 'Supports .csv, .xlsx · first row should be column headers')),
+      this.h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 18, flexWrap: 'wrap', gap: 12 } },
+        this.h('div', { style: { fontSize: 13, color: '#737373' } }, 'Fields we can read: name, email, student ID, team, section, role'),
+        this.h(Button, { variant: 'outline', size: 'sm', startIcon: this.icon('IconDownloadOutlined', 15) }, 'Download sample template'))));
+    else if (step === 1) {
+      const cols = [['first_name', 'First name'], ['last_name', 'Last name'], ['email', 'Email'], ['id', 'Student ID'], ['team', 'Team name'], ['section', 'Section']];
+      const opts = [{ value: 'first', label: 'First name' }, { value: 'last', label: 'Last name' }, { value: 'email', label: 'Email' }, { value: 'sid', label: 'Student ID' }, { value: 'team', label: 'Team name' }, { value: 'section', label: 'Section' }, { value: 'ignore', label: 'Ignore column' }];
+      body = this.panel(this.h('div', { style: { padding: 24 } },
+        this.h('p', { style: { margin: '0 0 16px', color: '#737373', fontSize: 14 } }, 'Match each column from ', this.h('strong', null, 'roster_fall26.csv'), ' to a platform field.'),
+        this.h('div', { style: { display: 'flex', flexDirection: 'column', gap: 10 } },
+          cols.map((c, i) => this.h('div', { key: i, style: { display: 'grid', gridTemplateColumns: '1fr 24px 220px', gap: 12, alignItems: 'center' } },
+            this.h('div', { style: { padding: '9px 12px', background: '#FBFAF6', border: '1px solid #EFE9DA', borderRadius: 8, fontSize: 13, fontFamily: 'Geist Mono, monospace', color: '#444' } }, c[0]),
+            this.icon('IconArrowForwardOutlined', 16, '#c4bda9'),
+            this.h(Select, { options: opts, defaultValue: opts[i] ? opts[i].value : 'ignore' }))))));
+    } else if (step === 2) {
+      const issue = (icon, tint, n, label) => this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, padding: 12, border: '1px solid #EFE9DA', borderRadius: 10, flex: '1 1 150px' } },
+        this.h('span', { style: { width: 30, height: 30, borderRadius: 8, background: tint + '18', color: tint, display: 'grid', placeItems: 'center' } }, this.icon(icon, 17)),
+        this.h('div', null, this.h('div', { style: { fontWeight: 700, fontSize: 16, color: '#002341' } }, n), this.h('div', { style: { fontSize: 12, color: '#737373' } }, label)));
+      body = this.h('div', null,
+        this.h('div', { style: { display: 'flex', gap: 12, marginBottom: 16, flexWrap: 'wrap' } },
+          issue('IconCheckCircleOutlined', '#0E7C57', '24', 'Valid records'),
+          issue('IconWarningAmberOutlined', '#FF6713', '2', 'Need attention'),
+          issue('IconGroupOutlined', '#0382ED', '6', 'Teams detected'),
+          issue('IconErrorOutlineOutlined', '#b91c1c', '1', 'Missing email')),
+        this.panel(this.h('div', { style: { padding: 0 } },
+          this.h(Table, { columns: [{ key: 'name', header: 'Student' }, { key: 'email', header: 'Email' }, { key: 'sid', header: 'ID' }, { key: 'team', header: 'Team' }, { key: 'flag', header: 'Status' }],
+            rows: [
+              { name: 'Maya Chen', email: 'mchen@uni.edu', sid: 'S1042', team: 'Team 3', flag: this.h(Badge, { variant: 'success' }, 'OK') },
+              { name: 'Liam Ortiz', email: 'lortiz@uni.edu', sid: 'S1043', team: 'Team 3', flag: this.h(Badge, { variant: 'success' }, 'OK') },
+              { name: 'Dana Kim', email: this.h('span', { style: { color: '#b91c1c' } }, 'missing'), sid: 'S1051', team: 'Team 5', flag: this.h(Badge, { variant: 'destructive' }, 'No email') },
+              { name: 'Sam Whitfield', email: 'swhit@uni.edu', sid: 'S1044', team: this.h('span', { style: { color: '#b06a00' } }, 'Team 3 / Team 4'), flag: this.h(Badge, { variant: 'warning' }, 'Two teams') },
+              { name: 'Priya Nair', email: 'pnair@uni.edu', sid: 'S1045', team: 'Team 3', flag: this.h(Badge, { variant: 'success' }, 'OK') },
+            ] }))));
+    } else body = this.h('div', { style: { maxWidth: 520, margin: '0 auto' } }, this.panel(this.h('div', { style: { padding: 30, textAlign: 'center' } },
+      this.h('span', { style: { width: 56, height: 56, borderRadius: '50%', background: '#E7F5EF', color: '#0E7C57', display: 'inline-grid', placeItems: 'center', marginBottom: 12 } }, this.icon('IconGroupOutlined', 32)),
+      this.h('h2', { style: { fontFamily: '"Copernicus Trial", serif', fontSize: 24, color: '#002341', margin: '0 0 6px' } }, 'Roster imported'),
+      this.h('p', { style: { color: '#737373', margin: '0 0 18px' } }, '24 students across 6 teams. Historical team records were preserved.'),
+      this.h(Button, { onClick: () => this.go('i-teams'), endIcon: this.icon('IconArrowForwardOutlined', 16) }, 'Manage teams'))));
+    return this.h(React.Fragment, null,
+      this.pageHead('Roster & import', 'Upload a roster, map columns, resolve issues, then confirm.',
+        step < 3 ? [this.h(Button, { variant: 'ghost', disabled: step === 0, onClick: () => this.setState({ rosterStep: step - 1 }) }, 'Back'),
+          this.h(Button, { onClick: () => this.setState({ rosterStep: step + 1 }), disabled: step === 0 }, step === 2 ? 'Confirm import' : 'Continue')] : null),
+      this.stepper(steps, step),
+      step === 2 ? this.h('div', { style: { marginBottom: 14 } }, this.h(Alert, { variant: 'warning', title: '2 records need attention before some students can join' }, 'Fix the flagged rows, or import now and resolve them later in Team management.')) : null,
+      body);
+  }
+
+  // ================= INSTRUCTOR: TEAM MANAGEMENT =================
+  screen_i_teams() {
+    const { Button, Badge } = this.C();
+    const teams = [
+      { n: 3, members: this.data.members.map(m => ({ ...m })), locked: true },
+      { n: 1, members: [{ initials: 'AR', name: 'Ada R.', tint: '#0382ED' }, { initials: 'BT', name: 'Ben T.', tint: '#8A3FFC' }, { initials: 'CF', name: 'Cara F.', tint: '#0E7C57' }, { initials: 'DL', name: 'Diego L.', tint: '#FF6713' }] },
+      { n: 2, members: [{ initials: 'EN', name: 'Erin N.', tint: '#0382ED' }, { initials: 'FO', name: 'Fatima O.', tint: '#8A3FFC' }, { initials: 'GK', name: 'Gus K.', tint: '#0E7C57' }, { initials: 'HP', name: 'Hana P.', tint: '#FF6713' }] },
+      { n: 4, members: [{ initials: 'IV', name: 'Ivan V.', tint: '#0382ED' }, { initials: 'JW', name: 'Jo W.', tint: '#8A3FFC' }, { initials: 'KM', name: 'Kai M.', tint: '#0E7C57' }] },
+    ];
+    return this.h(React.Fragment, null,
+      this.pageHead('Team management', 'Introduction to Engineering · 24 students · 6 teams',
+        [this.btn('Import updated roster', { variant: 'outline', icon: 'IconFileUploadOutlined', onClick: () => this.go('i-roster') }),
+         this.btn('Create team', { icon: 'IconAddOutlined' })]),
+      this.h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 } },
+        teams.map(t => this.panel(this.h('div', { style: { padding: 20 } },
+          this.h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 } },
+            this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+              this.h('span', { style: { width: 32, height: 32, borderRadius: 9, background: '#F4ECFE', color: '#8A3FFC', display: 'grid', placeItems: 'center' } }, this.icon('IconGroupsOutlined', 18)),
+              this.h('span', { style: { fontWeight: 600, fontSize: 15, color: '#002341' } }, 'Team ' + t.n),
+              t.locked ? this.h(Badge, { variant: 'outline', startIcon: this.icon('IconLockOutlined', 12) }, 'Locked') : null),
+            this.h('span', { style: { fontSize: 12, color: t.members.length < 4 ? '#b06a00' : '#737373' } }, t.members.length + ' members')),
+          this.h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+            t.members.map((m, i) => this.h('div', { key: i, style: { display: 'flex', alignItems: 'center', gap: 10 } },
+              this.avatar(m, 28),
+              this.h('span', { style: { flex: 1, fontSize: 13.5, color: '#333' } }, m.name),
+              i === 0 ? this.h(Badge, { variant: 'sky' }, 'Recorder') : null,
+              this.icon('IconMoreHorizOutlined', 18, '#c4bda9')))),
+          t.members.length < 4 ? this.h('div', { style: { marginTop: 12, fontSize: 12, color: '#b06a00', display: 'flex', gap: 6, alignItems: 'center' } }, this.icon('IconWarningAmberOutlined', 14), 'Fewer than 4 members') : null,
+          this.h('div', { style: { display: 'flex', gap: 8, marginTop: 14 } },
+            this.h(Button, { variant: 'outline', size: 'sm', startIcon: this.icon('IconPersonOutlined', 14) }, 'Add student'),
+            this.h(Button, { variant: 'ghost', size: 'sm', startIcon: this.icon('IconStyleOutlined', 14) }, 'Roles'))),
+        { key: t.n }))),
+    );
+  }
+
+  settingRow(label, desc, on, ai) {
+    const { Switch } = this.C();
+    return this.h('div', { style: { display: 'flex', alignItems: 'flex-start', gap: 14, padding: '12px 0', borderBottom: '1px solid #F0ECE0' } },
+      this.h('div', { style: { flex: 1 } },
+        this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, fontWeight: 500, fontSize: 14, color: '#0A0A0A' } }, label, ai ? this.sparkle('AI') : null),
+        desc ? this.h('div', { style: { fontSize: 12.5, color: '#8a8577', marginTop: 2 } }, desc) : null),
+      this.h(Switch, { defaultChecked: on }));
+  }
+
+  modeSelector() {
+    const opts = [
+      { key: 'COLLECTIVE', stage: 'collective', title: 'One collective response per team', text: 'Students discuss their original responses and create one shared submission. The shared response receives a team grade based on the activity rubric.' },
+      { key: 'INDIVIDUAL', stage: 'individual', title: 'One post-discussion response per student', text: 'Students discuss their original responses, then each student privately submits a final response. Each response receives an individual grade based on the activity rubric.' },
+    ];
+    return this.h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 } },
+      opts.map(o => {
+        const sel = this.state.mode === o.key;
+        const s = this.STAGE[o.stage];
+        return this.h('div', { key: o.key, onClick: () => this.setState({ mode: o.key }),
+          style: { cursor: 'pointer', border: '2px solid ' + (sel ? s.tint : '#E7E1D2'), background: sel ? s.soft : '#fff', borderRadius: 14, padding: 20, transition: 'all .12s' } },
+          this.h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 } },
+            this.h('span', { style: { width: 40, height: 40, borderRadius: 10, background: s.soft, color: s.tint, display: 'grid', placeItems: 'center' } }, this.icon(s.icon, 22)),
+            this.icon(sel ? 'IconRadioButtonCheckedOutlined' : 'IconRadioButtonUncheckedOutlined', 22, sel ? s.tint : '#c4bda9')),
+          this.h('div', { style: { fontWeight: 600, fontSize: 15, color: '#002341', marginBottom: 6 } }, o.title),
+          this.h('div', { style: { fontSize: 13, color: '#5a5a5a', lineHeight: 1.55 } }, o.text));
+      }));
+  }
+
+  // ================= INSTRUCTOR: ACTIVITY BUILDER =================
+  screen_i_builder() {
+    const { Tabs, Input, Textarea, Button, Badge, Select } = this.C();
+    const tab = this.state.builderTab || 'details';
+    const tabs = [
+      { value: 'details', label: 'Details' },
+      { value: 'questions', label: 'Questions' },
+      { value: 'prep', label: 'Individual prep' },
+      { value: 'team', label: 'Team stage' },
+      { value: 'mode', label: 'Submission mode' },
+    ];
+    const fieldWrap = (label, node) => this.h('div', { style: { marginBottom: 16 } }, this.h('div', { style: { fontSize: 13, fontWeight: 600, color: '#002341', marginBottom: 6 } }, label), node);
+    let content;
+    if (tab === 'details') content = this.panel(this.h('div', { style: { padding: 24, maxWidth: 720 } },
+      fieldWrap('Activity title', this.h(Input, { defaultValue: 'Bridge Design Decision' })),
+      fieldWrap('Description', this.h(Textarea, { rows: 2, defaultValue: 'Evaluate structural options for a 90 m gorge crossing and justify a load-bearing decision.' })),
+      fieldWrap('Learning objectives', this.h(Textarea, { rows: 2, defaultValue: '• Select an appropriate structure for span & site\n• Compute load on a key structural element\n• Weigh a design tradeoff' })),
+      this.h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 } },
+        fieldWrap('Estimated time', this.h(Input, { defaultValue: '45 min' })),
+        fieldWrap('Individual due', this.h(Input, { defaultValue: 'Wed 11:59 PM' })),
+        fieldWrap('Grade value', this.h(Input, { defaultValue: '20 pts' })))));
+    else if (tab === 'questions') content = this.h('div', null,
+      this.h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 8, marginBottom: 12 } },
+        this.h(Button, { variant: 'ghost', size: 'sm', startIcon: this.icon('IconVisibilityOutlined', 15), onClick: () => { this.setState({ role: 'student', screen: 's-question' }); } }, 'Preview student view'),
+        this.h(Button, { variant: 'outline', size: 'sm', startIcon: this.icon('IconAddOutlined', 15) }, 'Add question')),
+      this.h('div', { style: { display: 'flex', flexDirection: 'column', gap: 10 } },
+        this.data.activity.questions.map(q => this.panel(this.h('div', { style: { padding: 16, display: 'flex', gap: 12, alignItems: 'flex-start' } },
+          this.icon('IconDragIndicatorOutlined', 20, '#c4bda9'),
+          this.h('span', { style: { width: 24, height: 24, borderRadius: 6, background: '#002341', color: '#FCF8EC', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 700, flex: '0 0 auto', marginTop: 1 } }, q.n),
+          this.h('div', { style: { flex: 1 } },
+            this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 } }, this.h(Badge, { variant: 'outline' }, q.type), q.n === 4 ? this.h(Badge, { variant: 'sky' }, 'Written work required') : null),
+            this.h('div', { style: { fontSize: 14, color: '#333' } }, q.prompt)),
+          this.h('div', { style: { display: 'flex', gap: 4 } }, this.icon('IconContentCopyOutlined', 18, '#c4bda9'), this.icon('IconDeleteOutlineOutlined', 18, '#c4bda9'))),
+        { key: q.n }))));
+    else if (tab === 'prep') content = this.panel(this.h('div', { style: { padding: 24, maxWidth: 760 } },
+      this.h('div', { style: { fontSize: 13, color: '#737373', marginBottom: 6 } }, 'Individual prep is assessed for completeness, not correctness.'),
+      this.settingRow('Require every question attempted', 'Blocks submission until all questions have a response.', true),
+      this.settingRow('Require written reasoning', 'Short answers must include an explanation.', true),
+      this.settingRow('Require uploaded work on Q3', 'Handwritten calculations must be attached.', true),
+      this.settingRow('Require OCR confirmation', 'Student reviews the transcription before submitting.', true),
+      this.settingRow('Use AI completeness assessment', 'Flags blank, illegible, or off-topic work for review.', true, true),
+      this.settingRow('Hide correctness feedback', 'Students don\u2019t see if answers are right before discussion.', true),
+      this.settingRow('Lock original after submission', 'Original response can never be overwritten.', true),
+      this.settingRow('Award preparation credit', 'Completion earns preparation points.', true)));
+    else if (tab === 'team') content = this.panel(this.h('div', { style: { padding: 24, maxWidth: 760 } },
+      this.settingRow('Require individual completion before access', 'Students must submit prep to enter the team stage.', true),
+      this.settingRow('Show teammates\u2019 names', 'Otherwise responses appear anonymously.', true),
+      this.settingRow('Show original responses only', 'Never expose in-progress or post-discussion work.', true),
+      this.settingRow('Show original uploaded work & OCR', 'Teammates can view calculations and transcriptions.', true),
+      this.settingRow('Release one question at a time', 'Pace the discussion question by question.', false),
+      this.settingRow('Allow instructor to pause the activity', 'Freeze all teams during a class-wide point.', true)));
+    else content = this.h('div', null,
+      this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 } }, this.h('span', { style: { fontWeight: 600, fontSize: 15, color: '#002341' } }, 'Post-discussion submission type'), this.h(Badge, { variant: 'destructive' }, 'Required')),
+      this.h('div', { style: { fontSize: 13, color: '#737373', marginBottom: 14 } }, 'Choose what the assessed post-discussion product is. This changes the student experience.'),
+      this.modeSelector(),
+      this.h('div', { style: { height: 18 } }),
+      this.panel(this.h('div', { style: { padding: 22, maxWidth: 760 } },
+        this.h('div', { style: { fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#8a8577', marginBottom: 4 } }, this.state.mode === 'COLLECTIVE' ? 'Collective submission settings' : 'Individual submission settings'),
+        this.state.mode === 'COLLECTIVE' ? this.h('div', null,
+          this.settingRow('Allow all team members to edit', 'Otherwise only a designated recorder edits.', true),
+          this.settingRow('Require participation confirmation', 'Each member confirms before submission.', true),
+          this.settingRow('Apply the same grade to all members', 'Instructor may still adjust individually.', true),
+          this.settingRow('Show contribution & edit history', 'Track who wrote what.', true),
+          this.settingRow('Begin with a blank shared workspace', 'No original answer is copied in automatically.', true)) : this.h('div', null,
+          this.settingRow('Require every student to submit', 'Each student produces a private final response.', true),
+          this.settingRow('Keep post-discussion responses private', 'Teammates cannot see each other\u2019s final work.', true),
+          this.settingRow('Limit students to one final submission', 'Locks the response after submitting.', true),
+          this.settingRow('Release teammates\u2019 responses after grading', 'Optional reveal once grades are posted.', false),
+          this.settingRow('Use AI-suggested grading', 'AI proposes rubric scores for instructor approval.', true, true)),
+        this.h('div', { style: { marginTop: 14 } }, this.h(Button, { variant: 'ghost', size: 'sm', startIcon: this.icon('IconVisibilityOutlined', 15), onClick: () => { this.setState({ role: 'student', screen: 's-discussion' }); } }, 'Preview how students see this')))));
+    return this.h(React.Fragment, null,
+      this.pageHead('Activity builder', 'Bridge Design Decision · draft',
+        [this.h(Button, { variant: 'outline', startIcon: this.icon('IconAutoAwesomeOutlined', 15), onClick: () => this.go('i-ai') }, 'Regenerate with AI'),
+         this.h(Button, { startIcon: this.icon('IconCheckOutlined', 16) }, 'Publish activity')]),
+      this.h(Tabs, { tabs, value: tab, onChange: v => this.setState({ builderTab: v }) }),
+      this.h('div', { style: { height: 18 } }),
+      content);
+  }
+
+  sourceItem(icon, name, meta) {
+    return this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, padding: '9px 11px', border: '1px solid #EFE9DA', borderRadius: 9, background: '#FBFAF6' } },
+      this.h('span', { style: { width: 28, height: 28, borderRadius: 7, background: '#EAF4FE', color: '#0382ED', display: 'grid', placeItems: 'center', flex: '0 0 auto' } }, this.icon(icon, 16)),
+      this.h('div', { style: { flex: 1, minWidth: 0 } }, this.h('div', { style: { fontSize: 13, fontWeight: 500, color: '#002341', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, name), this.h('div', { style: { fontSize: 11, color: '#9a9a9a' } }, meta)),
+      this.icon('IconCheckCircleOutlined', 16, '#0E7C57'));
+  }
+
+  aiQuestionCard(q, tags) {
+    const { Badge, Button } = this.C();
+    const meta = (label, val, spark) => this.h('div', { style: { display: 'flex', gap: 8, fontSize: 12.5, padding: '5px 0' } },
+      this.h('span', { style: { color: '#8a8577', width: 128, flex: '0 0 auto', display: 'flex', alignItems: 'center', gap: 4 } }, spark ? this.icon('IconAutoAwesomeOutlined', 13, '#FF6713') : null, label), this.h('span', { style: { color: '#444', flex: 1 } }, val));
+    return this.panel(this.h('div', { style: { padding: 18 } },
+      this.h('div', { style: { display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 10 } },
+        this.h('span', { style: { width: 24, height: 24, borderRadius: 6, background: '#002341', color: '#FCF8EC', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 700, flex: '0 0 auto', marginTop: 2 } }, q.n),
+        this.h('div', { style: { flex: 1 } }, this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 } }, this.h(Badge, { variant: 'outline' }, q.type), this.h(Badge, { variant: tags.diff === 'Hard' ? 'orange' : tags.diff === 'Medium' ? 'sky' : 'secondary' }, tags.diff)), this.h('div', { style: { fontSize: 14, color: '#0A0A0A', fontWeight: 500 } }, q.prompt))),
+      this.h('div', { style: { background: '#FBFAF6', borderRadius: 9, padding: '8px 12px', margin: '4px 0 12px' } },
+        meta('Learning objective', tags.obj, true),
+        meta('Source used', tags.src, true),
+        meta('Suggested answer', tags.ans, true),
+        meta('Completeness rule', tags.comp, true),
+        meta('Likely misconception', tags.mis, true)),
+      this.h('div', { style: { display: 'flex', gap: 6, flexWrap: 'wrap' } },
+        this.h(Button, { variant: 'primary', size: 'sm', startIcon: this.icon('IconCheckOutlined', 14) }, 'Accept'),
+        this.h(Button, { variant: 'outline', size: 'sm', startIcon: this.icon('IconEditOutlined', 14) }, 'Edit'),
+        this.h(Button, { variant: 'ghost', size: 'sm', startIcon: this.icon('IconRefreshOutlined', 14) }, 'Regenerate'),
+        this.h(Button, { variant: 'ghost', size: 'sm' }, 'Add follow-up'))),
+    { key: q.n, marginBottom: 12 });
+  }
+
+  // ================= INSTRUCTOR: AI ACTIVITY GENERATION =================
+  screen_i_ai() {
+    const { Button, Badge, Select, Alert } = this.C();
+    const gen = this.state.aiGenerated;
+    const tags = [
+      { diff: 'Easy', obj: 'Select appropriate structure', src: 'Reading: Bridge structures §2', ans: 'Suspension bridge', comp: 'One option selected', mis: 'Arch viable at 90 m' },
+      { diff: 'Medium', obj: 'Justify against constraints', src: 'Design constraints sheet', ans: 'Span + gorge depth favor tension system', comp: '≥ 2 constraints referenced', mis: 'Ignoring wind loading' },
+      { diff: 'Hard', obj: 'Compute load on element', src: 'Lecture slides 12–15', ans: 'T_max ≈ 1180 kN per cable', comp: 'Shows method + units', mis: 'Confusing H with T_max' },
+      { diff: 'Medium', obj: 'Document reasoning', src: 'Answer key', ans: 'Legible handwritten calc uploaded', comp: 'File attached & readable', mis: 'Missing pages' },
+      { diff: 'Medium', obj: 'Weigh a tradeoff', src: 'Site diagram', ans: 'Anchorage cost vs. stiffness', comp: 'One tradeoff, explained', mis: 'Restating the choice' },
+    ];
+    const params = [
+      ['Student level', 'First-year undergraduate'], ['Subject area', 'Structural engineering'], ['Length', '5 questions · 45 min'],
+      ['Difficulty', 'Introductory → applied'], ['Thinking type', 'Conceptual + quantitative'], ['Final submission', this.state.mode === 'COLLECTIVE' ? 'Collective team' : 'Individual'],
+    ];
+    return this.h(React.Fragment, null,
+      this.pageHead('Generate activity with AI', 'Upload course materials and set parameters. AI drafts an editable activity with source citations — nothing publishes automatically.'),
+      this.h('div', { style: { display: 'grid', gridTemplateColumns: '340px 1fr', gap: 20, alignItems: 'start' } },
+        this.h('div', { style: { display: 'flex', flexDirection: 'column', gap: 16 } },
+          this.panel(this.h('div', { style: { padding: 18 } },
+            this.h('div', { style: { fontSize: 13, fontWeight: 700, color: '#002341', marginBottom: 10 } }, 'Source materials'),
+            this.h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+              this.sourceItem('IconMenuBookOutlined', 'Bridge structures (reading).pdf', '6 pages'),
+              this.sourceItem('IconInsertChartOutlined', 'Lecture slides 12–15.pdf', '4 slides'),
+              this.sourceItem('IconChecklistOutlined', 'Design constraints.docx', 'Site limits'),
+              this.sourceItem('IconImageOutlined', 'Gorge site diagram.png', 'Elevation')),
+            this.h(Button, { variant: 'outline', size: 'sm', fullWidth: true, startIcon: this.icon('IconFileUploadOutlined', 15), style: { marginTop: 10 } }, 'Add material'))),
+          this.panel(this.h('div', { style: { padding: 18 } },
+            this.h('div', { style: { fontSize: 13, fontWeight: 700, color: '#002341', marginBottom: 10 } }, 'Parameters'),
+            this.h('div', { style: { display: 'flex', flexDirection: 'column', gap: 9 } },
+              params.map((p, i) => this.h('div', { key: i, style: { display: 'flex', justifyContent: 'space-between', fontSize: 12.5, borderBottom: '1px solid #F0ECE0', paddingBottom: 7 } }, this.h('span', { style: { color: '#8a8577' } }, p[0]), this.h('span', { style: { color: '#333', fontWeight: 500, textAlign: 'right' } }, p[1])))),
+            this.h(Button, { fullWidth: true, startIcon: this.icon('IconAutoAwesomeOutlined', 16), style: { marginTop: 14 }, onClick: () => this.setState({ aiGenerated: true }) }, gen ? 'Regenerate draft' : 'Generate draft'))),
+        ),
+        gen ? this.h('div', null,
+          this.h('div', { style: { marginBottom: 12 } }, this.h(Alert, { variant: 'info', icon: this.icon('IconAutoAwesomeOutlined', 16, '#0382ED'), title: 'Draft generated from 4 sources' }, 'Review each question. Every item keeps a citation to the material it came from. Accept, edit, or regenerate before publishing.')),
+          this.data.activity.questions.map((q, i) => this.aiQuestionCard(q, tags[i])),
+          this.h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 6 } },
+            this.h(Button, { variant: 'outline', onClick: () => this.go('i-rubric') }, 'Generate matching rubric'),
+            this.h(Button, { onClick: () => this.go('i-builder'), endIcon: this.icon('IconArrowForwardOutlined', 16) }, 'Open in builder'))) :
+          this.panel(this.h('div', { style: { padding: 60, textAlign: 'center', color: '#9a9a9a' } },
+            this.h('span', { style: { width: 56, height: 56, borderRadius: 14, background: '#FFF0E6', color: '#FF6713', display: 'inline-grid', placeItems: 'center', marginBottom: 12 } }, this.icon('IconAutoAwesomeOutlined', 30)),
+            this.h('div', { style: { fontWeight: 600, color: '#002341', fontSize: 15 } }, 'Ready to draft your activity'),
+            this.h('div', { style: { fontSize: 13, marginTop: 4 } }, 'Set parameters and generate — you\u2019ll get editable questions with answer keys, completeness rules and rubric hints.'))),
+      ),
+    );
+  }
+
+  // ================= INSTRUCTOR: RUBRIC BUILDER =================
+  screen_i_rubric() {
+    const { Button, Badge, Alert, Switch } = this.C();
+    const gen = this.state.rubricGenerated;
+    const levels = ['Exemplary', 'Proficient', 'Developing', 'Beginning'];
+    return this.h(React.Fragment, null,
+      this.pageHead('Rubric builder', 'Bridge Design Decision · used to grade the post-discussion submission',
+        [this.h(Button, { variant: 'outline', startIcon: this.icon('IconAutoAwesomeOutlined', 15), onClick: () => this.setState({ rubricGenerated: true }) }, gen ? 'Regenerate' : 'Generate with AI'),
+         this.h(Button, { startIcon: this.icon('IconCheckOutlined', 16), disabled: !gen }, 'Approve rubric')]),
+      gen ? this.h('div', { style: { marginBottom: 14 } }, this.h(Alert, { variant: 'warning', icon: this.icon('IconAutoAwesomeOutlined', 16, '#b45309'), title: 'AI-generated — your approval required' }, 'This rubric was drafted from the activity and source materials. Review every criterion; it will not be used for grading until you approve it.')) : null,
+      gen ? this.h('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
+        this.data.rubric.map((r, i) => this.panel(this.h('div', { style: { padding: 18 } },
+          this.h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 } },
+            this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, this.h('span', { style: { fontWeight: 600, fontSize: 14.5, color: '#002341' } }, r.c), this.sparkle('AI')),
+            this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 12 } },
+              this.h('span', { style: { fontSize: 12.5, color: '#737373' } }, r.pts + ' pts'),
+              this.h('span', { style: { fontSize: 12, color: '#0382ED', display: 'inline-flex', gap: 4, alignItems: 'center' } }, this.icon('IconAutoAwesomeOutlined', 13), 'AI may score'),
+              this.h(Switch, { defaultChecked: true }))),
+          this.h('div', { style: { fontSize: 12.5, color: '#8a8577', marginBottom: 10 } }, r.desc),
+          this.h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 } },
+            levels.map((lv, j) => this.h('div', { key: j, style: { border: '1px solid #EFE9DA', borderRadius: 8, padding: '8px 10px', background: j === 0 ? '#F3FAF6' : '#fff' } },
+              this.h('div', { style: { fontSize: 11, fontWeight: 700, color: '#002341', display: 'flex', justifyContent: 'space-between' } }, lv, this.h('span', { style: { color: '#9a9a9a' } }, Math.round(r.pts * (1 - j / 4)))),
+              this.h('div', { style: { fontSize: 11, color: '#8a8577', marginTop: 3, lineHeight: 1.35 } }, j === 0 ? 'Fully meets criterion with clear evidence.' : j === 1 ? 'Meets criterion with minor gaps.' : j === 2 ? 'Partially addresses criterion.' : 'Little or no evidence.'))))),
+        { key: i })),
+      ) : this.panel(this.h('div', { style: { padding: 56, textAlign: 'center', color: '#9a9a9a' } },
+        this.h('span', { style: { width: 56, height: 56, borderRadius: 14, background: '#F4ECFE', color: '#8A3FFC', display: 'inline-grid', placeItems: 'center', marginBottom: 12 } }, this.icon('IconChecklistOutlined', 30)),
+        this.h('div', { style: { fontWeight: 600, color: '#002341', fontSize: 15 } }, 'Build a rubric manually or generate one'),
+        this.h('div', { style: { fontSize: 13, marginTop: 4, maxWidth: 420, marginLeft: 'auto', marginRight: 'auto' } }, 'AI can draft criteria, performance levels and point values from the activity, answer key or learning objectives. You review and approve.'))),
+      this.h('div', { style: { height: 22 } }),
+      this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 } },
+        this.h('span', { style: { fontWeight: 600, fontSize: 15, color: '#002341', display: 'inline-flex', alignItems: 'center', gap: 7 } }, this.icon('IconMicNoneOutlined', 18, '#8A3FFC'), 'Oral check-in rubric'),
+        this.h(Badge, { variant: 'lavender' }, 'Preset · used during live discussion')),
+      this.h('div', { style: { fontSize: 13, color: '#737373', marginBottom: 12, maxWidth: 640 } }, 'Applied when you run a random oral check-in from the live dashboard. Scored separately from the written submission — it never changes the team grade or completeness credit.'),
+      this.panel(this.h('div', { style: { padding: 18 } },
+        this.h('div', { style: { display: 'flex', flexDirection: 'column', gap: 10 } },
+          this.data.oralRubric.map((r, i) => this.h('div', { key: i, style: { display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 0', borderBottom: i < this.data.oralRubric.length - 1 ? '1px solid #F0ECE0' : 'none' } },
+            this.h('span', { style: { width: 26, height: 26, borderRadius: 7, background: '#F4ECFE', color: '#8A3FFC', display: 'grid', placeItems: 'center', flex: '0 0 auto', fontSize: 13, fontWeight: 700 } }, i + 1),
+            this.h('div', { style: { flex: 1 } }, this.h('div', { style: { fontWeight: 600, fontSize: 14, color: '#002341' } }, r.c), this.h('div', { style: { fontSize: 12.5, color: '#8a8577', marginTop: 1 } }, r.desc)),
+            this.h('span', { style: { fontFamily: 'Geist Mono, monospace', fontSize: 12.5, color: '#737373', flex: '0 0 auto' } }, r.pts + ' pts')))),
+        this.h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, paddingTop: 12, borderTop: '1px solid #F0ECE0' } },
+          this.h(Button, { variant: 'outline', size: 'sm', startIcon: this.icon('IconEditOutlined', 15) }, 'Edit oral rubric'),
+          this.h('span', { style: { fontSize: 13, color: '#002341', fontWeight: 600 } }, 'Total ' + this.data.oralRubric.reduce((a, r) => a + r.pts, 0) + ' pts')))),
+    );
+  }
+
+  // ================= INSTRUCTOR: LIVE DASHBOARD =================
+  screen_i_live() {
+    const { Button, Badge } = this.C();
+    const teams = [
+      { n: 1, status: 'Submitted', tint: 'success', prog: 100, prep: 4 },
+      { n: 2, status: 'Active', tint: 'lavender', prog: 60, prep: 4 },
+      { n: 3, status: 'Active', tint: 'lavender', prog: 45, prep: 4 },
+      { n: 4, status: 'Needs help', tint: 'warning', prog: 30, prep: 3 },
+      { n: 5, status: 'Active', tint: 'lavender', prog: 55, prep: 3 },
+      { n: 6, status: 'Not started', tint: 'secondary', prog: 0, prep: 4 },
+    ];
+    const ctrl = (label, icon, variant) => this.h(Button, { variant: variant || 'outline', size: 'sm', startIcon: this.icon(icon, 15) }, label);
+    return this.h(React.Fragment, null,
+      this.pageHead('Live dashboard', 'Bridge Design Decision · team stage is open'),
+      this.panel(this.h('div', { style: { padding: 16, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' } },
+        this.h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 7, fontWeight: 600, color: '#8A3FFC', fontSize: 14 } }, this.h('span', { style: { width: 9, height: 9, borderRadius: '50%', background: '#8A3FFC', boxShadow: '0 0 0 4px #8A3FFC22' } }), 'Team discussion live'),
+        this.h('span', { style: { color: '#c4bda9' } }, '·'),
+        this.h('span', { style: { fontSize: 13, color: '#737373' } }, '18:24 remaining'),
+        this.h('div', { style: { flex: 1 } }),
+        ctrl('Release Q2', 'IconChecklistOutlined'), ctrl('Extend time', 'IconAccessTimeOutlined'), ctrl('Announce', 'IconSendOutlined'), ctrl('Pause', 'IconPauseOutlined'),
+        this.h(Button, { size: 'sm', variant: 'destructive', startIcon: this.icon('IconLockOutlined', 15) }, 'Close stage')),
+      { marginBottom: 18 }),
+      this.h('div', { style: { display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 20 } },
+        this.statCard('Prep complete', '21 / 24', 'IconCheckCircleOutlined', '#0E7C57', 'before team stage'),
+        this.statCard('Missing prep', '3', 'IconPersonOutlined', '#FF6713', 'joined without prep'),
+        this.statCard('Teams active', '4 / 6', 'IconGroupsOutlined', '#8A3FFC', '1 submitted, 1 idle'),
+        this.statCard('Needs assistance', '1', 'IconWarningAmberOutlined', '#b45309', 'Team 4 flagged')),
+      this.h('div', { style: { fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#8a8577', margin: '4px 0 10px', display: 'flex', alignItems: 'center', gap: 8 } },
+        this.h('span', null, 'Team status'),
+        this.h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 5, textTransform: 'none', letterSpacing: 0, fontWeight: 500, fontSize: 12, color: '#8a8577' } }, this.icon('IconMicNoneOutlined', 15, '#8A3FFC'), 'Click a team to run an oral check-in')),
+      this.h('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 } },
+        teams.map(t => { const launchable = t.status !== 'Not started'; return this.panel(this.h('div', { style: { padding: 16, cursor: launchable ? 'pointer' : 'default' }, onClick: launchable ? () => this.startOral(t.n) : undefined },
+          this.h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 } },
+            this.h('span', { style: { fontWeight: 600, color: '#002341' } }, 'Team ' + t.n),
+            this.h(Badge, { variant: t.tint }, t.status)),
+          this.h('div', { style: { height: 7, borderRadius: 5, background: '#EFE9DA', overflow: 'hidden', marginBottom: 8 } }, this.h('div', { style: { width: t.prog + '%', height: '100%', background: t.status === 'Submitted' ? '#0E7C57' : t.status === 'Needs help' ? '#FF6713' : '#8A3FFC' } })),
+          this.h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: launchable ? 12 : 0 } },
+            this.h('span', { style: { display: 'flex', gap: 3 } }, [0, 1, 2, 3].map(d => this.h('span', { key: d, style: { width: 8, height: 8, borderRadius: '50%', background: d < t.prep ? '#0E7C57' : '#E1DAC9' } }))),
+            t.status === 'Needs help' ? this.h('button', { onClick: e => { e.stopPropagation(); }, style: { border: 'none', background: 'none', color: '#0382ED', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'Geist' } }, 'Message team') : this.h('span', { style: { fontSize: 12, color: '#9a9a9a' } }, t.prep + '/4 prepped')),
+          launchable ? this.h(Button, { variant: 'outline', size: 'sm', fullWidth: true, startIcon: this.icon('IconMicNoneOutlined', 15), onClick: e => { e.stopPropagation(); this.startOral(t.n); } }, 'Oral check-in') : null),
+        { key: t.n }); })),
+    );
+  }
+
+  oralRecs(n) { return (this.state.oralRecords || {})[n] || []; }
+  availIdx(n) {
+    const members = this.teamMembers(n);
+    const seen = this.oralRecs(n).map(r => r.id);
+    return members.map((m, i) => i).filter(i => !seen.includes(members[i].id));
+  }
+  pushOralRec(n, rec) {
+    this.setState(st => { const recs = { ...(st.oralRecords || {}) }; recs[n] = [...(recs[n] || []), rec]; return { oralRecords: recs }; });
+  }
+
+  startOral(n) {
+    this.setState({ screen: 'i-oral', oralTeam: n, oralPhase: 'select', oralPicked: null, oralSpinning: false, oralQuestion: 1, oralScores: {} });
+    const m = document.getElementById('tlp-main'); if (m) m.scrollTop = 0;
+  }
+
+  spinPick() {
+    const n = this.state.oralTeam;
+    const members = this.teamMembers(n);
+    const avail = this.availIdx(n);
+    if (!avail.length) return;
+    this.setState({ oralSpinning: true, oralPicked: avail[0], oralScores: {} });
+    let ticks = 0;
+    const total = 16 + Math.floor(Math.random() * 5);
+    clearInterval(this._spin);
+    this._spin = setInterval(() => {
+      ticks++;
+      this.setState({ oralPicked: avail[ticks % avail.length] });
+      if (ticks >= total) {
+        clearInterval(this._spin);
+        const final = avail[Math.floor(Math.random() * avail.length)];
+        this.setState({ oralPicked: final, oralSpinning: false, oralPhase: 'present' });
+      }
+    }, 90);
+  }
+
+  markAbsent(n, m) {
+    this.pushOralRec(n, { id: m.id, name: m.name, initials: m.initials, tint: m.tint, absent: true });
+    this.setState({ oralPhase: 'select', oralPicked: null, oralScores: {} });
+  }
+
+  applyTeamAverage(n, avg) {
+    this.setState(st => ({ oralApplied: { ...(st.oralApplied || {}), [n]: avg } }));
+  }
+
+  // ================= INSTRUCTOR: ORAL CHECK-IN =================
+  screen_i_oral() {
+    const { Button, Badge, Input, Alert } = this.C();
+    const n = this.state.oralTeam || 3;
+    const members = this.teamMembers(n);
+    const phase = this.state.oralPhase || 'select';
+    const picked = this.state.oralPicked;
+    const q = this.data.activity.questions[(this.state.oralQuestion || 1) - 1];
+    const back = this.h(Button, { variant: 'ghost', startIcon: this.icon('IconArrowBackOutlined', 16), onClick: () => this.go('i-live') }, 'Back to live dashboard');
+    const recs = this.oralRecs(n);
+    const recMap = {}; recs.forEach(r => { recMap[r.id] = r; });
+    const present = recs.filter(r => !r.absent);
+    const avg = present.length ? Math.round(present.reduce((a, r) => a + r.score, 0) / present.length * 10) / 10 : 0;
+    const avail = this.availIdx(n);
+    const applied = (this.state.oralApplied || {})[n];
+
+    // running roster of who's been checked / absent / pending
+    const rosterStrip = recs.length ? this.panel(this.h('div', { style: { padding: 14 } },
+      this.h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 } },
+        this.h('span', { style: { fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#8a8577' } }, 'Check-ins so far · Team ' + n),
+        present.length ? this.h('span', { style: { fontSize: 12.5, color: '#002341' } }, 'Team average ', this.h('strong', null, avg + ' / 10')) : null),
+      this.h('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 8 } },
+        members.map(m => { const r = recMap[m.id]; const st = r ? (r.absent ? 'absent' : 'done') : 'pending';
+          return this.h('span', { key: m.id, style: { display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 999, fontSize: 12.5, fontWeight: 500, border: '1px solid ' + (st === 'done' ? '#bfe3d1' : st === 'absent' ? '#e6d3a8' : '#E1DAC9'), background: st === 'done' ? '#EAF6EF' : st === 'absent' ? '#FBF3DF' : '#fff', color: st === 'absent' ? '#8a6d1a' : '#333' } },
+            this.icon(st === 'done' ? 'IconCheckCircleOutlined' : st === 'absent' ? 'IconEventBusyOutlined' : 'IconRadioButtonUncheckedOutlined', 14, st === 'done' ? '#0E7C57' : st === 'absent' ? '#b45309' : '#c4bda9'),
+            m.name.split(' ')[0], r && !r.absent ? this.h('span', { style: { fontFamily: 'Geist Mono, monospace', color: '#0E7C57' } }, r.score) : r && r.absent ? this.h('span', null, 'absent') : null); })))) : null;
+
+    if (phase === 'select') {
+      const noneLeft = avail.length === 0;
+      return this.h(React.Fragment, null,
+        this.pageHead('Oral check-in · Team ' + n, 'Randomly select a member to present. Score it against your oral rubric, or mark the student absent — both are kept separate from the written submission.', [back]),
+        rosterStrip ? this.h('div', { style: { marginBottom: 16 } }, rosterStrip) : null,
+        this.h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20, alignItems: 'start' } },
+          this.panel(this.h('div', { style: { padding: 28, textAlign: 'center' } },
+            this.h('div', { style: { fontSize: 13, color: '#737373', marginBottom: 16, display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'center' } }, this.icon('IconCasinoOutlined', 16, '#8A3FFC'), this.state.oralSpinning ? 'Selecting a student…' : noneLeft ? 'Everyone has been checked in or marked absent' : 'Ready to select a student at random'),
+            this.h('div', { style: { display: 'flex', justifyContent: 'center', gap: 14, marginBottom: 22, flexWrap: 'wrap' } },
+              members.map((m, i) => { const on = this.state.oralSpinning && picked === i; const r = recMap[m.id]; const dim = r || (this.state.oralSpinning && !on); return this.h('div', { key: m.id, style: { textAlign: 'center', opacity: dim ? 0.4 : 1, transition: 'opacity .09s' } },
+                this.h('span', { style: { position: 'relative', width: 58, height: 58, borderRadius: '50%', background: m.tint, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 22, fontWeight: 700, margin: '0 auto', boxShadow: on ? '0 0 0 5px ' + m.tint + '44' : 'none', transform: on ? 'scale(1.08)' : 'scale(1)', transition: 'all .09s' } }, m.initials,
+                  r ? this.h('span', { style: { position: 'absolute', bottom: -2, right: -2, width: 20, height: 20, borderRadius: '50%', background: '#fff', display: 'grid', placeItems: 'center' } }, this.icon(r.absent ? 'IconEventBusyOutlined' : 'IconCheckCircleOutlined', 18, r.absent ? '#b45309' : '#0E7C57')) : null),
+                this.h('div', { style: { fontSize: 12.5, color: '#333', marginTop: 6, fontWeight: on ? 700 : 500 } }, m.name.split(' ')[0]),
+                !r && !this.state.oralSpinning ? this.h('button', { onClick: () => this.markAbsent(n, m), style: { border: 'none', background: 'none', color: '#b45309', fontSize: 11, cursor: 'pointer', fontFamily: 'Geist', marginTop: 2, padding: 0 } }, 'Mark absent') : null); })),
+            this.h(Button, { size: 'lg', disabled: this.state.oralSpinning || noneLeft, startIcon: this.icon('IconCasinoOutlined', 18), onClick: () => this.spinPick() }, this.state.oralSpinning ? 'Selecting…' : 'Select at random'),
+            noneLeft && present.length ? this.h('div', { style: { marginTop: 16 } }, this.h(Button, { variant: 'outline', startIcon: this.icon('IconGroupsOutlined', 16), onClick: () => this.setState({ oralPhase: 'summary' }) }, 'Review & apply team average')) : null)),
+          this.h('div', null,
+            this.panel(this.h('div', { style: { padding: 18 } },
+              this.h('div', { style: { fontSize: 13, fontWeight: 700, color: '#002341', marginBottom: 8 } }, 'Present this question'),
+              this.h('div', { style: { display: 'flex', flexDirection: 'column', gap: 6 } },
+                this.data.activity.questions.map(qq => this.h('button', { key: qq.n, onClick: () => this.setState({ oralQuestion: qq.n }),
+                  style: { textAlign: 'left', border: '1px solid ' + ((this.state.oralQuestion || 1) === qq.n ? '#002341' : '#E1DAC9'), background: (this.state.oralQuestion || 1) === qq.n ? '#002341' : '#fff', color: (this.state.oralQuestion || 1) === qq.n ? '#FCF8EC' : '#525252', borderRadius: 9, padding: '9px 11px', fontSize: 12.5, cursor: 'pointer', fontFamily: 'Geist', display: 'flex', gap: 8, alignItems: 'center' } },
+                  this.h('span', { style: { fontWeight: 700 } }, 'Q' + qq.n), this.h('span', { style: { flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } }, qq.type))))) ),
+            this.h('div', { style: { height: 12 } }),
+            this.h(Alert, { variant: 'info', title: 'Fair & unbiased' }, 'Absent and already-checked students are excluded from the next random draw.')),
+        ),
+      );
+    }
+
+    // ---- team summary / apply-average phase ----
+    if (phase === 'summary') {
+      return this.h('div', { style: { maxWidth: 640, margin: '0 auto' } },
+        this.pageHead('Oral check-ins · Team ' + n, 'Apply the average of today\u2019s oral scores to the whole team, or keep them individual.', [back]),
+        this.panel(this.h('div', { style: { padding: 24 } },
+          this.h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 } },
+            recs.map((r, i) => this.h('div', { key: i, style: { display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', border: '1px solid #EFE9DA', borderRadius: 10, background: r.absent ? '#FBF3DF' : '#fff' } },
+              this.h('span', { style: { width: 32, height: 32, borderRadius: '50%', background: r.tint, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 700 } }, r.initials),
+              this.h('div', { style: { flex: 1 } }, this.h('div', { style: { fontWeight: 600, fontSize: 14, color: '#002341' } }, r.name), this.h('div', { style: { fontSize: 12, color: r.absent ? '#8a6d1a' : '#9a9a9a' } }, r.absent ? 'Marked absent — receives 0, excluded from average' : 'Presented Q' + (this.state.oralQuestion || 1))),
+              r.absent ? this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 10 } }, this.h(Badge, { variant: 'warning', startIcon: this.icon('IconEventBusyOutlined', 13) }, 'Absent'), applied != null ? this.h('span', { style: { fontFamily: 'Geist Mono, monospace', fontWeight: 700, color: '#b45309' } }, '0 / 10') : null) : this.h('span', { style: { fontFamily: 'Geist Mono, monospace', fontWeight: 700, color: '#002341' } }, (applied != null ? applied : r.score) + ' / 10')))),
+          this.h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '14px 16px', background: '#F4ECFE', borderRadius: 12, marginBottom: 16 } },
+            this.h('div', null, this.h('div', { style: { fontSize: 13, color: '#6b4a9a' } }, 'Team average (' + present.length + ' present)'), this.h('div', { style: { fontFamily: '"Copernicus Trial", serif', fontSize: 30, fontWeight: 700, color: '#8A3FFC' } }, avg + ' / 10')),
+            applied != null ? this.h(Badge, { variant: 'success', startIcon: this.icon('IconCheckOutlined', 14) }, 'Applied') : null),
+          applied != null
+            ? this.h(Alert, { variant: 'success', title: 'Oral scores applied for Team ' + n }, present.length + ' present student' + (present.length === 1 ? '' : 's') + ' received ' + applied + ' / 10.' + (recs.some(r => r.absent) ? ' Absent students received 0 and are recorded as absent, separate from this grade.' : '')) 
+            : this.h(Alert, { variant: 'info', icon: this.icon('IconGroupsOutlined', 16, '#0382ED'), title: 'Apply one shared oral score' }, 'Present members of Team ' + n + ' get the team average for today; absent students get a 0. Kept separate from the written team submission and completeness credit.'),
+          this.h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 } },
+            this.h(Button, { variant: 'outline', onClick: () => this.go('i-live') }, 'Done'),
+            applied != null
+              ? this.h(Button, { startIcon: this.icon('IconGroupsOutlined', 16), onClick: () => this.go('i-live') }, 'Back to live dashboard')
+              : this.h(Button, { disabled: !present.length, startIcon: this.icon('IconGroupsOutlined', 16), onClick: () => this.applyTeamAverage(n, avg) }, 'Apply average to whole team')))));
+    }
+
+    // ---- per-check-in confirmation phase ----
+    const m = members[picked || 0];
+    const scores = this.state.oralScores || {};
+    const total = this.data.oralRubric.reduce((a, r, i) => a + (scores[i] != null ? scores[i] : Math.min(r.pts, r.pts - (i === 2 ? 1 : 0))), 0);
+    const setScore = (i, v) => this.setState(st => ({ oralScores: { ...st.oralScores, [i]: v } }));
+    if (phase === 'done') {
+      const moreLeft = this.availIdx(n).length > 0;
+      return this.h('div', { style: { maxWidth: 560, margin: '0 auto' } },
+        this.panel(this.h('div', { style: { padding: 32, textAlign: 'center' } },
+          this.h('span', { style: { width: 62, height: 62, borderRadius: '50%', background: '#F4ECFE', color: '#8A3FFC', display: 'inline-grid', placeItems: 'center', marginBottom: 12 } }, this.icon('IconMicNoneOutlined', 34)),
+          this.h('h2', { style: { fontFamily: '"Copernicus Trial", serif', fontSize: 24, color: '#002341', margin: '0 0 6px' } }, 'Oral check-in recorded'),
+          this.h('p', { style: { color: '#737373', margin: '0 0 16px' } }, m.name + ' presented Q' + (this.state.oralQuestion || 1) + ' for Team ' + n + '.'),
+          this.h('div', { style: { display: 'inline-flex', alignItems: 'baseline', gap: 6, marginBottom: 8 } }, this.h('span', { style: { fontFamily: '"Copernicus Trial", serif', fontSize: 40, fontWeight: 700, color: '#002341' } }, total), this.h('span', { style: { color: '#737373', fontSize: 16 } }, '/ 10')),
+          present.length > 1 ? this.h('div', { style: { fontSize: 13, color: '#8A3FFC', marginBottom: 12 } }, 'Team average so far: ' + avg + ' / 10 · ' + present.length + ' checked in') : null,
+          this.h('div', { style: { textAlign: 'left', padding: 12, background: '#EAF4FE', borderRadius: 10, fontSize: 13, color: '#334', display: 'flex', gap: 8, marginTop: 4, marginBottom: 18 } }, this.icon('IconInfoOutlined', 16, '#0382ED'), this.h('span', null, 'Kept separate from the written team submission and the completeness credit.')),
+          this.h('div', { style: { display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' } },
+            moreLeft ? this.h(Button, { variant: 'outline', startIcon: this.icon('IconCasinoOutlined', 15), onClick: () => this.setState({ oralPhase: 'select', oralPicked: null, oralScores: {} }) }, 'Check in another') : null,
+            this.h(Button, { startIcon: this.icon('IconGroupsOutlined', 16), onClick: () => this.setState({ oralPhase: 'summary' }) }, 'Review & apply team average')))));
+    }
+    return this.h(React.Fragment, null,
+      this.pageHead('Oral check-in · Team ' + n, 'Score the presentation against your preset oral rubric.', [back]),
+      this.panel(this.h('div', { style: { padding: 18, display: 'flex', alignItems: 'center', gap: 14, borderLeft: '4px solid #8A3FFC', flexWrap: 'wrap' } },
+        this.h('span', { style: { width: 52, height: 52, borderRadius: '50%', background: m.tint, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 20, fontWeight: 700, flex: '0 0 auto' } }, m.initials),
+        this.h('div', { style: { flex: 1, minWidth: 180 } },
+          this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, this.h('span', { style: { fontWeight: 600, fontSize: 16, color: '#002341' } }, m.name), this.h(Badge, { variant: 'lavender', startIcon: this.icon('IconCasinoOutlined', 13) }, 'Randomly selected')),
+          this.h('div', { style: { fontSize: 13, color: '#737373', marginTop: 2 } }, 'Presenting Q' + q.n + ' · ' + q.type)),
+        this.h(Button, { variant: 'outline', size: 'sm', startIcon: this.icon('IconEventBusyOutlined', 15), onClick: () => this.markAbsent(n, m) }, 'Mark absent'),
+        this.h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#8A3FFC', fontWeight: 600 } }, this.icon('IconMicNoneOutlined', 16), 'Listening')),
+      { marginBottom: 16 }),
+      this.h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 300px', gap: 20, alignItems: 'start' } },
+        this.h('div', null,
+          this.panel(this.h('div', { style: { padding: 18, marginBottom: 0 } },
+            this.h('div', { style: { display: 'flex', gap: 10, alignItems: 'flex-start' } },
+              this.h('span', { style: { width: 26, height: 26, borderRadius: 7, background: '#002341', color: '#FCF8EC', display: 'grid', placeItems: 'center', fontSize: 13, fontWeight: 700, flex: '0 0 auto' } }, q.n),
+              this.h('div', null, this.h(Badge, { variant: 'outline' }, q.type), this.h('div', { style: { fontWeight: 500, fontSize: 14.5, color: '#0A0A0A', lineHeight: 1.5, marginTop: 6 } }, q.prompt))))),
+          this.h('div', { style: { height: 14 } }),
+          this.h('div', { style: { fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#8a8577', marginBottom: 10 } }, 'Oral presentation rubric'),
+          this.h('div', { style: { display: 'flex', flexDirection: 'column', gap: 12 } },
+            this.data.oralRubric.map((r, i) => { const cur = scores[i] != null ? scores[i] : Math.min(r.pts, r.pts - (i === 2 ? 1 : 0)); return this.panel(this.h('div', { style: { padding: 14 } },
+              this.h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 } },
+                this.h('div', null, this.h('div', { style: { fontWeight: 600, fontSize: 14, color: '#002341' } }, r.c), this.h('div', { style: { fontSize: 12, color: '#8a8577', marginTop: 1 } }, r.desc)),
+                this.h('span', { style: { fontFamily: 'Geist Mono, monospace', fontSize: 13, fontWeight: 600, color: '#002341', flex: '0 0 auto', marginLeft: 12 } }, cur + ' / ' + r.pts)),
+              this.h('div', { style: { display: 'flex', gap: 6 } }, Array.from({ length: r.pts + 1 }, (_, v) => this.h('button', { key: v, onClick: () => setScore(i, v),
+                style: { flex: 1, padding: '7px 0', borderRadius: 7, border: '1px solid ' + (cur === v ? '#8A3FFC' : '#E1DAC9'), background: cur === v ? '#8A3FFC' : '#fff', color: cur === v ? '#fff' : '#737373', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Geist' } }, v)))),
+            { key: i }); }))),
+        this.h('div', null,
+          this.panel(this.h('div', { style: { padding: 20, textAlign: 'center' } },
+            this.h('div', { style: { fontSize: 13, color: '#737373' } }, 'Oral score'),
+            this.h('div', { style: { fontFamily: '"Copernicus Trial", serif', fontSize: 40, fontWeight: 700, color: '#8A3FFC' } }, total + ' / 10'),
+            this.h(Badge, { variant: 'lavender' }, 'Scored live'))),
+          this.h('div', { style: { height: 12 } }),
+          this.panel(this.h('div', { style: { padding: 16 } },
+            this.h('div', { style: { fontSize: 12, fontWeight: 700, color: '#002341', marginBottom: 6 } }, 'Note (optional)'),
+            this.h(Input, { placeholder: 'e.g. Strong on load path; revisit units.' }))),
+          this.h('div', { style: { height: 12 } }),
+          this.h(Button, { fullWidth: true, startIcon: this.icon('IconCheckOutlined', 16), onClick: () => { this.pushOralRec(n, { id: m.id, name: m.name, initials: m.initials, tint: m.tint, absent: false, score: total }); this.setState({ oralPhase: 'done' }); } }, 'Save oral score'),
+          this.h('div', { style: { height: 8 } }),
+          this.h(Button, { fullWidth: true, variant: 'ghost', startIcon: this.icon('IconCasinoOutlined', 15), onClick: () => this.setState({ oralPhase: 'select', oralPicked: null, oralScores: {} }) }, 'Cancel & re-pick')),
+      ),
+    );
+  }
+
+  // ================= INSTRUCTOR: GRADING + RUBRIC ASSESSMENT =================
+  screen_i_grading() {
+    const { Button, Badge, Input, Alert } = this.C();
+    const collective = this.state.mode === 'COLLECTIVE';
+    const queue = collective
+      ? [{ id: 't1', label: 'Team 1', sub: 'Submitted 2:31', done: true }, { id: 't3', label: 'Team 3', sub: 'In review', done: false }, { id: 't2', label: 'Team 2', sub: 'Submitted 2:44', done: true }, { id: 't5', label: 'Team 5', sub: 'Not submitted', done: null }]
+      : this.data.members.map(m => ({ id: m.id, label: m.name, sub: m.id === 'sw' ? 'Needs review' : 'Submitted', done: m.id === 'mc' }));
+    const sel = this.state.gradeSel || queue[1].id;
+    const ai = { 'Correct structure choice': [4, 4, 'Selected suspension — appropriate for span.', 'High'], 'Quality of reasoning': [5, 6, 'References span & gorge; alternative under-weighed.', 'Medium'], 'Load calculation accuracy': [5, 6, 'Method sound; T_max ≈ 1180 kN verified.', 'High'], 'Units & assumptions': [2, 2, 'Units stated; sag assumption reasonable.', 'High'], 'Tradeoff analysis': [1, 2, 'Tradeoff named but not developed.', 'Medium'] };
+    const total = Object.values(ai).reduce((a, b) => a + b[0], 0);
+    const view = this.state.gradeView || 'submissions';
+    const toggle = this.h('div', { style: { display: 'inline-flex', background: '#EFE9DA', borderRadius: 10, padding: 3, gap: 3 } },
+      [['submissions', 'Submissions', 'IconGradingOutlined'], ['gradebook', 'Gradebook', 'IconTableChartOutlined']].map(v => this.h('button', { key: v[0], onClick: () => this.setState({ gradeView: v[0] }),
+        style: { border: 'none', borderRadius: 8, padding: '6px 12px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Geist', display: 'inline-flex', alignItems: 'center', gap: 6, background: view === v[0] ? '#fff' : 'transparent', color: view === v[0] ? '#002341' : '#8a7f68', boxShadow: view === v[0] ? '0 1px 2px rgba(0,0,0,0.06)' : 'none' } },
+        this.icon(v[2], 15, view === v[0] ? '#002341' : '#8a7f68'), v[1])));
+    if (view === 'gradebook') return this.h(React.Fragment, null,
+      this.pageHead('Grading', 'Introduction to Engineering · student gradebook', [toggle]),
+      this.gradebook());
+
+    const subTab = this.state.gradeTab || (collective ? 'team' : 'individual');
+    const students = this.data.members.map(m => ({ id: m.id, name: m.name, initials: m.initials, tint: m.tint, sub: m.id === 'sw' ? 'Needs review' : 'Submitted', done: m.id === 'mc', flag: m.id === 'sw' }));
+    const teams = [
+      { id: 't1', n: 1, sub: 'Submitted 2:31', done: true }, { id: 't3', n: 3, sub: 'In review', done: false },
+      { id: 't2', n: 2, sub: 'Submitted 2:44', done: true }, { id: 't5', n: 5, sub: 'Not submitted', done: null },
+    ];
+    const subToggle = this.h('div', { style: { display: 'inline-flex', background: '#EFE9DA', borderRadius: 10, padding: 3, gap: 3, marginBottom: 18 } },
+      [['individual', 'Individual', 'IconPersonOutlined'], ['team', 'Team', 'IconGroupsOutlined']].map(v => this.h('button', { key: v[0], onClick: () => this.setState({ gradeTab: v[0] }),
+        style: { border: 'none', borderRadius: 8, padding: '7px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'Geist', display: 'inline-flex', alignItems: 'center', gap: 6, background: subTab === v[0] ? '#fff' : 'transparent', color: subTab === v[0] ? '#002341' : '#8a7f68', boxShadow: subTab === v[0] ? '0 1px 2px rgba(0,0,0,0.06)' : 'none' } },
+        this.icon(v[1] === 'Individual' ? 'IconPersonOutlined' : 'IconGroupsOutlined', 15, subTab === v[0] ? '#002341' : '#8a7f68'), v[1])));
+
+    const finals = {
+      mc: 'Suspension bridge. The 90 m span over the deep gorge rules out beam and arch; a suspension system carries the span efficiently in tension. After discussion I detailed the anchorage into the rock face as the key constraint.',
+      lo: 'I agreed to suspension after comparing with cable-stayed. Suspension wins on span; I noted the deck stiffness tradeoff we raised in discussion.',
+      pn: 'Suspension bridge. Confirmed the load path with the team; the anchorage into rock is the main risk. Recomputed T_max ≈ 1180 kN per cable.',
+      sw: 'I revised from arch to suspension — 90 m exceeds a practical arch range for this site. Still refining the load calculation.',
+    };
+    const teamResp = 'The team selected a suspension bridge for the 90 m gorge crossing. Reasoning: the span and gorge depth favor a tension-based system; beam and arch are impractical at this length. We computed the maximum cable tension T_max ≈ 1180 kN per main cable at midspan, and identified anchorage cost into the rock face as the primary design tradeoff against a stiffer cable-stayed alternative.';
+
+    const responseCard = (kind, entity) => this.panel(this.h('div', { style: { padding: 20 } },
+      this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 } },
+        kind === 'team'
+          ? this.h('span', { style: { width: 40, height: 40, borderRadius: 10, background: '#FFF0E6', color: '#FF6713', display: 'grid', placeItems: 'center', flex: '0 0 auto' } }, this.icon('IconGroupOutlined', 22))
+          : this.h('span', { style: { width: 40, height: 40, borderRadius: '50%', background: entity.tint, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 15, fontWeight: 700, flex: '0 0 auto' } }, entity.initials),
+        this.h('div', { style: { flex: 1 } },
+          this.h('div', { style: { fontWeight: 600, fontSize: 16, color: '#002341' } }, kind === 'team' ? 'Team ' + entity.n + ' — collective response' : entity.name + ' — final individual response'),
+          this.h('div', { style: { fontSize: 12.5, color: '#737373', marginTop: 2 } }, kind === 'team' ? 'One shared submission · assessed for the whole team' : 'Private post-discussion submission · assessed individually')),
+        this.h(Badge, { variant: kind === 'team' ? 'orange' : 'default' }, kind === 'team' ? 'Team submission' : 'Individual submission')),
+      this.h('div', { style: { fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#8a8577', marginBottom: 6 } }, 'Submitted response'),
+      this.h('div', { style: { fontSize: 14, color: '#333', lineHeight: 1.6, marginBottom: 14 } }, kind === 'team' ? teamResp : (finals[entity.id] || '—')),
+      this.h('div', { style: { display: 'flex', gap: 10, flexWrap: 'wrap' } },
+        this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 8, padding: '8px 11px', background: '#FBFAF6', border: '1px solid #EFE9DA', borderRadius: 9 } },
+          this.icon('IconImageOutlined', 16, '#0382ED'), this.h('span', { style: { fontSize: 12.5, color: '#525252' } }, kind === 'team' ? 'team_final_calcs.pdf' : (entity.id + '_final_calcs.jpg')), this.sparkle('OCR')),
+        this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 6, padding: '8px 11px', fontSize: 12.5, color: '#737373' } }, this.icon('IconAccessTimeOutlined', 15), kind === 'team' ? 'Submitted Thu 2:41 PM' : 'Submitted Thu 1:58 PM'))));
+
+    const gradingPanel = (isTeam) => this.panel(this.h('div', { style: { padding: 20 } },
+      this.h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 } },
+        this.h('div', null,
+          this.h('div', { style: { fontWeight: 600, fontSize: 16, color: '#002341' } }, 'Rubric-based grading'),
+          this.h('div', { style: { fontSize: 12.5, color: '#737373', marginTop: 2 } }, 'Graded for correctness & quality against the approved rubric')),
+        this.h('div', { style: { textAlign: 'right' } }, this.h('div', { style: { fontFamily: '"Copernicus Trial", serif', fontSize: 30, fontWeight: 700, color: '#002341' } }, total + ' / 20'), this.h(Badge, { variant: 'outline' }, 'AI-suggested'))),
+      this.h('div', { style: { display: 'flex', flexDirection: 'column', gap: 10 } },
+        this.data.rubric.map((r, i) => { const a = ai[r.c]; return this.h('div', { key: i, style: { border: '1px solid #EFE9DA', borderRadius: 10, padding: 14 } },
+          this.h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 } },
+            this.h('span', { style: { fontWeight: 600, fontSize: 14, color: '#002341' } }, r.c),
+            this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+              this.h(Badge, { variant: a[3] === 'High' ? 'success' : 'warning' }, a[3] + ' confidence'),
+              this.h('span', { style: { fontSize: 12, color: '#8a8577' } }, 'Score'),
+              this.h(Input, { defaultValue: a[0], style: { width: 46, textAlign: 'center', padding: '4px 6px' } }),
+              this.h('span', { style: { fontSize: 13, color: '#737373' } }, '/ ' + a[1]))),
+          this.h('div', { style: { fontSize: 12.5, color: '#555', display: 'flex', gap: 6, alignItems: 'flex-start' } }, this.icon('IconAutoAwesomeOutlined', 14, '#0382ED'), this.h('span', null, this.h('strong', { style: { color: '#002341' } }, 'Evidence: '), a[2]))); })),
+      this.h('div', { style: { height: 14 } }),
+      this.h(Alert, { variant: 'info', title: 'AI suggestion vs. your grade are kept separate' }, 'Adjust any score to override. Both the AI-suggested grade and your approved grade are preserved in the record.'),
+      this.h('div', { style: { display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14 } },
+        this.h(Button, { variant: 'outline' }, 'Save draft'),
+        this.h(Button, { startIcon: this.icon('IconCheckOutlined', 16), onClick: () => this.go('i-results') }, isTeam ? 'Approve & release team grade' : 'Approve & release grade'))));
+
+    const listPanel = (label, items, selId, onPick, renderRow) => this.panel(this.h('div', { style: { padding: 10 } },
+      this.h('div', { style: { fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: '#8a8577', padding: '6px 8px' } }, label),
+      items.map(renderRow)));
+
+    let leftList, detail;
+    if (subTab === 'individual') {
+      const selId = this.state.gradeSelInd || students[0].id;
+      const cur = students.find(s => s.id === selId) || students[0];
+      leftList = listPanel('Students', students, selId, null, s => this.h('div', { key: s.id, onClick: () => this.setState({ gradeSelInd: s.id }),
+        style: { display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 9, cursor: 'pointer', background: selId === s.id ? '#EAF4FE' : 'transparent' } },
+        this.h('span', { style: { width: 28, height: 28, borderRadius: '50%', background: s.tint, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 700, flex: '0 0 auto' } }, s.initials),
+        this.h('div', { style: { flex: 1, minWidth: 0 } }, this.h('div', { style: { fontSize: 13.5, fontWeight: selId === s.id ? 600 : 500, color: '#002341' } }, s.name), this.h('div', { style: { fontSize: 11.5, color: s.flag ? '#b45309' : '#9a9a9a' } }, s.sub)),
+        s.done ? this.icon('IconCheckCircleOutlined', 16, '#0E7C57') : s.flag ? this.icon('IconWarningAmberOutlined', 16, '#b45309') : null));
+      detail = this.h('div', { style: { display: 'flex', flexDirection: 'column', gap: 16 } }, responseCard('individual', cur), gradingPanel(false));
+    } else {
+      const selId = this.state.gradeSelTeam || 't3';
+      const cur = teams.find(t => t.id === selId) || teams[0];
+      leftList = listPanel('Teams', teams, selId, null, t => this.h('div', { key: t.id, onClick: () => this.setState({ gradeSelTeam: t.id }),
+        style: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 10px', borderRadius: 9, cursor: 'pointer', background: selId === t.id ? '#EAF4FE' : 'transparent' } },
+        this.h('span', { style: { width: 8, height: 8, borderRadius: '50%', background: t.done ? '#0E7C57' : t.done === null ? '#E1DAC9' : '#FF6713' } }),
+        this.h('div', { style: { flex: 1 } }, this.h('div', { style: { fontSize: 13.5, fontWeight: selId === t.id ? 600 : 500, color: '#002341' } }, 'Team ' + t.n), this.h('div', { style: { fontSize: 11.5, color: '#9a9a9a' } }, t.sub)),
+        t.done ? this.icon('IconCheckCircleOutlined', 16, '#0E7C57') : null));
+      detail = this.h('div', { style: { display: 'flex', flexDirection: 'column', gap: 16 } }, responseCard('team', cur), gradingPanel(true));
+    }
+
+    return this.h(React.Fragment, null,
+      this.pageHead('Grading', 'Bridge Design Decision · view and grade submissions',
+        [toggle, this.h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#737373' } }, this.icon('IconAutoAwesomeOutlined', 15, '#0382ED'), 'AI-suggested grading enabled')]),
+      subToggle,
+      this.h('div', { style: { display: 'grid', gridTemplateColumns: '230px 1fr', gap: 20, alignItems: 'start' } }, leftList, detail),
+    );
+  }
+
+  gradebook() {
+    const { Badge } = this.C();
+    const collective = this.state.mode === 'COLLECTIVE';
+    const students = [
+      { name: 'Maya Chen', team: 3, tint: '#0382ED', initials: 'MC' },
+      { name: 'Liam Ortiz', team: 3, tint: '#8A3FFC', initials: 'LO' },
+      { name: 'Priya Nair', team: 3, tint: '#0E7C57', initials: 'PN' },
+      { name: 'Sam Whitfield', team: 3, tint: '#FF6713', initials: 'SW' },
+      { name: 'Ada Reyes', team: 1, tint: '#0382ED', initials: 'AR' },
+      { name: 'Ben Tan', team: 1, tint: '#8A3FFC', initials: 'BT' },
+    ];
+    // per-activity records: prep = completeness credit (out of 5), sub = graded score (out of 20)
+    const activities = [
+      { key: 'bridge', title: 'Bridge Design Decision', mode: collective ? 'COLLECTIVE' : 'INDIVIDUAL' },
+      { key: 'statics', title: 'Statics Warm-up', mode: 'INDIVIDUAL' },
+    ];
+    const data = {
+      'Maya Chen':      { bridge: { prep: [5, 5], sub: 17 }, statics: { prep: [4, 5], sub: 18 } },
+      'Liam Ortiz':     { bridge: { prep: [5, 5], sub: 16 }, statics: { prep: [5, 5], sub: 15 } },
+      'Priya Nair':     { bridge: { prep: [5, 5], sub: 15 }, statics: { prep: [3, 5], sub: 14 } },
+      'Sam Whitfield':  { bridge: { prep: [3, 5], sub: 12, flag: true }, statics: { prep: [5, 5], sub: 13 } },
+      'Ada Reyes':      { bridge: { prep: [5, 5], sub: 18 }, statics: { prep: [4, 5], sub: 16 } },
+      'Ben Tan':        { bridge: { prep: [4, 5], sub: 18 }, statics: { prep: [5, 5], sub: 17 } },
+    };
+    const scoreCell = (label, val, max, tint, tag) => this.h('div', { style: { display: 'flex', flexDirection: 'column', gap: 2 } },
+      this.h('span', { style: { fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', color: tint } }, label),
+      this.h('span', { style: { fontFamily: 'Geist Mono, monospace', fontSize: 14, fontWeight: 600, color: '#002341' } }, val + ' / ' + max),
+      this.h('span', { style: { fontSize: 10.5, color: '#9a9a9a' } }, tag));
+    return this.h('div', null,
+      this.h('div', { style: { display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' } },
+        this.h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: '#0382ED', background: '#EAF4FE', border: '1px solid #cfe6fb', borderRadius: 999, padding: '4px 11px' } }, this.icon('IconPersonOutlined', 15), 'Individual = completeness of prep'),
+        this.h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: collective ? '#FF6713' : '#002341', background: collective ? '#FFF0E6' : '#E9EEF3', border: '1px solid ' + (collective ? '#f7d6bd' : '#cdd9e3'), borderRadius: 999, padding: '4px 11px' } }, this.icon(collective ? 'IconGroupOutlined' : 'IconAssignmentOutlined', 15), collective ? 'Submission = shared team grade' : 'Submission = individual final grade')),
+      this.panel(this.h('div', { style: { padding: 0, overflowX: 'auto' } },
+        this.h('div', { style: { minWidth: 720 } },
+          this.h('div', { style: { display: 'grid', gridTemplateColumns: '220px repeat(2, 1fr)', background: '#FBFAF6', borderBottom: '1px solid #EFE9DA' } },
+            this.h('div', { style: { padding: '12px 16px', fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#8a8577' } }, 'Student'),
+            activities.map((a, i) => this.h('div', { key: i, style: { padding: '12px 16px', borderLeft: '1px solid #EFE9DA' } },
+              this.h('div', { style: { fontSize: 13, fontWeight: 600, color: '#002341' } }, a.title),
+              this.h('div', { style: { fontSize: 11, color: '#9a9a9a', marginTop: 1 } }, a.mode === 'COLLECTIVE' ? 'Collective submission' : 'Individual submission')))),
+          students.map((s, si) => this.h('div', { key: si, style: { display: 'grid', gridTemplateColumns: '220px repeat(2, 1fr)', borderBottom: si < students.length - 1 ? '1px solid #F0ECE0' : 'none', alignItems: 'stretch' } },
+            this.h('div', { style: { padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 10 } },
+              this.h('span', { style: { width: 30, height: 30, borderRadius: '50%', background: s.tint, color: '#fff', display: 'grid', placeItems: 'center', fontSize: 12, fontWeight: 700, flex: '0 0 auto' } }, s.initials),
+              this.h('div', null, this.h('div', { style: { fontSize: 13.5, fontWeight: 500, color: '#002341' } }, s.name), this.h('div', { style: { fontSize: 11.5, color: '#9a9a9a' } }, 'Team ' + s.team))),
+            activities.map((a, ai2) => { const rec = data[s.name][a.key]; return this.h('div', { key: ai2, style: { padding: '12px 16px', borderLeft: '1px solid #F0ECE0', display: 'flex', gap: 18, alignItems: 'center' } },
+              scoreCell('Individual', rec.prep[0], rec.prep[1], '#0382ED', 'completeness'),
+              this.h('span', { style: { width: 1, alignSelf: 'stretch', background: '#F0ECE0' } }),
+              this.h('div', { style: { display: 'flex', flexDirection: 'column', gap: 2 } },
+                scoreCell(a.mode === 'COLLECTIVE' ? 'Team' : 'Individual', rec.sub, 20, a.mode === 'COLLECTIVE' ? '#FF6713' : '#002341', a.mode === 'COLLECTIVE' ? 'shared grade' : 'final grade'),
+                rec.flag ? this.h('span', { style: { display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 10.5, color: '#b45309' } }, this.icon('IconWarningAmberOutlined', 12), 'reviewed') : null)); }))))),
+      ),
+      this.h('div', { style: { fontSize: 12, color: '#9a9a9a', marginTop: 12, display: 'flex', gap: 6, alignItems: 'flex-start' } }, this.icon('IconInfoOutlined', 15, '#c4bda9'),
+        this.h('span', null, 'Completeness credit and the graded submission are stored separately for every student — the completeness grade is never affected by the correctness of the final work.')));
+  }
+
+  hBar(label, value, max, tint, right) {
+    return this.h('div', { style: { display: 'flex', alignItems: 'center', gap: 10, marginBottom: 9 } },
+      this.h('span', { style: { width: 150, fontSize: 12.5, color: '#525252', flex: '0 0 auto' } }, label),
+      this.h('div', { style: { flex: 1, height: 10, borderRadius: 6, background: '#EFE9DA', overflow: 'hidden' } }, this.h('div', { style: { width: (value / max * 100) + '%', height: '100%', background: tint, borderRadius: 6 } })),
+      this.h('span', { style: { width: 52, textAlign: 'right', fontSize: 12, color: '#737373', flex: '0 0 auto' } }, right != null ? right : value));
+  }
+
+  // ================= INSTRUCTOR: RESULTS & ANALYTICS =================
+  screen_i_results() {
+    const { Badge, Alert } = this.C();
+    const collective = this.state.mode === 'COLLECTIVE';
+    const tab = this.state.resultsTab || 'overview';
+    const tabs = [['overview', 'Analytics'], ['comparison', 'Original → final'], ['convergence', 'Team convergence']];
+    let body;
+    if (tab === 'overview') body = this.h('div', null,
+      this.h('div', { style: { display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 18 } },
+        this.statCard('Submission rate', collective ? '6 / 6 teams' : '23 / 24', 'IconCheckCircleOutlined', '#0E7C57'),
+        this.statCard(collective ? 'Avg team score' : 'Avg score', collective ? '15.8 / 20' : '14.9 / 20', 'IconGradeOutlined', '#8A3FFC'),
+        this.statCard('Changed answer', '58%', 'IconAutorenewOutlined', '#0382ED', 'after discussion'),
+        this.statCard('Incorrect → correct', '31%', 'IconArrowUpwardOutlined', '#FF6713', 'improved')),
+      this.h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 } },
+        this.panel(this.h('div', { style: { padding: 20 } },
+          this.h('h3', { style: { margin: '0 0 14px', fontSize: 15, color: '#002341' } }, 'Rubric performance by criterion'),
+          this.hBar('Structure choice', 3.6, 4, '#0E7C57', '90%'),
+          this.hBar('Reasoning', 4.6, 6, '#0382ED', '77%'),
+          this.hBar('Load calculation', 4.1, 6, '#FF6713', '68%'),
+          this.hBar('Units & assumptions', 1.7, 2, '#8A3FFC', '85%'),
+          this.hBar('Tradeoff analysis', 1.1, 2, '#b45309', '55%'))),
+        this.panel(this.h('div', { style: { padding: 20 } },
+          this.h('h3', { style: { margin: '0 0 14px', fontSize: 15, color: '#002341' } }, 'Preparation → performance'),
+          this.hBar('Prep complete', 88, 100, '#0E7C57', '88%'),
+          this.hBar('On-time prep', 79, 100, '#0382ED', '79%'),
+          this.hBar('OCR issues', 8, 100, '#FF6713', '8%'),
+          this.h('div', { style: { marginTop: 14 } }, this.h(Alert, { variant: 'success', title: 'Prepared students scored higher' }, 'Students who completed prep on time averaged 3.2 points higher on the final rubric.')))),
+      ));
+    else if (tab === 'comparison') body = this.h('div', null,
+      this.h('div', { style: { marginBottom: 14 } }, this.h(Alert, { variant: 'info', title: collective ? 'Team original range vs. final' : 'Original prep vs. post-discussion — kept separate' }, collective ? 'Compare the spread of original individual answers with the collective result.' : 'Original responses are preserved unchanged. The comparison never overwrites either record.')),
+      this.panel(this.h('div', { style: { padding: 0, overflow: 'hidden' } },
+        this.h('div', { style: { display: 'grid', gridTemplateColumns: '150px 1fr 1fr 96px', gap: 0, background: '#FBFAF6', borderBottom: '1px solid #EFE9DA', padding: '10px 16px', fontSize: 11.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.03em', color: '#8a8577' } },
+          this.h('span', null, 'Student'), this.h('span', null, 'Original (Q1 choice)'), this.h('span', null, 'Final (Q1 choice)'), this.h('span', { style: { textAlign: 'right' } }, 'Score')),
+        this.data.members.map((m, i) => { const o = this.data.originals[m.id]; const finals = { mc: 'Suspension bridge', lo: 'Suspension bridge', pn: 'Suspension bridge', sw: 'Suspension bridge' }; const changed = o.q1 !== finals[m.id]; const scores = { mc: 17, lo: 16, pn: 15, sw: 12 };
+          return this.h('div', { key: m.id, style: { display: 'grid', gridTemplateColumns: '150px 1fr 1fr 96px', gap: 0, alignItems: 'center', padding: '12px 16px', borderBottom: i < 3 ? '1px solid #F0ECE0' : 'none' } },
+            this.h('span', { style: { display: 'flex', alignItems: 'center', gap: 8 } }, this.avatar(m, 26), this.h('span', { style: { fontSize: 13, color: '#333' } }, m.name.split(' ')[0])),
+            this.h('span', { style: { fontSize: 13, color: '#666' } }, o.q1),
+            this.h('span', { style: { fontSize: 13, color: '#002341', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 } }, finals[m.id], changed ? this.h(Badge, { variant: 'sky', startIcon: this.icon('IconAutorenewOutlined', 12) }, 'Changed') : this.h('span', { style: { fontSize: 11, color: '#9a9a9a' } }, 'kept')),
+            this.h('span', { style: { textAlign: 'right', fontFamily: 'Geist Mono, monospace', fontSize: 13, fontWeight: 600, color: '#002341' } }, scores[m.id] + '/20')); }))));
+    else body = this.h('div', null,
+      this.h('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 18 } },
+        this.panel(this.h('div', { style: { padding: 20 } },
+          this.h('h3', { style: { margin: '0 0 4px', fontSize: 15, color: '#002341' } }, 'Q1 answer distribution — Team 3'),
+          this.h('div', { style: { fontSize: 12, color: '#737373', marginBottom: 14 } }, 'Before vs. after discussion'),
+          this.h('div', { style: { fontSize: 12, fontWeight: 600, color: '#8a8577', margin: '4px 0 6px' } }, 'Original'),
+          this.hBar('Suspension', 2, 4, '#8A3FFC'), this.hBar('Cable-stayed', 1, 4, '#8A3FFC'), this.hBar('Arch', 1, 4, '#8A3FFC'),
+          this.h('div', { style: { fontSize: 12, fontWeight: 600, color: '#8a8577', margin: '12px 0 6px' } }, 'Final'),
+          this.hBar('Suspension', 4, 4, '#0E7C57'), this.hBar('Cable-stayed', 0, 4, '#0E7C57'), this.hBar('Arch', 0, 4, '#0E7C57'))),
+        this.h('div', null,
+          this.panel(this.h('div', { style: { padding: 20, textAlign: 'center' } },
+            this.h('div', { style: { fontSize: 13, color: '#737373' } }, 'Degree of convergence'),
+            this.h('div', { style: { fontFamily: '"Copernicus Trial", serif', fontSize: 42, fontWeight: 700, color: '#0E7C57' } }, 'High'),
+            this.h(Badge, { variant: 'success' }, '4 of 4 agree after discussion'))),
+          this.h('div', { style: { height: 14 } }),
+          this.h(Alert, { variant: 'warning', title: 'Persistent misconception' }, 'One student still treats horizontal cable force H as the maximum tension — worth revisiting in class.')),
+      ),
+      this.panel(this.h('div', { style: { padding: 20 } },
+        this.h('h3', { style: { margin: '0 0 14px', fontSize: 15, color: '#002341' } }, 'Convergence by team'),
+        [['Team 1', 100], ['Team 2', 75], ['Team 3', 100], ['Team 4', 50], ['Team 5', 75], ['Team 6', 100]].map((t, i) => this.hBar(t[0], t[1], 100, t[1] === 100 ? '#0E7C57' : t[1] >= 75 ? '#0382ED' : '#FF6713', t[1] + '%')))));
+    return this.h(React.Fragment, null,
+      this.pageHead('Results & analytics', 'Bridge Design Decision · ' + (collective ? 'collective team submission' : 'individual post-discussion submission'),
+        [this.btn('Export results', { variant: 'outline', icon: 'IconDownloadOutlined' })]),
+      this.h('div', { style: { display: 'flex', gap: 8, marginBottom: 18, borderBottom: '1px solid #E7E1D2' } },
+        tabs.map(t => this.h('button', { key: t[0], onClick: () => this.setState({ resultsTab: t[0] }),
+          style: { border: 'none', background: 'none', padding: '10px 4px', marginRight: 14, fontSize: 14, fontWeight: 600, cursor: 'pointer', fontFamily: 'Geist', color: tab === t[0] ? '#002341' : '#9a8f78', borderBottom: '2px solid ' + (tab === t[0] ? '#FF6713' : 'transparent') } }, t[1]))),
+      body);
+  }
+}
+</script>
+</body>
+</html>

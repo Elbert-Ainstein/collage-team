@@ -1,0 +1,2409 @@
+/* Generated from Figma Variables. First mode = :root default.
+   FLOAT tokens are unitless — multiply by 1px in calc() where a length is needed. */
+
+:root {
+  --0-2: 0; /* @kind other */
+  --0-4-2: 0.4; /* @kind other */
+  --0-4: -0.4; /* @kind other */
+  --0-5: 0.5; /* @kind other */
+  --0-75: 0.75; /* @kind other */
+  --0-8-2: 0.8; /* @kind other */
+  --0-8: -0.8; /* @kind other */
+  --0: 0; /* @kind other */
+  --1-25: 1.25; /* @kind other */
+  --1-2: 1; /* @kind other */
+  --1-5: 1.5; /* @kind other */
+  --1-6: 1.6; /* @kind other */
+  --1-75: 1.75; /* @kind other */
+  --10-2: 10; /* @kind other */
+  --100: 100; /* @kind other */
+  --1024: 1024; /* @kind other */
+  --10: 10; /* @kind other */
+  --112-2: 112; /* @kind other */
+  --112: 112; /* @kind other */
+  --1152: 1152; /* @kind other */
+  --12-2: 12; /* @kind other */
+  --128-2: 128; /* @kind other */
+  --1280: 1280; /* @kind other */
+  --128: 128; /* @kind other */
+  --12: 12; /* @kind other */
+  --14-2: 14; /* @kind other */
+  --144-2: 144; /* @kind other */
+  --144: 144; /* @kind other */
+  --14: 14; /* @kind other */
+  --1536: 1536; /* @kind other */
+  --15: 15; /* @kind other */
+  --16-2: 16; /* @kind other */
+  --160-2: 160; /* @kind other */
+  --160: 160; /* @kind other */
+  --16: 16; /* @kind other */
+  --176-2: 176; /* @kind other */
+  --176: 176; /* @kind other */
+  --18: 18; /* @kind other */
+  --192-2: 192; /* @kind other */
+  --192: 192; /* @kind other */
+  --1: 1; /* @kind other */
+  --2-25: 2.25; /* @kind other */
+  --2-2: 2; /* @kind other */
+  --2-5: 2.5; /* @kind other */
+  --2-75: 2.75; /* @kind other */
+  --20-2: 20; /* @kind other */
+  --200: 200; /* @kind other */
+  --208-2: 208; /* @kind other */
+  --208: 208; /* @kind other */
+  --20: 20; /* @kind other */
+  --224-2: 224; /* @kind other */
+  --224: 224; /* @kind other */
+  --22: 22; /* @kind other */
+  --24-2: 24; /* @kind other */
+  --240-2: 240; /* @kind other */
+  --240: 240; /* @kind other */
+  --24: 24; /* @kind other */
+  --256-2: 256; /* @kind other */
+  --256: 256; /* @kind other */
+  --25: 25; /* @kind other */
+  --26: 26; /* @kind other */
+  --28-2: 28; /* @kind other */
+  --288-2: 288; /* @kind other */
+  --288: 288; /* @kind other */
+  --28: 28; /* @kind other */
+  --2: 2; /* @kind other */
+  --300: 300; /* @kind other */
+  --30: 30; /* @kind other */
+  --32-2: 32; /* @kind other */
+  --320-2: 320; /* @kind other */
+  --320: 320; /* @kind other */
+  --32: 32; /* @kind other */
+  --35: 35; /* @kind other */
+  --36-2: 36; /* @kind other */
+  --36: 36; /* @kind other */
+  --384-2: 384; /* @kind other */
+  --384: 384; /* @kind other */
+  --3: 3; /* @kind other */
+  --4-2: 4; /* @kind other */
+  --40-2: 40; /* @kind other */
+  --400: 400; /* @kind other */
+  --40: 40; /* @kind other */
+  --44-2: 44; /* @kind other */
+  --448: 448; /* @kind other */
+  --44: 44; /* @kind other */
+  --45: 45; /* @kind other */
+  --48-2: 48; /* @kind other */
+  --48: 48; /* @kind other */
+  --4: 4; /* @kind other */
+  --500: 500; /* @kind other */
+  --50: 50; /* @kind other */
+  --512: 512; /* @kind other */
+  --55: 55; /* @kind other */
+  --56-2: 56; /* @kind other */
+  --56: 56; /* @kind other */
+  --576: 576; /* @kind other */
+  --5: 5; /* @kind other */
+  --6-2: 6; /* @kind other */
+  --600: 600; /* @kind other */
+  --60: 60; /* @kind other */
+  --64-2: 64; /* @kind other */
+  --640: 640; /* @kind other */
+  --64: 64; /* @kind other */
+  --65: 65; /* @kind other */
+  --672: 672; /* @kind other */
+  --6: 6; /* @kind other */
+  --700: 700; /* @kind other */
+  --70: 70; /* @kind other */
+  --72: 72; /* @kind other */
+  --75: 75; /* @kind other */
+  --768: 768; /* @kind other */
+  --8-2: 8; /* @kind other */
+  --80-2: 80; /* @kind other */
+  --800: 800; /* @kind other */
+  --80: 80; /* @kind other */
+  --85: 85; /* @kind other */
+  --896: 896; /* @kind other */
+  --8: 8; /* @kind other */
+  --900: 900; /* @kind other */
+  --90: 90; /* @kind other */
+  --95: 95; /* @kind other */
+  --96-2: 96; /* @kind other */
+  --96: 96; /* @kind other */
+  --9999-2: 9999; /* @kind other */
+  --9999: 9999; /* @kind other */
+  --accent-foreground: var(--neutral-900); /* @kind color */
+  --accent: var(--neutral-100); /* @kind color */
+  --amber-100: rgb(254,243,199); /* @kind color */
+  --amber-10: rgb(255,186,24); /* @kind color */
+  --amber-11: rgb(171,100,0); /* @kind color */
+  --amber-12: rgb(79,52,34); /* @kind color */
+  --amber-1: rgb(254,253,251); /* @kind color */
+  --amber-200: rgb(253,230,138); /* @kind color */
+  --amber-2: rgb(254,251,233); /* @kind color */
+  --amber-300: rgb(252,211,77); /* @kind color */
+  --amber-3: rgb(255,247,194); /* @kind color */
+  --amber-400: rgb(251,191,36); /* @kind color */
+  --amber-4: rgb(255,238,156); /* @kind color */
+  --amber-500: rgb(245,158,11); /* @kind color */
+  --amber-50: rgb(255,251,235); /* @kind color */
+  --amber-5: rgb(251,229,119); /* @kind color */
+  --amber-600: rgb(217,119,6); /* @kind color */
+  --amber-6: rgb(243,214,115); /* @kind color */
+  --amber-700: rgb(180,83,9); /* @kind color */
+  --amber-7: rgb(233,193,98); /* @kind color */
+  --amber-800: rgb(146,64,14); /* @kind color */
+  --amber-8: rgb(226,163,54); /* @kind color */
+  --amber-900: rgb(120,53,15); /* @kind color */
+  --amber-950: rgb(69,26,3); /* @kind color */
+  --amber-9: rgb(255,197,61); /* @kind color */
+  --background-color: var(--black-5); /* @kind color */
+  --background: var(--white); /* @kind color */
+  --bg-transparent: rgba(255,255,255,0); /* @kind color */
+  --black-10: rgba(0,0,0,0.8); /* @kind color */
+  --black-11: rgba(0,0,0,0.9); /* @kind color */
+  --black-12: rgba(0,0,0,0.95); /* @kind color */
+  --black-1: rgba(0,0,0,0.05); /* @kind color */
+  --black-2: rgba(0,0,0,0.1); /* @kind color */
+  --black-3: rgba(0,0,0,0.15); /* @kind color */
+  --black-4: rgba(0,0,0,0.2); /* @kind color */
+  --black-5: rgba(0,0,0,0.3); /* @kind color */
+  --black-6: rgba(0,0,0,0.4); /* @kind color */
+  --black-7: rgba(0,0,0,0.5); /* @kind color */
+  --black-8: rgba(0,0,0,0.6); /* @kind color */
+  --black-9: rgba(0,0,0,0.7); /* @kind color */
+  --black: rgb(0,0,0); /* @kind color */
+  --blue-100: rgb(224,238,250); /* @kind color */
+  --blue-10: rgb(5,136,240); /* @kind color */
+  --blue-11: rgb(13,116,206); /* @kind color */
+  --blue-12: rgb(17,50,100); /* @kind color */
+  --blue-1: rgb(251,253,255); /* @kind color */
+  --blue-200: rgb(188,222,251); /* @kind color */
+  --blue-2: rgb(244,250,255); /* @kind color */
+  --blue-300: rgb(139,201,254); /* @kind color */
+  --blue-3: rgb(230,244,254); /* @kind color */
+  --blue-400: rgb(84,176,253); /* @kind color */
+  --blue-4: rgb(213,239,255); /* @kind color */
+  --blue-500-2: rgb(3,130,237); /* @kind color */
+  --blue-500: rgb(59,130,246); /* @kind color */
+  --blue-50: rgb(242,248,253); /* @kind color */
+  --blue-5: rgb(194,229,255); /* @kind color */
+  --blue-600: rgb(2,111,203); /* @kind color */
+  --blue-6: rgb(172,216,252); /* @kind color */
+  --blue-700: rgb(2,92,168); /* @kind color */
+  --blue-7: rgb(142,200,246); /* @kind color */
+  --blue-800: rgb(1,73,134); /* @kind color */
+  --blue-8: rgb(94,177,239); /* @kind color */
+  --blue-900: rgb(1,54,99); /* @kind color */
+  --blue-950: rgb(1,39,71); /* @kind color */
+  --blue-9: rgb(0,144,255); /* @kind color */
+  --border-0: var(--0-2);
+  --border-2-2: var(--2-2);
+  --border-2: var(--1-2);
+  --border-4: var(--4-2);
+  --border-8: var(--8-2);
+  --border-b-0: var(--0-2);
+  --border-b-2: var(--2-2);
+  --border-b-4: var(--4-2);
+  --border-b-8: var(--8-2);
+  --border-b: var(--1-2);
+  --border-e-0: var(--0-2);
+  --border-e-2: var(--2-2);
+  --border-e-4: var(--4-2);
+  --border-e-8: var(--8-2);
+  --border-e: var(--1-2);
+  --border-l-0: var(--0-2);
+  --border-l-2: var(--2-2);
+  --border-l-4: var(--4-2);
+  --border-l-8: var(--8-2);
+  --border-l: var(--1-2);
+  --border-r-0: var(--0-2);
+  --border-r-2: var(--2-2);
+  --border-r-4: var(--4-2);
+  --border-r-8: var(--8-2);
+  --border-r: var(--1-2);
+  --border-s-0: var(--0-2);
+  --border-s-2: var(--2-2);
+  --border-s-4: var(--4-2);
+  --border-s-8: var(--8-2);
+  --border-s: var(--1-2);
+  --border-t-0: var(--0-2);
+  --border-t-2: var(--2-2);
+  --border-t-4: var(--4-2);
+  --border-t-8: var(--8-2);
+  --border-t: var(--1-2);
+  --border-width: var(--1-2);
+  --border-x-0: var(--0-2);
+  --border-x-2: var(--2-2);
+  --border-x-4: var(--4-2);
+  --border-x-8: var(--8-2);
+  --border-x: var(--1-2);
+  --border-y-0: var(--0-2);
+  --border-y-2: var(--2-2);
+  --border-y-4: var(--4-2);
+  --border-y-8: var(--8-2);
+  --border-y: var(--1-2);
+  --border: var(--neutral-200); /* @kind color */
+  --brand-blue: var(--blue-500-2); /* @kind color */
+  --brand-cream: var(--cream-300); /* @kind color */
+  --brand-lavender: var(--lavender-300); /* @kind color */
+  --brand-navy-deep: var(--navy-900); /* @kind color */
+  --brand-navy: var(--navy-950); /* @kind color */
+  --brand-orange: var(--orange-500); /* @kind color */
+  --brand-pink: var(--pink-200); /* @kind color */
+  --brand-sky: var(--sky-300); /* @kind color */
+  --bronze-10: rgb(149,116,104); /* @kind color */
+  --bronze-11: rgb(125,94,84); /* @kind color */
+  --bronze-12: rgb(67,48,43); /* @kind color */
+  --bronze-1: rgb(253,252,252); /* @kind color */
+  --bronze-2: rgb(253,247,245); /* @kind color */
+  --bronze-3: rgb(246,237,234); /* @kind color */
+  --bronze-4: rgb(239,228,223); /* @kind color */
+  --bronze-5: rgb(231,217,211); /* @kind color */
+  --bronze-6: rgb(223,205,197); /* @kind color */
+  --bronze-7: rgb(211,188,179); /* @kind color */
+  --bronze-8: rgb(194,164,153); /* @kind color */
+  --bronze-9: rgb(161,128,114); /* @kind color */
+  --brown-10: rgb(160,117,83); /* @kind color */
+  --brown-11: rgb(129,94,70); /* @kind color */
+  --brown-12: rgb(62,51,46); /* @kind color */
+  --brown-1: rgb(254,253,252); /* @kind color */
+  --brown-2: rgb(252,249,246); /* @kind color */
+  --brown-3: rgb(246,238,231); /* @kind color */
+  --brown-4: rgb(240,228,217); /* @kind color */
+  --brown-5: rgb(235,218,202); /* @kind color */
+  --brown-6: rgb(228,205,183); /* @kind color */
+  --brown-7: rgb(220,188,159); /* @kind color */
+  --brown-8: rgb(206,163,126); /* @kind color */
+  --brown-9: rgb(173,127,88); /* @kind color */
+  --card-foreground: var(--neutral-950); /* @kind color */
+  --card: var(--white); /* @kind color */
+  --chart-1: var(--brand-blue); /* @kind color */
+  --chart-2: var(--brand-orange); /* @kind color */
+  --chart-3: var(--brand-sky); /* @kind color */
+  --chart-4: var(--brand-lavender); /* @kind color */
+  --chart-5: var(--brand-pink); /* @kind color */
+  --color: rgb(255,255,255); /* @kind color */
+  --cream-100: rgb(255,252,242); /* @kind color */
+  --cream-200: rgb(255,250,236); /* @kind color */
+  --cream-300: rgb(252,248,236); /* @kind color */
+  --cream-400: rgb(239,223,173); /* @kind color */
+  --cream-500: rgb(238,216,152); /* @kind color */
+  --cream-50: rgba(252,248,236,0.5); /* @kind color */
+  --cream-600: rgb(203,160,32); /* @kind color */
+  --cream-700: rgb(167,132,26); /* @kind color */
+  --cream-800: rgb(132,104,21); /* @kind color */
+  --cream-900: rgb(97,76,15); /* @kind color */
+  --cream-950: rgb(62,49,10); /* @kind color */
+  --crimson-10: rgb(223,52,120); /* @kind color */
+  --crimson-11: rgb(203,29,99); /* @kind color */
+  --crimson-12: rgb(98,22,57); /* @kind color */
+  --crimson-1: rgb(255,252,253); /* @kind color */
+  --crimson-2: rgb(254,247,249); /* @kind color */
+  --crimson-3: rgb(255,233,240); /* @kind color */
+  --crimson-4: rgb(254,220,231); /* @kind color */
+  --crimson-5: rgb(250,206,221); /* @kind color */
+  --crimson-6: rgb(243,190,209); /* @kind color */
+  --crimson-7: rgb(234,172,195); /* @kind color */
+  --crimson-8: rgb(224,147,178); /* @kind color */
+  --crimson-9: rgb(233,61,130); /* @kind color */
+  --cyan-100: rgb(207,250,254); /* @kind color */
+  --cyan-10: rgb(7,151,185); /* @kind color */
+  --cyan-11: rgb(16,125,152); /* @kind color */
+  --cyan-12: rgb(13,60,72); /* @kind color */
+  --cyan-1: rgb(250,253,254); /* @kind color */
+  --cyan-200: rgb(165,243,252); /* @kind color */
+  --cyan-2: rgb(242,250,251); /* @kind color */
+  --cyan-300: rgb(103,232,249); /* @kind color */
+  --cyan-3: rgb(222,247,249); /* @kind color */
+  --cyan-400: rgb(34,211,238); /* @kind color */
+  --cyan-4: rgb(202,241,246); /* @kind color */
+  --cyan-500: rgb(6,182,212); /* @kind color */
+  --cyan-50: rgb(236,254,255); /* @kind color */
+  --cyan-5: rgb(181,233,240); /* @kind color */
+  --cyan-600: rgb(8,145,178); /* @kind color */
+  --cyan-6: rgb(157,221,231); /* @kind color */
+  --cyan-700: rgb(14,116,144); /* @kind color */
+  --cyan-7: rgb(125,206,220); /* @kind color */
+  --cyan-800: rgb(21,94,117); /* @kind color */
+  --cyan-8: rgb(61,185,207); /* @kind color */
+  --cyan-900: rgb(22,78,99); /* @kind color */
+  --cyan-950: rgb(8,51,68); /* @kind color */
+  --cyan-9: rgb(0,162,199); /* @kind color */
+  --default: rgb(18,18,18); /* @kind color */
+  --destructive-foreground: var(--red-700); /* @kind color */
+  --destructive-soft: var(--red-50); /* @kind color */
+  --destructive: var(--red-600); /* @kind color */
+  --emerald-100: rgb(209,250,229); /* @kind color */
+  --emerald-200: rgb(167,243,208); /* @kind color */
+  --emerald-300: rgb(110,231,183); /* @kind color */
+  --emerald-400: rgb(52,211,153); /* @kind color */
+  --emerald-500: rgb(16,185,129); /* @kind color */
+  --emerald-50: rgb(236,253,245); /* @kind color */
+  --emerald-600: rgb(5,150,105); /* @kind color */
+  --emerald-700: rgb(4,120,87); /* @kind color */
+  --emerald-800: rgb(6,95,70); /* @kind color */
+  --emerald-900: rgb(6,78,59); /* @kind color */
+  --emerald-950: rgb(2,44,34); /* @kind color */
+  --family-font-handwriting: "Collage AI"; /* @kind font */
+  --family-mono: "Geist Mono"; /* @kind font */
+  --family-monospace: "Geist Mono"; /* @kind font */
+  --family-sans-serif: "Copernicus Trial"; /* @kind font */
+  --family-sans: "Geist"; /* @kind font */
+  --foreground: var(--neutral-950); /* @kind color */
+  --gap-0-5: var(--2-2);
+  --gap-0: var(--0);
+  --gap-1-5: var(--6);
+  --gap-10: var(--40);
+  --gap-11: var(--44-2);
+  --gap-12: var(--48-2);
+  --gap-14: var(--56);
+  --gap-16: var(--64-2);
+  --gap-1: var(--4);
+  --gap-2-5: var(--10);
+  --gap-20: var(--80-2);
+  --gap-24: var(--96);
+  --gap-28: var(--112-2);
+  --gap-2: var(--8);
+  --gap-3-5: var(--14-2);
+  --gap-32: var(--128-2);
+  --gap-36: var(--144-2);
+  --gap-3: var(--12);
+  --gap-40: var(--160-2);
+  --gap-44: var(--176-2);
+  --gap-48: var(--192-2);
+  --gap-4: var(--16);
+  --gap-52: var(--208-2);
+  --gap-56: var(--224-2);
+  --gap-5: var(--20);
+  --gap-60: var(--240-2);
+  --gap-64: var(--256-2);
+  --gap-6: var(--24);
+  --gap-72: var(--288-2);
+  --gap-7: var(--28-2);
+  --gap-80: var(--320-2);
+  --gap-8: var(--32);
+  --gap-96: var(--384-2);
+  --gap-9: var(--36-2);
+  --gap-x-0-5: var(--2-2);
+  --gap-x-0: var(--0);
+  --gap-x-1-5: var(--6);
+  --gap-x-10: var(--40);
+  --gap-x-11: var(--44-2);
+  --gap-x-12: var(--48-2);
+  --gap-x-14: var(--56);
+  --gap-x-16: var(--64-2);
+  --gap-x-1: var(--4);
+  --gap-x-2-2: var(--8);
+  --gap-x-2-5: var(--10);
+  --gap-x-20: var(--80-2);
+  --gap-x-24: var(--96);
+  --gap-x-28: var(--112-2);
+  --gap-x-3-5: var(--14-2);
+  --gap-x-32: var(--128-2);
+  --gap-x-36: var(--144-2);
+  --gap-x-3: var(--12);
+  --gap-x-40: var(--160-2);
+  --gap-x-44: var(--176-2);
+  --gap-x-48: var(--192-2);
+  --gap-x-4: var(--16);
+  --gap-x-52: var(--208-2);
+  --gap-x-56: var(--224-2);
+  --gap-x-5: var(--20);
+  --gap-x-60: var(--240-2);
+  --gap-x-64: var(--256-2);
+  --gap-x-6: var(--24);
+  --gap-x-72: var(--288-2);
+  --gap-x-7: var(--28-2);
+  --gap-x-80: var(--320-2);
+  --gap-x-8: var(--32);
+  --gap-x-96: var(--384-2);
+  --gap-x-9: var(--36-2);
+  --gap-y-0-5: var(--2);
+  --gap-y-0: var(--0);
+  --gap-y-1-5: var(--6);
+  --gap-y-10: var(--40);
+  --gap-y-11: var(--44-2);
+  --gap-y-12: var(--48-2);
+  --gap-y-14: var(--56);
+  --gap-y-16: var(--64-2);
+  --gap-y-1: var(--4);
+  --gap-y-2-5: var(--10);
+  --gap-y-20: var(--80-2);
+  --gap-y-24: var(--96);
+  --gap-y-28: var(--112-2);
+  --gap-y-2: var(--8);
+  --gap-y-3-5: var(--14-2);
+  --gap-y-32: var(--128-2);
+  --gap-y-36: var(--144-2);
+  --gap-y-3: var(--12);
+  --gap-y-40: var(--160-2);
+  --gap-y-44: var(--176-2);
+  --gap-y-48: var(--192-2);
+  --gap-y-4: var(--16);
+  --gap-y-52: var(--208-2);
+  --gap-y-56: var(--224-2);
+  --gap-y-5: var(--20);
+  --gap-y-60: var(--240-2);
+  --gap-y-64: var(--256-2);
+  --gap-y-6: var(--24);
+  --gap-y-72: var(--288-2);
+  --gap-y-7: var(--28-2);
+  --gap-y-80: var(--320-2);
+  --gap-y-8: var(--32);
+  --gap-y-96: var(--384-2);
+  --gap-y-9: var(--36-2);
+  --gold-10: rgb(140,122,94); /* @kind color */
+  --gold-11: rgb(113,98,75); /* @kind color */
+  --gold-12: rgb(59,53,43); /* @kind color */
+  --gold-1: rgb(253,253,252); /* @kind color */
+  --gold-2: rgb(250,249,242); /* @kind color */
+  --gold-3: rgb(242,240,231); /* @kind color */
+  --gold-4: rgb(234,230,219); /* @kind color */
+  --gold-5: rgb(225,220,207); /* @kind color */
+  --gold-6: rgb(216,208,191); /* @kind color */
+  --gold-7: rgb(203,192,170); /* @kind color */
+  --gold-8: rgb(185,168,141); /* @kind color */
+  --gold-9: rgb(151,131,101); /* @kind color */
+  --grass-10: rgb(62,155,79); /* @kind color */
+  --grass-11: rgb(42,126,59); /* @kind color */
+  --grass-12: rgb(32,60,37); /* @kind color */
+  --grass-1: rgb(251,254,251); /* @kind color */
+  --grass-2: rgb(245,251,245); /* @kind color */
+  --grass-3: rgb(233,246,233); /* @kind color */
+  --grass-4: rgb(218,241,219); /* @kind color */
+  --grass-5: rgb(201,232,202); /* @kind color */
+  --grass-6: rgb(178,221,181); /* @kind color */
+  --grass-7: rgb(148,206,154); /* @kind color */
+  --grass-8: rgb(101,186,116); /* @kind color */
+  --grass-9: rgb(70,167,88); /* @kind color */
+  --gray-100: rgb(243,244,246); /* @kind color */
+  --gray-10: rgb(131,131,131); /* @kind color */
+  --gray-11: rgb(100,100,100); /* @kind color */
+  --gray-12: rgb(32,32,32); /* @kind color */
+  --gray-1: rgb(252,252,252); /* @kind color */
+  --gray-200: rgb(229,231,235); /* @kind color */
+  --gray-2: rgb(249,249,249); /* @kind color */
+  --gray-300: rgb(209,213,219); /* @kind color */
+  --gray-3: rgb(240,240,240); /* @kind color */
+  --gray-400: rgb(156,163,175); /* @kind color */
+  --gray-4: rgb(232,232,232); /* @kind color */
+  --gray-500: rgb(107,114,128); /* @kind color */
+  --gray-50: rgb(249,250,251); /* @kind color */
+  --gray-5: rgb(224,224,224); /* @kind color */
+  --gray-600: rgb(75,85,99); /* @kind color */
+  --gray-6: rgb(217,217,217); /* @kind color */
+  --gray-700: rgb(55,65,81); /* @kind color */
+  --gray-7: rgb(206,206,206); /* @kind color */
+  --gray-800: rgb(31,41,55); /* @kind color */
+  --gray-8: rgb(187,187,187); /* @kind color */
+  --gray-900: rgb(17,24,39); /* @kind color */
+  --gray-950: rgb(3,7,18); /* @kind color */
+  --gray-9: rgb(141,141,141); /* @kind color */
+  --green-100: rgb(220,252,231); /* @kind color */
+  --green-10: rgb(43,154,102); /* @kind color */
+  --green-11: rgb(33,131,88); /* @kind color */
+  --green-12: rgb(25,59,45); /* @kind color */
+  --green-1: rgb(251,254,252); /* @kind color */
+  --green-200: rgb(187,247,208); /* @kind color */
+  --green-2: rgb(244,251,246); /* @kind color */
+  --green-300: rgb(134,239,172); /* @kind color */
+  --green-3: rgb(230,246,235); /* @kind color */
+  --green-400: rgb(74,222,128); /* @kind color */
+  --green-4: rgb(214,241,223); /* @kind color */
+  --green-500: rgb(34,197,94); /* @kind color */
+  --green-50: rgb(240,253,244); /* @kind color */
+  --green-5: rgb(196,232,209); /* @kind color */
+  --green-600: rgb(22,163,74); /* @kind color */
+  --green-6: rgb(173,221,192); /* @kind color */
+  --green-700: rgb(21,128,61); /* @kind color */
+  --green-7: rgb(142,206,170); /* @kind color */
+  --green-800: rgb(22,101,52); /* @kind color */
+  --green-8: rgb(91,185,139); /* @kind color */
+  --green-900: rgb(20,83,45); /* @kind color */
+  --green-950: rgb(5,46,22); /* @kind color */
+  --green-9: rgb(48,164,108); /* @kind color */
+  --h-0-5: var(--2-2);
+  --h-0: var(--0-2);
+  --h-10: var(--40-2);
+  --h-12: var(--48);
+  --h-14: var(--56-2);
+  --h-16: var(--64);
+  --h-18: var(--72);
+  --h-1: var(--4-2);
+  --h-2-5: var(--10-2);
+  --h-20: var(--80);
+  --h-24: var(--96-2);
+  --h-2: var(--8-2);
+  --h-3-5: var(--14);
+  --h-3: var(--12-2);
+  --h-48: var(--192);
+  --h-4: var(--16-2);
+  --h-5: var(--20-2);
+  --h-6: var(--24-2);
+  --h-72: var(--288);
+  --h-7: var(--28);
+  --h-8: var(--32-2);
+  --h-96: var(--384);
+  --h-9: var(--36);
+  --h-px: var(--1-2);
+  --hover: rgb(168,85,247); /* @kind color */
+  --indigo-100: rgb(224,231,255); /* @kind color */
+  --indigo-10: rgb(51,88,212); /* @kind color */
+  --indigo-11: rgb(58,91,199); /* @kind color */
+  --indigo-12: rgb(31,45,92); /* @kind color */
+  --indigo-1: rgb(253,253,254); /* @kind color */
+  --indigo-200: rgb(199,210,254); /* @kind color */
+  --indigo-2: rgb(247,249,255); /* @kind color */
+  --indigo-300: rgb(165,180,252); /* @kind color */
+  --indigo-3: rgb(237,242,254); /* @kind color */
+  --indigo-400: rgb(129,140,248); /* @kind color */
+  --indigo-4: rgb(225,233,255); /* @kind color */
+  --indigo-500: rgb(99,102,241); /* @kind color */
+  --indigo-50: rgb(238,242,255); /* @kind color */
+  --indigo-5: rgb(210,222,255); /* @kind color */
+  --indigo-600: rgb(79,70,229); /* @kind color */
+  --indigo-6: rgb(193,208,255); /* @kind color */
+  --indigo-700: rgb(67,56,202); /* @kind color */
+  --indigo-7: rgb(171,189,249); /* @kind color */
+  --indigo-800: rgb(55,48,163); /* @kind color */
+  --indigo-8: rgb(141,164,239); /* @kind color */
+  --indigo-900: rgb(49,46,129); /* @kind color */
+  --indigo-950: rgb(30,27,75); /* @kind color */
+  --indigo-9: rgb(62,99,221); /* @kind color */
+  --input: var(--neutral-200); /* @kind color */
+  --iris-10: rgb(81,81,205); /* @kind color */
+  --iris-11: rgb(87,83,198); /* @kind color */
+  --iris-12: rgb(39,41,98); /* @kind color */
+  --iris-1: rgb(253,253,255); /* @kind color */
+  --iris-2: rgb(248,248,255); /* @kind color */
+  --iris-3: rgb(240,241,254); /* @kind color */
+  --iris-4: rgb(230,231,255); /* @kind color */
+  --iris-5: rgb(218,220,255); /* @kind color */
+  --iris-6: rgb(203,205,255); /* @kind color */
+  --iris-7: rgb(184,186,248); /* @kind color */
+  --iris-8: rgb(155,158,240); /* @kind color */
+  --iris-9: rgb(91,91,214); /* @kind color */
+  --jade-10: rgb(38,153,123); /* @kind color */
+  --jade-11: rgb(32,131,104); /* @kind color */
+  --jade-12: rgb(29,59,49); /* @kind color */
+  --jade-1: rgb(251,254,253); /* @kind color */
+  --jade-2: rgb(244,251,247); /* @kind color */
+  --jade-3: rgb(230,247,237); /* @kind color */
+  --jade-4: rgb(214,241,227); /* @kind color */
+  --jade-5: rgb(195,233,215); /* @kind color */
+  --jade-6: rgb(172,222,200); /* @kind color */
+  --jade-7: rgb(139,206,182); /* @kind color */
+  --jade-8: rgb(86,186,159); /* @kind color */
+  --jade-9: rgb(41,163,131); /* @kind color */
+  --lavender-100: rgb(241,224,250); /* @kind color */
+  --lavender-200: rgb(228,189,250); /* @kind color */
+  --lavender-300: rgb(220,162,253); /* @kind color */
+  --lavender-400: rgb(191,85,251); /* @kind color */
+  --lavender-500: rgb(170,30,250); /* @kind color */
+  --lavender-50: rgb(249,242,253); /* @kind color */
+  --lavender-600: rgb(148,5,230); /* @kind color */
+  --lavender-700: rgb(122,4,190); /* @kind color */
+  --lavender-800: rgb(97,3,150); /* @kind color */
+  --lavender-900: rgb(71,2,110); /* @kind color */
+  --lavender-950: rgb(45,2,70); /* @kind color */
+  --leading-10: var(--40-2);
+  --leading-12: var(--48);
+  --leading-15: var(--60);
+  --leading-18: var(--72);
+  --leading-24: var(--96-2);
+  --leading-32: var(--128);
+  --leading-3: var(--12-2);
+  --leading-4: var(--16-2);
+  --leading-5: var(--20-2);
+  --leading-6: var(--24-2);
+  --leading-7: var(--28);
+  --leading-8: var(--32-2);
+  --leading-9: var(--36);
+  --lime-10: rgb(176,230,76); /* @kind color */
+  --lime-11: rgb(92,124,47); /* @kind color */
+  --lime-12: rgb(55,64,28); /* @kind color */
+  --lime-1: rgb(252,253,250); /* @kind color */
+  --lime-2: rgb(248,250,243); /* @kind color */
+  --lime-3: rgb(238,246,214); /* @kind color */
+  --lime-4: rgb(226,240,189); /* @kind color */
+  --lime-5: rgb(211,231,166); /* @kind color */
+  --lime-6: rgb(194,218,145); /* @kind color */
+  --lime-7: rgb(171,201,120); /* @kind color */
+  --lime-8: rgb(141,182,84); /* @kind color */
+  --lime-9: rgb(189,238,99); /* @kind color */
+  --m-0-5: var(--2);
+  --m-0: var(--0);
+  --m-1-5: var(--6);
+  --m-10: var(--40);
+  --m-11: var(--44-2);
+  --m-12: var(--48-2);
+  --m-14: var(--56);
+  --m-16: var(--64-2);
+  --m-1: var(--4);
+  --m-2-5: var(--10);
+  --m-20: var(--80-2);
+  --m-24: var(--96);
+  --m-28: var(--112-2);
+  --m-2: var(--8);
+  --m-3-5: var(--14-2);
+  --m-32: var(--128-2);
+  --m-36: var(--144-2);
+  --m-3: var(--12);
+  --m-40: var(--160-2);
+  --m-44: var(--176-2);
+  --m-48: var(--192-2);
+  --m-4: var(--16);
+  --m-52: var(--208-2);
+  --m-56: var(--224-2);
+  --m-5: var(--20);
+  --m-60: var(--240-2);
+  --m-64: var(--256-2);
+  --m-6: var(--24);
+  --m-72: var(--288-2);
+  --m-7: var(--28-2);
+  --m-80: var(--320-2);
+  --m-8: var(--32);
+  --m-96: var(--384-2);
+  --m-9: var(--36-2);
+  --m-px: var(--1);
+  --mauve-10: rgb(132,130,142); /* @kind color */
+  --mauve-11: rgb(101,99,109); /* @kind color */
+  --mauve-12: rgb(33,31,38); /* @kind color */
+  --mauve-1: rgb(253,252,253); /* @kind color */
+  --mauve-2: rgb(250,249,251); /* @kind color */
+  --mauve-3: rgb(242,239,243); /* @kind color */
+  --mauve-4: rgb(234,231,236); /* @kind color */
+  --mauve-5: rgb(227,223,230); /* @kind color */
+  --mauve-6: rgb(219,216,224); /* @kind color */
+  --mauve-7: rgb(208,205,215); /* @kind color */
+  --mauve-8: rgb(188,186,199); /* @kind color */
+  --mauve-9: rgb(142,140,153); /* @kind color */
+  --max-h-0-5: var(--2-2);
+  --max-h-0: var(--0-2);
+  --max-h-1-5: var(--6-2);
+  --max-h-10: var(--40-2);
+  --max-h-11: var(--44);
+  --max-h-12: var(--48);
+  --max-h-14: var(--56-2);
+  --max-h-16: var(--64);
+  --max-h-1: var(--4-2);
+  --max-h-2-5: var(--10-2);
+  --max-h-20: var(--80);
+  --max-h-24: var(--96-2);
+  --max-h-28: var(--112);
+  --max-h-2: var(--8-2);
+  --max-h-3-5: var(--14);
+  --max-h-32: var(--128);
+  --max-h-36: var(--144);
+  --max-h-3: var(--12-2);
+  --max-h-40: var(--160);
+  --max-h-44: var(--176);
+  --max-h-48: var(--192);
+  --max-h-4: var(--16-2);
+  --max-h-52: var(--208);
+  --max-h-56: var(--224);
+  --max-h-5: var(--20-2);
+  --max-h-60: var(--240);
+  --max-h-64: var(--256);
+  --max-h-6: var(--24-2);
+  --max-h-72: var(--288);
+  --max-h-7: var(--28);
+  --max-h-80: var(--320);
+  --max-h-8: var(--32-2);
+  --max-h-96: var(--384);
+  --max-h-9: var(--36);
+  --max-h-px: var(--1-2);
+  --max-w-0-5: var(--2-2);
+  --max-w-0: var(--0-2);
+  --max-w-1-5: var(--6-2);
+  --max-w-10: var(--40-2);
+  --max-w-11: var(--44);
+  --max-w-12: var(--48);
+  --max-w-14: var(--56-2);
+  --max-w-16: var(--64);
+  --max-w-1: var(--4-2);
+  --max-w-2-5: var(--10-2);
+  --max-w-20: var(--80);
+  --max-w-24: var(--96-2);
+  --max-w-28: var(--112);
+  --max-w-2: var(--8-2);
+  --max-w-2xl: var(--672);
+  --max-w-32: var(--128);
+  --max-w-36: var(--144);
+  --max-w-3: var(--12-2);
+  --max-w-3xl: var(--768);
+  --max-w-40: var(--160);
+  --max-w-44: var(--176);
+  --max-w-48: var(--192);
+  --max-w-4: var(--16-2);
+  --max-w-4xl: var(--896);
+  --max-w-52: var(--208);
+  --max-w-56: var(--224);
+  --max-w-5: var(--20-2);
+  --max-w-5xl: var(--1024);
+  --max-w-60: var(--240);
+  --max-w-64: var(--256);
+  --max-w-6: var(--24-2);
+  --max-w-6xl: var(--1152);
+  --max-w-72: var(--288);
+  --max-w-7: var(--28);
+  --max-w-7xl: var(--1280);
+  --max-w-80: var(--320);
+  --max-w-8: var(--32-2);
+  --max-w-96: var(--384);
+  --max-w-9: var(--36);
+  --max-w-lg: var(--512);
+  --max-w-md: var(--448);
+  --max-w-none: var(--0-2);
+  --max-w-px: var(--1-2);
+  --max-w-screen-2xl: var(--1536);
+  --max-w-screen-lg: var(--1024);
+  --max-w-screen-md: var(--768);
+  --max-w-screen-sm: var(--640);
+  --max-w-screen-xl: var(--1280);
+  --max-w-sm: var(--384);
+  --max-w-xl: var(--576);
+  --max-w-xs: var(--320);
+  --mb-0-5: var(--2);
+  --mb-0: var(--0);
+  --mb-1-2: var(--4);
+  --mb-1-5: var(--6);
+  --mb-10: var(--40);
+  --mb-11: var(--44-2);
+  --mb-12: var(--48-2);
+  --mb-14: var(--56);
+  --mb-16: var(--64-2);
+  --mb-1: var(--4);
+  --mb-2-5: var(--10);
+  --mb-20: var(--80-2);
+  --mb-24: var(--96);
+  --mb-28: var(--112-2);
+  --mb-2: var(--8);
+  --mb-3-5: var(--14-2);
+  --mb-32: var(--128-2);
+  --mb-36: var(--144-2);
+  --mb-3: var(--12);
+  --mb-4-2: var(--16);
+  --mb-40: var(--160-2);
+  --mb-44: var(--176-2);
+  --mb-48: var(--192-2);
+  --mb-4: var(--16);
+  --mb-52: var(--208-2);
+  --mb-56: var(--224-2);
+  --mb-5: var(--20);
+  --mb-60: var(--240-2);
+  --mb-64: var(--256-2);
+  --mb-6: var(--24);
+  --mb-72: var(--288-2);
+  --mb-7: var(--28-2);
+  --mb-80: var(--320-2);
+  --mb-8: var(--32);
+  --mb-96: var(--384-2);
+  --mb-9: var(--36-2);
+  --mb-px: var(--1);
+  --mint-10: rgb(125,224,203); /* @kind color */
+  --mint-11: rgb(2,120,100); /* @kind color */
+  --mint-12: rgb(22,67,60); /* @kind color */
+  --mint-1: rgb(249,254,253); /* @kind color */
+  --mint-2: rgb(242,251,249); /* @kind color */
+  --mint-3: rgb(221,249,242); /* @kind color */
+  --mint-4: rgb(200,244,233); /* @kind color */
+  --mint-5: rgb(179,236,222); /* @kind color */
+  --mint-6: rgb(156,224,208); /* @kind color */
+  --mint-7: rgb(126,207,189); /* @kind color */
+  --mint-8: rgb(76,187,165); /* @kind color */
+  --mint-9: rgb(134,234,212); /* @kind color */
+  --ml-0-5: var(--2);
+  --ml-0: var(--0);
+  --ml-1-2: var(--4);
+  --ml-1-5: var(--6);
+  --ml-10: var(--40);
+  --ml-11: var(--44-2);
+  --ml-12: var(--48-2);
+  --ml-14: var(--56);
+  --ml-16: var(--64-2);
+  --ml-1: var(--4);
+  --ml-2-2: var(--8);
+  --ml-2-5: var(--10);
+  --ml-20: var(--80-2);
+  --ml-24: var(--96);
+  --ml-28: var(--112-2);
+  --ml-2: var(--8);
+  --ml-3-5: var(--14-2);
+  --ml-32: var(--128-2);
+  --ml-36: var(--144-2);
+  --ml-3: var(--12);
+  --ml-4-2: var(--16);
+  --ml-40: var(--160-2);
+  --ml-44: var(--176-2);
+  --ml-48: var(--192-2);
+  --ml-4: var(--16);
+  --ml-52: var(--208-2);
+  --ml-56: var(--224-2);
+  --ml-5: var(--20);
+  --ml-6-2: var(--24);
+  --ml-60: var(--240-2);
+  --ml-64: var(--256-2);
+  --ml-6: var(--24);
+  --ml-72: var(--288-2);
+  --ml-7: var(--28-2);
+  --ml-80: var(--320-2);
+  --ml-8: var(--32);
+  --ml-96: var(--384-2);
+  --ml-9: var(--36-2);
+  --ml-px: var(--1);
+  --mr-0-5: var(--2);
+  --mr-0: var(--0);
+  --mr-1-5: var(--6);
+  --mr-10: var(--40);
+  --mr-11: var(--44-2);
+  --mr-12: var(--48-2);
+  --mr-14: var(--56);
+  --mr-16: var(--64-2);
+  --mr-1: var(--4);
+  --mr-2-2: var(--8);
+  --mr-2-5-2: var(--10);
+  --mr-2-5: var(--10);
+  --mr-20: var(--80-2);
+  --mr-24: var(--96);
+  --mr-28: var(--112-2);
+  --mr-2: var(--8);
+  --mr-3-5: var(--14-2);
+  --mr-32: var(--128-2);
+  --mr-36: var(--144-2);
+  --mr-3: var(--12);
+  --mr-40: var(--160-2);
+  --mr-44: var(--176-2);
+  --mr-48: var(--192-2);
+  --mr-4: var(--16);
+  --mr-52: var(--208-2);
+  --mr-56: var(--224-2);
+  --mr-5: var(--20);
+  --mr-60: var(--240-2);
+  --mr-64: var(--256-2);
+  --mr-6: var(--24);
+  --mr-72: var(--288-2);
+  --mr-7: var(--28-2);
+  --mr-80: var(--320-2);
+  --mr-8: var(--32);
+  --mr-96: var(--384-2);
+  --mr-9: var(--36-2);
+  --mr-px: var(--1);
+  --mt-0-5-2: var(--2);
+  --mt-0-5: var(--2);
+  --mt-0: var(--0);
+  --mt-1-5: var(--6);
+  --mt-10: var(--40);
+  --mt-11: var(--44-2);
+  --mt-12: var(--48-2);
+  --mt-14: var(--56);
+  --mt-16: var(--64-2);
+  --mt-1: var(--4);
+  --mt-2-2: var(--8);
+  --mt-2-5: var(--10);
+  --mt-20: var(--80-2);
+  --mt-24-2: var(--96);
+  --mt-24: var(--96);
+  --mt-28: var(--112-2);
+  --mt-2: var(--8);
+  --mt-3-5: var(--14-2);
+  --mt-32: var(--128-2);
+  --mt-36: var(--144-2);
+  --mt-3: var(--12);
+  --mt-40: var(--160-2);
+  --mt-44: var(--176-2);
+  --mt-48: var(--192-2);
+  --mt-4: var(--16);
+  --mt-52: var(--208-2);
+  --mt-56: var(--224-2);
+  --mt-5: var(--20);
+  --mt-6-2: var(--24);
+  --mt-60: var(--240-2);
+  --mt-64: var(--256-2);
+  --mt-6: var(--24);
+  --mt-72: var(--288-2);
+  --mt-7: var(--28-2);
+  --mt-8-2: var(--32);
+  --mt-80: var(--320-2);
+  --mt-8: var(--32);
+  --mt-96: var(--384-2);
+  --mt-9: var(--36-2);
+  --mt-px: var(--1);
+  --muted-foreground: var(--neutral-500); /* @kind color */
+  --muted: var(--cream-50); /* @kind color */
+  --mx-0-5: var(--2);
+  --mx-0: var(--0);
+  --mx-1-5: var(--6);
+  --mx-10: var(--40);
+  --mx-11: var(--44-2);
+  --mx-12: var(--48-2);
+  --mx-14: var(--56);
+  --mx-16: var(--64-2);
+  --mx-1: var(--4);
+  --mx-2-5: var(--10);
+  --mx-20: var(--80-2);
+  --mx-24: var(--96);
+  --mx-28: var(--112-2);
+  --mx-2: var(--8);
+  --mx-3-5: var(--14-2);
+  --mx-32: var(--128-2);
+  --mx-36: var(--144-2);
+  --mx-3: var(--12);
+  --mx-40: var(--160-2);
+  --mx-44: var(--176-2);
+  --mx-48: var(--192-2);
+  --mx-4: var(--16);
+  --mx-52: var(--208-2);
+  --mx-56: var(--224-2);
+  --mx-5: var(--20);
+  --mx-60: var(--240-2);
+  --mx-64: var(--256-2);
+  --mx-6: var(--24);
+  --mx-72: var(--288-2);
+  --mx-7: var(--28-2);
+  --mx-80: var(--320-2);
+  --mx-8: var(--32);
+  --mx-96: var(--384-2);
+  --mx-9: var(--36-2);
+  --mx-px: var(--1);
+  --my-0-5: var(--2);
+  --my-0: var(--0);
+  --my-1-5: var(--6);
+  --my-10: var(--40);
+  --my-11: var(--44-2);
+  --my-12: var(--48-2);
+  --my-14: var(--56);
+  --my-16: var(--64-2);
+  --my-1: var(--4);
+  --my-2-5: var(--10);
+  --my-20: var(--80-2);
+  --my-24: var(--96);
+  --my-28: var(--112-2);
+  --my-2: var(--8);
+  --my-3-5: var(--14-2);
+  --my-32: var(--128-2);
+  --my-36: var(--144-2);
+  --my-3: var(--12);
+  --my-40: var(--160-2);
+  --my-44: var(--176-2);
+  --my-48: var(--192-2);
+  --my-4: var(--16);
+  --my-52: var(--208-2);
+  --my-56: var(--224-2);
+  --my-5: var(--20);
+  --my-60: var(--240-2);
+  --my-64: var(--256-2);
+  --my-6: var(--24);
+  --my-72: var(--288-2);
+  --my-7: var(--28-2);
+  --my-80: var(--320-2);
+  --my-8: var(--32);
+  --my-96: var(--384-2);
+  --my-9: var(--36-2);
+  --my-px: var(--1);
+  --navy-100: rgb(231,238,243); /* @kind color */
+  --navy-200: rgb(207,220,231); /* @kind color */
+  --navy-300: rgb(175,198,217); /* @kind color */
+  --navy-400: rgb(134,171,203); /* @kind color */
+  --navy-500: rgb(89,144,192); /* @kind color */
+  --navy-50: rgb(245,248,250); /* @kind color */
+  --navy-600: rgb(53,122,182); /* @kind color */
+  --navy-700: rgb(31,102,163); /* @kind color */
+  --navy-800: rgb(11,82,142); /* @kind color */
+  --navy-900: rgb(14,51,84); /* @kind color */
+  --navy-950: rgb(0,35,65); /* @kind color */
+  --navy: rgb(0,35,65); /* @kind color */
+  --neutral-100: rgb(245,245,245); /* @kind color */
+  --neutral-200: rgb(229,229,229); /* @kind color */
+  --neutral-300: rgb(212,212,212); /* @kind color */
+  --neutral-400: rgb(163,163,163); /* @kind color */
+  --neutral-500: rgb(115,115,115); /* @kind color */
+  --neutral-50: rgb(250,250,250); /* @kind color */
+  --neutral-600: rgb(82,82,82); /* @kind color */
+  --neutral-700: rgb(64,64,64); /* @kind color */
+  --neutral-800: rgb(38,38,38); /* @kind color */
+  --neutral-900: rgb(23,23,23); /* @kind color */
+  --neutral-950: rgb(10,10,10); /* @kind color */
+  --olive-10: rgb(127,132,125); /* @kind color */
+  --olive-11: rgb(96,101,95); /* @kind color */
+  --olive-12: rgb(29,33,28); /* @kind color */
+  --olive-1: rgb(252,253,252); /* @kind color */
+  --olive-2: rgb(248,250,248); /* @kind color */
+  --olive-3: rgb(239,241,239); /* @kind color */
+  --olive-4: rgb(231,233,231); /* @kind color */
+  --olive-5: rgb(223,226,223); /* @kind color */
+  --olive-6: rgb(215,218,215); /* @kind color */
+  --olive-7: rgb(204,207,204); /* @kind color */
+  --olive-8: rgb(185,188,184); /* @kind color */
+  --olive-9: rgb(137,142,135); /* @kind color */
+  --opacity-0: var(--0-2);
+  --opacity-100: var(--100);
+  --opacity-10: var(--10-2);
+  --opacity-15: var(--15);
+  --opacity-20: var(--20-2);
+  --opacity-25: var(--25);
+  --opacity-30: var(--30);
+  --opacity-35: var(--35);
+  --opacity-40: var(--40-2);
+  --opacity-45: var(--45);
+  --opacity-50-2: var(--50);
+  --opacity-50: var(--opacity-50-2);
+  --opacity-55: var(--55);
+  --opacity-5: var(--5);
+  --opacity-60-2: var(--60);
+  --opacity-60: var(--opacity-60-2);
+  --opacity-65: var(--65);
+  --opacity-70: var(--70);
+  --opacity-75: var(--75);
+  --opacity-80: var(--80);
+  --opacity-85: var(--85);
+  --opacity-90: var(--90);
+  --opacity-95: var(--95);
+  --orange-100: rgb(251,233,224); /* @kind color */
+  --orange-10: rgb(239,95,0); /* @kind color */
+  --orange-11: rgb(204,78,0); /* @kind color */
+  --orange-12: rgb(88,45,29); /* @kind color */
+  --orange-1: rgb(254,252,251); /* @kind color */
+  --orange-200: rgb(251,210,187); /* @kind color */
+  --orange-2: rgb(255,247,237); /* @kind color */
+  --orange-300: rgb(255,179,138); /* @kind color */
+  --orange-3: rgb(255,239,214); /* @kind color */
+  --orange-400: rgb(255,143,82); /* @kind color */
+  --orange-4: rgb(255,223,181); /* @kind color */
+  --orange-500: rgb(255,103,19); /* @kind color */
+  --orange-50: rgb(253,246,242); /* @kind color */
+  --orange-5: rgb(255,209,154); /* @kind color */
+  --orange-600: rgb(235,84,0); /* @kind color */
+  --orange-6: rgb(255,193,130); /* @kind color */
+  --orange-700: rgb(194,69,0); /* @kind color */
+  --orange-7: rgb(245,174,115); /* @kind color */
+  --orange-800: rgb(153,54,0); /* @kind color */
+  --orange-8: rgb(236,148,85); /* @kind color */
+  --orange-900: rgb(112,40,0); /* @kind color */
+  --orange-950: rgb(71,25,0); /* @kind color */
+  --orange-9: rgb(247,107,21); /* @kind color */
+  --p-0-5: var(--2);
+  --p-0: var(--0);
+  --p-1-2: var(--4);
+  --p-1-5: var(--6);
+  --p-10: var(--40);
+  --p-11: var(--44-2);
+  --p-12: var(--48-2);
+  --p-14-2: var(--56);
+  --p-14: var(--56);
+  --p-16: var(--64-2);
+  --p-1: var(--4);
+  --p-2-5: var(--10);
+  --p-20: var(--80-2);
+  --p-24: var(--96);
+  --p-28: var(--112-2);
+  --p-2: var(--8);
+  --p-3-2: var(--12);
+  --p-3-5: var(--14-2);
+  --p-32: var(--128-2);
+  --p-36: var(--144-2);
+  --p-3: var(--12);
+  --p-4-2: var(--16);
+  --p-40: var(--160-2);
+  --p-44: var(--176-2);
+  --p-48: var(--192-2);
+  --p-4: var(--16);
+  --p-52: var(--208-2);
+  --p-56: var(--224-2);
+  --p-5: var(--20);
+  --p-6-2: var(--24);
+  --p-60: var(--240-2);
+  --p-64: var(--256-2);
+  --p-6: var(--24);
+  --p-72: var(--288-2);
+  --p-7: var(--28-2);
+  --p-80: var(--320-2);
+  --p-8: var(--32);
+  --p-96: var(--384-2);
+  --p-9: var(--36-2);
+  --p-px: var(--1);
+  --page: rgb(251,249,243); /* @kind color */
+  --pb-0-5: var(--2);
+  --pb-0: var(--0);
+  --pb-1-2: var(--4);
+  --pb-1-5: var(--6);
+  --pb-10: var(--40);
+  --pb-11: var(--44-2);
+  --pb-12: var(--48-2);
+  --pb-14: var(--56);
+  --pb-16: var(--64-2);
+  --pb-1: var(--4);
+  --pb-2-5: var(--10);
+  --pb-20: var(--80-2);
+  --pb-24: var(--96);
+  --pb-28: var(--112-2);
+  --pb-2: var(--8);
+  --pb-3-5: var(--14-2);
+  --pb-32: var(--128-2);
+  --pb-36: var(--144-2);
+  --pb-3: var(--12);
+  --pb-40: var(--160-2);
+  --pb-44: var(--176-2);
+  --pb-48: var(--192-2);
+  --pb-4: var(--16);
+  --pb-52: var(--208-2);
+  --pb-56: var(--224-2);
+  --pb-5: var(--20);
+  --pb-60: var(--240-2);
+  --pb-64: var(--256-2);
+  --pb-6: var(--24);
+  --pb-72: var(--288-2);
+  --pb-7: var(--28-2);
+  --pb-80: var(--320-2);
+  --pb-8: var(--32);
+  --pb-96: var(--384-2);
+  --pb-9: var(--36-2);
+  --pb-px: var(--1);
+  --pink-100: rgb(251,224,231); /* @kind color */
+  --pink-10: rgb(207,56,151); /* @kind color */
+  --pink-11: rgb(194,41,138); /* @kind color */
+  --pink-12: rgb(101,18,73); /* @kind color */
+  --pink-1: rgb(255,252,254); /* @kind color */
+  --pink-200: rgb(255,201,215); /* @kind color */
+  --pink-2: rgb(254,247,251); /* @kind color */
+  --pink-300: rgb(255,138,168); /* @kind color */
+  --pink-3: rgb(254,233,245); /* @kind color */
+  --pink-400: rgb(255,82,127); /* @kind color */
+  --pink-4: rgb(251,220,239); /* @kind color */
+  --pink-500: rgb(255,26,85); /* @kind color */
+  --pink-50: rgb(253,242,245); /* @kind color */
+  --pink-5: rgb(246,206,231); /* @kind color */
+  --pink-600: rgb(235,0,61); /* @kind color */
+  --pink-6: rgb(239,191,221); /* @kind color */
+  --pink-700: rgb(194,0,50); /* @kind color */
+  --pink-7: rgb(231,172,208); /* @kind color */
+  --pink-800: rgb(153,0,40); /* @kind color */
+  --pink-8: rgb(221,147,194); /* @kind color */
+  --pink-900: rgb(112,0,29); /* @kind color */
+  --pink-950: rgb(71,0,19); /* @kind color */
+  --pink-9: rgb(214,64,159); /* @kind color */
+  --pl-0-5: var(--2);
+  --pl-0: var(--0);
+  --pl-1-15: var(--6);
+  --pl-10: var(--40);
+  --pl-11: var(--44-2);
+  --pl-12: var(--48-2);
+  --pl-14: var(--56);
+  --pl-16: var(--64-2);
+  --pl-1: var(--4);
+  --pl-2-5: var(--10);
+  --pl-20: var(--80-2);
+  --pl-24: var(--96);
+  --pl-28: var(--112-2);
+  --pl-2: var(--8);
+  --pl-3-2: var(--12);
+  --pl-3-5: var(--14-2);
+  --pl-32: var(--128-2);
+  --pl-36: var(--144-2);
+  --pl-3: var(--12);
+  --pl-40: var(--160-2);
+  --pl-44: var(--176-2);
+  --pl-48: var(--192-2);
+  --pl-4: var(--16);
+  --pl-52: var(--208-2);
+  --pl-56: var(--224-2);
+  --pl-5: var(--20);
+  --pl-60: var(--240-2);
+  --pl-64: var(--256-2);
+  --pl-6: var(--24);
+  --pl-72: var(--288-2);
+  --pl-7: var(--28-2);
+  --pl-80: var(--320-2);
+  --pl-8: var(--32);
+  --pl-96: var(--384-2);
+  --pl-9: var(--36-2);
+  --pl-px: var(--1);
+  --plum-10: rgb(161,68,175); /* @kind color */
+  --plum-11: rgb(149,62,163); /* @kind color */
+  --plum-12: rgb(83,25,93); /* @kind color */
+  --plum-1: rgb(254,252,255); /* @kind color */
+  --plum-2: rgb(253,247,253); /* @kind color */
+  --plum-3: rgb(251,235,251); /* @kind color */
+  --plum-4: rgb(247,222,248); /* @kind color */
+  --plum-5: rgb(242,209,243); /* @kind color */
+  --plum-6: rgb(233,194,236); /* @kind color */
+  --plum-7: rgb(222,173,227); /* @kind color */
+  --plum-8: rgb(207,145,216); /* @kind color */
+  --plum-9: rgb(171,74,186); /* @kind color */
+  --popover-foreground: var(--neutral-950); /* @kind color */
+  --popover: var(--white); /* @kind color */
+  --pr-0-5: var(--2);
+  --pr-0: var(--0);
+  --pr-1-5: var(--6);
+  --pr-10: var(--40);
+  --pr-11: var(--44-2);
+  --pr-12: var(--48-2);
+  --pr-14: var(--56);
+  --pr-16: var(--64-2);
+  --pr-1: var(--4);
+  --pr-2-5: var(--10);
+  --pr-20: var(--80-2);
+  --pr-24: var(--96);
+  --pr-28: var(--112-2);
+  --pr-2: var(--8);
+  --pr-3-5: var(--14-2);
+  --pr-32: var(--128-2);
+  --pr-36: var(--144-2);
+  --pr-3: var(--12);
+  --pr-4-2: var(--16);
+  --pr-40: var(--160-2);
+  --pr-44: var(--176-2);
+  --pr-48: var(--192-2);
+  --pr-4: var(--16);
+  --pr-52: var(--208-2);
+  --pr-56: var(--224-2);
+  --pr-5: var(--20);
+  --pr-60: var(--240-2);
+  --pr-64: var(--256-2);
+  --pr-6: var(--24);
+  --pr-72: var(--288-2);
+  --pr-7: var(--28-2);
+  --pr-80: var(--320-2);
+  --pr-8: var(--32);
+  --pr-96: var(--384-2);
+  --pr-9: var(--36-2);
+  --pr-px: var(--1);
+  --primary-foreground: var(--brand-cream); /* @kind color */
+  --primary: var(--brand-navy); /* @kind color */
+  --pt-0-5: var(--2);
+  --pt-0: var(--0);
+  --pt-1-2: var(--4);
+  --pt-1-5: var(--6);
+  --pt-10: var(--40);
+  --pt-11: var(--44-2);
+  --pt-12: var(--48-2);
+  --pt-14: var(--56);
+  --pt-16: var(--64-2);
+  --pt-1: var(--4);
+  --pt-2-5: var(--10);
+  --pt-20: var(--80-2);
+  --pt-24: var(--96);
+  --pt-28: var(--112-2);
+  --pt-2: var(--8);
+  --pt-3-5: var(--14-2);
+  --pt-32: var(--128-2);
+  --pt-36: var(--144-2);
+  --pt-3: var(--12);
+  --pt-40: var(--160-2);
+  --pt-44: var(--176-2);
+  --pt-48: var(--192-2);
+  --pt-4: var(--16);
+  --pt-52: var(--208-2);
+  --pt-56: var(--224-2);
+  --pt-5: var(--20);
+  --pt-60: var(--240-2);
+  --pt-64: var(--256-2);
+  --pt-6: var(--24);
+  --pt-72: var(--288-2);
+  --pt-7: var(--28-2);
+  --pt-80: var(--320-2);
+  --pt-8: var(--32);
+  --pt-96: var(--384-2);
+  --pt-9: var(--36-2);
+  --pt-px: var(--1);
+  --purple-100: rgb(243,232,255); /* @kind color */
+  --purple-10: rgb(131,71,185); /* @kind color */
+  --purple-11: rgb(129,69,181); /* @kind color */
+  --purple-12: rgb(64,32,96); /* @kind color */
+  --purple-1: rgb(254,252,254); /* @kind color */
+  --purple-200: rgb(233,213,255); /* @kind color */
+  --purple-2: rgb(251,247,254); /* @kind color */
+  --purple-300: rgb(216,180,254); /* @kind color */
+  --purple-3: rgb(247,237,254); /* @kind color */
+  --purple-400: rgb(192,132,252); /* @kind color */
+  --purple-4: rgb(242,226,252); /* @kind color */
+  --purple-500: rgb(168,85,247); /* @kind color */
+  --purple-50: rgb(250,245,255); /* @kind color */
+  --purple-5: rgb(234,213,249); /* @kind color */
+  --purple-600: rgb(147,51,234); /* @kind color */
+  --purple-6: rgb(224,196,244); /* @kind color */
+  --purple-700: rgb(126,34,206); /* @kind color */
+  --purple-7: rgb(209,175,236); /* @kind color */
+  --purple-800: rgb(107,33,168); /* @kind color */
+  --purple-8: rgb(190,147,228); /* @kind color */
+  --purple-900: rgb(88,28,135); /* @kind color */
+  --purple-950: rgb(59,7,100); /* @kind color */
+  --purple-9: rgb(142,78,198); /* @kind color */
+  --px-0-5: var(--2);
+  --px-0: var(--0);
+  --px-1-2: var(--4);
+  --px-1-5-2: var(--6);
+  --px-1-5: var(--6);
+  --px-10: var(--40);
+  --px-11: var(--44-2);
+  --px-12: var(--48-2);
+  --px-14: var(--56);
+  --px-16: var(--64-2);
+  --px-1: var(--4);
+  --px-2-2: var(--8);
+  --px-2-5-2: var(--10);
+  --px-2-5: var(--10);
+  --px-20: var(--80-2);
+  --px-24: var(--96);
+  --px-28: var(--112-2);
+  --px-2: var(--8);
+  --px-3-2: var(--12);
+  --px-3-5: var(--14-2);
+  --px-32: var(--128-2);
+  --px-36: var(--144-2);
+  --px-3: var(--12);
+  --px-4-2: var(--16);
+  --px-40: var(--160-2);
+  --px-44: var(--176-2);
+  --px-48: var(--192-2);
+  --px-4: var(--16);
+  --px-52: var(--208-2);
+  --px-56: var(--224-2);
+  --px-5: var(--20);
+  --px-60: var(--240-2);
+  --px-64: var(--256-2);
+  --px-6: var(--24);
+  --px-72: var(--288-2);
+  --px-7: var(--28-2);
+  --px-80: var(--320-2);
+  --px-8: var(--32);
+  --px-96: var(--384-2);
+  --px-9: var(--36-2);
+  --px-px: var(--1);
+  --py-0-5-2: var(--2);
+  --py-0-5: var(--2);
+  --py-0: var(--0);
+  --py-1-2: var(--4);
+  --py-1-5-2: var(--6);
+  --py-1-5: var(--6);
+  --py-10: var(--40);
+  --py-11: var(--44-2);
+  --py-12: var(--48-2);
+  --py-14: var(--56);
+  --py-16: var(--64-2);
+  --py-1: var(--4);
+  --py-2-2: var(--8);
+  --py-2-5: var(--10);
+  --py-20: var(--80-2);
+  --py-24: var(--96);
+  --py-28: var(--112-2);
+  --py-2: var(--8);
+  --py-3-2: var(--12);
+  --py-3-5: var(--14-2);
+  --py-32: var(--128-2);
+  --py-36: var(--144-2);
+  --py-3: var(--12);
+  --py-4-2: var(--16);
+  --py-40: var(--160-2);
+  --py-44: var(--176-2);
+  --py-48: var(--192-2);
+  --py-4: var(--16);
+  --py-52: var(--208-2);
+  --py-56: var(--224-2);
+  --py-5: var(--20);
+  --py-60: var(--240-2);
+  --py-64: var(--256-2);
+  --py-6: var(--24);
+  --py-72: var(--288-2);
+  --py-7: var(--28-2);
+  --py-80: var(--320-2);
+  --py-8: var(--32);
+  --py-96: var(--384-2);
+  --py-9: var(--36-2);
+  --py-px-2: var(--1);
+  --py-px: var(--1);
+  --radius-2xl: var(--18);
+  --radius-3xl: var(--22);
+  --radius-4xl: var(--26);
+  --radius-full: var(--9999-2);
+  --radius-lg: var(--10-2);
+  --radius-md: var(--8-2);
+  --radius-none: var(--0-2);
+  --radius-sm: var(--6-2);
+  --radius-xl: var(--14);
+  --radius-xs: var(--2-2);
+  --radius: var(--rounded-lg-2);
+  --red-100: rgb(254,226,226); /* @kind color */
+  --red-10: rgb(220,62,66); /* @kind color */
+  --red-11: rgb(206,44,49); /* @kind color */
+  --red-12: rgb(100,23,35); /* @kind color */
+  --red-1: rgb(255,252,252); /* @kind color */
+  --red-200: rgb(254,202,202); /* @kind color */
+  --red-2: rgb(255,247,247); /* @kind color */
+  --red-300: rgb(252,165,165); /* @kind color */
+  --red-3: rgb(254,235,236); /* @kind color */
+  --red-400: rgb(248,113,113); /* @kind color */
+  --red-4: rgb(255,219,220); /* @kind color */
+  --red-500: rgb(239,68,68); /* @kind color */
+  --red-50: rgb(254,242,242); /* @kind color */
+  --red-5: rgb(255,205,206); /* @kind color */
+  --red-600: rgb(220,38,38); /* @kind color */
+  --red-6: rgb(253,189,190); /* @kind color */
+  --red-700: rgb(185,28,28); /* @kind color */
+  --red-7: rgb(244,169,170); /* @kind color */
+  --red-800: rgb(153,27,27); /* @kind color */
+  --red-8: rgb(235,142,144); /* @kind color */
+  --red-900: rgb(127,29,29); /* @kind color */
+  --red-950: rgb(69,10,10); /* @kind color */
+  --red-9: rgb(229,72,77); /* @kind color */
+  --ring: var(--navy-900); /* @kind color */
+  --rounded-1-2xl: var(--16-2);
+  --rounded-1-3xl: var(--24-2);
+  --rounded-1-4xl: var(--32-2);
+  --rounded-1-full: var(--9999-2);
+  --rounded-1-lg: var(--8-2);
+  --rounded-1-md: var(--6-2);
+  --rounded-1-none: var(--0-2);
+  --rounded-1-sm: var(--4-2);
+  --rounded-1-xl: var(--12-2);
+  --rounded-1-xs: var(--2-2);
+  --rounded-2xl: var(--16);
+  --rounded-3xl: var(--24);
+  --rounded-4xl: var(--32-2);
+  --rounded-b-2xl: var(--16-2);
+  --rounded-b-3xl: var(--24-2);
+  --rounded-b-4xl: var(--32-2);
+  --rounded-b-full: var(--9999-2);
+  --rounded-b-lg: var(--8-2);
+  --rounded-b-md: var(--6-2);
+  --rounded-b-none: var(--0-2);
+  --rounded-b-sm: var(--4-2);
+  --rounded-b-xl: var(--12-2);
+  --rounded-b-xs: var(--2-2);
+  --rounded-bl-2xl: var(--16-2);
+  --rounded-bl-3xl: var(--24-2);
+  --rounded-bl-4xl: var(--32-2);
+  --rounded-bl-full: var(--9999-2);
+  --rounded-bl-lg: var(--8-2);
+  --rounded-bl-md: var(--6-2);
+  --rounded-bl-none: var(--0-2);
+  --rounded-bl-sm: var(--4-2);
+  --rounded-bl-xl: var(--12-2);
+  --rounded-bl-xs: var(--2-2);
+  --rounded-br-2xl: var(--16-2);
+  --rounded-br-3xl: var(--24-2);
+  --rounded-br-4xl: var(--32-2);
+  --rounded-br-full: var(--9999-2);
+  --rounded-br-lg: var(--8-2);
+  --rounded-br-md: var(--6-2);
+  --rounded-br-none: var(--0-2);
+  --rounded-br-sm: var(--4-2);
+  --rounded-br-xl: var(--12-2);
+  --rounded-br-xs: var(--2-2);
+  --rounded-e-2xl: var(--16-2);
+  --rounded-e-3xl: var(--24-2);
+  --rounded-e-4xl: var(--32-2);
+  --rounded-e-full: var(--9999-2);
+  --rounded-e-lg: var(--8-2);
+  --rounded-e-md: var(--6-2);
+  --rounded-e-none: var(--0-2);
+  --rounded-e-sm: var(--4-2);
+  --rounded-e-xl: var(--12-2);
+  --rounded-e-xs: var(--2-2);
+  --rounded-ee-2xl: var(--16-2);
+  --rounded-ee-3xl: var(--24-2);
+  --rounded-ee-4xl: var(--32-2);
+  --rounded-ee-full: var(--9999-2);
+  --rounded-ee-lg: var(--8-2);
+  --rounded-ee-md: var(--6-2);
+  --rounded-ee-none: var(--0-2);
+  --rounded-ee-sm: var(--4-2);
+  --rounded-ee-xl: var(--12-2);
+  --rounded-ee-xs: var(--2-2);
+  --rounded-es-2xl: var(--16-2);
+  --rounded-es-3xl: var(--24-2);
+  --rounded-es-4xl: var(--32-2);
+  --rounded-es-full: var(--9999-2);
+  --rounded-es-lg: var(--8-2);
+  --rounded-es-md: var(--6-2);
+  --rounded-es-none: var(--0-2);
+  --rounded-es-sm: var(--4-2);
+  --rounded-es-xl: var(--12-2);
+  --rounded-es-xs: var(--2-2);
+  --rounded-full-2: var(--9999);
+  --rounded-full: var(--9999);
+  --rounded-lg-2: var(--8);
+  --rounded-lg: var(--8);
+  --rounded-md-2: var(--6);
+  --rounded-md-3: var(--6-2);
+  --rounded-md: var(--6);
+  --rounded-none: var(--0-2);
+  --rounded-r-2xl: var(--16-2);
+  --rounded-r-3xl: var(--24-2);
+  --rounded-r-4xl: var(--32-2);
+  --rounded-r-full: var(--9999-2);
+  --rounded-r-lg: var(--8-2);
+  --rounded-r-md: var(--6-2);
+  --rounded-r-none: var(--0-2);
+  --rounded-r-sm: var(--4-2);
+  --rounded-r-xl: var(--12-2);
+  --rounded-r-xs: var(--2-2);
+  --rounded-s-2xl: var(--16-2);
+  --rounded-s-3xl: var(--24-2);
+  --rounded-s-4xl: var(--32-2);
+  --rounded-s-full: var(--9999-2);
+  --rounded-s-lg: var(--8-2);
+  --rounded-s-md: var(--6-2);
+  --rounded-s-none: var(--0-2);
+  --rounded-s-sm: var(--4-2);
+  --rounded-s-xs: var(--2-2);
+  --rounded-se-2xl: var(--16-2);
+  --rounded-se-3xl: var(--24-2);
+  --rounded-se-4xl: var(--32-2);
+  --rounded-se-full: var(--9999-2);
+  --rounded-se-lg: var(--8-2);
+  --rounded-se-md: var(--6-2);
+  --rounded-se-none: var(--0-2);
+  --rounded-se-sm: var(--4-2);
+  --rounded-se-xl: var(--12-2);
+  --rounded-se-xs: var(--2-2);
+  --rounded-sm-2: var(--4-2);
+  --rounded-sm: var(--2);
+  --rounded-ss-2xl: var(--16-2);
+  --rounded-ss-3xl: var(--24-2);
+  --rounded-ss-4xl: var(--32-2);
+  --rounded-ss-full: var(--9999-2);
+  --rounded-ss-lg: var(--8-2);
+  --rounded-ss-md: var(--6-2);
+  --rounded-ss-none: var(--0-2);
+  --rounded-ss-sm: var(--4-2);
+  --rounded-ss-xl: var(--12-2);
+  --rounded-ss-xs: var(--2-2);
+  --rounded-t-2xl: var(--16-2);
+  --rounded-t-3xl: var(--24-2);
+  --rounded-t-4xl: var(--32-2);
+  --rounded-t-full: var(--9999-2);
+  --rounded-t-lg: var(--8-2);
+  --rounded-t-md: var(--6-2);
+  --rounded-t-none: var(--0-2);
+  --rounded-t-sm: var(--4-2);
+  --rounded-t-xl: var(--12-2);
+  --rounded-t-xs: var(--2-2);
+  --rounded-tl-2xl: var(--16-2);
+  --rounded-tl-3xl: var(--24-2);
+  --rounded-tl-4xl: var(--32-2);
+  --rounded-tl-full: var(--9999-2);
+  --rounded-tl-lg: var(--8-2);
+  --rounded-tl-md: var(--6-2);
+  --rounded-tl-none: var(--0-2);
+  --rounded-tl-sm: var(--4-2);
+  --rounded-tl-xl: var(--12-2);
+  --rounded-tl-xs: var(--0-2);
+  --rounded-tr-2xl: var(--16-2);
+  --rounded-tr-3xl: var(--24-2);
+  --rounded-tr-4xl: var(--32-2);
+  --rounded-tr-full: var(--9999-2);
+  --rounded-tr-lg: var(--8-2);
+  --rounded-tr-md: var(--6-2);
+  --rounded-tr-none: var(--0-2);
+  --rounded-tr-sm: var(--4-2);
+  --rounded-tr-xl: var(--12-2);
+  --rounded-tr-xs: var(--2-2);
+  --rounded-xl: var(--12);
+  --rounded-xs: var(--2-2);
+  --rounded: var(--4);
+  --ruby-10: rgb(220,59,93); /* @kind color */
+  --ruby-11: rgb(202,36,77); /* @kind color */
+  --ruby-12: rgb(100,23,43); /* @kind color */
+  --ruby-1: rgb(255,252,253); /* @kind color */
+  --ruby-2: rgb(255,247,248); /* @kind color */
+  --ruby-3: rgb(254,234,237); /* @kind color */
+  --ruby-4: rgb(255,220,225); /* @kind color */
+  --ruby-5: rgb(255,206,214); /* @kind color */
+  --ruby-6: rgb(248,191,200); /* @kind color */
+  --ruby-7: rgb(239,172,184); /* @kind color */
+  --ruby-8: rgb(229,146,163); /* @kind color */
+  --ruby-9: rgb(229,70,102); /* @kind color */
+  --sage-10: rgb(124,132,129); /* @kind color */
+  --sage-11: rgb(95,101,99); /* @kind color */
+  --sage-12: rgb(26,33,30); /* @kind color */
+  --sage-1: rgb(251,253,252); /* @kind color */
+  --sage-2: rgb(247,249,248); /* @kind color */
+  --sage-3: rgb(238,238,255); /* @kind color */
+  --sage-4: rgb(230,233,232); /* @kind color */
+  --sage-5: rgb(223,226,224); /* @kind color */
+  --sage-6: rgb(215,218,217); /* @kind color */
+  --sage-7: rgb(203,207,205); /* @kind color */
+  --sage-8: rgb(184,188,186); /* @kind color */
+  --sage-9: rgb(134,142,139); /* @kind color */
+  --sand-10: rgb(130,130,124); /* @kind color */
+  --sand-11: rgb(99,99,94); /* @kind color */
+  --sand-12: rgb(33,32,28); /* @kind color */
+  --sand-1: rgb(253,253,252); /* @kind color */
+  --sand-2: rgb(249,249,248); /* @kind color */
+  --sand-3: rgb(241,240,239); /* @kind color */
+  --sand-4: rgb(233,232,230); /* @kind color */
+  --sand-5: rgb(226,225,222); /* @kind color */
+  --sand-6: rgb(218,217,214); /* @kind color */
+  --sand-7: rgb(207,206,202); /* @kind color */
+  --sand-8: rgb(188,187,181); /* @kind color */
+  --sand-9: rgb(141,141,134); /* @kind color */
+  --secondary-foreground: var(--black-10); /* @kind color */
+  --secondary: var(--neutral-100); /* @kind color */
+  --semantic-background: rgb(105,104,103); /* @kind color */
+  --semantic-border: rgb(137,136,135); /* @kind color */
+  --semantic-foreground: var(--white); /* @kind color */
+  --sidebar-accent-foreground: var(--brand-cream); /* @kind color */
+  --sidebar-accent: var(--navy-900); /* @kind color */
+  --sidebar-border: var(--navy-900); /* @kind color */
+  --sidebar-foreground: var(--brand-cream); /* @kind color */
+  --sidebar-primary-foreground: var(--neutral-50); /* @kind color */
+  --sidebar-primary: var(--brand-blue); /* @kind color */
+  --sidebar-ring: var(--neutral-500); /* @kind color */
+  --sidebar: var(--brand-navy); /* @kind color */
+  --size-2xl: var(--24-2);
+  --size-3xl: var(--30);
+  --size-4xl: var(--36);
+  --size-5xl: var(--48);
+  --size-6xl: var(--60);
+  --size-7xl: var(--72);
+  --size-8xl: var(--96-2);
+  --size-9xl: var(--128);
+  --size-base: var(--16-2);
+  --size-lg: var(--18);
+  --size-sm: var(--14);
+  --size-xl: var(--20-2);
+  --size-xs: var(--12-2);
+  --sky-100: rgb(225,243,249); /* @kind color */
+  --sky-10: rgb(116,218,248); /* @kind color */
+  --sky-11: rgb(0,116,158); /* @kind color */
+  --sky-12: rgb(29,62,86); /* @kind color */
+  --sky-1: rgb(249,254,255); /* @kind color */
+  --sky-200: rgb(190,233,249); /* @kind color */
+  --sky-2: rgb(241,250,253); /* @kind color */
+  --sky-300: rgb(121,214,249); /* @kind color */
+  --sky-3: rgb(225,246,253); /* @kind color */
+  --sky-400: rgb(89,204,248); /* @kind color */
+  --sky-4: rgb(209,240,250); /* @kind color */
+  --sky-500: rgb(35,188,245); /* @kind color */
+  --sky-50: rgb(242,250,253); /* @kind color */
+  --sky-5: rgb(190,231,245); /* @kind color */
+  --sky-600: rgb(10,166,225); /* @kind color */
+  --sky-6: rgb(169,218,237); /* @kind color */
+  --sky-700: rgb(8,137,185); /* @kind color */
+  --sky-7: rgb(141,202,227); /* @kind color */
+  --sky-800: rgb(7,108,146); /* @kind color */
+  --sky-8: rgb(96,179,215); /* @kind color */
+  --sky-900: rgb(5,79,107); /* @kind color */
+  --sky-950: rgb(3,50,68); /* @kind color */
+  --sky-9: rgb(124,226,254); /* @kind color */
+  --slate-100: rgb(241,245,249); /* @kind color */
+  --slate-10: rgb(128,131,141); /* @kind color */
+  --slate-11: rgb(96,100,108); /* @kind color */
+  --slate-12: rgb(28,32,36); /* @kind color */
+  --slate-1: rgb(252,252,253); /* @kind color */
+  --slate-200-2: rgb(226,232,240); /* @kind color */
+  --slate-200: rgb(226,232,240); /* @kind color */
+  --slate-2: rgb(249,249,251); /* @kind color */
+  --slate-300: rgb(203,213,225); /* @kind color */
+  --slate-3: rgb(240,240,243); /* @kind color */
+  --slate-400: rgb(148,163,184); /* @kind color */
+  --slate-4: rgb(232,232,236); /* @kind color */
+  --slate-500: rgb(100,116,139); /* @kind color */
+  --slate-50: rgb(248,250,252); /* @kind color */
+  --slate-5: rgb(224,225,230); /* @kind color */
+  --slate-600: rgb(71,85,105); /* @kind color */
+  --slate-6: rgb(217,217,224); /* @kind color */
+  --slate-700: rgb(51,65,85); /* @kind color */
+  --slate-7: rgb(205,206,214); /* @kind color */
+  --slate-800-2: rgb(30,41,59); /* @kind color */
+  --slate-800: rgb(30,41,59); /* @kind color */
+  --slate-8: rgb(185,187,198); /* @kind color */
+  --slate-900: rgb(15,23,42); /* @kind color */
+  --slate-950: rgb(2,6,23); /* @kind color */
+  --slate-9: rgb(139,141,152); /* @kind color */
+  --space-x-0-5-2: var(--2-2);
+  --space-x-0-5: var(--2);
+  --space-x-0: var(--0);
+  --space-x-1-2: var(--4);
+  --space-x-1-5: var(--6);
+  --space-x-10: var(--40);
+  --space-x-11: var(--44-2);
+  --space-x-12: var(--48-2);
+  --space-x-14: var(--56);
+  --space-x-16: var(--64-2);
+  --space-x-1: var(--4);
+  --space-x-2-5: var(--10);
+  --space-x-20: var(--80-2);
+  --space-x-24: var(--96);
+  --space-x-28: var(--112-2);
+  --space-x-2: var(--8);
+  --space-x-3-5: var(--14-2);
+  --space-x-32: var(--128-2);
+  --space-x-36: var(--144-2);
+  --space-x-3: var(--12);
+  --space-x-4-2: var(--16);
+  --space-x-40: var(--160-2);
+  --space-x-44: var(--176-2);
+  --space-x-48: var(--192-2);
+  --space-x-4: var(--16);
+  --space-x-52: var(--208-2);
+  --space-x-56: var(--224-2);
+  --space-x-5: var(--20);
+  --space-x-60: var(--240-2);
+  --space-x-64: var(--256-2);
+  --space-x-6: var(--24);
+  --space-x-72: var(--288-2);
+  --space-x-7: var(--28-2);
+  --space-x-80: var(--320-2);
+  --space-x-8: var(--32);
+  --space-x-96: var(--384-2);
+  --space-x-9: var(--36-2);
+  --space-y-0-5: var(--2);
+  --space-y-0: var(--0);
+  --space-y-1-2: var(--4);
+  --space-y-1-5-2: var(--6);
+  --space-y-1-5: var(--6);
+  --space-y-10-2: var(--40);
+  --space-y-10: var(--40);
+  --space-y-11: var(--44-2);
+  --space-y-12: var(--48-2);
+  --space-y-14: var(--56);
+  --space-y-16: var(--64-2);
+  --space-y-1: var(--4);
+  --space-y-2-2: var(--8);
+  --space-y-2-5: var(--10);
+  --space-y-20: var(--80-2);
+  --space-y-24: var(--96);
+  --space-y-28: var(--112-2);
+  --space-y-2: var(--8);
+  --space-y-3-2: var(--12);
+  --space-y-3-5: var(--14-2);
+  --space-y-32: var(--128-2);
+  --space-y-36: var(--144-2);
+  --space-y-3: var(--12);
+  --space-y-4-2: var(--16);
+  --space-y-40: var(--160-2);
+  --space-y-44: var(--176-2);
+  --space-y-48: var(--192-2);
+  --space-y-4: var(--16);
+  --space-y-52: var(--208-2);
+  --space-y-56: var(--224-2);
+  --space-y-5: var(--20);
+  --space-y-60: var(--240-2);
+  --space-y-64: var(--256-2);
+  --space-y-6: var(--24);
+  --space-y-72: var(--288-2);
+  --space-y-7: var(--28-2);
+  --space-y-80: var(--320-2);
+  --space-y-8: var(--32);
+  --space-y-96: var(--384-2);
+  --space-y-9: var(--36-2);
+  --stone-100: rgb(245,245,244); /* @kind color */
+  --stone-200: rgb(231,229,228); /* @kind color */
+  --stone-300: rgb(214,211,209); /* @kind color */
+  --stone-400: rgb(168,162,158); /* @kind color */
+  --stone-500: rgb(120,113,108); /* @kind color */
+  --stone-50: rgb(250,250,249); /* @kind color */
+  --stone-600: rgb(87,83,78); /* @kind color */
+  --stone-700: rgb(68,64,60); /* @kind color */
+  --stone-800: rgb(41,37,36); /* @kind color */
+  --stone-900: rgb(28,25,23); /* @kind color */
+  --stone-950: rgb(12,10,9); /* @kind color */
+  --stroke-0-5: var(--0-5);
+  --stroke-0-75: var(--0-75);
+  --stroke-1-25: var(--1-25);
+  --stroke-1-5: var(--1-5);
+  --stroke-1-75: var(--1-75);
+  --stroke-1: var(--1-2);
+  --stroke-2-25: var(--2-25);
+  --stroke-2-5: var(--2-5);
+  --stroke-2-75: var(--2-75);
+  --stroke-2: var(--2-2);
+  --stroke-3: var(--3);
+  --stroke-width: var(--2-2);
+  --style-italic: "italic"; /* @kind other */
+  --style-not-italic: "normal"; /* @kind other */
+  --success-border: rgb(134,239,172); /* @kind color */
+  --success-foreground: var(--green-700); /* @kind color */
+  --success-soft: var(--green-50); /* @kind color */
+  --success: var(--green-600); /* @kind color */
+  --teal-100: rgb(204,251,241); /* @kind color */
+  --teal-10: rgb(13,155,138); /* @kind color */
+  --teal-11: rgb(0,133,115); /* @kind color */
+  --teal-12: rgb(13,61,56); /* @kind color */
+  --teal-1: rgb(250,254,253); /* @kind color */
+  --teal-200: rgb(153,246,228); /* @kind color */
+  --teal-2: rgb(243,251,249); /* @kind color */
+  --teal-300: rgb(94,234,212); /* @kind color */
+  --teal-3: rgb(224,248,243); /* @kind color */
+  --teal-400: rgb(45,212,191); /* @kind color */
+  --teal-4: rgb(204,243,234); /* @kind color */
+  --teal-500: rgb(20,184,166); /* @kind color */
+  --teal-50: rgb(240,253,250); /* @kind color */
+  --teal-5: rgb(184,234,224); /* @kind color */
+  --teal-600: rgb(13,148,136); /* @kind color */
+  --teal-6: rgb(161,222,210); /* @kind color */
+  --teal-700: rgb(15,118,110); /* @kind color */
+  --teal-7: rgb(131,205,193); /* @kind color */
+  --teal-800: rgb(17,94,89); /* @kind color */
+  --teal-8: rgb(83,185,171); /* @kind color */
+  --teal-900: rgb(19,78,74); /* @kind color */
+  --teal-950: rgb(4,47,46); /* @kind color */
+  --teal-9: rgb(18,165,148); /* @kind color */
+  --tomato-10: rgb(221,68,37); /* @kind color */
+  --tomato-11: rgb(209,52,21); /* @kind color */
+  --tomato-12: rgb(92,39,31); /* @kind color */
+  --tomato-1: rgb(255,252,252); /* @kind color */
+  --tomato-2: rgb(255,248,247); /* @kind color */
+  --tomato-3: rgb(254,235,231); /* @kind color */
+  --tomato-4: rgb(255,220,211); /* @kind color */
+  --tomato-5: rgb(255,205,194); /* @kind color */
+  --tomato-6: rgb(253,189,175); /* @kind color */
+  --tomato-7: rgb(245,168,152); /* @kind color */
+  --tomato-8: rgb(236,142,123); /* @kind color */
+  --tomato-9: rgb(229,77,46); /* @kind color */
+  --tracking-normal: var(--0-2);
+  --tracking-tight: var(--0-4);
+  --tracking-tighter: var(--0-8);
+  --tracking-wide: var(--0-4-2);
+  --tracking-wider: var(--0-8-2);
+  --tracking-widest: var(--1-6);
+  --violet-100: rgb(237,233,254); /* @kind color */
+  --violet-10: rgb(101,77,196); /* @kind color */
+  --violet-11: rgb(101,80,185); /* @kind color */
+  --violet-12: rgb(47,38,95); /* @kind color */
+  --violet-1: rgb(253,252,254); /* @kind color */
+  --violet-200: rgb(221,214,254); /* @kind color */
+  --violet-2: rgb(250,248,255); /* @kind color */
+  --violet-300: rgb(196,181,253); /* @kind color */
+  --violet-3: rgb(244,240,254); /* @kind color */
+  --violet-400: rgb(167,139,250); /* @kind color */
+  --violet-4: rgb(235,228,255); /* @kind color */
+  --violet-500: rgb(139,92,246); /* @kind color */
+  --violet-50: rgb(245,243,255); /* @kind color */
+  --violet-5: rgb(225,217,255); /* @kind color */
+  --violet-600: rgb(124,58,237); /* @kind color */
+  --violet-6: rgb(212,202,254); /* @kind color */
+  --violet-700: rgb(109,40,217); /* @kind color */
+  --violet-7: rgb(194,181,245); /* @kind color */
+  --violet-800: rgb(91,33,182); /* @kind color */
+  --violet-8: rgb(170,153,236); /* @kind color */
+  --violet-900: rgb(76,29,149); /* @kind color */
+  --violet-950: rgb(46,16,101); /* @kind color */
+  --violet-9: rgb(110,86,207); /* @kind color */
+  --warning-border: rgb(66,32,6); /* @kind color */
+  --warning-foreground: var(--yellow-800); /* @kind color */
+  --warning-soft: var(--yellow-50); /* @kind color */
+  --warning: var(--yellow-600); /* @kind color */
+  --weight-black: var(--900);
+  --weight-bold: var(--700);
+  --weight-extrabold: var(--800);
+  --weight-extralight: var(--200);
+  --weight-light: var(--300);
+  --weight-medium: var(--500);
+  --weight-normal: var(--400);
+  --weight-semibold: var(--600);
+  --weight-thin: var(--100);
+  --white-10: rgba(255,255,255,0.8); /* @kind color */
+  --white-11: rgba(255,255,255,0.9); /* @kind color */
+  --white-12: rgba(255,255,255,0.95); /* @kind color */
+  --white-1: rgba(255,255,255,0.05); /* @kind color */
+  --white-2: rgba(255,255,255,0.1); /* @kind color */
+  --white-3: rgba(255,255,255,0.15); /* @kind color */
+  --white-4: rgba(255,255,255,0.2); /* @kind color */
+  --white-5: rgba(255,255,255,0.3); /* @kind color */
+  --white-6: rgba(255,255,255,0.4); /* @kind color */
+  --white-7: rgba(255,255,255,0.5); /* @kind color */
+  --white-8: rgba(255,255,255,0.6); /* @kind color */
+  --white-9: rgba(255,255,255,0.7); /* @kind color */
+  --white: rgb(255,255,255); /* @kind color */
+  --yellow-100: rgb(254,249,195); /* @kind color */
+  --yellow-10: rgb(255,220,0); /* @kind color */
+  --yellow-11: rgb(158,108,0); /* @kind color */
+  --yellow-12: rgb(71,59,31); /* @kind color */
+  --yellow-1: rgb(253,253,249); /* @kind color */
+  --yellow-200: rgb(254,240,138); /* @kind color */
+  --yellow-2: rgb(254,252,233); /* @kind color */
+  --yellow-300: rgb(253,224,71); /* @kind color */
+  --yellow-3: rgb(255,250,184); /* @kind color */
+  --yellow-400: rgb(250,204,21); /* @kind color */
+  --yellow-4: rgb(255,243,148); /* @kind color */
+  --yellow-500: rgb(234,179,8); /* @kind color */
+  --yellow-50: rgb(254,252,232); /* @kind color */
+  --yellow-5: rgb(255,231,112); /* @kind color */
+  --yellow-600: rgb(202,138,4); /* @kind color */
+  --yellow-6: rgb(243,215,104); /* @kind color */
+  --yellow-700: rgb(161,98,7); /* @kind color */
+  --yellow-7: rgb(228,199,103); /* @kind color */
+  --yellow-800: rgb(133,77,14); /* @kind color */
+  --yellow-8: rgb(213,174,57); /* @kind color */
+  --yellow-900: rgb(113,63,18); /* @kind color */
+  --yellow-950: rgb(66,32,6); /* @kind color */
+  --yellow-9: rgb(255,230,41); /* @kind color */
+  --zinc-100: rgb(244,244,245); /* @kind color */
+  --zinc-200: rgb(228,228,231); /* @kind color */
+  --zinc-300: rgb(212,212,216); /* @kind color */
+  --zinc-400-2: rgb(161,161,170); /* @kind color */
+  --zinc-400: rgb(161,161,170); /* @kind color */
+  --zinc-50-2: rgb(250,250,250); /* @kind color */
+  --zinc-500: rgb(113,113,122); /* @kind color */
+  --zinc-50: rgb(250,250,250); /* @kind color */
+  --zinc-600: rgb(82,82,91); /* @kind color */
+  --zinc-700: rgb(63,63,70); /* @kind color */
+  --zinc-800-2: rgb(39,39,42); /* @kind color */
+  --zinc-800: rgb(39,39,42); /* @kind color */
+  --zinc-900-2: rgb(24,24,27); /* @kind color */
+  --zinc-900: rgb(24,24,27); /* @kind color */
+  --zinc-950-2: rgb(9,9,11); /* @kind color */
+  --zinc-950: rgb(9,9,11); /* @kind color */
+}
+
+:root[data-theme="dark"], .dark {
+  --accent-foreground: var(--neutral-50); /* @kind color */
+  --accent: var(--neutral-700); /* @kind color */
+  --amber-10: rgb(255,214,10); /* @kind color */
+  --amber-11: rgb(255,202,22); /* @kind color */
+  --amber-12: rgb(255,231,179); /* @kind color */
+  --amber-1: rgb(22,18,12); /* @kind color */
+  --amber-2: rgb(29,24,15); /* @kind color */
+  --amber-3: rgb(48,32,8); /* @kind color */
+  --amber-4: rgb(63,39,0); /* @kind color */
+  --amber-5: rgb(77,48,0); /* @kind color */
+  --amber-6: rgb(92,61,5); /* @kind color */
+  --amber-7: rgb(113,79,25); /* @kind color */
+  --amber-8: rgb(143,100,36); /* @kind color */
+  --amber-9: rgb(255,197,61); /* @kind color */
+  --background-color: var(--black-5); /* @kind color */
+  --background: var(--neutral-950); /* @kind color */
+  --bg-transparent: rgba(255,255,255,0); /* @kind color */
+  --black-10: rgba(0,0,0,0.8); /* @kind color */
+  --black-11: rgba(0,0,0,0.9); /* @kind color */
+  --black-12: rgba(0,0,0,0.95); /* @kind color */
+  --black-1: rgba(0,0,0,0.05); /* @kind color */
+  --black-2: rgba(0,0,0,0.1); /* @kind color */
+  --black-3: rgba(0,0,0,0.15); /* @kind color */
+  --black-4: rgba(0,0,0,0.2); /* @kind color */
+  --black-5: rgba(0,0,0,0.3); /* @kind color */
+  --black-6: rgba(0,0,0,0.4); /* @kind color */
+  --black-7: rgba(0,0,0,0.5); /* @kind color */
+  --black-8: rgba(0,0,0,0.6); /* @kind color */
+  --black-9: rgba(0,0,0,0.7); /* @kind color */
+  --blue-10: rgb(59,158,255); /* @kind color */
+  --blue-11: rgb(112,184,255); /* @kind color */
+  --blue-12: rgb(194,230,255); /* @kind color */
+  --blue-1: rgb(13,21,32); /* @kind color */
+  --blue-2: rgb(17,25,39); /* @kind color */
+  --blue-3: rgb(13,40,71); /* @kind color */
+  --blue-4: rgb(0,51,98); /* @kind color */
+  --blue-5: rgb(0,64,116); /* @kind color */
+  --blue-6: rgb(16,77,135); /* @kind color */
+  --blue-7: rgb(32,93,158); /* @kind color */
+  --blue-8: rgb(40,112,189); /* @kind color */
+  --blue-9: rgb(0,144,255); /* @kind color */
+  --border-width: var(--1-2);
+  --border: var(--neutral-700); /* @kind color */
+  --bronze-10: rgb(174,140,126); /* @kind color */
+  --bronze-11: rgb(212,179,165); /* @kind color */
+  --bronze-12: rgb(237,224,217); /* @kind color */
+  --bronze-1: rgb(20,17,16); /* @kind color */
+  --bronze-2: rgb(28,25,23); /* @kind color */
+  --bronze-3: rgb(38,34,32); /* @kind color */
+  --bronze-4: rgb(48,42,39); /* @kind color */
+  --bronze-5: rgb(59,51,48); /* @kind color */
+  --bronze-6: rgb(73,62,58); /* @kind color */
+  --bronze-7: rgb(90,76,71); /* @kind color */
+  --bronze-8: rgb(111,95,88); /* @kind color */
+  --bronze-9: rgb(161,128,114); /* @kind color */
+  --brown-10: rgb(184,140,103); /* @kind color */
+  --brown-11: rgb(219,181,148); /* @kind color */
+  --brown-12: rgb(242,225,202); /* @kind color */
+  --brown-1: rgb(18,17,15); /* @kind color */
+  --brown-2: rgb(28,24,22); /* @kind color */
+  --brown-3: rgb(40,33,29); /* @kind color */
+  --brown-4: rgb(50,41,34); /* @kind color */
+  --brown-5: rgb(62,49,40); /* @kind color */
+  --brown-6: rgb(77,60,47); /* @kind color */
+  --brown-7: rgb(97,74,57); /* @kind color */
+  --brown-8: rgb(124,95,70); /* @kind color */
+  --brown-9: rgb(173,127,88); /* @kind color */
+  --card-foreground: var(--neutral-50); /* @kind color */
+  --card: var(--neutral-900); /* @kind color */
+  --chart-1: var(--blue-8); /* @kind color */
+  --chart-2: var(--blue-9); /* @kind color */
+  --chart-3: var(--blue-10); /* @kind color */
+  --chart-4: var(--blue-11); /* @kind color */
+  --chart-5: var(--blue-12); /* @kind color */
+  --color: rgb(255,255,255); /* @kind color */
+  --crimson-10: rgb(238,81,138); /* @kind color */
+  --crimson-11: rgb(255,146,173); /* @kind color */
+  --crimson-12: rgb(253,211,232); /* @kind color */
+  --crimson-1: rgb(25,17,20); /* @kind color */
+  --crimson-2: rgb(32,19,24); /* @kind color */
+  --crimson-3: rgb(56,21,37); /* @kind color */
+  --crimson-4: rgb(77,18,47); /* @kind color */
+  --crimson-5: rgb(92,24,57); /* @kind color */
+  --crimson-6: rgb(109,37,69); /* @kind color */
+  --crimson-7: rgb(135,51,86); /* @kind color */
+  --crimson-8: rgb(176,67,110); /* @kind color */
+  --crimson-9: rgb(233,61,130); /* @kind color */
+  --cyan-10: rgb(35,175,208); /* @kind color */
+  --cyan-11: rgb(76,204,230); /* @kind color */
+  --cyan-12: rgb(182,236,247); /* @kind color */
+  --cyan-1: rgb(11,22,26); /* @kind color */
+  --cyan-2: rgb(16,27,32); /* @kind color */
+  --cyan-3: rgb(8,44,54); /* @kind color */
+  --cyan-4: rgb(0,56,72); /* @kind color */
+  --cyan-5: rgb(0,69,88); /* @kind color */
+  --cyan-6: rgb(4,84,104); /* @kind color */
+  --cyan-7: rgb(18,103,126); /* @kind color */
+  --cyan-8: rgb(17,128,156); /* @kind color */
+  --cyan-9: rgb(0,162,199); /* @kind color */
+  --destructive-foreground: rgb(255,255,255); /* @kind color */
+  --destructive-soft: rgb(255,255,255); /* @kind color */
+  --destructive: var(--red-400); /* @kind color */
+  --foreground: var(--neutral-50); /* @kind color */
+  --gold-10: rgb(163,144,115); /* @kind color */
+  --gold-11: rgb(203,185,159); /* @kind color */
+  --gold-12: rgb(232,226,217); /* @kind color */
+  --gold-1: rgb(18,18,17); /* @kind color */
+  --gold-2: rgb(27,26,23); /* @kind color */
+  --gold-3: rgb(36,35,31); /* @kind color */
+  --gold-4: rgb(45,43,38); /* @kind color */
+  --gold-5: rgb(56,53,46); /* @kind color */
+  --gold-6: rgb(68,64,57); /* @kind color */
+  --gold-7: rgb(84,79,70); /* @kind color */
+  --gold-8: rgb(105,98,86); /* @kind color */
+  --gold-9: rgb(151,131,101); /* @kind color */
+  --grass-10: rgb(83,179,101); /* @kind color */
+  --grass-11: rgb(113,208,131); /* @kind color */
+  --grass-12: rgb(194,240,194); /* @kind color */
+  --grass-1: rgb(14,21,17); /* @kind color */
+  --grass-2: rgb(20,26,21); /* @kind color */
+  --grass-3: rgb(27,42,30); /* @kind color */
+  --grass-4: rgb(29,58,36); /* @kind color */
+  --grass-5: rgb(37,72,45); /* @kind color */
+  --grass-6: rgb(45,87,54); /* @kind color */
+  --grass-7: rgb(54,103,64); /* @kind color */
+  --grass-8: rgb(62,121,73); /* @kind color */
+  --grass-9: rgb(70,167,88); /* @kind color */
+  --gray-10: rgb(123,123,123); /* @kind color */
+  --gray-11: rgb(180,180,180); /* @kind color */
+  --gray-12: rgb(238,238,238); /* @kind color */
+  --gray-1: rgb(17,17,17); /* @kind color */
+  --gray-2: rgb(25,25,25); /* @kind color */
+  --gray-3: rgb(34,34,34); /* @kind color */
+  --gray-4: rgb(42,42,42); /* @kind color */
+  --gray-5: rgb(49,49,49); /* @kind color */
+  --gray-6: rgb(58,58,58); /* @kind color */
+  --gray-7: rgb(72,72,72); /* @kind color */
+  --gray-8: rgb(96,96,96); /* @kind color */
+  --gray-9: rgb(110,110,110); /* @kind color */
+  --green-10: rgb(51,176,116); /* @kind color */
+  --green-11: rgb(61,214,140); /* @kind color */
+  --green-12: rgb(177,241,203); /* @kind color */
+  --green-1: rgb(14,21,18); /* @kind color */
+  --green-2: rgb(18,27,23); /* @kind color */
+  --green-3: rgb(19,45,33); /* @kind color */
+  --green-4: rgb(17,59,41); /* @kind color */
+  --green-5: rgb(23,73,51); /* @kind color */
+  --green-6: rgb(32,87,62); /* @kind color */
+  --green-7: rgb(40,104,74); /* @kind color */
+  --green-8: rgb(47,124,87); /* @kind color */
+  --green-9: rgb(48,164,108); /* @kind color */
+  --indigo-10: rgb(84,114,228); /* @kind color */
+  --indigo-11: rgb(158,177,255); /* @kind color */
+  --indigo-12: rgb(214,225,255); /* @kind color */
+  --indigo-1: rgb(17,19,31); /* @kind color */
+  --indigo-2: rgb(20,23,38); /* @kind color */
+  --indigo-3: rgb(24,36,73); /* @kind color */
+  --indigo-4: rgb(29,46,98); /* @kind color */
+  --indigo-5: rgb(37,57,116); /* @kind color */
+  --indigo-6: rgb(48,67,132); /* @kind color */
+  --indigo-7: rgb(58,79,151); /* @kind color */
+  --indigo-8: rgb(67,93,177); /* @kind color */
+  --indigo-9: rgb(62,99,221); /* @kind color */
+  --input: var(--neutral-900); /* @kind color */
+  --iris-10: rgb(110,106,222); /* @kind color */
+  --iris-11: rgb(177,169,255); /* @kind color */
+  --iris-12: rgb(224,223,254); /* @kind color */
+  --iris-1: rgb(19,19,30); /* @kind color */
+  --iris-2: rgb(23,22,37); /* @kind color */
+  --iris-3: rgb(32,34,72); /* @kind color */
+  --iris-4: rgb(38,42,101); /* @kind color */
+  --iris-5: rgb(48,51,116); /* @kind color */
+  --iris-6: rgb(61,62,130); /* @kind color */
+  --iris-7: rgb(74,74,149); /* @kind color */
+  --iris-8: rgb(89,88,177); /* @kind color */
+  --iris-9: rgb(91,91,214); /* @kind color */
+  --jade-10: rgb(39,176,139); /* @kind color */
+  --jade-11: rgb(31,216,164); /* @kind color */
+  --jade-12: rgb(173,240,212); /* @kind color */
+  --jade-1: rgb(13,21,18); /* @kind color */
+  --jade-2: rgb(18,28,24); /* @kind color */
+  --jade-3: rgb(15,46,34); /* @kind color */
+  --jade-4: rgb(11,59,44); /* @kind color */
+  --jade-5: rgb(17,72,55); /* @kind color */
+  --jade-6: rgb(27,87,69); /* @kind color */
+  --jade-7: rgb(36,104,84); /* @kind color */
+  --jade-8: rgb(42,126,104); /* @kind color */
+  --jade-9: rgb(41,163,131); /* @kind color */
+  --lime-10: rgb(212,255,112); /* @kind color */
+  --lime-11: rgb(189,229,108); /* @kind color */
+  --lime-12: rgb(227,247,186); /* @kind color */
+  --lime-1: rgb(17,19,12); /* @kind color */
+  --lime-2: rgb(21,26,16); /* @kind color */
+  --lime-3: rgb(31,41,23); /* @kind color */
+  --lime-4: rgb(41,55,29); /* @kind color */
+  --lime-5: rgb(51,68,35); /* @kind color */
+  --lime-6: rgb(61,82,42); /* @kind color */
+  --lime-7: rgb(73,98,49); /* @kind color */
+  --lime-8: rgb(87,117,56); /* @kind color */
+  --lime-9: rgb(189,238,99); /* @kind color */
+  --mauve-10: rgb(124,122,133); /* @kind color */
+  --mauve-11: rgb(181,178,188); /* @kind color */
+  --mauve-12: rgb(238,238,240); /* @kind color */
+  --mauve-1: rgb(18,17,19); /* @kind color */
+  --mauve-2: rgb(26,25,27); /* @kind color */
+  --mauve-3: rgb(35,34,37); /* @kind color */
+  --mauve-4: rgb(43,41,45); /* @kind color */
+  --mauve-5: rgb(50,48,53); /* @kind color */
+  --mauve-6: rgb(60,57,63); /* @kind color */
+  --mauve-7: rgb(73,71,78); /* @kind color */
+  --mauve-8: rgb(98,95,105); /* @kind color */
+  --mauve-9: rgb(111,109,120); /* @kind color */
+  --mint-10: rgb(168,245,229); /* @kind color */
+  --mint-11: rgb(88,213,186); /* @kind color */
+  --mint-12: rgb(196,245,225); /* @kind color */
+  --mint-1: rgb(14,21,21); /* @kind color */
+  --mint-2: rgb(15,27,27); /* @kind color */
+  --mint-3: rgb(9,44,43); /* @kind color */
+  --mint-4: rgb(0,58,56); /* @kind color */
+  --mint-5: rgb(0,71,68); /* @kind color */
+  --mint-6: rgb(16,86,80); /* @kind color */
+  --mint-7: rgb(30,104,95); /* @kind color */
+  --mint-8: rgb(39,127,112); /* @kind color */
+  --mint-9: rgb(134,234,212); /* @kind color */
+  --muted-foreground: var(--neutral-400); /* @kind color */
+  --muted: var(--neutral-800); /* @kind color */
+  --olive-10: rgb(118,125,116); /* @kind color */
+  --olive-11: rgb(175,181,173); /* @kind color */
+  --olive-12: rgb(236,238,236); /* @kind color */
+  --olive-1: rgb(17,18,16); /* @kind color */
+  --olive-2: rgb(24,25,23); /* @kind color */
+  --olive-3: rgb(33,34,32); /* @kind color */
+  --olive-4: rgb(40,42,39); /* @kind color */
+  --olive-5: rgb(47,49,46); /* @kind color */
+  --olive-6: rgb(56,58,54); /* @kind color */
+  --olive-7: rgb(69,72,67); /* @kind color */
+  --olive-8: rgb(92,98,91); /* @kind color */
+  --olive-9: rgb(104,112,102); /* @kind color */
+  --opacity-50: var(--opacity-50-2);
+  --opacity-60: var(--opacity-60-2);
+  --orange-10: rgb(255,128,31); /* @kind color */
+  --orange-11: rgb(255,160,87); /* @kind color */
+  --orange-12: rgb(255,224,194); /* @kind color */
+  --orange-1: rgb(23,18,14); /* @kind color */
+  --orange-2: rgb(30,22,15); /* @kind color */
+  --orange-3: rgb(51,30,11); /* @kind color */
+  --orange-4: rgb(70,33,0); /* @kind color */
+  --orange-5: rgb(86,40,0); /* @kind color */
+  --orange-6: rgb(102,53,12); /* @kind color */
+  --orange-7: rgb(126,69,29); /* @kind color */
+  --orange-8: rgb(163,88,41); /* @kind color */
+  --orange-9: rgb(247,107,21); /* @kind color */
+  --page: var(--navy); /* @kind color */
+  --pink-10: rgb(222,81,168); /* @kind color */
+  --pink-11: rgb(255,141,204); /* @kind color */
+  --pink-12: rgb(253,209,234); /* @kind color */
+  --pink-1: rgb(25,17,23); /* @kind color */
+  --pink-2: rgb(33,18,29); /* @kind color */
+  --pink-3: rgb(55,23,47); /* @kind color */
+  --pink-4: rgb(75,20,61); /* @kind color */
+  --pink-5: rgb(89,28,71); /* @kind color */
+  --pink-6: rgb(105,41,85); /* @kind color */
+  --pink-7: rgb(131,56,105); /* @kind color */
+  --pink-8: rgb(168,72,133); /* @kind color */
+  --pink-9: rgb(214,64,159); /* @kind color */
+  --plum-10: rgb(182,88,196); /* @kind color */
+  --plum-11: rgb(231,150,243); /* @kind color */
+  --plum-12: rgb(244,212,244); /* @kind color */
+  --plum-1: rgb(24,17,24); /* @kind color */
+  --plum-2: rgb(32,19,32); /* @kind color */
+  --plum-3: rgb(53,26,53); /* @kind color */
+  --plum-4: rgb(69,29,71); /* @kind color */
+  --plum-5: rgb(81,36,84); /* @kind color */
+  --plum-6: rgb(94,48,97); /* @kind color */
+  --plum-7: rgb(115,64,121); /* @kind color */
+  --plum-8: rgb(146,84,156); /* @kind color */
+  --plum-9: rgb(171,74,186); /* @kind color */
+  --popover-foreground: var(--neutral-50); /* @kind color */
+  --popover: var(--neutral-800); /* @kind color */
+  --primary-foreground: var(--neutral-900); /* @kind color */
+  --primary: var(--neutral-200); /* @kind color */
+  --purple-10: rgb(48,28,59); /* @kind color */
+  --purple-11: rgb(30,21,35); /* @kind color */
+  --purple-12: rgb(24,17,27); /* @kind color */
+  --purple-1: rgb(236,217,250); /* @kind color */
+  --purple-2: rgb(209,157,255); /* @kind color */
+  --purple-3: rgb(154,92,208); /* @kind color */
+  --purple-4: rgb(142,78,198); /* @kind color */
+  --purple-5: rgb(132,87,170); /* @kind color */
+  --purple-6: rgb(102,66,130); /* @kind color */
+  --purple-7: rgb(84,52,107); /* @kind color */
+  --purple-8: rgb(72,41,92); /* @kind color */
+  --purple-9: rgb(61,34,78); /* @kind color */
+  --radius-2xl: var(--18);
+  --radius-3xl: var(--22);
+  --radius-4xl: var(--26);
+  --radius-full: var(--9999-2);
+  --radius-lg: var(--10-2);
+  --radius-md: var(--8-2);
+  --radius-none: var(--0-2);
+  --radius-sm: var(--6-2);
+  --radius-xl: var(--14);
+  --radius-xs: var(--2-2);
+  --radius: var(--rounded-lg-2);
+  --red-10: rgb(236,93,94); /* @kind color */
+  --red-11: rgb(255,149,146); /* @kind color */
+  --red-12: rgb(255,209,217); /* @kind color */
+  --red-1: rgb(25,17,17); /* @kind color */
+  --red-2: rgb(32,19,20); /* @kind color */
+  --red-3: rgb(59,18,25); /* @kind color */
+  --red-4: rgb(80,15,28); /* @kind color */
+  --red-5: rgb(97,22,35); /* @kind color */
+  --red-6: rgb(114,35,45); /* @kind color */
+  --red-7: rgb(140,51,58); /* @kind color */
+  --red-8: rgb(181,69,72); /* @kind color */
+  --red-9: rgb(229,72,77); /* @kind color */
+  --ring: var(--neutral-500); /* @kind color */
+  --rounded-md-3: var(--6-2);
+  --ruby-10: rgb(236,90,114); /* @kind color */
+  --ruby-11: rgb(255,148,157); /* @kind color */
+  --ruby-12: rgb(254,210,225); /* @kind color */
+  --ruby-1: rgb(25,17,19); /* @kind color */
+  --ruby-2: rgb(30,21,23); /* @kind color */
+  --ruby-3: rgb(58,20,30); /* @kind color */
+  --ruby-4: rgb(78,19,37); /* @kind color */
+  --ruby-5: rgb(94,26,46); /* @kind color */
+  --ruby-6: rgb(111,37,57); /* @kind color */
+  --ruby-7: rgb(136,52,71); /* @kind color */
+  --ruby-8: rgb(179,68,90); /* @kind color */
+  --ruby-9: rgb(229,70,102); /* @kind color */
+  --sage-10: rgb(173,181,178); /* @kind color */
+  --sage-11: rgb(173,181,178); /* @kind color */
+  --sage-12: rgb(236,238,237); /* @kind color */
+  --sage-1: rgb(16,18,17); /* @kind color */
+  --sage-2: rgb(23,25,24); /* @kind color */
+  --sage-3: rgb(32,34,33); /* @kind color */
+  --sage-4: rgb(39,42,41); /* @kind color */
+  --sage-5: rgb(46,49,48); /* @kind color */
+  --sage-6: rgb(55,59,57); /* @kind color */
+  --sage-7: rgb(68,73,71); /* @kind color */
+  --sage-8: rgb(91,98,95); /* @kind color */
+  --sage-9: rgb(99,112,107); /* @kind color */
+  --sand-10: rgb(124,123,116); /* @kind color */
+  --sand-11: rgb(181,179,173); /* @kind color */
+  --sand-12: rgb(238,238,236); /* @kind color */
+  --sand-1: rgb(17,17,16); /* @kind color */
+  --sand-2: rgb(25,25,24); /* @kind color */
+  --sand-3: rgb(34,34,33); /* @kind color */
+  --sand-4: rgb(42,42,40); /* @kind color */
+  --sand-5: rgb(49,49,46); /* @kind color */
+  --sand-6: rgb(59,58,55); /* @kind color */
+  --sand-7: rgb(73,72,68); /* @kind color */
+  --sand-8: rgb(98,96,91); /* @kind color */
+  --sand-9: rgb(111,109,102); /* @kind color */
+  --secondary-foreground: var(--neutral-50); /* @kind color */
+  --secondary: var(--neutral-800); /* @kind color */
+  --semantic-background: rgb(39,38,37); /* @kind color */
+  --semantic-border: rgb(83,81,81); /* @kind color */
+  --semantic-foreground: var(--white); /* @kind color */
+  --sidebar-accent-foreground: var(--neutral-50); /* @kind color */
+  --sidebar-accent: var(--neutral-800); /* @kind color */
+  --sidebar-border: var(--neutral-700); /* @kind color */
+  --sidebar-foreground: var(--neutral-50); /* @kind color */
+  --sidebar-primary-foreground: var(--neutral-50); /* @kind color */
+  --sidebar-primary: var(--blue-10); /* @kind color */
+  --sidebar-ring: var(--neutral-500); /* @kind color */
+  --sidebar: var(--neutral-900); /* @kind color */
+  --sky-10: rgb(168,238,255); /* @kind color */
+  --sky-11: rgb(117,199,240); /* @kind color */
+  --sky-12: rgb(194,243,255); /* @kind color */
+  --sky-1: rgb(13,20,31); /* @kind color */
+  --sky-2: rgb(17,26,39); /* @kind color */
+  --sky-3: rgb(17,40,64); /* @kind color */
+  --sky-4: rgb(17,53,85); /* @kind color */
+  --sky-5: rgb(21,68,103); /* @kind color */
+  --sky-6: rgb(27,83,123); /* @kind color */
+  --sky-7: rgb(31,102,146); /* @kind color */
+  --sky-8: rgb(25,124,174); /* @kind color */
+  --sky-9: rgb(124,226,254); /* @kind color */
+  --slate-10: rgb(119,123,132); /* @kind color */
+  --slate-11: rgb(176,180,186); /* @kind color */
+  --slate-12: rgb(237,238,240); /* @kind color */
+  --slate-1: rgb(17,17,19); /* @kind color */
+  --slate-2: rgb(24,25,27); /* @kind color */
+  --slate-3: rgb(33,34,37); /* @kind color */
+  --slate-4: rgb(39,42,45); /* @kind color */
+  --slate-5: rgb(46,49,53); /* @kind color */
+  --slate-6: rgb(54,58,63); /* @kind color */
+  --slate-7: rgb(67,72,78); /* @kind color */
+  --slate-8: rgb(90,97,105); /* @kind color */
+  --slate-9: rgb(105,110,119); /* @kind color */
+  --stroke-width: var(--2-2);
+  --success-border: rgb(255,255,255); /* @kind color */
+  --success-foreground: rgb(5,46,22); /* @kind color */
+  --success-soft: rgb(255,255,255); /* @kind color */
+  --success: rgb(34,197,94); /* @kind color */
+  --teal-10: rgb(14,179,158); /* @kind color */
+  --teal-11: rgb(11,216,182); /* @kind color */
+  --teal-12: rgb(173,240,221); /* @kind color */
+  --teal-1: rgb(13,21,20); /* @kind color */
+  --teal-2: rgb(17,28,27); /* @kind color */
+  --teal-3: rgb(13,45,42); /* @kind color */
+  --teal-4: rgb(2,59,55); /* @kind color */
+  --teal-5: rgb(8,72,67); /* @kind color */
+  --teal-6: rgb(20,87,80); /* @kind color */
+  --teal-7: rgb(28,105,97); /* @kind color */
+  --teal-8: rgb(32,126,115); /* @kind color */
+  --teal-9: rgb(18,165,148); /* @kind color */
+  --tomato-10: rgb(236,97,66); /* @kind color */
+  --tomato-11: rgb(255,151,125); /* @kind color */
+  --tomato-12: rgb(251,211,203); /* @kind color */
+  --tomato-1: rgb(24,17,17); /* @kind color */
+  --tomato-2: rgb(31,21,19); /* @kind color */
+  --tomato-3: rgb(57,23,20); /* @kind color */
+  --tomato-4: rgb(78,21,17); /* @kind color */
+  --tomato-5: rgb(94,28,22); /* @kind color */
+  --tomato-6: rgb(110,41,32); /* @kind color */
+  --tomato-7: rgb(133,58,45); /* @kind color */
+  --tomato-8: rgb(172,77,57); /* @kind color */
+  --tomato-9: rgb(229,77,46); /* @kind color */
+  --violet-10: rgb(125,102,217); /* @kind color */
+  --violet-11: rgb(186,167,255); /* @kind color */
+  --violet-12: rgb(226,221,254); /* @kind color */
+  --violet-1: rgb(20,18,31); /* @kind color */
+  --violet-2: rgb(27,21,37); /* @kind color */
+  --violet-3: rgb(41,31,67); /* @kind color */
+  --violet-4: rgb(51,37,91); /* @kind color */
+  --violet-5: rgb(60,46,105); /* @kind color */
+  --violet-6: rgb(71,56,118); /* @kind color */
+  --violet-7: rgb(86,70,139); /* @kind color */
+  --violet-8: rgb(105,88,173); /* @kind color */
+  --violet-9: rgb(110,86,207); /* @kind color */
+  --warning-border: rgb(255,255,255); /* @kind color */
+  --warning-foreground: rgb(66,32,6); /* @kind color */
+  --warning-soft: rgb(255,255,255); /* @kind color */
+  --warning: rgb(250,204,21); /* @kind color */
+  --white-10: rgba(255,255,255,0.8); /* @kind color */
+  --white-11: rgba(255,255,255,0.9); /* @kind color */
+  --white-12: rgba(255,255,255,0.95); /* @kind color */
+  --white-1: rgba(255,255,255,0.05); /* @kind color */
+  --white-2: rgba(255,255,255,0.1); /* @kind color */
+  --white-3: rgba(255,255,255,0.15); /* @kind color */
+  --white-4: rgba(255,255,255,0.2); /* @kind color */
+  --white-5: rgba(255,255,255,0.3); /* @kind color */
+  --white-6: rgba(255,255,255,0.4); /* @kind color */
+  --white-7: rgba(255,255,255,0.5); /* @kind color */
+  --white-8: rgba(255,255,255,0.6); /* @kind color */
+  --white-9: rgba(255,255,255,0.7); /* @kind color */
+  --yellow-10: rgb(255,255,87); /* @kind color */
+  --yellow-11: rgb(245,225,71); /* @kind color */
+  --yellow-12: rgb(246,238,180); /* @kind color */
+  --yellow-1: rgb(20,18,11); /* @kind color */
+  --yellow-2: rgb(27,24,15); /* @kind color */
+  --yellow-3: rgb(45,35,5); /* @kind color */
+  --yellow-4: rgb(54,43,0); /* @kind color */
+  --yellow-5: rgb(67,53,0); /* @kind color */
+  --yellow-6: rgb(82,66,2); /* @kind color */
+  --yellow-7: rgb(102,84,23); /* @kind color */
+  --yellow-8: rgb(131,106,33); /* @kind color */
+  --yellow-9: rgb(255,230,41); /* @kind color */
+}
