@@ -1,17 +1,18 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useStore } from "@/store";
 import { Icon } from "@/components";
 import type { Role } from "@/types";
 
 export function RoleRail() {
-  const role = useStore((s) => s.role);
   const setRole = useStore((s) => s.setRole);
   const router = useRouter();
+  const pathname = usePathname();
+  const isInstructor = pathname.startsWith("/i");
 
   function switchTo(next: Role) {
-    setRole(next);
+    setRole(next); // keeps the "/" landing redirect in sync
     router.push(next === "instructor" ? "/i/dashboard" : "/s/activities");
   }
 
@@ -21,18 +22,18 @@ export function RoleRail() {
         ✦
       </div>
       <button
-        className={`rail__btn ${role === "instructor" ? "rail__btn--active" : ""}`}
+        className={`rail__btn ${isInstructor ? "rail__btn--active" : ""}`}
         onClick={() => switchTo("instructor")}
         title="Instructor"
-        aria-pressed={role === "instructor"}
+        aria-pressed={isInstructor}
       >
         <Icon name="school" />
       </button>
       <button
-        className={`rail__btn ${role === "student" ? "rail__btn--active" : ""}`}
+        className={`rail__btn ${!isInstructor ? "rail__btn--active" : ""}`}
         onClick={() => switchTo("student")}
         title="Student"
-        aria-pressed={role === "student"}
+        aria-pressed={!isInstructor}
       >
         <Icon name="person" />
       </button>

@@ -4,6 +4,7 @@
 
 import type {
   Activity,
+  CollectiveResponse,
   Course,
   Member,
   OriginalResponse,
@@ -173,12 +174,11 @@ function makeStub(
   };
 }
 
-// Teammates' ORIGINAL prep responses (locked, pre-class). Maya's own original
-// is created live when the demo student submits prep.
+// Team 3 ORIGINAL prep responses (locked, pre-class).
 const OCR_SAMPLE = "Span L = 90 m, w = 32 kN/m -> W = 2880 kN -> H = 3600 kN -> T_max ~ 1180 kN per cable.";
 
-export function seedTeammateOriginals(): OriginalResponse[] {
-  const base = (memberId: string, choice: string, load: string): OriginalResponse => ({
+function baseOriginal(memberId: string, choice: string, load: string): OriginalResponse {
+  return {
     memberId,
     activityId: BRIDGE_ACTIVITY.id,
     answers: {
@@ -190,13 +190,16 @@ export function seedTeammateOriginals(): OriginalResponse[] {
     status: "complete",
     submittedAt: "2026-09-09T21:42:00",
     locked: true,
-  });
+  };
+}
 
-  const liam = base(LIAM.id, "Cable-stayed", "1050");
-  const priya = base(PRIYA.id, "Suspension", "1210");
-  const sam = base(SAM.id, "Arch", "1400");
+// `fresh` = pre-prep state (Maya has NOT submitted) for demoing the student flow
+// from scratch. Default (populated) includes Maya's submitted, locked original.
+export function seedAllOriginals(fresh = false): OriginalResponse[] {
+  const liam = baseOriginal(LIAM.id, "Cable-stayed", "1050");
+  const priya = baseOriginal(PRIYA.id, "Suspension", "1210");
+  const sam = baseOriginal(SAM.id, "Arch", "1400");
   sam.status = "needs-review";
-  // Sam uploaded handwritten work that OCR flagged.
   sam.upload = {
     filename: "calc_bridge_load.jpg",
     imageUrl: "",
@@ -204,7 +207,26 @@ export function seedTeammateOriginals(): OriginalResponse[] {
     ocrConfirmed: false,
     flaggedSymbols: ["T_max", "H"],
   };
-  return [liam, priya, sam];
+  const teammates = [liam, priya, sam];
+  if (fresh) return teammates;
+  const maya = baseOriginal(MAYA.id, "Suspension", "1180");
+  maya.upload = { filename: "calc_bridge_load.jpg", imageUrl: "", ocrText: OCR_SAMPLE, ocrConfirmed: true, flaggedSymbols: [] };
+  return [maya, ...teammates];
+}
+
+// Team 3's submitted (ungraded) collective response — the thing the instructor grades.
+export function seedTeam3Collective(): CollectiveResponse {
+  return {
+    teamId: SEED_TEAM_3.id,
+    activityId: BRIDGE_ACTIVITY.id,
+    text:
+      "Team 3 recommends a SUSPENSION bridge for the 90 m gorge span. The main cables carry the deck load to the towers; with w = 32 kN/m, W = 2880 kN and T_max ≈ 1180 kN per cable. We chose it over cable-stayed and arch after weighing the load path and constructability over a deep gorge.",
+    attachments: ["calc_bridge_load.jpg"],
+    participationConfirmed: { [MAYA.id]: true, [LIAM.id]: true, [PRIYA.id]: true, [SAM.id]: true },
+    submittedBy: MAYA.id,
+    submittedAt: "2026-09-10T14:31:00",
+    locked: true,
+  };
 }
 
 export const OCR_TRANSCRIPTION_SAMPLE = OCR_SAMPLE;

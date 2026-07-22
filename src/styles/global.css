@@ -6,6 +6,7 @@
 @import "../shell/app.css";
 @import "../routes/student/student.css";
 @import "../routes/student/teamStage.css";
+@import "../routes/instructor/instructor.css";
 
 html,
 body,

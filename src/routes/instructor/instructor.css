@@ -1,0 +1,183 @@
+/* Instructor screens */
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  margin-bottom: 22px;
+}
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.card-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+/* Active activity panel */
+.active-activity {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+.prep-team-row {
+  display: grid;
+  grid-template-columns: 90px 1fr 40px;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+  font-size: var(--text-sm);
+}
+
+/* Library / activity cards */
+.lib-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.lib-card {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 16px 18px;
+  text-align: left;
+  width: 100%;
+}
+.lib-card:hover {
+  border-color: #d6cdb5;
+}
+
+/* Team management */
+.team-card__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.team-member {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--surface-border);
+}
+.team-member:last-of-type {
+  border-bottom: none;
+}
+
+/* Grading two-column */
+.grading-layout {
+  display: grid;
+  grid-template-columns: 232px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+}
+.queue-item:hover {
+  background: #f3efe4;
+}
+.queue-item--active {
+  background: var(--navy);
+  color: #fff;
+}
+.queue-item--active .member-card__sub,
+.queue-item--active .queue-item__sub {
+  color: #c9d6e2;
+}
+.queue-item__sub {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.criterion-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--surface-border);
+}
+.criterion-row:last-child {
+  border-bottom: none;
+}
+.evidence {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  margin-top: 4px;
+  line-height: 1.5;
+  font-style: italic;
+}
+
+/* Builder */
+.builder-3col {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+.q-builder-card {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+}
+.drag-handle {
+  color: var(--muted-2);
+  cursor: grab;
+  padding-top: 2px;
+}
+
+/* Toggle segmented control */
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--surface-border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+.segmented button {
+  padding: 7px 14px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--muted);
+}
+.segmented button.on {
+  background: var(--navy);
+  color: #fff;
+}
+
+.rubric-levels {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+  margin-top: 12px;
+}
+.rubric-level {
+  border: 1px solid var(--surface-border);
+  border-radius: 10px;
+  padding: 10px;
+  font-size: var(--text-xs);
+}
+.rubric-level__pts {
+  font-family: var(--font-mono);
+  color: var(--navy);
+  font-weight: var(--weight-semibold);
+}

@@ -56,11 +56,13 @@ const INSTRUCTOR_GROUPS: NavGroup[] = [
 ];
 
 export function Sidebar() {
-  const role = useStore((s) => s.role);
+  // Sidebar follows the URL section so it can never drift from the visible route.
+  const pathname = usePathname();
+  const isInstructor = pathname.startsWith("/i");
   return (
     <aside className="sidebar">
-      <div className="sidebar__scroll">{role === "instructor" ? <InstructorNav /> : <StudentNav />}</div>
-      <UserCard />
+      <div className="sidebar__scroll">{isInstructor ? <InstructorNav /> : <StudentNav />}</div>
+      <UserCard isInstructor={isInstructor} />
     </aside>
   );
 }
@@ -148,10 +150,8 @@ function NavItem({ entry }: { entry: NavEntry }) {
   );
 }
 
-function UserCard() {
-  const role = useStore((s) => s.role);
+function UserCard({ isInstructor }: { isInstructor: boolean }) {
   const course = useStore((s) => s.course);
-  const isInstructor = role === "instructor";
   const member = isInstructor
     ? { id: "inst", name: course.instructorName, initials: "EA", avatarTint: "#002341" }
     : MAYA;

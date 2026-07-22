@@ -28,8 +28,8 @@ const CONTEXT_LABELS: Record<string, string> = {
 
 export function TopBar() {
   const course = useStore((s) => s.course);
-  const role = useStore((s) => s.role);
   const pathname = usePathname();
+  const isStudent = pathname.startsWith("/s");
   const leaf = pathname.split("/").filter(Boolean).pop() ?? "";
   const context = CONTEXT_LABELS[leaf] ?? "";
 
@@ -41,7 +41,7 @@ export function TopBar() {
         <span>{context}</span>
       </div>
       <div className="topbar__right">
-        {role === "student" && (
+        {isStudent && (
           <span className="team-badge">
             <Icon name="groups" size="sm" />
             {SEED_TEAM_3.name}

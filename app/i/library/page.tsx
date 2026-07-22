@@ -1,4 +1,1 @@
-import { Stub } from "@/routes/Stub";
-export default function Page() {
-  return <Stub title="Activity library" milestone="M4" />;
-}
+export { Library as default } from "@/routes/instructor/Library";

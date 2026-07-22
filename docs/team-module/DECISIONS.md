@@ -3,6 +3,22 @@
 Where the spec is silent (per §Working agreements), the simplest behavior consistent
 with the §4 hard rules is chosen and recorded here.
 
+## D9 — Client-only rendering to avoid store/localStorage hydration mismatch
+The persisted Zustand store made server HTML (seed state) differ from the client's
+first render (localStorage state) → React hydration errors in the shell. Fix: the
+store uses `skipHydration`, and `AppShell` renders a neutral canvas until mounted,
+then rehydrates in `Boot`. Server + first client render match; the app renders after
+mount. This is a client-only SPA, so no SSR/SEO is lost.
+
+## D8 — Sidebar/top-bar follow the URL section; populated default seed
+- The shell (sidebar nav, user card, team badge) derives instructor-vs-student from
+  the URL prefix (`/i` vs `/s`), not the role flag, so it can never drift from the
+  visible route on a direct link. The rail still sets `role` for the "/" redirect.
+- Default boot is the "grading day" populated seed (Maya's prep submitted, Team 3's
+  collective submitted-but-ungraded) so the instructor loop is demoable immediately.
+  `?reset=fresh` gives the pre-prep state for the student-authoring demo; `?reset`
+  (or `?reset=populated`) restores the populated default.
+
 ## D7 — Framework: Next.js (App Router), client-rendered, still frontend-only
 Migrated from Vite + react-router to **Next.js App Router** at the user's request, keeping
 the app frontend-only (no route handlers, no server data). Routes are file-based under

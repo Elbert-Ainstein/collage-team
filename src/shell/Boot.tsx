@@ -8,10 +8,17 @@ import { useStore } from "@/store";
 //  • dev-only store exposure for debugging + demoing the INDIVIDUAL variant
 export function Boot() {
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).has("reset")) {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("reset")) {
+      // ?reset → populated "grading day" seed; ?reset=fresh → pre-prep seed.
+      const fresh = params.get("reset") === "fresh";
       window.localStorage.removeItem("collage-team-module");
-      useStore.getState().reset();
+      useStore.getState().reset(fresh);
       window.history.replaceState({}, "", window.location.pathname);
+    } else {
+      // Load persisted state after mount (store uses skipHydration to avoid a
+      // server/client hydration mismatch on the first render).
+      void useStore.persist.rehydrate();
     }
     if (process.env.NODE_ENV !== "production") {
       (window as unknown as { __store: typeof useStore }).__store = useStore;

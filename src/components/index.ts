@@ -6,3 +6,4 @@ export { Avatar } from "./Avatar";
 export { Button, Panel, PageHeader, Alert, SectionLabel } from "./primitives";
 export { ConfirmationCard } from "./ConfirmationCard";
 export type { ReceiptRow } from "./ConfirmationCard";
+export { StatCard, SettingRow, Stepper, ProgressBar, PrepDots, HBar, ScoreButtonsRow } from "./widgets";

@@ -48,6 +48,11 @@ tests/rules/  the priority §11 rule-enforcement suite
 ## Milestones
 - **M1 (done)** — shell, routing, role switch, tokens, shared components; student prep flow
   (prep → OCR review → submit-and-lock); immutability + prep-gate enforced & tested.
-- M2 — team stage (discussion, collective/individual workspaces, participation, privacy).
-- M3 — instructor core (builder, roster, teams, AI-suggested grading, gradebook, grade view).
-- M4 — dashboard/library, ◇ stubs, states, responsive, Playwright, seed-reset, deploy.
+- **M2 (done)** — team stage (discussion, collective/individual workspaces, participation, privacy).
+- **M3 (done)** — instructor core: activity builder (5 tabs, live toggles), roster import wizard,
+  team management, rubric builder, AI-suggested grading + approve/release, gradebook, course
+  dashboard, activity library, and the student grade view. Full author→grade→release→student loop.
+- M4 — ◇ stubs polish (oral, live controls, results, AI-gen, formation, peer-eval), empty/loading/
+  error states, responsive, Playwright happy paths, seed-reset command, deploy.
+
+Reset states: `?reset` = populated "grading day" demo · `?reset=fresh` = pre-prep (student authoring).

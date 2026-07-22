@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist, createJSONStorage, type StateStorage } from "zustand/middleware";
 import type {
   Activity,
+  AiGradeSuggestion,
   ApprovedGrade,
   CollectiveResponse,
   Course,
@@ -19,7 +20,8 @@ import {
   SEED_MEMBERS,
   SEED_TEAMS,
   SEED_TEAM_3,
-  seedTeammateOriginals,
+  seedAllOriginals,
+  seedTeam3Collective,
 } from "@/seed";
 
 export interface AppState {
@@ -36,6 +38,7 @@ export interface AppState {
   originals: OriginalResponse[];
   collectives: CollectiveResponse[];
   individualFinals: IndividualFinalResponse[];
+  aiSuggestions: AiGradeSuggestion[];
   approvedGrades: ApprovedGrade[];
 
   // low-level mutators (services/ call these; UI should prefer services/)
@@ -45,12 +48,19 @@ export interface AppState {
   _upsertOriginal: (r: OriginalResponse) => void;
   _upsertCollective: (r: CollectiveResponse) => void;
   _upsertIndividualFinal: (r: IndividualFinalResponse) => void;
+  _upsertAiSuggestion: (s: AiGradeSuggestion) => void;
   _upsertApprovedGrade: (g: ApprovedGrade) => void;
   _updateActivity: (id: string, patch: Partial<Activity>) => void;
-  reset: () => void;
+  _addActivity: (a: Activity) => void;
+  _setRoster: (members: Member[], teams: Team[]) => void;
+  _upsertTeam: (t: Team) => void;
+  reset: (fresh?: boolean) => void;
 }
 
-function initialData() {
+// Default boot = "grading day" populated state: Maya's prep is submitted and
+// Team 3's collective is submitted (ungraded), so the instructor loop is
+// demoable out of the box. `?reset=fresh` gives the pre-prep student state.
+function initialData(fresh = false) {
   return {
     role: "student" as Role,
     currentStudentId: CURRENT_STUDENT_ID,
@@ -59,9 +69,10 @@ function initialData() {
     members: SEED_MEMBERS,
     teams: [SEED_TEAM_3, ...SEED_TEAMS.filter((t) => t.id !== SEED_TEAM_3.id)],
     activities: [BRIDGE_ACTIVITY, ...OTHER_ACTIVITIES],
-    originals: seedTeammateOriginals(),
-    collectives: [] as CollectiveResponse[],
+    originals: seedAllOriginals(fresh),
+    collectives: fresh ? [] : [seedTeam3Collective()],
     individualFinals: [] as IndividualFinalResponse[],
+    aiSuggestions: [] as AiGradeSuggestion[],
     approvedGrades: [] as ApprovedGrade[],
   };
 }
@@ -97,6 +108,10 @@ export const useStore = create<AppState>()(
     set((s) => ({
       individualFinals: upsert(s.individualFinals, r, (x) => x.memberId === r.memberId && x.activityId === r.activityId),
     })),
+  _upsertAiSuggestion: (sg) =>
+    set((s) => ({
+      aiSuggestions: upsert(s.aiSuggestions, sg, (x) => x.target === sg.target && x.activityId === sg.activityId),
+    })),
   _upsertApprovedGrade: (g) =>
     set((s) => ({
       approvedGrades: upsert(s.approvedGrades, g, (x) => x.target === g.target && x.activityId === g.activityId),
@@ -105,21 +120,31 @@ export const useStore = create<AppState>()(
     set((s) => ({
       activities: s.activities.map((a) => (a.id === id ? { ...a, ...patch } : a)),
     })),
+  _addActivity: (a) => set((s) => ({ activities: [a, ...s.activities] })),
+  _setRoster: (members, teams) => set(() => ({ members, teams })),
+  _upsertTeam: (t) => set((s) => ({ teams: upsert(s.teams, t, (x) => x.id === t.id) })),
 
-      reset: () => set({ ...initialData() }),
+      reset: (fresh = false) => set({ ...initialData(fresh) }),
     }),
     {
       name: "collage-team-module",
+      // Skip auto-hydration: the server and the client's FIRST render both use the
+      // seed (so they match — no hydration mismatch); Boot rehydrates from
+      // localStorage after mount. Standard Next.js + zustand/persist pattern.
+      skipHydration: true,
       storage: createJSONStorage(() => (isTest || typeof window === "undefined" ? noopStorage : window.localStorage)),
-      // Persist only session + mutable domain data (not the static seed catalogs).
+      // Persist session + all mutable domain data (not the static seed catalogs).
       partialize: (s) => ({
         role: s.role,
         currentStudentId: s.currentStudentId,
         currentActivityId: s.currentActivityId,
+        members: s.members,
+        teams: s.teams,
         activities: s.activities,
         originals: s.originals,
         collectives: s.collectives,
         individualFinals: s.individualFinals,
+        aiSuggestions: s.aiSuggestions,
         approvedGrades: s.approvedGrades,
       }),
     },

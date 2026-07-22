@@ -6,6 +6,12 @@
   overflow: hidden;
 }
 
+/* Pre-mount neutral canvas (client-only SPA — see AppShell). */
+.app-boot {
+  height: 100vh;
+  background: var(--app-bg);
+}
+
 /* ---- Role rail ---- */
 .rail {
   background: var(--navy);
