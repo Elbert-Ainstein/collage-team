@@ -10,7 +10,7 @@ import { CourseContent } from "./CourseContent";
 const GEN_OPTIONS = [
   { key: "lesson", label: "Generate Lesson", icon: "menu_book" },
   { key: "summative", label: "Generate Summative", icon: "quiz" },
-  { key: "activity", label: "Generate Activity", icon: "groups" }, // ← Team Module integration
+  { key: "activity", label: "Upload Activity", icon: "groups" }, // ← Team Module integration
   { key: "import", label: "Import Summative", icon: "upload_file" },
 ];
 
@@ -58,20 +58,18 @@ export function CreatePage() {
 
       {/* prompt box */}
       <div className="mx-auto mt-7 max-w-3xl rounded-2xl border border-line bg-cream-100 p-4 shadow-2xs">
-        <textarea
-          rows={2}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          placeholder={
-            isActivity
-              ? "Optional: describe the team activity — the decision students must justify, or what it should cover…"
-              : "Describe the lesson you want to generate — a topic, learning goals, or what it should cover…"
-          }
-          className="w-full resize-none bg-transparent text-base text-navy outline-none placeholder:text-navy/40"
-        />
+        {!isActivity && (
+          <textarea
+            rows={2}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="Describe the lesson you want to generate — a topic, learning goals, or what it should cover…"
+            className="w-full resize-none bg-transparent text-base text-navy outline-none placeholder:text-navy/40"
+          />
+        )}
 
         {isActivity && (
-          <div className="mt-2">
+          <div>
             {sources.length === 0 ? (
               <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-[#cfc6ac] bg-page p-5 text-center">
                 <Icon name="upload" className="text-muted-fg" />
@@ -136,7 +134,7 @@ export function CreatePage() {
               onClick={createActivity}
               className="ml-auto flex items-center gap-1.5 rounded-lg bg-navy px-3.5 py-2 text-xs font-medium text-cream shadow-2xs hover:bg-navy-deep disabled:cursor-not-allowed disabled:opacity-40"
             >
-              <Icon name="auto_awesome" size="sm" /> Generate activity
+              <Icon name="upload" size="sm" /> Upload activity
             </button>
           ) : (
             <button
