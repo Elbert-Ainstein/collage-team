@@ -346,6 +346,43 @@
   color: var(--cream);
 }
 
+/* ---- Activity upload field (create-activity = upload, not wizard) ---- */
+.fac-upload {
+  margin-top: 12px;
+}
+.fac-upload__drop {
+  border: 2px dashed #cfc6ac;
+  border-radius: 12px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background: var(--page);
+  text-align: center;
+}
+.fac-upload__hint {
+  font-size: var(--text-sm);
+  color: var(--navy);
+  font-weight: var(--weight-medium);
+}
+.fac-upload__list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fac-upload__file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  background: var(--page);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: var(--text-sm);
+  color: var(--navy);
+}
+
 /* ---- Create option rows ---- */
 .fac-options {
   max-width: 900px;
