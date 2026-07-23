@@ -1,23 +1,33 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { RoleRail } from "./RoleRail";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { Boot } from "./Boot";
+import { FacultyShell } from "@/faculty/FacultyShell";
 
-// The persistent app chrome (role rail + sidebar + top bar). Next's file-based
-// routes render into {children}. This is a client-only SPA (frontend-only): the
-// shell and pages read the persisted store, so we render nothing store-dependent
-// until after mount — server HTML and the first client render match (a neutral
-// canvas), then the app renders. This avoids store/localStorage hydration
-// mismatches app-wide.
+// Client-only SPA (frontend-only): render nothing store-dependent until mounted so
+// server HTML and the first client render match (avoids hydration mismatch).
+// The instructor experience (/i/*) uses the redesigned Faculty Dashboard shell;
+// the student experience (/s/*) uses the original shell.
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [mounted, setMounted] = useState(false);
+  const pathname = usePathname();
   useEffect(() => setMounted(true), []);
 
   if (!mounted) {
     return <div className="app-boot" aria-hidden />;
+  }
+
+  if (pathname.startsWith("/i")) {
+    return (
+      <>
+        <Boot />
+        <FacultyShell>{children}</FacultyShell>
+      </>
+    );
   }
 
   return (

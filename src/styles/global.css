@@ -7,6 +7,7 @@
 @import "../routes/student/student.css";
 @import "../routes/student/teamStage.css";
 @import "../routes/instructor/instructor.css";
+@import "../faculty/faculty.css";
 
 html,
 body,

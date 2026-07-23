@@ -1,0 +1,164 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
+@import '@fontsource/source-serif-4/400.css';
+@import '@fontsource/source-serif-4/500.css';
+@import '@fontsource/source-serif-4/600.css';
+@import 'katex/dist/katex.min.css';
+@import 'material-symbols/outlined.css';
+
+@theme {
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
+  /* stand-in for Copernicus (proprietary display serif in the Figma designs) */
+  --font-serif: 'Source Serif 4', Georgia, serif;
+
+  /* Collage AI brand */
+  --color-cream: #fcf8ec;
+  --color-brand-purple: #dca2fd;
+  --color-navy: #002341;
+  --color-navy-deep: #0e3354;
+
+  /* Sidebar */
+  --color-sidebar: #002341;
+  --color-sidebar-border: #0e3354;
+  --color-sidebar-accent: #0e3354;
+  --color-sidebar-foreground: #fcf8ec;
+
+  /* Surfaces & chrome (Special Blocks page tokens) */
+  --color-page: #fbf9f3;
+  --color-cream-100: #fffcf2;
+  --color-cream-300: #fcf8ec;
+  --color-cream-400: #efdfad;
+  --color-line: #e5e5e5;
+  --color-muted: #fffcf3;
+  --color-muted-fg: #737373;
+  --color-secondary-fg: rgba(0, 0, 0, 0.8);
+
+  /* Text highlight swatches */
+  --color-hl-yellow: #ffe770;
+  --color-hl-blue: #d5efff;
+  --color-hl-green: #adddc0;
+  --color-hl-pink: #f6cee7;
+
+  --shadow-2xs: 0 1px 0 0 rgba(0, 0, 0, 0.05);
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.1);
+}
+
+/* Experimental light-mode sidebar: remap the sidebar tokens to warm cream
+   with dark text (toggle in the sidebar header — temporary). */
+.sidebar-light {
+  --color-sidebar: #fbf5e9;
+  --color-sidebar-border: #ece1c9;
+  --color-sidebar-accent: #efe4c8;
+  --color-sidebar-foreground: #002341;
+  --color-navy-deep: #ece1c9; /* divider borders inside the sidebar */
+}
+
+/* Dashboard shell: the sidebar sits directly on the cream-100 page background
+   (no panel of its own) so only the canvas floats, like the dashboard landing. */
+.sidebar-on-canvas {
+  --color-sidebar: transparent;
+  --color-sidebar-border: transparent;
+}
+
+/* streaming-text cursor (Figma "Blinking cursor" component 3265:2430) */
+@keyframes cursor-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+.cursor-blink {
+  animation: cursor-blink 1s step-end infinite;
+}
+
+/* AI generating shimmer (Figma "Shimmer Overlay", node 3473:2606) */
+@keyframes shimmer-sweep {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.shimmer-overlay {
+  border-radius: 8px;
+  background: linear-gradient(
+    130.93deg,
+    rgba(220, 162, 253, 0.225) 2.47%,
+    rgba(255, 201, 215, 0.225) 29%,
+    rgba(255, 103, 19, 0.15) 63.18%,
+    rgba(121, 214, 249, 0.225) 94.81%
+  );
+  background-size: 200% 200%;
+  animation: shimmer-sweep 2.4s ease-in-out infinite;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* themed scrollbars — navy tint on light surfaces */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(14, 51, 84, 0.25) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(14, 51, 84, 0.25);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(14, 51, 84, 0.45);
+}
+
+/* cream thumb variant for the navy sidebar */
+.sidebar-scroll {
+  scrollbar-color: rgba(252, 248, 236, 0.3) transparent;
+}
+
+.sidebar-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: rgba(252, 248, 236, 0.28);
+}
+
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(252, 248, 236, 0.5);
+}
+
+/* contenteditable placeholder */
+[contenteditable][data-placeholder]:empty::before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  pointer-events: none;
+}
