@@ -10,40 +10,32 @@ import type { Activity } from "@/types";
 type Sub = "lessons" | "summatives" | "activities";
 const FILTERS = ["All", "Published", "Draft", "Closed"] as const;
 
-const STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
-  Published: { bg: "var(--success-bg)", fg: "var(--success-fg)" },
-  Draft: { bg: "var(--warning-bg)", fg: "var(--warning-fg)" },
-  Closed: { bg: "rgba(0,35,65,0.06)", fg: "var(--muted-fg)" },
-  Scheduled: { bg: "var(--sky-bg)", fg: "var(--sky-fg)" },
-  "Team stage": { bg: "var(--stage-collective-bg)", fg: "var(--stage-collective-fg)" },
-  Grading: { bg: "var(--lavender-bg)", fg: "var(--lavender-fg)" },
-  Released: { bg: "var(--success-bg)", fg: "var(--success-fg)" },
+const STATUS_CLS: Record<string, string> = {
+  Published: "bg-[#e7f5ef] text-[#0e7c57]",
+  Draft: "bg-[#fff4e5] text-[#b45309]",
+  Closed: "bg-navy/[0.06] text-muted-fg",
+  Scheduled: "bg-[#e0f2fe] text-[#0369a1]",
+  "Team stage": "bg-[#fff0e6] text-[#ff6713]",
+  Grading: "bg-[#f3e8ff] text-[#7c3aed]",
+  Released: "bg-[#e7f5ef] text-[#0e7c57]",
 };
 
-function StatusBadge({ status }: { status: string }) {
-  const s = STATUS_STYLE[status] ?? STATUS_STYLE.Closed;
+function Badge({ status }: { status: string }) {
   return (
-    <span className="fac-badge" style={{ background: s.bg, color: s.fg }}>
+    <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_CLS[status] ?? STATUS_CLS.Closed}`}>
       {status}
     </span>
   );
 }
 
-// Map an Activity's lifecycle status to a faculty-list label + row action.
 function activityStatusLabel(a: Activity): string {
   switch (a.status) {
-    case "team-stage":
-      return "Team stage";
-    case "grading":
-      return "Grading";
-    case "released":
-      return "Released";
-    case "scheduled":
-      return "Scheduled";
-    case "draft":
-      return "Draft";
-    default:
-      return "Published";
+    case "team-stage": return "Team stage";
+    case "grading": return "Grading";
+    case "released": return "Released";
+    case "scheduled": return "Scheduled";
+    case "draft": return "Draft";
+    default: return "Published";
   }
 }
 
@@ -58,116 +50,108 @@ export function CourseContent() {
   const visible = filter === "All" ? rows : rows.filter((r) => r.status === filter);
 
   return (
-    <section className="fac-course">
-      <h2>Course content</h2>
+    <section className="mt-12">
+      <h2 className="mb-4 font-serif text-[26px] font-semibold text-black/80">Course content</h2>
 
-      <div className="fac-subtabs">
+      <div className="mb-4 flex gap-6 border-b border-line">
         <Tab id="lessons" active={sub} onClick={setSub} icon="menu_book" label="Lessons" count={LESSONS.length} />
         <Tab id="summatives" active={sub} onClick={setSub} icon="quiz" label="Summatives" count={SUMMATIVES.length} />
         <Tab id="activities" active={sub} onClick={setSub} icon="groups" label="Activities" count={activities.length} />
       </div>
 
-      <div className="fac-filters">
+      <div className="mb-1 flex gap-1.5">
         {FILTERS.map((f) => (
-          <button key={f} className={`fac-filter ${filter === f ? "fac-filter--on" : ""}`} onClick={() => setFilter(f)}>
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`rounded-lg px-3 py-1.5 text-xs font-medium ${filter === f ? "bg-navy text-cream" : "text-muted-fg hover:bg-navy/5"}`}
+          >
             {f}
           </button>
         ))}
-        <button className="fac-filter" title="Refresh">
+        <button className="rounded-lg px-2 py-1.5 text-muted-fg hover:bg-navy/5" title="Refresh">
           <Icon name="refresh" size="sm" />
         </button>
       </div>
 
-      <div className="fac-list">
-        <div className="fac-list__head">
-          <span>{sub === "activities" ? "Activity" : sub === "summatives" ? "Summative" : "Lesson"}</span>
-          <span>Status</span>
-          <span>Due</span>
-          <span />
-        </div>
+      <div className="grid grid-cols-[1fr_130px_150px_170px] items-center gap-3 border-b border-line px-1.5 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-fg">
+        <span>{sub === "activities" ? "Activity" : sub === "summatives" ? "Summative" : "Lesson"}</span>
+        <span>Status</span>
+        <span>Due</span>
+        <span />
+      </div>
 
-        {sub !== "activities" &&
-          visible.map((r) => (
-            <div className="fac-row" key={r.id}>
-              <div className="fac-row__title">
-                <span className="fac-row__icon">
-                  <Icon name={sub === "summatives" ? "quiz" : "menu_book"} size="sm" />
+      {sub !== "activities" &&
+        visible.map((r) => (
+          <div key={r.id} className="grid grid-cols-[1fr_130px_150px_170px] items-center gap-3 border-b border-line px-1.5 py-3.5">
+            <div className="flex items-center gap-3">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-sky/40 text-[#0382ed]">
+                <Icon name={sub === "summatives" ? "quiz" : "menu_book"} size="sm" />
+              </span>
+              <span className="text-sm font-semibold text-navy">{r.title}</span>
+            </div>
+            <Badge status={r.status} />
+            <span className="text-sm text-muted-fg">{r.due ? `Due ${r.due}` : "No due date"}</span>
+            <div className="flex items-center justify-end gap-2">
+              <button className="flex items-center gap-1.5 rounded-lg bg-navy px-3.5 py-2 text-xs font-medium text-cream hover:bg-navy-deep">
+                <Icon name="auto_awesome" size="sm" /> Generate
+              </button>
+              <button className="rounded-lg p-1.5 text-navy/50 hover:bg-navy/5">
+                <Icon name="more_vert" size="sm" />
+              </button>
+            </div>
+          </div>
+        ))}
+
+      {sub === "activities" &&
+        activities.map((a) => {
+          const label = activityStatusLabel(a);
+          const grade = a.status === "grading" || a.status === "team-stage";
+          return (
+            <div key={a.id} className="grid grid-cols-[1fr_130px_150px_170px] items-center gap-3 border-b border-line px-1.5 py-3.5">
+              <div className="flex items-center gap-3">
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-purple/25 text-[#7c3aed]">
+                  <Icon name="groups" size="sm" />
                 </span>
-                <span className="fac-row__name">{r.title}</span>
+                <div>
+                  <div className="text-sm font-semibold text-navy">{a.title}</div>
+                  <div className="text-xs text-muted-fg">
+                    {a.questions.length} questions · {a.mode === "COLLECTIVE" ? "Collective" : "Individual"} · {a.gradeValue} pts
+                  </div>
+                </div>
               </div>
-              <StatusBadge status={r.status} />
-              <span className="fac-row__due">{r.due ? `Due ${r.due}` : "No due date"}</span>
-              <div className="fac-row__actions">
-                <button className="fac-gen-cta">
-                  <Icon name="auto_awesome" size="sm" /> Generate
+              <Badge status={label} />
+              <span className="text-sm text-muted-fg">{a.individualDue ? `Due ${a.individualDue}` : "No due date"}</span>
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setCurrent(a.id);
+                    router.push(`/i/activity/${a.id}?tab=${grade ? "grade" : "build"}`);
+                  }}
+                  className="flex items-center gap-1.5 rounded-lg bg-navy px-3.5 py-2 text-xs font-medium text-cream hover:bg-navy-deep"
+                >
+                  <Icon name={grade ? "grading" : "edit"} size="sm" /> {grade ? "Grade" : "Open"}
                 </button>
-                <button className="fac-icon-btn">
+                <button className="rounded-lg p-1.5 text-navy/50 hover:bg-navy/5">
                   <Icon name="more_vert" size="sm" />
                 </button>
               </div>
             </div>
-          ))}
-
-        {sub === "activities" &&
-          activities.map((a) => {
-            const label = activityStatusLabel(a);
-            const grade = a.status === "grading" || a.status === "team-stage";
-            return (
-              <div className="fac-row" key={a.id}>
-                <div className="fac-row__title">
-                  <span className="fac-row__icon" style={{ background: "var(--stage-discussion-bg)", color: "var(--stage-discussion-fg)" }}>
-                    <Icon name="groups" size="sm" />
-                  </span>
-                  <div>
-                    <div className="fac-row__name">{a.title}</div>
-                    <div className="fac-option__desc">
-                      {a.questions.length} questions · {a.mode === "COLLECTIVE" ? "Collective" : "Individual"} · {a.gradeValue} pts
-                    </div>
-                  </div>
-                </div>
-                <StatusBadge status={label} />
-                <span className="fac-row__due">{a.individualDue ? `Due ${a.individualDue}` : "No due date"}</span>
-                <div className="fac-row__actions">
-                  <button
-                    className="fac-gen-cta"
-                    onClick={() => {
-                      setCurrent(a.id);
-                      router.push(`/i/activity/${a.id}?tab=${grade ? "grade" : "build"}`);
-                    }}
-                  >
-                    <Icon name={grade ? "grading" : "edit"} size="sm" /> {grade ? "Grade" : "Open"}
-                  </button>
-                  <button className="fac-icon-btn">
-                    <Icon name="more_vert" size="sm" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-      </div>
+          );
+        })}
     </section>
   );
 }
 
-function Tab({
-  id,
-  active,
-  onClick,
-  icon,
-  label,
-  count,
-}: {
-  id: Sub;
-  active: Sub;
-  onClick: (s: Sub) => void;
-  icon: string;
-  label: string;
-  count: number;
-}) {
+function Tab({ id, active, onClick, icon, label, count }: { id: Sub; active: Sub; onClick: (s: Sub) => void; icon: string; label: string; count: number }) {
+  const on = active === id;
   return (
-    <button className={`fac-subtab ${active === id ? "fac-subtab--active" : ""}`} onClick={() => onClick(id)}>
+    <button
+      onClick={() => onClick(id)}
+      className={`-mb-px flex items-center gap-2 border-b-2 px-0.5 py-2.5 text-sm font-medium ${on ? "border-navy text-navy" : "border-transparent text-muted-fg hover:text-navy"}`}
+    >
       <Icon name={icon} size="sm" /> {label}
-      <span className="fac-subtab__count">{count}</span>
+      <span className="rounded-full bg-navy/[0.08] px-1.5 py-0.5 text-[10px] text-navy/70">{count}</span>
     </button>
   );
 }
