@@ -1,6 +1,10 @@
 # Team Learning Module → Collage AI Faculty Dashboard — Integration Plan
 
-**Status:** proposal for team review. No code changes yet.
+**Status:** IMPLEMENTED. The faculty shell, Create + Course-content (Activities subtab),
+the activity create wizard, per-activity workspace (Build · Grade · Monitor), Analytics
+(dashboard + gradebook + prep→performance), and Roster & teams (off the course bar) are all
+built under `src/faculty/*`. Old consolidated-hub routes retired; the fixed four-item nav
+holds. §11 rules + tests untouched (19/19 green).
 **Context:** The Team Learning Module (this repo) becomes a feature *inside* the redesigned
 Collage AI **Faculty Dashboard** (Create · Analytics · AI tutor · Library, with a top course
 bar and a Course content area split into Lessons | Summatives). This doc maps our existing

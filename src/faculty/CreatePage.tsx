@@ -18,8 +18,8 @@ export function CreatePage() {
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
 
-  function goActivityBuilder() {
-    router.push("/i/activities?tab=builder");
+  function goActivityWizard() {
+    router.push("/i/create/new");
   }
 
   return (
@@ -68,7 +68,7 @@ export function CreatePage() {
           <button
             className={`fac-send ${text.trim() ? "fac-send--on" : ""}`}
             title="Generate"
-            onClick={() => gen.key === "activity" && goActivityBuilder()}
+            onClick={() => gen.key === "activity" && goActivityWizard()}
           >
             <Icon name="arrow_upward" size="sm" />
           </button>
@@ -92,7 +92,7 @@ export function CreatePage() {
             <span className="fac-option__title">Create an Assessment from sources and existing lessons</span>
           </span>
         </button>
-        <button className="fac-option" onClick={goActivityBuilder}>
+        <button className="fac-option" onClick={goActivityWizard}>
           <span className="fac-option__icon" style={{ background: "var(--stage-discussion-bg)", color: "var(--stage-discussion-fg)" }}>
             <Icon name="groups" size="sm" />
           </span>

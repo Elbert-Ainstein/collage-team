@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { Icon } from "@/components";
 import { FacultySidebar } from "./FacultySidebar";
 import { FACULTY_COURSE } from "./seed";
@@ -8,6 +9,7 @@ import { FACULTY_COURSE } from "./seed";
 // AI tutor/Library sidebar + floating canvas). Hosts the instructor experience;
 // the Team Learning Module lives inside it (see docs/team-module/INTEGRATION-PLAN.md).
 export function FacultyShell({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   return (
     <div className="faculty">
       <header className="fac-topbar">
@@ -27,10 +29,10 @@ export function FacultyShell({ children }: { children: React.ReactNode }) {
           <span className="fac-stat">
             <Icon name="donut_small" size="sm" /> <b>{FACULTY_COURSE.avgCompletion}%</b> Avg completion
           </span>
-          <span className="fac-stat">
+          <button className="fac-stat" onClick={() => router.push("/i/roster")} title="Roster & teams">
             <Icon name="group" size="sm" /> <b>{FACULTY_COURSE.students}</b> Students
-          </span>
-          <button className="fac-invite">
+          </button>
+          <button className="fac-invite" onClick={() => router.push("/i/roster")}>
             <Icon name="person_add" size="sm" /> Invite
           </button>
         </div>

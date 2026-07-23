@@ -1,1 +1,1 @@
-export { Dashboard as default } from "@/routes/instructor/Dashboard";
+export { Analytics as default } from "@/faculty/Analytics";

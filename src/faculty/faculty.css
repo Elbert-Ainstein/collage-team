@@ -531,3 +531,264 @@
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
 }
+
+/* ---- Create wizard ---- */
+.wiz__head {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+.wiz__head .fac-icon-btn {
+  width: auto;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  background: var(--cream-100);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+.wiz__grid {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 18px;
+  align-items: start;
+}
+.wiz__panel {
+  border: 1px solid var(--line);
+  background: var(--cream-100);
+  border-radius: 16px;
+  padding: 28px;
+}
+.wiz__title {
+  font-family: var(--font-heading);
+  font-size: 30px;
+  font-weight: var(--weight-semibold);
+  color: rgba(0, 0, 0, 0.82);
+}
+.wiz__sub {
+  color: var(--muted-fg);
+  margin-top: 6px;
+  font-size: var(--text-sm);
+}
+.wiz__label {
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted-fg);
+  margin: 22px 0 10px;
+}
+.wiz__type {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  background: var(--page);
+}
+.wiz__type-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--stage-discussion-bg);
+  color: var(--stage-discussion-fg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wiz__type-title {
+  font-family: var(--font-heading);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+  color: var(--navy);
+}
+.wiz__type-desc {
+  font-size: var(--text-xs);
+  color: var(--muted-fg);
+  margin-top: 2px;
+}
+.wiz__drop {
+  border: 2px dashed #cfc6ac;
+  border-radius: 14px;
+  padding: 34px;
+  text-align: center;
+  background: var(--page);
+}
+.wiz__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--line);
+  background: var(--cream-100);
+  border-radius: 10px;
+  padding: 8px 13px;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--navy);
+}
+.wiz__btn:hover {
+  background: var(--cream-300);
+}
+.wiz__guide {
+  border: 1px solid var(--line);
+  background: var(--cream-100);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  min-height: 520px;
+}
+.wiz__guide-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
+  font-weight: var(--weight-semibold);
+  color: var(--navy);
+  border-bottom: 1px solid var(--line);
+}
+.wiz__guide-spark {
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: var(--lavender-bg);
+  color: var(--lavender-fg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wiz__artifacts {
+  padding: 6px 16px 14px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.wiz__artifact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-xs);
+  color: var(--navy);
+  background: var(--page);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 7px 10px;
+}
+.wiz__chat {
+  flex: 1;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+.wiz__msg {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+.wiz__msg--user {
+  justify-content: flex-end;
+}
+.wiz__msg-spark {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--lavender-bg);
+  color: var(--lavender-fg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.wiz__bubble {
+  border: 1px solid var(--line);
+  background: var(--page);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font-size: var(--text-sm);
+  color: var(--navy);
+  line-height: 1.5;
+  max-width: 280px;
+}
+.wiz__msg--user .wiz__bubble {
+  background: var(--navy);
+  color: var(--cream);
+  border-color: var(--navy);
+}
+.wiz__input {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+}
+.wiz__input input {
+  flex: 1;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 12px;
+  font-size: var(--text-sm);
+  background: var(--page);
+}
+.wiz__send {
+  width: 38px;
+  border-radius: 10px;
+  background: var(--navy);
+  color: var(--cream);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---- Analytics / Roster faculty section headers ---- */
+.fac-section {
+  margin-bottom: 30px;
+}
+.fac-section__title {
+  font-family: var(--font-heading);
+  font-size: 26px;
+  font-weight: var(--weight-semibold);
+  color: rgba(0, 0, 0, 0.82);
+  margin-bottom: 6px;
+}
+.fac-section__sub {
+  color: var(--muted-fg);
+  font-size: var(--text-sm);
+  margin-bottom: 18px;
+}
+
+/* ============================================================
+   Restyle: our re-hosted module screens read faculty-native
+   when rendered inside the faculty canvas (scoped so the student
+   side, outside .faculty, is unaffected).
+   ============================================================ */
+.faculty .page-header {
+  margin-bottom: 20px;
+}
+.faculty .page-header__title {
+  font-family: var(--font-heading);
+  color: rgba(0, 0, 0, 0.82);
+}
+.faculty .panel {
+  background: var(--cream-100);
+  border-color: var(--line);
+  border-radius: 14px;
+}
+.faculty .tabs {
+  border-color: var(--line);
+}
+.faculty .btn--primary {
+  background: var(--navy);
+}
+.faculty .btn--primary:hover {
+  background: var(--navy-deep);
+}
+.faculty .stat-card {
+  background: var(--cream-100);
+}
+.faculty .sticky-footer {
+  background: rgba(251, 249, 243, 0.92);
+  border-color: var(--line);
+}
+

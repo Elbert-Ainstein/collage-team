@@ -51,7 +51,7 @@ export function ActivityBuilder() {
         subtitle={activity.title}
         actions={
           <>
-            <Button variant="secondary" icon="auto_awesome" onClick={() => router.push("/i/activities?tab=ai")}>
+            <Button variant="secondary" icon="auto_awesome" onClick={() => router.push("/i/create/new")}>
               Regenerate with AI
             </Button>
             <Button variant="primary" icon="publish" onClick={() => patch({ status: "team-stage" })}>

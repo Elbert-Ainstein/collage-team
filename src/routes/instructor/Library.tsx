@@ -21,7 +21,7 @@ export function Library() {
 
   function open(a: Activity) {
     setCurrent(a.id);
-    router.push("/i/activities?tab=builder");
+    router.push("/i/create/new");
   }
 
   return (
@@ -31,10 +31,10 @@ export function Library() {
         subtitle="Every team-based activity in this course."
         actions={
           <>
-            <Button variant="secondary" icon="add" onClick={() => router.push("/i/activities?tab=builder")}>
+            <Button variant="secondary" icon="add" onClick={() => router.push("/i/create/new")}>
               Create manually
             </Button>
-            <Button variant="primary" icon="auto_awesome" onClick={() => router.push("/i/activities?tab=ai")}>
+            <Button variant="primary" icon="auto_awesome" onClick={() => router.push("/i/create/new")}>
               Generate with AI
             </Button>
           </>

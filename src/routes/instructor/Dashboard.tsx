@@ -50,7 +50,7 @@ export function Dashboard() {
             <Button variant="secondary" icon="upload_file" onClick={() => router.push("/i/roster")}>
               Import roster
             </Button>
-            <Button variant="primary" icon="add" onClick={() => router.push("/i/activities?tab=builder")}>
+            <Button variant="primary" icon="add" onClick={() => router.push("/i/create/new")}>
               New activity
             </Button>
           </>
@@ -86,7 +86,7 @@ export function Dashboard() {
                 <StatusBadge variant="orange">Team stage today</StatusBadge>
               </div>
             </div>
-            <Button variant="secondary" icon="sensors" onClick={() => router.push("/i/overview?tab=live")}>
+            <Button variant="secondary" icon="sensors" onClick={() => router.push("/i/create")}>
               Open live view
             </Button>
           </div>

@@ -132,7 +132,7 @@ export function CourseContent() {
                     className="fac-gen-cta"
                     onClick={() => {
                       setCurrent(a.id);
-                      router.push(grade ? "/i/grading" : "/i/activities?tab=builder");
+                      router.push(`/i/activity/${a.id}?tab=${grade ? "grade" : "build"}`);
                     }}
                   >
                     <Icon name={grade ? "grading" : "edit"} size="sm" /> {grade ? "Grade" : "Open"}
