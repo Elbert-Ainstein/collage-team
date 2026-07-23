@@ -16,6 +16,16 @@ the builder. The wizard remains available for Lessons. *(Done — `src/faculty/C
 
 ---
 
+## 1b. Activities are team-centric now  ✅ (built, faculty side)
+
+Per the "three pillars — assign / submit / team, keep only team" direction: an uploaded
+activity has **no builder** and **no submission/grading pipeline**. Opening one shows the
+**original PDF** plus the Team Tab features as tabs: **Source · Team · Resources · Discussion ·
+Progress**. The submission/grading services + §11 tests are kept intact but no longer surfaced in
+the activity UX. Data + `teamTabService` added (`TeamResource`, `AudioDiscussion`,
+`ProgressReport` — the AI report regenerates as resources/discussions are added). *Still to do:
+the student **My / Team** split (§3).*
+
 ## 2. The Team Tab — a persistent team workspace
 
 Distinct from the **per-activity** team stage (prep → discussion → submission → assessment): the

@@ -4,12 +4,15 @@
 
 import type {
   Activity,
+  AudioDiscussion,
   CollectiveResponse,
   Course,
   Member,
   OriginalResponse,
+  ProgressReport,
   RubricCriterion,
   Team,
+  TeamResource,
 } from "@/types";
 
 export const SEED_COURSE: Course = {
@@ -78,6 +81,7 @@ export const BRIDGE_ACTIVITY: Activity = {
   gradeValue: 20,
   mode: "COLLECTIVE",
   status: "team-stage",
+  source: { filename: "Bridge Design Decision — brief.pdf", pages: 4, kind: "pdf" },
   questions: [
     {
       n: 1,
@@ -230,3 +234,40 @@ export function seedTeam3Collective(): CollectiveResponse {
 }
 
 export const OCR_TRANSCRIPTION_SAMPLE = OCR_SAMPLE;
+
+// ---- Team Tab seed (team-centric activity workspace) ----
+const ACT = BRIDGE_ACTIVITY.id;
+const TEAM = SEED_TEAM_3.id;
+
+export function seedTeamResources(): TeamResource[] {
+  return [
+    { id: "res-1", teamId: TEAM, activityId: ACT, kind: "proposal", name: "Team 3 — Bridge proposal.pdf", addedBy: MAYA.id, addedAt: "2026-09-08T10:15:00" },
+    { id: "res-2", teamId: TEAM, activityId: ACT, kind: "whiteboard", name: "Load-path sketch (whiteboard).jpg", addedBy: LIAM.id, addedAt: "2026-09-09T13:40:00" },
+    { id: "res-3", teamId: TEAM, activityId: ACT, kind: "contract", name: "Team contract — roles & norms.pdf", addedBy: PRIYA.id, addedAt: "2026-09-07T09:00:00" },
+  ];
+}
+
+export function seedAudioDiscussions(): AudioDiscussion[] {
+  return [
+    { id: "aud-1", teamId: TEAM, activityId: ACT, title: "Kickoff — comparing structures", durationSec: 372, recordedBy: MAYA.id, at: "2026-09-09T14:05:00" },
+    { id: "aud-2", teamId: TEAM, activityId: ACT, title: "Load calc walkthrough", durationSec: 511, recordedBy: SAM.id, at: "2026-09-10T14:20:00" },
+  ];
+}
+
+export function seedProgressReports(): ProgressReport[] {
+  return [
+    {
+      teamId: TEAM,
+      activityId: ACT,
+      generatedAt: "2026-09-10T15:00:00",
+      percentComplete: 70,
+      summary:
+        "Team 3 has converged on a suspension bridge and backed it with a load calculation (T_max ≈ 1180 kN per cable). Roles are set via the team contract; the proposal and a load-path sketch are in place. Remaining: finalize the tradeoff analysis and record a closing discussion.",
+      highlights: [
+        "Proposal + team contract uploaded — roles clear",
+        "Load calculation reviewed on audio (2 discussions logged)",
+        "Open: tradeoff analysis not yet documented",
+      ],
+    },
+  ];
+}

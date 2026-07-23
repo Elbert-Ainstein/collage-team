@@ -106,7 +106,6 @@ export function CourseContent() {
       {sub === "activities" &&
         activities.map((a) => {
           const label = activityStatusLabel(a);
-          const grade = a.status === "grading" || a.status === "team-stage";
           return (
             <div key={a.id} className="grid grid-cols-[1fr_130px_150px_170px] items-center gap-3 border-b border-line px-1.5 py-3.5">
               <div className="flex items-center gap-3">
@@ -126,11 +125,11 @@ export function CourseContent() {
                 <button
                   onClick={() => {
                     setCurrent(a.id);
-                    router.push(`/i/activity/${a.id}?tab=${grade ? "grade" : "build"}`);
+                    router.push(`/i/activity/${a.id}?tab=source`);
                   }}
                   className="flex items-center gap-1.5 rounded-lg bg-navy px-3.5 py-2 text-xs font-medium text-cream hover:bg-navy-deep"
                 >
-                  <Icon name={grade ? "grading" : "edit"} size="sm" /> {grade ? "Grade" : "Open"}
+                  <Icon name="groups" size="sm" /> Open
                 </button>
                 <button className="rounded-lg p-1.5 text-navy/50 hover:bg-navy/5">
                   <Icon name="more_vert" size="sm" />

@@ -4,13 +4,16 @@ import type {
   Activity,
   AiGradeSuggestion,
   ApprovedGrade,
+  AudioDiscussion,
   CollectiveResponse,
   Course,
   IndividualFinalResponse,
   Member,
   OriginalResponse,
+  ProgressReport,
   Role,
   Team,
+  TeamResource,
 } from "@/types";
 import {
   BRIDGE_ACTIVITY,
@@ -21,7 +24,10 @@ import {
   SEED_TEAMS,
   SEED_TEAM_3,
   seedAllOriginals,
+  seedAudioDiscussions,
+  seedProgressReports,
   seedTeam3Collective,
+  seedTeamResources,
 } from "@/seed";
 
 export interface AppState {
@@ -40,6 +46,10 @@ export interface AppState {
   individualFinals: IndividualFinalResponse[];
   aiSuggestions: AiGradeSuggestion[];
   approvedGrades: ApprovedGrade[];
+  // Team Tab (team-centric activities)
+  teamResources: TeamResource[];
+  audioDiscussions: AudioDiscussion[];
+  progressReports: ProgressReport[];
 
   // low-level mutators (services/ call these; UI should prefer services/)
   setRole: (role: Role) => void;
@@ -54,6 +64,9 @@ export interface AppState {
   _addActivity: (a: Activity) => void;
   _setRoster: (members: Member[], teams: Team[]) => void;
   _upsertTeam: (t: Team) => void;
+  _addTeamResource: (r: TeamResource) => void;
+  _addAudioDiscussion: (d: AudioDiscussion) => void;
+  _upsertProgressReport: (p: ProgressReport) => void;
   reset: (fresh?: boolean) => void;
 }
 
@@ -74,6 +87,9 @@ function initialData(fresh = false) {
     individualFinals: [] as IndividualFinalResponse[],
     aiSuggestions: [] as AiGradeSuggestion[],
     approvedGrades: [] as ApprovedGrade[],
+    teamResources: fresh ? [] : seedTeamResources(),
+    audioDiscussions: fresh ? [] : seedAudioDiscussions(),
+    progressReports: fresh ? [] : seedProgressReports(),
   };
 }
 
@@ -123,6 +139,12 @@ export const useStore = create<AppState>()(
   _addActivity: (a) => set((s) => ({ activities: [a, ...s.activities] })),
   _setRoster: (members, teams) => set(() => ({ members, teams })),
   _upsertTeam: (t) => set((s) => ({ teams: upsert(s.teams, t, (x) => x.id === t.id) })),
+  _addTeamResource: (r) => set((s) => ({ teamResources: [...s.teamResources, r] })),
+  _addAudioDiscussion: (d) => set((s) => ({ audioDiscussions: [...s.audioDiscussions, d] })),
+  _upsertProgressReport: (p) =>
+    set((s) => ({
+      progressReports: upsert(s.progressReports, p, (x) => x.teamId === p.teamId && x.activityId === p.activityId),
+    })),
 
       reset: (fresh = false) => set({ ...initialData(fresh) }),
     }),
@@ -146,6 +168,9 @@ export const useStore = create<AppState>()(
         individualFinals: s.individualFinals,
         aiSuggestions: s.aiSuggestions,
         approvedGrades: s.approvedGrades,
+        teamResources: s.teamResources,
+        audioDiscussions: s.audioDiscussions,
+        progressReports: s.progressReports,
       }),
     },
   ),
