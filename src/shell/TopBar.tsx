@@ -5,16 +5,16 @@ import { useStore } from "@/store";
 import { Icon } from "@/components";
 import { SEED_TEAM_3 } from "@/seed";
 
-const CONTEXT_LABELS: Record<string, string> = {
-  dashboard: "Course dashboard",
-  library: "Activity library",
-  roster: "Roster & import",
-  teams: "Team management",
-  builder: "Activity builder",
-  rubric: "Rubric builder",
-  live: "Live dashboard",
-  grading: "Grading",
-  results: "Results & analytics",
+// Instructor hubs (leaf of /i/*).
+const INSTRUCTOR_LABELS: Record<string, string> = {
+  overview: "Overview",
+  activities: "Activities",
+  roster: "Roster & teams",
+  grading: "Assessment",
+};
+
+// Student screens (leaf of /s/*).
+const STUDENT_LABELS: Record<string, string> = {
   activities: "My activities",
   prep: "Individual prep",
   ocr: "OCR review",
@@ -31,7 +31,7 @@ export function TopBar() {
   const pathname = usePathname();
   const isStudent = pathname.startsWith("/s");
   const leaf = pathname.split("/").filter(Boolean).pop() ?? "";
-  const context = CONTEXT_LABELS[leaf] ?? "";
+  const context = (isStudent ? STUDENT_LABELS : INSTRUCTOR_LABELS)[leaf] ?? "";
 
   return (
     <header className="topbar">

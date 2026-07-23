@@ -3,6 +3,17 @@
 Where the spec is silent (per §Working agreements), the simplest behavior consistent
 with the §4 hard rules is chosen and recorded here.
 
+## D10 — Instructor nav consolidated 12 items → 4 hubs (deviates from spec §5)
+At the user's request the 12-item instructor sidebar was collapsed into 4 hubs, each a
+single `/i` route hosting its correlated screens as in-page tabs (`TabHub`, active tab in
+`?tab=`): **Overview** (Course dashboard · Live class), **Activities** (Library · Builder ·
+Rubric · AI generation◇), **Roster & teams** (Roster · Teams · Formation◇), **Assessment**
+(Grading · Results◇ · Peer evaluation◇ · Oral check-in◇). Deferred ◇ tabs sit last and keep a
+"soon" marker. Grouping chosen via a design panel (3 proposals + synthesis). This intentionally
+deviates from spec §5's flat 12-item structure — a UI/IA change only; no screen behavior or §11
+rule changed, and every original screen still exists (now as a tab). Breadcrumb labels are
+section-aware so `/i/activities` reads "Activities" while `/s/activities` reads "My activities".
+
 ## D9 — Client-only rendering to avoid store/localStorage hydration mismatch
 The persisted Zustand store made server HTML (seed state) differ from the client's
 first render (localStorage state) → React hydration errors in the shell. Fix: the

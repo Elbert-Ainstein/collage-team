@@ -13,7 +13,7 @@ export function RoleRail() {
 
   function switchTo(next: Role) {
     setRole(next); // keeps the "/" landing redirect in sync
-    router.push(next === "instructor" ? "/i/dashboard" : "/s/activities");
+    router.push(next === "instructor" ? "/i/overview" : "/s/activities");
   }
 
   return (

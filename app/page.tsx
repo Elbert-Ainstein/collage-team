@@ -9,7 +9,7 @@ export default function Home() {
   const router = useRouter();
   const role = useStore((s) => s.role);
   useEffect(() => {
-    router.replace(role === "instructor" ? "/i/dashboard" : "/s/activities");
+    router.replace(role === "instructor" ? "/i/overview" : "/s/activities");
   }, [role, router]);
   return null;
 }

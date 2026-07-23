@@ -178,7 +178,7 @@ export function RosterImport() {
             {result.members} students across {result.teams} teams. Historical team records were preserved.
           </div>
           <div style={{ marginTop: 18 }}>
-            <Button variant="primary" iconRight="arrow_forward" onClick={() => router.push("/i/teams")}>
+            <Button variant="primary" iconRight="arrow_forward" onClick={() => router.push("/i/roster?tab=teams")}>
               Manage teams
             </Button>
           </div>

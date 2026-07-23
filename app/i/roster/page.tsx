@@ -1,1 +1,1 @@
-export { RosterImport as default } from "@/routes/instructor/RosterImport";
+export { RosterTeamsHub as default } from "@/routes/instructor/hubs";

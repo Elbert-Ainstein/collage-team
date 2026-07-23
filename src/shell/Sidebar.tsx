@@ -15,44 +15,13 @@ interface NavEntry {
   locked?: boolean;
   lockReason?: string;
 }
-interface NavGroup {
-  label: string;
-  items: NavEntry[];
-}
 
-const INSTRUCTOR_GROUPS: NavGroup[] = [
-  {
-    label: "Teaching",
-    items: [
-      { to: "/i/dashboard", label: "Course dashboard", icon: "dashboard" },
-      { to: "/i/library", label: "Activity library", icon: "library_books" },
-    ],
-  },
-  {
-    label: "Roster & teams",
-    items: [
-      { to: "/i/roster", label: "Roster & import", icon: "upload_file" },
-      { to: "/i/teams", label: "Team management", icon: "groups" },
-      { to: "/i/formation", label: "Team formation", icon: "hub", tag: "soon" },
-    ],
-  },
-  {
-    label: "Authoring",
-    items: [
-      { to: "/i/builder", label: "Activity builder", icon: "construction" },
-      { to: "/i/ai", label: "AI generation", icon: "auto_awesome", tag: "soon" },
-      { to: "/i/rubric", label: "Rubric builder", icon: "rule" },
-    ],
-  },
-  {
-    label: "Class & assessment",
-    items: [
-      { to: "/i/live", label: "Live dashboard", icon: "sensors" },
-      { to: "/i/grading", label: "Grading", icon: "grading" },
-      { to: "/i/results", label: "Results & analytics", icon: "insights", tag: "soon" },
-      { to: "/i/peer-eval", label: "Peer evaluation", icon: "reviews", tag: "soon" },
-    ],
-  },
+// Consolidated to 4 hubs; each hosts its correlated screens as in-page tabs.
+const INSTRUCTOR_ITEMS: NavEntry[] = [
+  { to: "/i/overview", label: "Overview", icon: "dashboard" },
+  { to: "/i/activities", label: "Activities", icon: "library_books" },
+  { to: "/i/roster", label: "Roster & teams", icon: "groups" },
+  { to: "/i/grading", label: "Assessment", icon: "grading" },
 ];
 
 export function Sidebar() {
@@ -70,14 +39,12 @@ export function Sidebar() {
 function InstructorNav() {
   return (
     <>
-      {INSTRUCTOR_GROUPS.map((g) => (
-        <div className="nav-group" key={g.label}>
-          <div className="nav-group__label">{g.label}</div>
-          {g.items.map((it) => (
-            <NavItem key={it.to} entry={it} />
-          ))}
-        </div>
-      ))}
+      <div className="nav-group">
+        <div className="nav-group__label">Teaching</div>
+        {INSTRUCTOR_ITEMS.map((it) => (
+          <NavItem key={it.to} entry={it} />
+        ))}
+      </div>
     </>
   );
 }
