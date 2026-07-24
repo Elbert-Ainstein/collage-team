@@ -1,0 +1,429 @@
+<title>Collage AI — Team pillar</title>
+<style>
+  :root {
+    --navy: #002341; --navy-deep: #0e3354;
+    --cream-100: #fffcf2; --cream-300: #fcf8ec; --cream-400: #efdfad;
+    --page: #fbf9f3; --line: #e6e2d6; --muted: #7a7568;
+    --purple: #dca2fd; --purple-bg: #f3e8ff;
+    --sky-fg: #0369a1; --sky-bg: #dcefff;
+    --green: #0e7c57; --green-bg: #e2f3ec;
+    --amber: #b45309; --amber-bg: #fdf0dd;
+    --lav: #7c3aed; --lav-bg: #f0e7fd;
+    --orange: #ff6713; --orange-bg: #ffeede;
+    --ai: #ff6713;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color-scheme: light;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+  .wrap {
+    font-family: var(--sans); color: var(--navy); background: var(--cream-100);
+    min-height: 100vh; display: flex; flex-direction: column;
+    -webkit-font-smoothing: antialiased;
+  }
+  .serif { font-family: var(--serif); }
+  h1, h2, h3 { font-family: var(--serif); font-weight: 600; margin: 0; letter-spacing: -0.01em; }
+
+  /* top bar */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 12px 20px; flex-wrap: wrap;
+  }
+  .topbar__l { display: flex; align-items: center; gap: 12px; }
+  .fd { font-size: 14px; font-weight: 600; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 7px; border: 1px solid var(--line);
+    background: var(--cream-100); border-radius: 999px; padding: 6px 13px; font-size: 12.5px; color: #33475b;
+  }
+  .stats { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .stat { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line);
+    background: var(--cream-100); border-radius: 999px; padding: 6px 13px; font-size: 12.5px; color: #33475b; }
+  .stat b { color: var(--navy); }
+  .invite { background: var(--navy); color: var(--cream-300); border: 0; border-radius: 10px;
+    padding: 8px 15px; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+  .invite:hover { background: var(--navy-deep); }
+  .dot { width: 8px; height: 8px; border-radius: 999px; display: inline-block; }
+
+  /* body layout */
+  .body { display: flex; flex: 1; min-height: 0; }
+  .side { width: 244px; flex-shrink: 0; display: flex; flex-direction: column; padding: 6px 16px 18px; }
+  .brand { display: flex; align-items: center; justify-content: space-between; padding: 8px 8px 20px; }
+  .logo { font-family: var(--serif); font-size: 22px; color: var(--navy); }
+  .logo b { font-weight: 700; }
+  .g1 { background: linear-gradient(115deg,#ff8bd2,#c77dff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .g2 { background: linear-gradient(115deg,#7db9ff,#38a2ff); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .nav { display: flex; flex-direction: column; gap: 3px; }
+  .nav a {
+    display: flex; align-items: center; gap: 11px; height: 40px; padding: 0 13px; border-radius: 10px;
+    font-size: 14px; color: #3a4a5a; text-decoration: none; border: 1px solid transparent; cursor: pointer;
+  }
+  .nav a:hover { background: rgba(0,35,65,0.05); color: var(--navy); }
+  .nav a.on { background: rgba(239,223,173,0.55); border-color: var(--line); color: var(--navy); font-weight: 600; }
+  .soon { margin-left: auto; font-size: 10px; color: var(--muted); border: 1px solid var(--line);
+    background: var(--cream-100); border-radius: 999px; padding: 1px 8px; }
+  .side__b { margin-top: auto; display: flex; flex-direction: column; gap: 6px; }
+  .srow { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; border-radius: 10px; font-size: 13.5px; color: #3a4a5a; }
+  .srow:hover { background: rgba(0,35,65,0.05); }
+  .user { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; }
+  .av { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center;
+    font-weight: 600; color: #fff; flex-shrink: 0; font-size: 13px; }
+  .uname { font-size: 13.5px; font-weight: 600; line-height: 1.2; }
+  .umail { font-size: 10.5px; color: var(--muted); }
+
+  /* main */
+  .main { flex: 1; min-width: 0; overflow: auto; padding: 4px 14px 16px 0; }
+  .canvas { border: 1px solid var(--line); background: var(--page); border-radius: 18px; padding: 34px 40px 48px; min-height: calc(100vh - 92px); }
+  .lede { color: var(--muted); font-size: 14px; margin-top: 6px; }
+
+  /* tabs */
+  .tabs { display: flex; gap: 24px; border-bottom: 1px solid var(--line); margin: 22px 0 20px; flex-wrap: wrap; }
+  .tab { display: inline-flex; align-items: center; gap: 8px; padding: 11px 2px; margin-bottom: -1px;
+    font-size: 14px; font-weight: 500; color: var(--muted); border: 0; border-bottom: 2px solid transparent;
+    background: none; cursor: pointer; }
+  .tab.on { color: var(--navy); border-bottom-color: var(--navy); }
+  .count { background: rgba(0,35,65,0.08); color: #46586a; border-radius: 999px; font-size: 10.5px; padding: 1px 8px; }
+
+  .panel { display: none; }
+  .panel.on { display: block; }
+
+  /* content list */
+  .row { display: grid; grid-template-columns: 1fr 130px 150px auto; align-items: center; gap: 14px;
+    padding: 15px 4px; border-bottom: 1px solid var(--line); }
+  .row__h { font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted);
+    padding: 8px 4px; border-bottom: 1px solid var(--line); }
+  .rtitle { display: flex; align-items: center; gap: 13px; }
+  .tile { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .rname { font-size: 14px; font-weight: 600; }
+  .rsub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .due { font-size: 13.5px; color: var(--muted); }
+  .badge { display: inline-flex; align-items: center; gap: 5px; padding: 3px 11px; border-radius: 999px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .btn { display: inline-flex; align-items: center; gap: 7px; border: 0; border-radius: 10px; cursor: pointer;
+    font-size: 12.5px; font-weight: 600; padding: 9px 15px; }
+  .btn--navy { background: var(--navy); color: var(--cream-300); }
+  .btn--navy:hover { background: var(--navy-deep); }
+  .btn--ghost { background: #fff; border: 1px solid var(--line); color: var(--navy); }
+  .btn--ghost:hover { background: var(--cream-300); }
+
+  /* cards / grids */
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; }
+  .card { border: 1px solid var(--line); background: var(--cream-100); border-radius: 14px; padding: 18px; }
+  .statcard__l { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12.5px; font-weight: 600; }
+  .statcard__v { font-family: var(--serif); font-size: 30px; color: var(--navy); margin-top: 8px; line-height: 1; }
+  .statcard__s { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .member { display: flex; align-items: center; gap: 11px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+  .member:last-child { border-bottom: 0; }
+  .rolechip { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--lav); background: var(--lav-bg); border-radius: 999px; padding: 2px 9px; }
+
+  .bar { height: 10px; border-radius: 999px; background: #eee6d3; overflow: hidden; }
+  .bar > span { display: block; height: 100%; border-radius: 999px; }
+  .barrow { display: grid; grid-template-columns: 160px 1fr 46px; align-items: center; gap: 12px; margin-bottom: 11px; font-size: 13.5px; }
+  .barrow .n { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  .eyebrow { font-size: 10.5px; font-weight: 700; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; }
+  .ai { color: var(--ai); font-weight: 600; }
+  .spark { color: var(--ai); }
+
+  /* workspace */
+  .ws-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .back { display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; color: var(--muted); font-size: 13px; cursor: pointer; padding: 0; margin-bottom: 10px; }
+  .back:hover { color: var(--navy); }
+  .pdf { max-width: 640px; margin: 0 auto; border: 1px solid var(--line); background: #fff; border-radius: 12px; }
+  .pdf__bar { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); padding: 12px 18px; font-size: 13px; }
+  .pdf__body { padding: 30px 34px; font-family: var(--serif); font-size: 15.5px; line-height: 1.65; color: #1b2b3a; }
+  .hairlines { height: 84px; margin-top: 18px; border-radius: 8px;
+    background: repeating-linear-gradient(180deg,#f1ecdf,#f1ecdf 9px,transparent 9px,transparent 22px); }
+  .reslist, .disclist { display: flex; flex-direction: column; gap: 10px; }
+  .resitem { display: flex; align-items: center; gap: 12px; border: 1px solid var(--line); background: #fff; border-radius: 12px; padding: 12px 14px; }
+  .addrow { display: flex; gap: 8px; flex-wrap: wrap; }
+  .waveform { display: flex; align-items: center; gap: 2px; height: 22px; }
+  .waveform i { width: 3px; border-radius: 2px; background: var(--lav); opacity: 0.55; }
+  .highlight { display: flex; gap: 10px; padding: 11px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .highlight:last-child { border-bottom: 0; }
+  .foot { margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--line); font-size: 12px; color: var(--muted); text-align: center; }
+  .note { font-size: 12.5px; color: var(--muted); }
+  .icn { width: 18px; height: 18px; display: inline-block; vertical-align: middle; }
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--sky-fg); outline-offset: 2px; }
+  @media (max-width: 1080px) { .grid4 { grid-template-columns: 1fr 1fr; } .stats .stat:nth-child(3) { display: none; } }
+  @media (max-width: 720px) { .grid2, .grid4 { grid-template-columns: 1fr; } .side { display: none; } .row { grid-template-columns: 1fr auto; } .row .due, .row .badge { display: none; } }
+</style>
+
+<div class="wrap">
+  <header class="topbar">
+    <div class="topbar__l">
+      <span class="fd">Faculty Dashboard</span>
+      <span class="chip">📘&nbsp; Physical Science 101 · Unit 2 — Matter &amp; Energy</span>
+    </div>
+    <div class="stats">
+      <span class="stat"><b>6</b> Lessons</span>
+      <span class="stat"><b>5</b> Summatives</span>
+      <span class="stat"><b>72%</b> Avg completion</span>
+      <span class="stat"><b>28</b> Students</span>
+      <button class="invite">＋ Invite</button>
+    </div>
+  </header>
+
+  <div class="body">
+    <aside class="side">
+      <div class="brand">
+        <span class="logo">Collage<b><span class="g1">Λ</span><span class="g2">I</span></b></span>
+      </div>
+      <nav class="nav">
+        <a>✦&nbsp; Create</a>
+        <a>▤&nbsp; Library <span class="soon">soon</span></a>
+        <a class="on">◐&nbsp; Team</a>
+      </nav>
+      <div class="side__b">
+        <div class="srow">👁 &nbsp;View as student <span>›</span></div>
+        <div class="srow">My courses <span>›</span></div>
+        <div class="user">
+          <span class="av" style="background:var(--purple);color:var(--navy)">D</span>
+          <div style="flex:1;min-width:0">
+            <div class="uname">Devanshu</div>
+            <div class="umail">devanshu@collage-ai.com</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="canvas">
+
+        <!-- ===== TEAM HUB ===== -->
+        <section id="hub">
+          <h1 style="font-size:30px">Team</h1>
+          <p class="lede">Run and monitor team-based activities — everything that happens after an activity is created.</p>
+
+          <div class="tabs" data-tabs="hub">
+            <button class="tab on" data-t="activities">Activities <span class="count">4</span></button>
+            <button class="tab" data-t="teams">Teams</button>
+            <button class="tab" data-t="analytics">Analytics</button>
+          </div>
+
+          <!-- activities -->
+          <div class="panel on" data-p="activities">
+            <div class="row__h" style="grid-template-columns:1fr 130px 150px auto;display:grid;gap:14px">
+              <span>Activity</span><span>Status</span><span>Due</span><span></span>
+            </div>
+            <div class="row">
+              <div class="rtitle"><span class="tile" style="background:var(--purple-bg);color:var(--lav)">◍</span>
+                <div><div class="rname">Bridge Design Decision</div><div class="rsub">Team-based · Collective · 20 pts</div></div></div>
+              <span class="badge" style="background:var(--orange-bg);color:var(--orange)">Team stage</span>
+              <span class="due">Due Wed 11:59pm</span>
+              <button class="btn btn--navy" onclick="openWs()">Open</button>
+            </div>
+            <div class="row">
+              <div class="rtitle"><span class="tile" style="background:var(--purple-bg);color:var(--lav)">◍</span>
+                <div><div class="rname">Statics Warm-up: Free-body Diagrams</div><div class="rsub">Team-based · Individual · 15 pts</div></div></div>
+              <span class="badge" style="background:var(--lav-bg);color:var(--lav)">Grading</span>
+              <span class="due">Due Wed 11:59pm</span>
+              <button class="btn btn--ghost" onclick="openWs()">Open</button>
+            </div>
+            <div class="row">
+              <div class="rtitle"><span class="tile" style="background:var(--purple-bg);color:var(--lav)">◍</span>
+                <div><div class="rname">Materials Selection Case</div><div class="rsub">Team-based · Individual · 20 pts</div></div></div>
+              <span class="badge" style="background:var(--amber-bg);color:var(--amber)">Draft</span>
+              <span class="due">No due date</span>
+              <button class="btn btn--ghost" onclick="openWs()">Open</button>
+            </div>
+            <div class="row">
+              <div class="rtitle"><span class="tile" style="background:var(--purple-bg);color:var(--lav)">◍</span>
+                <div><div class="rname">Truss Analysis Project Milestone</div><div class="rsub">Team-based · Collective · 25 pts</div></div></div>
+              <span class="badge" style="background:var(--sky-bg);color:var(--sky-fg)">Scheduled</span>
+              <span class="due">Due Wed 11:59pm</span>
+              <button class="btn btn--ghost" onclick="openWs()">Open</button>
+            </div>
+          </div>
+
+          <!-- teams -->
+          <div class="panel" data-p="teams">
+            <div class="grid2">
+              <div class="card">
+                <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px">
+                  <span class="tile" style="background:var(--purple-bg);color:var(--lav);width:32px;height:32px">◐</span>
+                  <b style="flex:1">Team 3</b><span class="badge" style="background:var(--cream-300);color:var(--muted)">4 members</span>
+                </div>
+                <div class="member"><span class="av" style="background:#0382ed">MC</span><span style="flex:1">Maya Chen</span><span class="rolechip">Recorder</span></div>
+                <div class="member"><span class="av" style="background:#8a3ffc">LO</span><span style="flex:1">Liam Ortiz</span></div>
+                <div class="member"><span class="av" style="background:#0e7c57">PN</span><span style="flex:1">Priya Nair</span></div>
+                <div class="member"><span class="av" style="background:#ff6713">SW</span><span style="flex:1">Sam Whitfield</span></div>
+              </div>
+              <div class="card">
+                <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px">
+                  <span class="tile" style="background:var(--purple-bg);color:var(--lav);width:32px;height:32px">◐</span>
+                  <b style="flex:1">Team 4</b><span class="badge" style="background:var(--amber-bg);color:var(--amber)">3 members</span>
+                </div>
+                <div class="note" style="display:flex;align-items:center;gap:6px;color:var(--amber)">⚠ Fewer than 4 members</div>
+                <div class="addrow" style="margin-top:14px">
+                  <button class="btn btn--ghost">＋ Add student</button>
+                  <button class="btn btn--ghost">Roles</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- analytics -->
+          <div class="panel" data-p="analytics">
+            <div class="grid4">
+              <div class="card"><div class="statcard__l">👥 Students</div><div class="statcard__v">24</div><div class="statcard__s">across 6 teams</div></div>
+              <div class="card"><div class="statcard__l">✔ Prep complete</div><div class="statcard__v">21/24</div><div class="statcard__s">88% ready</div></div>
+              <div class="card"><div class="statcard__l">⚑ Needs review</div><div class="statcard__v">3</div><div class="statcard__s">flagged submissions</div></div>
+              <div class="card"><div class="statcard__l">◷ Awaiting</div><div class="statcard__v">4</div><div class="statcard__s">teams submitted</div></div>
+            </div>
+            <div class="card" style="margin-top:16px">
+              <p class="eyebrow">Preparation → performance</p>
+              <div class="barrow"><span>Prep complete</span><span class="bar"><span style="width:88%;background:var(--green)"></span></span><span class="n">88%</span></div>
+              <div class="barrow"><span>On-time</span><span class="bar"><span style="width:79%;background:var(--sky-fg)"></span></span><span class="n">79%</span></div>
+              <div class="barrow"><span>OCR issues</span><span class="bar"><span style="width:8%;background:var(--amber)"></span></span><span class="n">8%</span></div>
+              <p class="note" style="margin-top:6px">Students who completed prep on time averaged ~3.2 points higher on the final rubric.</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===== ACTIVITY WORKSPACE ===== -->
+        <section id="ws" style="display:none">
+          <button class="back" onclick="closeWs()">‹ Back to Team</button>
+          <div class="ws-head">
+            <div>
+              <h1 style="font-size:28px">Bridge Design Decision</h1>
+              <p class="lede">Uploaded activity · Team 3 · team workspace</p>
+            </div>
+            <span class="chip" style="color:#b91c1c">▤ bridge_design_brief.pdf</span>
+          </div>
+
+          <div class="tabs" data-tabs="ws">
+            <button class="tab on" data-t="source">Source</button>
+            <button class="tab" data-t="team">Team</button>
+            <button class="tab" data-t="resources">Resources</button>
+            <button class="tab" data-t="discussion">Discussion</button>
+            <button class="tab" data-t="progress">Progress</button>
+          </div>
+
+          <!-- source -->
+          <div class="panel on" data-p="source">
+            <div class="card" style="background:var(--cream-100)">
+              <div class="pdf">
+                <div class="pdf__bar"><span style="color:#b91c1c;font-weight:600">▤ bridge_design_brief.pdf</span><span class="note">6 pages</span></div>
+                <div class="pdf__body">
+                  <p style="font-size:20px;font-weight:600;margin:0 0 10px">Bridge Design Decision</p>
+                  <p style="color:var(--muted);margin:0 0 14px">Evaluate structural options against site constraints and justify a load-bearing decision.</p>
+                  <p style="margin:0">Given a 90 m span over a deep gorge, choose a structure, defend it, and back it with a load calculation. Your team will use this brief as its shared source of truth.</p>
+                  <div class="hairlines"></div>
+                </div>
+              </div>
+              <p class="foot">The original upload is shown as-is — there is no builder for team activities.</p>
+            </div>
+          </div>
+
+          <!-- team -->
+          <div class="panel" data-p="team">
+            <div class="card" style="background:var(--cream-100)">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+                <h2 style="font-size:19px">Team 3</h2><button class="btn btn--ghost">Edit team</button>
+              </div>
+              <div class="grid2">
+                <div class="resitem"><span class="av" style="background:#0382ed">MC</span><div style="flex:1"><div class="rname">Maya Chen</div><div class="rsub">Recorder</div></div></div>
+                <div class="resitem"><span class="av" style="background:#8a3ffc">LO</span><div style="flex:1"><div class="rname">Liam Ortiz</div><div class="rsub">Member</div></div></div>
+                <div class="resitem"><span class="av" style="background:#0e7c57">PN</span><div style="flex:1"><div class="rname">Priya Nair</div><div class="rsub">Member</div></div></div>
+                <div class="resitem"><span class="av" style="background:#ff6713">SW</span><div style="flex:1"><div class="rname">Sam Whitfield</div><div class="rsub">Member</div></div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- resources -->
+          <div class="panel" data-p="resources">
+            <div class="card" style="background:var(--cream-100)">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:14px">
+                <div><h2 style="font-size:19px">Team resources</h2><p class="note">Proposal, report, contract, and whiteboard photos — each add feeds the progress report.</p></div>
+              </div>
+              <div class="addrow" style="margin-bottom:14px">
+                <button class="btn btn--ghost">＋ Proposal</button>
+                <button class="btn btn--ghost">＋ Report</button>
+                <button class="btn btn--ghost">＋ Contract</button>
+                <button class="btn btn--ghost">＋ Whiteboard</button>
+              </div>
+              <div class="reslist">
+                <div class="resitem"><span class="tile" style="background:var(--sky-bg);color:var(--sky-fg);width:34px;height:34px">▤</span>
+                  <div style="flex:1"><div class="rname">Proposal — Team 3.pdf</div><div class="rsub">Added by Maya · Sep 8</div></div><span class="badge" style="background:var(--sky-bg);color:var(--sky-fg)">Proposal</span></div>
+                <div class="resitem"><span class="tile" style="background:var(--amber-bg);color:var(--amber);width:34px;height:34px">▦</span>
+                  <div style="flex:1"><div class="rname">Whiteboard — load path sketch.jpg</div><div class="rsub">Added by Sam · Sep 10</div></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)">Whiteboard</span></div>
+                <div class="resitem"><span class="tile" style="background:var(--green-bg);color:var(--green);width:34px;height:34px">▤</span>
+                  <div style="flex:1"><div class="rname">Report — draft v1.pdf</div><div class="rsub">Added by Priya · Sep 11</div></div><span class="badge" style="background:var(--green-bg);color:var(--green)">Report</span></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- discussion -->
+          <div class="panel" data-p="discussion">
+            <div class="card" style="background:var(--cream-100)">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+                <div><h2 style="font-size:19px">Audio discussions</h2><p class="note">Recorded in the team stage — replayable, and fed into the progress report.</p></div>
+                <button class="btn btn--navy">● Record</button>
+              </div>
+              <div class="disclist">
+                <div class="resitem"><span class="waveform">
+                  <i style="height:8px"></i><i style="height:16px"></i><i style="height:22px"></i><i style="height:12px"></i><i style="height:18px"></i><i style="height:8px"></i><i style="height:14px"></i></span>
+                  <div style="flex:1"><div class="rname">Discussion — Q1</div><div class="rsub">Maya · 1:05</div></div><button class="btn btn--ghost">▶ Play</button></div>
+                <div class="resitem"><span class="waveform">
+                  <i style="height:12px"></i><i style="height:20px"></i><i style="height:10px"></i><i style="height:22px"></i><i style="height:14px"></i><i style="height:18px"></i><i style="height:9px"></i></span>
+                  <div style="flex:1"><div class="rname">Discussion — Q3</div><div class="rsub">Liam · 1:45</div></div><button class="btn btn--ghost">▶ Play</button></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- progress -->
+          <div class="panel" data-p="progress">
+            <div class="card" style="background:var(--cream-100)">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+                <h2 style="font-size:19px">Project progress report</h2>
+                <span class="badge" style="background:var(--orange-bg);color:var(--orange)"><span class="spark">✦</span> AI-generated</span>
+              </div>
+              <div class="barrow" style="grid-template-columns:auto 1fr 46px;margin:12px 0 16px">
+                <span style="font-weight:600">68% complete</span>
+                <span class="bar"><span style="width:68%;background:var(--lav)"></span></span><span class="n">68%</span>
+              </div>
+              <p style="font-size:14.5px;line-height:1.6;margin:0 0 16px">
+                Team 3 has converged on a <b>suspension</b> structure and backed it with a load calculation
+                (T<sub>max</sub> ≈ 1180 kN per cable). The proposal and a report draft are in; the whiteboard sketch
+                shows a sound load path. Remaining: finalize the tradeoff analysis and units check before submission.
+              </p>
+              <p class="eyebrow">Highlights</p>
+              <div class="highlight"><span class="ai">✦</span><span>Strong load-path reasoning surfaced in the Q3 discussion recording.</span></div>
+              <div class="highlight"><span class="ai">✦</span><span>Report draft aligns with the proposal — good internal consistency.</span></div>
+              <div class="highlight"><span class="ai">✦</span><span>One member still frames horizontal cable force as the max tension — worth a check-in.</span></div>
+              <p class="foot"><span class="ai">✦</span> Regenerates automatically as the team adds resources and discussions · faculty-reviewable, never auto-authoritative.</p>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+  // in-page tab switching for each tab group
+  document.querySelectorAll('[data-tabs]').forEach(function (group) {
+    var scope = group.closest('section');
+    group.querySelectorAll('.tab').forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        group.querySelectorAll('.tab').forEach(function (t) { t.classList.remove('on'); });
+        tab.classList.add('on');
+        scope.querySelectorAll(':scope > .panel').forEach(function (p) {
+          p.classList.toggle('on', p.dataset.p === tab.dataset.t);
+        });
+      });
+    });
+  });
+  function openWs() {
+    document.getElementById('hub').style.display = 'none';
+    document.getElementById('ws').style.display = 'block';
+    document.querySelector('.main').scrollTop = 0;
+  }
+  function closeWs() {
+    document.getElementById('ws').style.display = 'none';
+    document.getElementById('hub').style.display = 'block';
+  }
+</script>

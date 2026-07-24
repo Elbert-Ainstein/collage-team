@@ -19,8 +19,8 @@ const OPTIONS = [
   { key: "summative", title: "Create an Assessment from sources and existing lessons", desc: "", icon: "quiz", tint: "bg-[#ffe770]/40 text-[#b45309]" },
   {
     key: "activity",
-    title: "Create a team Activity by uploading your sources",
-    desc: "Four-stage team-based learning — prep, discussion, submission, assessment",
+    title: "Upload a team activity",
+    desc: "Upload a PDF brief — your teams collaborate on it (resources, discussion, AI progress report). No builder.",
     icon: "groups",
     tint: "bg-brand-purple/25 text-[#7c3aed]",
   },
@@ -30,6 +30,7 @@ const OPTIONS = [
 export function CreatePage() {
   const router = useRouter();
   const setCurrent = useStore((s) => s.setCurrentActivity);
+  const addActivity = useStore((s) => s._addActivity);
   const [gen, setGen] = useState(GEN_OPTIONS[0]);
   const [open, setOpen] = useState(false);
   const [text, setText] = useState("");
@@ -42,9 +43,22 @@ export function CreatePage() {
   function addSource() {
     setSources((s) => [...s, "Bridge structures (reading).pdf — 6 pages"]);
   }
+  // Uploading an activity CREATES a new one (its PDF is the source) and opens its
+  // team workspace — activities are just an uploaded brief, no builder.
   function createActivity() {
-    setCurrent(BRIDGE_ACTIVITY.id);
-    router.push(`/i/activity/${BRIDGE_ACTIVITY.id}?tab=build`);
+    const filename = (sources[0] ?? "activity.pdf").split(" — ")[0].trim();
+    const id = `act-${Date.now().toString(36)}`;
+    addActivity({
+      ...BRIDGE_ACTIVITY,
+      id,
+      title: filename.replace(/\.[a-z0-9]+$/i, ""),
+      objective: "Uploaded team activity.",
+      description: "Your team collaborates on this brief — share resources, record discussions, and track progress.",
+      status: "team-stage",
+      source: { filename, pages: 6, kind: "pdf" },
+    });
+    setCurrent(id);
+    router.push(`/i/activity/${id}`);
   }
 
   return (
