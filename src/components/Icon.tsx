@@ -10,7 +10,7 @@ interface IconProps {
 export function Icon({ name, size = "md", className = "", style }: IconProps) {
   const sizeClass = size === "sm" ? "icon--sm" : size === "lg" ? "icon--lg" : "";
   return (
-    <span className={`material-icons-outlined icon ${sizeClass} ${className}`} style={style} aria-hidden>
+    <span className={`material-symbols-outlined icon ${sizeClass} ${className}`} style={style} aria-hidden>
       {name}
     </span>
   );
