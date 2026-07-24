@@ -32,14 +32,14 @@ export function FacultyShell({ children }: { children: React.ReactNode }) {
           <Stat icon="quiz" value={FACULTY_COURSE.summatives} label="Summatives" />
           <Stat icon="donut_small" value={`${FACULTY_COURSE.avgCompletion}%`} label="Avg completion" />
           <button
-            onClick={() => router.push("/i/roster")}
+            onClick={() => router.push("/i/team?tab=teams")}
             className="flex items-center gap-1.5 rounded-full border border-line bg-cream-100 px-3 py-1.5 text-xs text-navy/80 hover:bg-cream-300"
             title="Roster & teams"
           >
             <Icon name="group" size="sm" /> <b className="font-semibold text-navy">{FACULTY_COURSE.students}</b> Students
           </button>
           <button
-            onClick={() => router.push("/i/roster")}
+            onClick={() => router.push("/i/team?tab=teams")}
             className="flex items-center gap-1.5 rounded-lg bg-navy px-3.5 py-2 text-xs font-medium text-cream shadow-2xs hover:bg-navy-deep"
           >
             <Icon name="person_add" size="sm" /> Invite

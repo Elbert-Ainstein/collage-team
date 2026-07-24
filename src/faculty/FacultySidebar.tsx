@@ -7,10 +7,9 @@ import { useStore } from "@/store";
 import { FACULTY_COURSE } from "./seed";
 
 const NAV = [
-  { to: "/i/create", label: "Create", icon: "add_circle" },
-  { to: "/i/analytics", label: "Analytics", icon: "bar_chart" },
-  { to: "/i/tutor", label: "AI tutor", icon: "smart_toy" },
+  { to: "/i/create", label: "Create", icon: "auto_awesome" },
   { to: "/i/library", label: "Library", icon: "library_books" },
+  { to: "/i/team", label: "Team", icon: "groups" },
 ];
 
 function DashLogo() {
@@ -55,7 +54,9 @@ export function FacultySidebar() {
 
       <nav className="flex flex-col gap-1">
         {NAV.map((n) => {
-          const active = pathname.startsWith(n.to);
+          // Team owns all post-creation surfaces (activity workspace, roster, analytics).
+          const teamPaths = ["/i/team", "/i/activity", "/i/roster", "/i/analytics"];
+          const active = n.to === "/i/team" ? teamPaths.some((p) => pathname.startsWith(p)) : pathname.startsWith(n.to);
           return (
             <Link
               key={n.to}

@@ -39,24 +39,25 @@ function activityStatusLabel(a: Activity): string {
   }
 }
 
-export function CourseContent() {
+export function CourseContent({ onlySubs, heading }: { onlySubs?: Sub[]; heading?: string | null } = {}) {
   const router = useRouter();
   const activities = useStore((s) => s.activities);
   const setCurrent = useStore((s) => s.setCurrentActivity);
-  const [sub, setSub] = useState<Sub>("lessons");
+  const subs = onlySubs ?? (["lessons", "summatives", "activities"] as Sub[]);
+  const [sub, setSub] = useState<Sub>(subs[0]);
   const [filter, setFilter] = useState<(typeof FILTERS)[number]>("All");
 
   const rows: ContentRow[] = sub === "lessons" ? LESSONS : sub === "summatives" ? SUMMATIVES : [];
   const visible = filter === "All" ? rows : rows.filter((r) => r.status === filter);
 
   return (
-    <section className="mt-12">
-      <h2 className="mb-4 font-serif text-[26px] font-semibold text-black/80">Course content</h2>
+    <section className={heading === null ? "" : "mt-12"}>
+      {heading !== null && <h2 className="mb-4 font-serif text-[26px] font-semibold text-black/80">{heading ?? "Course content"}</h2>}
 
       <div className="mb-4 flex gap-6 border-b border-line">
-        <Tab id="lessons" active={sub} onClick={setSub} icon="menu_book" label="Lessons" count={LESSONS.length} />
-        <Tab id="summatives" active={sub} onClick={setSub} icon="quiz" label="Summatives" count={SUMMATIVES.length} />
-        <Tab id="activities" active={sub} onClick={setSub} icon="groups" label="Activities" count={activities.length} />
+        {subs.includes("lessons") && <Tab id="lessons" active={sub} onClick={setSub} icon="menu_book" label="Lessons" count={LESSONS.length} />}
+        {subs.includes("summatives") && <Tab id="summatives" active={sub} onClick={setSub} icon="quiz" label="Summatives" count={SUMMATIVES.length} />}
+        {subs.includes("activities") && <Tab id="activities" active={sub} onClick={setSub} icon="groups" label="Activities" count={activities.length} />}
       </div>
 
       <div className="mb-1 flex gap-1.5">

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { activityById, memberById, teamOfMember, useStore } from "@/store";
 import { Alert, Avatar, Button, Icon, PageHeader, Panel, SectionLabel, StageChip, StatusBadge, AiBadge } from "@/components";
 import { canAccessTeamStage, getTeammateOriginals } from "@/services/responseService";
+import { addDiscussion, getDiscussions } from "@/services/teamTabService";
 import { MAYA } from "@/seed";
 import type { OriginalResponse, Question } from "@/types";
 
@@ -14,7 +15,19 @@ export function Discussion() {
   const activity = useStore((s) => activityById(s, activityId))!;
   const team = useStore((s) => teamOfMember(s, MAYA.id))!;
   useStore((s) => s.originals); // reactivity
+  useStore((s) => s.audioDiscussions);
   const [activeQ, setActiveQ] = useState(1);
+  const [recording, setRecording] = useState(false);
+
+  function toggleRecord() {
+    if (recording) {
+      // stop → save the recording to the team's audio discussions (Team Tab)
+      addDiscussion(team.id, activityId, `Discussion — Q${activeQ}`, 45 + activeQ * 20, MAYA.id);
+      setRecording(false);
+    } else {
+      setRecording(true);
+    }
+  }
 
   // Prep gate (§4) — enforced in UI and service.
   if (!canAccessTeamStage(MAYA.id, activityId)) {
@@ -49,7 +62,20 @@ export function Discussion() {
             <strong>You only see original prep — never what teammates change now.</strong>
           </>
         }
+        actions={
+          <Button variant={recording ? "danger" : "primary"} icon={recording ? "stop_circle" : "mic"} onClick={toggleRecord}>
+            {recording ? "Stop & save" : "Record discussion"}
+          </Button>
+        }
       />
+      {getDiscussions(team.id, activityId).length > 0 && (
+        <div style={{ marginBottom: 14 }}>
+          <StatusBadge variant="lavender" icon="graphic_eq">
+            {getDiscussions(team.id, activityId).length} discussion recording
+            {getDiscussions(team.id, activityId).length > 1 ? "s" : ""} saved to your Team tab
+          </StatusBadge>
+        </div>
+      )}
 
       <div className="stage-banner" style={{ background: "var(--stage-discussion-bg)", borderColor: "var(--stage-discussion-fg)" }}>
         <StageChip stage="discussion" />
