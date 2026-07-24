@@ -14,8 +14,19 @@ import { activityById, useStore } from "@/store";
 function now() {
   return new Date().toISOString();
 }
+// Defensive reads: a browser with localStorage persisted before these slices
+// existed rehydrates without them, so default to [] to survive schema drift.
+function allResources(): TeamResource[] {
+  return useStore.getState().teamResources ?? [];
+}
+function allDiscussions(): AudioDiscussion[] {
+  return useStore.getState().audioDiscussions ?? [];
+}
+function allReports(): ProgressReport[] {
+  return useStore.getState().progressReports ?? [];
+}
 function rid(prefix: string) {
-  return `${prefix}-${useStore.getState().teamResources.length + useStore.getState().audioDiscussions.length + 1}-${Date.now().toString(36)}`;
+  return `${prefix}-${allResources().length + allDiscussions().length + 1}-${Date.now().toString(36)}`;
 }
 
 export function getSource(activityId: string) {
@@ -24,7 +35,7 @@ export function getSource(activityId: string) {
 
 // ---- Team resources ----
 export function getResources(teamId: string, activityId: string): TeamResource[] {
-  return useStore.getState().teamResources.filter((r) => r.teamId === teamId && r.activityId === activityId);
+  return allResources().filter((r) => r.teamId === teamId && r.activityId === activityId);
 }
 
 export function addResource(
@@ -43,7 +54,7 @@ export function addResource(
 
 // ---- Audio discussions ----
 export function getDiscussions(teamId: string, activityId: string): AudioDiscussion[] {
-  return useStore.getState().audioDiscussions.filter((d) => d.teamId === teamId && d.activityId === activityId);
+  return allDiscussions().filter((d) => d.teamId === teamId && d.activityId === activityId);
 }
 
 export function addDiscussion(
@@ -61,7 +72,7 @@ export function addDiscussion(
 
 // ---- AI Project Progress Report (✦) ----
 export function getProgressReport(teamId: string, activityId: string): ProgressReport | undefined {
-  return useStore.getState().progressReports.find((p) => p.teamId === teamId && p.activityId === activityId);
+  return allReports().find((p) => p.teamId === teamId && p.activityId === activityId);
 }
 
 // Deterministic mock "AI" — derives a summary + completeness from the team's

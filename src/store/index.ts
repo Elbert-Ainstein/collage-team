@@ -139,11 +139,11 @@ export const useStore = create<AppState>()(
   _addActivity: (a) => set((s) => ({ activities: [a, ...s.activities] })),
   _setRoster: (members, teams) => set(() => ({ members, teams })),
   _upsertTeam: (t) => set((s) => ({ teams: upsert(s.teams, t, (x) => x.id === t.id) })),
-  _addTeamResource: (r) => set((s) => ({ teamResources: [...s.teamResources, r] })),
-  _addAudioDiscussion: (d) => set((s) => ({ audioDiscussions: [...s.audioDiscussions, d] })),
+  _addTeamResource: (r) => set((s) => ({ teamResources: [...(s.teamResources ?? []), r] })),
+  _addAudioDiscussion: (d) => set((s) => ({ audioDiscussions: [...(s.audioDiscussions ?? []), d] })),
   _upsertProgressReport: (p) =>
     set((s) => ({
-      progressReports: upsert(s.progressReports, p, (x) => x.teamId === p.teamId && x.activityId === p.activityId),
+      progressReports: upsert(s.progressReports ?? [], p, (x) => x.teamId === p.teamId && x.activityId === p.activityId),
     })),
 
       reset: (fresh = false) => set({ ...initialData(fresh) }),
@@ -172,6 +172,20 @@ export const useStore = create<AppState>()(
         audioDiscussions: s.audioDiscussions,
         progressReports: s.progressReports,
       }),
+      // Schema-drift guard: merge persisted state over a fresh seed and force the
+      // newer slices to arrays, so a browser with older localStorage never
+      // rehydrates a `undefined` collection (which would crash .filter/.map).
+      merge: (persisted, current) => {
+        const merged = { ...current, ...(persisted as Partial<AppState>) };
+        merged.teamResources = merged.teamResources ?? [];
+        merged.audioDiscussions = merged.audioDiscussions ?? [];
+        merged.progressReports = merged.progressReports ?? [];
+        merged.aiSuggestions = merged.aiSuggestions ?? [];
+        merged.approvedGrades = merged.approvedGrades ?? [];
+        merged.collectives = merged.collectives ?? [];
+        merged.individualFinals = merged.individualFinals ?? [];
+        return merged;
+      },
     },
   ),
 );
