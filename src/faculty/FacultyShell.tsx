@@ -50,7 +50,7 @@ export function FacultyShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-0 flex-1">
         <FacultySidebar />
         <main className="min-h-0 flex-1 overflow-y-auto py-3 pr-3" data-fac-main>
-          <div className="min-h-full rounded-2xl border border-line bg-page px-10 py-10 shadow-xs">{children}</div>
+          <div className="min-h-full rounded-2xl border border-line bg-page px-8 py-8 shadow-xs">{children}</div>
         </main>
       </div>
     </div>

@@ -39,17 +39,9 @@ export function FacultySidebar() {
   }
 
   return (
-    <aside className="flex w-60 shrink-0 flex-col px-4 pb-4 pt-4">
-      <div className="flex items-center justify-between px-2 pb-5">
+    <aside className="flex w-60 shrink-0 flex-col px-4 pb-4 pt-5">
+      <div className="px-2 pb-5">
         <DashLogo />
-        <span className="flex gap-1 text-navy/50">
-          <button className="rounded-md p-1 hover:bg-navy/5 hover:text-navy" title="Toggle theme">
-            <Icon name="dark_mode" size="sm" />
-          </button>
-          <button className="rounded-md p-1 hover:bg-navy/5 hover:text-navy" title="Collapse sidebar">
-            <Icon name="menu_open" size="sm" />
-          </button>
-        </span>
       </div>
 
       <nav className="flex flex-col gap-1">
@@ -62,10 +54,10 @@ export function FacultySidebar() {
               key={n.to}
               href={n.to}
               className={`flex h-9 w-full items-center gap-2.5 rounded-lg px-3 text-sm transition-colors ${
-                active ? "border border-line bg-cream-400/50 font-medium text-navy" : "border border-transparent text-navy/70 hover:bg-navy/5 hover:text-navy"
+                active ? "border border-line bg-cream-400/50 font-medium text-navy" : "text-navy/70 hover:bg-navy/5 hover:text-navy"
               }`}
             >
-              <Icon name={n.icon} size="sm" />
+              <Icon name={n.icon} size={17} />
               <span className="min-w-0 flex-1 truncate text-left">{n.label}</span>
             </Link>
           );
@@ -93,7 +85,7 @@ export function FacultySidebar() {
             <p className="truncate text-sm font-semibold leading-4 text-navy">{FACULTY_COURSE.instructor}</p>
             <p className="truncate text-[10px] leading-3 text-navy/60">{FACULTY_COURSE.instructorEmail}</p>
           </div>
-          <Icon name="unfold_more" size="sm" className="text-navy/50" />
+          <Icon name="unfold_more" size={15} className="text-navy/60" />
         </div>
       </div>
     </aside>

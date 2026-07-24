@@ -1,190 +1,304 @@
 "use client";
 
-import { useState } from "react";
+import type { CSSProperties, ReactElement, ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Icon } from "@/components";
 import { useStore } from "@/store";
 import { BRIDGE_ACTIVITY } from "@/seed";
 import { CourseContent } from "./CourseContent";
 
-const GEN_OPTIONS = [
-  { key: "lesson", label: "Generate Lesson", icon: "menu_book" },
-  { key: "summative", label: "Generate Summative", icon: "quiz" },
-  { key: "activity", label: "Upload Activity", icon: "groups" }, // ← Team Module integration
-  { key: "import", label: "Import Summative", icon: "upload_file" },
-];
+/**
+ * The Create landing reproduces the redesign's Dashboard canvas pixel-for-pixel
+ * (docs/team-module/redesign/src/dashboard/dashboard.tsx): the "What do you want
+ * to create?" hero with the create-card grid, Subject essentials chips, and the
+ * Featured resource cards. Content/wiring is adapted to our team-centric app —
+ * the marquee tile creates a team activity, and Featured points at our real
+ * surfaces (team workspace, roster, analytics, student preview). No builder.
+ */
 
-const OPTIONS = [
-  { key: "lesson", title: "Create a Lesson from your sources", desc: "", icon: "menu_book", tint: "bg-sky/40 text-[#0382ed]" },
-  { key: "summative", title: "Create an Assessment from sources and existing lessons", desc: "", icon: "quiz", tint: "bg-[#ffe770]/40 text-[#b45309]" },
-  {
-    key: "activity",
-    title: "Upload a team activity",
-    desc: "Upload a PDF brief — your teams collaborate on it (resources, discussion, AI progress report). No builder.",
-    icon: "groups",
-    tint: "bg-brand-purple/25 text-[#7c3aed]",
-  },
-  { key: "import", title: "Upload an assessment you already have", desc: "", icon: "upload_file", tint: "bg-navy/[0.06] text-muted-fg" },
-];
+// Material Symbols icon at an exact pixel size (mirrors the redesign's mIcon).
+// Our shared <Icon> only exposes sm/md/lg presets, so the dashboard uses this.
+function MIcon({
+  name,
+  size = 20,
+  className = "",
+  style,
+}: {
+  name: string;
+  size?: number;
+  className?: string;
+  style?: CSSProperties;
+}): ReactElement {
+  return (
+    <span
+      className={`material-symbols-outlined select-none leading-none ${className}`}
+      style={{ fontSize: size, width: size, height: size, overflow: "hidden", display: "inline-block", ...style }}
+      aria-hidden
+    >
+      {name}
+    </span>
+  );
+}
 
-export function CreatePage() {
+/** Small create-category card (Assessments / Flashcards style tiles). */
+function CreateCard({
+  tint,
+  iconBg,
+  icon,
+  title,
+  desc,
+  chip,
+  onClick,
+}: {
+  tint: string;
+  iconBg: string;
+  icon: string;
+  title: string;
+  desc: string;
+  chip?: string;
+  onClick?: () => void;
+}): ReactElement {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="relative flex items-start gap-3 rounded-xl border p-4 text-left transition-shadow hover:shadow-md"
+      style={{ backgroundColor: tint, borderColor: "rgba(0,35,65,0.12)" }}
+    >
+      {chip && (
+        <span className="absolute -top-2.5 right-3 rounded-md bg-navy px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cream">
+          {chip}
+        </span>
+      )}
+      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-cream" style={{ backgroundColor: iconBg }}>
+        <MIcon name={icon} size={18} />
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-semibold text-navy">{title}</span>
+        <span className="mt-0.5 block text-xs leading-4 text-navy/70">{desc}</span>
+      </span>
+    </button>
+  );
+}
+
+function SubjectChip({ icon, label, from, to }: { icon: string; label: string; from: string; to: string }): ReactElement {
+  return (
+    <button type="button" className="group flex w-20 flex-col items-center gap-2">
+      <span
+        className="flex h-14 w-14 items-center justify-center rounded-full text-navy transition-transform group-hover:scale-105"
+        style={{ backgroundImage: `linear-gradient(135deg, ${from}, ${to})` }}
+      >
+        <MIcon name={icon} size={22} />
+      </span>
+      <span className="text-xs font-medium text-navy/80">{label}</span>
+    </button>
+  );
+}
+
+function ResourceCard({
+  icon,
+  preview,
+  title,
+  desc,
+  action,
+  onClick,
+}: {
+  icon: string;
+  preview: [string, string];
+  title: string;
+  desc: string;
+  action: string;
+  onClick: () => void;
+}): ReactElement {
+  return (
+    <div className="flex flex-col overflow-hidden rounded-xl border border-line bg-cream-100 shadow-2xs transition-shadow hover:shadow-md">
+      <div
+        className="flex h-32 items-center justify-center border-b border-line"
+        style={{ backgroundImage: `linear-gradient(135deg, ${preview[0]}, ${preview[1]})` }}
+      >
+        <span className="flex h-14 w-14 items-center justify-center rounded-xl bg-white/70 text-navy shadow-xs">
+          <MIcon name={icon} size={26} />
+        </span>
+      </div>
+      <div className="flex min-h-0 flex-1 flex-col gap-1.5 p-4">
+        <p className="text-sm font-semibold text-navy">{title}</p>
+        <p className="flex-1 text-xs leading-4 text-navy/70">{desc}</p>
+        <div className="mt-2 flex justify-end">
+          <button
+            type="button"
+            onClick={onClick}
+            className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium text-navy shadow-2xs hover:bg-cream-300"
+          >
+            {action}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SectionTitle({ children }: { children: ReactNode }): ReactElement {
+  return <h2 className="font-serif text-xl font-semibold text-black/80">{children}</h2>;
+}
+
+export function CreatePage(): ReactElement {
   const router = useRouter();
   const setCurrent = useStore((s) => s.setCurrentActivity);
   const addActivity = useStore((s) => s._addActivity);
-  const [gen, setGen] = useState(GEN_OPTIONS[0]);
-  const [open, setOpen] = useState(false);
-  const [text, setText] = useState("");
-  const [sources, setSources] = useState<string[]>([]);
-  const isActivity = gen.key === "activity";
+  const setRole = useStore((s) => s.setRole);
 
-  function selectActivity() {
-    setGen(GEN_OPTIONS[2]);
-  }
-  function addSource() {
-    setSources((s) => [...s, "Bridge structures (reading).pdf — 6 pages"]);
-  }
-  // Uploading an activity CREATES a new one (its PDF is the source) and opens its
-  // team workspace — activities are just an uploaded brief, no builder.
-  function createActivity() {
-    const filename = (sources[0] ?? "activity.pdf").split(" — ")[0].trim();
+  // The marquee tile creates a fresh team activity (its PDF is the source) and
+  // opens the team workspace — activities are an uploaded brief, no builder.
+  function createTeamActivity(): void {
     const id = `act-${Date.now().toString(36)}`;
     addActivity({
       ...BRIDGE_ACTIVITY,
       id,
-      title: filename.replace(/\.[a-z0-9]+$/i, ""),
+      title: "Untitled team activity",
       objective: "Uploaded team activity.",
       description: "Your team collaborates on this brief — share resources, record discussions, and track progress.",
       status: "team-stage",
-      source: { filename, pages: 6, kind: "pdf" },
+      source: { filename: "activity.pdf", pages: 4, kind: "pdf" },
     });
     setCurrent(id);
     router.push(`/i/activity/${id}`);
   }
 
+  const openBridge = (): void => {
+    setCurrent(BRIDGE_ACTIVITY.id);
+    router.push(`/i/activity/${BRIDGE_ACTIVITY.id}?tab=source`);
+  };
+  const comingSoon = (): void => void router.push("/i/library");
+  const viewAsStudent = (): void => {
+    setRole("student");
+    router.push("/s/activities");
+  };
+
   return (
     <>
-      <div className="mx-auto max-w-3xl pt-6 text-center">
-        <h1 className="font-serif text-[40px] font-semibold leading-tight tracking-tight text-black/80">
-          What would you like to create?
-        </h1>
-        <p className="mt-2 text-base text-muted-fg">Design. Deliver. Assess.</p>
-      </div>
-
-      {/* prompt box */}
-      <div className="mx-auto mt-7 max-w-3xl rounded-2xl border border-line bg-cream-100 p-4 shadow-2xs">
-        {!isActivity && (
-          <textarea
-            rows={2}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Describe the lesson you want to generate — a topic, learning goals, or what it should cover…"
-            className="w-full resize-none bg-transparent text-base text-navy outline-none placeholder:text-navy/40"
-          />
-        )}
-
-        {isActivity && (
-          <div>
-            {sources.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 rounded-xl border-2 border-dashed border-[#cfc6ac] bg-page p-5 text-center">
-                <Icon name="upload" className="text-muted-fg" />
-                <div className="text-sm font-medium text-navy">Drag &amp; drop source material for the activity, or</div>
-                <div className="flex gap-2">
-                  <button className="flex items-center gap-1.5 rounded-lg border border-line bg-cream-100 px-3 py-1.5 text-sm font-medium text-navy hover:bg-cream-300" onClick={addSource}>
-                    <Icon name="upload_file" size="sm" /> Upload files
-                  </button>
-                  <button className="flex items-center gap-1.5 rounded-lg border border-line bg-cream-100 px-3 py-1.5 text-sm font-medium text-navy hover:bg-cream-300" onClick={addSource}>
-                    <Icon name="auto_awesome" size="sm" /> Use sample PDF
-                  </button>
-                </div>
-                <div className="text-[10px] text-muted-fg">slides, PDFs, docs, text, images, or video — up to 25 MB each</div>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {sources.map((s, i) => (
-                  <div key={i} className="flex items-center gap-2 rounded-lg border border-line bg-page px-3 py-2 text-sm text-navy">
-                    <Icon name="description" size="sm" /> <span className="flex-1">{s}</span>
-                    <button className="text-navy/50 hover:text-navy" onClick={() => setSources((x) => x.filter((_, idx) => idx !== i))}>
-                      <Icon name="close" size="sm" />
-                    </button>
-                  </div>
-                ))}
-                <button className="flex w-fit items-center gap-1.5 rounded-lg border border-line bg-cream-100 px-3 py-1.5 text-sm font-medium text-navy hover:bg-cream-300" onClick={addSource}>
-                  <Icon name="add" size="sm" /> Add more
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="mt-2 flex items-center gap-2">
-          <button className="flex h-8 w-8 items-center justify-center rounded-lg text-navy/60 hover:bg-navy/5 hover:text-navy" title="Attach" onClick={isActivity ? addSource : undefined}>
-            <Icon name="attach_file" size="sm" />
+      {/* hero */}
+      <div className="rounded-xl border border-line bg-cream-300 p-6 shadow-2xs">
+        <div className="flex items-center justify-between">
+          <h1 className="font-serif text-3xl font-semibold text-black/80">What do you want to create?</h1>
+          <span className="flex items-center gap-1.5 text-xs font-medium text-navy/70">
+            <MIcon name="school" size={15} /> Collage Academy
+          </span>
+        </div>
+        <div className="mt-5 grid grid-cols-1 gap-3 lg:grid-cols-[1.2fr_1fr_1fr]">
+          {/* marquee tile — a team activity (our team pillar's entry point) */}
+          <button
+            type="button"
+            onClick={createTeamActivity}
+            className="relative row-span-2 flex flex-col items-start gap-3 rounded-xl border p-5 text-left transition-shadow hover:shadow-md"
+            style={{ backgroundColor: "rgba(220,162,253,0.16)", borderColor: "#dca2fd" }}
+          >
+            <span className="absolute -top-2.5 right-4 rounded-md bg-navy px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-cream">
+              Team
+            </span>
+            <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-navy text-cream">
+              <MIcon name="groups" size={22} />
+            </span>
+            <span>
+              <span className="block font-serif text-xl font-semibold text-black/80">Team activity</span>
+              <span className="mt-1 block text-xs leading-5 text-navy/70">
+                Upload a PDF brief and your teams collaborate on it — shared resources, a recorded discussion, and an AI
+                project progress report. No builder.
+              </span>
+            </span>
+            <span className="mt-auto flex items-center gap-1.5 rounded-lg bg-navy px-3 py-1.5 text-xs font-medium text-cream">
+              <MIcon name="upload" size={14} /> Upload activity
+            </span>
           </button>
-          <div className="relative">
-            <button className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-navy hover:bg-navy/5" onClick={() => setOpen((o) => !o)}>
-              <Icon name={gen.icon} size="sm" /> {gen.label} <Icon name="expand_more" size="sm" />
-            </button>
-            {open && (
-              <div className="absolute left-0 top-full z-20 mt-1.5 min-w-56 rounded-xl border border-line bg-cream-100 p-1.5 shadow-md">
-                {GEN_OPTIONS.map((o) => (
-                  <button
-                    key={o.key}
-                    className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm text-navy hover:bg-navy/5"
-                    onClick={() => {
-                      setGen(o);
-                      setOpen(false);
-                    }}
-                  >
-                    <Icon name={o.icon} size="sm" /> {o.label}
-                    {o.key === gen.key && <Icon name="check" size="sm" className="ml-auto text-navy" />}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          {isActivity ? (
-            <button
-              disabled={sources.length === 0}
-              onClick={createActivity}
-              className="ml-auto flex items-center gap-1.5 rounded-lg bg-navy px-3.5 py-2 text-xs font-medium text-cream shadow-2xs hover:bg-navy-deep disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <Icon name="upload" size="sm" /> Upload activity
-            </button>
-          ) : (
-            <button
-              className={`ml-auto flex h-9 w-9 items-center justify-center rounded-lg ${text.trim() ? "bg-navy text-cream" : "bg-[#e7e2d3] text-navy/40"}`}
-              title="Generate"
-            >
-              <Icon name="arrow_upward" size="sm" />
-            </button>
-          )}
+          <CreateCard
+            tint="#d5efff"
+            iconBg="#0382ed"
+            icon="menu_book"
+            title="Lesson"
+            desc="Inline lessons with concepts, media, equations, and exercises."
+            onClick={comingSoon}
+          />
+          <CreateCard
+            tint="rgba(173,221,192,0.45)"
+            iconBg="#15803d"
+            icon="quiz"
+            title="Assessment"
+            desc="Checks for understanding with 4 question types and AI feedback."
+            onClick={comingSoon}
+          />
+          <CreateCard
+            tint="rgba(246,206,231,0.5)"
+            iconBg="#9405e6"
+            icon="style"
+            title="Flashcards"
+            desc="Flip decks with images, char limits, and student practice mode."
+            chip="Soon"
+            onClick={comingSoon}
+          />
+          <CreateCard
+            tint="rgba(255,231,112,0.35)"
+            iconBg="#b45309"
+            icon="checklist"
+            title="Worksheets"
+            desc="Practice, review, and skill-building sheets from your source PDFs."
+            onClick={comingSoon}
+          />
         </div>
       </div>
 
-      {/* option rows */}
-      <div className="mx-auto mt-5 max-w-3xl overflow-hidden rounded-2xl border border-line">
-        {OPTIONS.map((o, i) => {
-          const highlight = o.key === "lesson" || (isActivity && o.key === "activity");
-          return (
-            <button
-              key={o.key}
-              onClick={o.key === "activity" ? selectActivity : undefined}
-              className={`flex w-full items-center gap-3.5 px-5 py-4 text-left transition-colors ${
-                i > 0 ? "border-t border-line" : ""
-              } ${highlight ? "bg-sky/20" : "bg-cream-100 hover:bg-cream-300"}`}
-            >
-              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${o.tint}`}>
-                <Icon name={o.icon} size="sm" />
-              </span>
-              <span>
-                <span className="block text-[15px] font-semibold text-navy">{o.title}</span>
-                {o.desc && <span className="mt-0.5 block text-xs text-muted-fg">{o.desc}</span>}
-              </span>
-            </button>
-          );
-        })}
+      {/* subjects */}
+      <div className="mt-8">
+        <SectionTitle>Subject essentials</SectionTitle>
+        <div className="mt-4 flex flex-wrap gap-4">
+          <SubjectChip icon="science" label="Chemistry" from="#d5efff" to="#a2c5fd" />
+          <SubjectChip icon="biotech" label="Biology" from="#adddc0" to="#a2fdc5" />
+          <SubjectChip icon="functions" label="Math" from="#ffe770" to="#efdfad" />
+          <SubjectChip icon="menu_book" label="ELA" from="#f6cee7" to="#dca2fd" />
+          <SubjectChip icon="public" label="Social studies" from="#fdd7a2" to="#fda2a2" />
+          <SubjectChip icon="record_voice_over" label="Speech" from="#dca2fd" to="#a2c5fd" />
+          <SubjectChip icon="code" label="CS" from="#c2e5ff" to="#7db9ff" />
+          <SubjectChip icon="palette" label="Arts" from="#f6cee7" to="#ffc9d7" />
+        </div>
       </div>
 
+      {/* featured — our real team-pillar surfaces */}
+      <div className="mt-8">
+        <SectionTitle>Featured in your workspace</SectionTitle>
+        <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <ResourceCard
+            icon="groups"
+            preview={["#f6cee7", "#dca2fd"]}
+            title="Bridge Design Decision — team activity"
+            desc="The seeded team activity: a PDF brief with shared resources, a recorded team discussion, and an AI project progress report."
+            action="Open workspace"
+            onClick={openBridge}
+          />
+          <ResourceCard
+            icon="diversity_3"
+            preview={["#d5efff", "#a2c5fd"]}
+            title="Roster & teams"
+            desc="Import your class roster and organize students into project teams for the team-based activities."
+            action="Manage teams"
+            onClick={() => router.push("/i/team?tab=teams")}
+          />
+          <ResourceCard
+            icon="analytics"
+            preview={["#adddc0", "#a2fdc5"]}
+            title="Team analytics"
+            desc="Participation, discussion, and progress signals across every team — see who's on track and who needs a nudge."
+            action="View analytics"
+            onClick={() => router.push("/i/team?tab=analytics")}
+          />
+          <ResourceCard
+            icon="visibility"
+            preview={["#fdd7a2", "#fda2a2"]}
+            title="Student experience"
+            desc="Preview the student side end to end — individual prep, the team stage, discussion recording, and progress."
+            action="View as student"
+            onClick={viewAsStudent}
+          />
+        </div>
+      </div>
+
+      {/* our real course content (lessons + summatives) */}
       <CourseContent onlySubs={["lessons", "summatives"]} />
     </>
   );
