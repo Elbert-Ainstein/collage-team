@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Icon } from "@/components";
 import { useStore } from "@/store";
 import { BRIDGE_ACTIVITY } from "@/seed";
+import { CourseContent } from "./CourseContent";
 
 const GEN_OPTIONS = [
   { key: "lesson", label: "Generate Lesson", icon: "menu_book" },
@@ -169,6 +170,8 @@ export function CreatePage() {
           );
         })}
       </div>
+
+      <CourseContent onlySubs={["lessons", "summatives"]} />
     </>
   );
 }
