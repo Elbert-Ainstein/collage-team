@@ -306,6 +306,15 @@
                   <button class="btn btn--navy" onclick="newTeam()"><svg class="ic"><use href="#i-add"></use></svg> New team</button>
                 </div>
               </div>
+              <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px">
+                <span class="teamsize-ctl">Team setup
+                  <span class="segmented" id="team-mode">
+                    <button class="seg on" data-tm="shared" onclick="setTeamMode('shared')">Same for every activity</button>
+                    <button class="seg" data-tm="per" onclick="setTeamMode('per')">Teams per activity</button>
+                  </span>
+                </span>
+                <span class="note" id="team-mode-hint" style="margin:0">Every activity uses the same teams below.</span>
+              </div>
               <div class="grid2" id="teams-grid">
                 <div class="card team-card">
                   <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px"><span class="tile" style="background:var(--purple-bg);color:var(--lav);width:32px;height:32px"><svg class="ic"><use href="#i-groups"></use></svg></span><b style="flex:1">Team 3</b><span class="badge count-badge" style="background:var(--cream-300);color:var(--muted)">4 members</span><button class="icon-btn" title="Delete team" onclick="deleteTeam(this)"><svg class="ic"><use href="#i-delete"></use></svg></button></div>
@@ -454,7 +463,8 @@
             </div>
             <div class="panel" data-p="team">
               <div class="card">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><h2 style="font-size:19px">Team 3</h2><button class="btn btn--ghost" onclick="editTeam()">Edit team</button></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h2 style="font-size:19px">Team 3</h2><button class="btn btn--ghost" id="ws-team-edit" onclick="editTeam()">Manage in Team &#8250; Teams</button></div>
+                <p class="note" id="ws-team-note" style="margin:0 0 14px">This activity uses your class teams &#8212; the same set across every activity.</p>
                 <div class="grid2">
                   <div class="resitem"><span class="av" style="background:#0382ed">MC</span><div style="flex:1"><div class="rname">Maya Chen</div><div class="rsub">Recorder</div></div></div>
                   <div class="resitem"><span class="av" style="background:#8a3ffc">LO</span><div style="flex:1"><div class="rname">Liam Ortiz</div><div class="rsub">Member</div></div></div>
@@ -626,6 +636,7 @@
     set('ws-file', a.file); set('ws-src-title', title); set('ws-src-sub', a.sub); set('ws-src-brief', a.brief);
     set('ws-stu-title', title); set('ws-stu-meta', a.meta + ' \u00B7 Due Wed 11:59pm'); set('ws-stu-brief', a.brief);
     var sb = document.getElementById('ws-stu-status'); if (sb) { sb.textContent = a.status; sb.style.background = a.sbg; sb.style.color = a.sfg; }
+    applyTeamMode();
     document.getElementById('hub').style.display = 'none'; document.getElementById('ws').style.display = 'block'; setWsView('faculty'); document.querySelector('.main').scrollTop = 0;
   }
   function editTeam() { closeWs(); var t = document.querySelector('#hub [data-tabs=\'hub\'] .tab[data-t=\'teams\']'); if (t) t.click(); document.querySelector('.main').scrollTop = 0; }
@@ -731,6 +742,20 @@
   var poolIdx = 3;
   var targetSize = '4';
   function setTargetSize(v) { targetSize = v; document.querySelectorAll('.team-card').forEach(function (c) { refreshTeam(c); }); }
+  var teamMode = 'shared';
+  function setTeamMode(m) {
+    teamMode = m;
+    document.querySelectorAll('#team-mode .seg').forEach(function (b) { b.classList.toggle('on', b.dataset.tm === m); });
+    var hint = document.getElementById('team-mode-hint');
+    if (hint) hint.textContent = m === 'per' ? 'Each activity can start from these teams and be regrouped on its own.' : 'Every activity uses the same teams below.';
+    applyTeamMode();
+  }
+  function applyTeamMode() {
+    var note = document.getElementById('ws-team-note');
+    var btn = document.getElementById('ws-team-edit');
+    if (note) note.textContent = teamMode === 'per' ? 'Teams for this activity \u2014 regroup them without changing other activities.' : 'This activity uses your class teams \u2014 the same set across every activity.';
+    if (btn) btn.innerHTML = teamMode === 'per' ? 'Regroup for this activity' : 'Manage in Team \u203A Teams';
+  }
   function refreshTeam(card) {
     var n = card.querySelectorAll('.team-members .member').length;
     var target = targetSize === 'any' ? 0 : parseInt(targetSize, 10);
