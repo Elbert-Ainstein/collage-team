@@ -155,6 +155,15 @@
   .icon-btn:hover { background:rgba(185,28,28,0.1); color:#b91c1c; }
   .mem-x { display:inline-flex; align-items:center; justify-content:center; width:26px; height:26px; border-radius:6px; border:0; background:none; color:var(--muted); cursor:pointer; flex-shrink:0; }
   .mem-x:hover { background:rgba(185,28,28,0.1); color:#b91c1c; }
+  .ocr-item { display:grid; grid-template-columns:150px 1fr; gap:16px; align-items:start; }
+  .ocr-scan { border:1px solid var(--line); border-radius:10px; background:var(--page); min-height:110px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; color:var(--muted); font-size:11px; text-align:center; padding:10px; }
+  .ocr-text { border:1px solid var(--line); border-radius:10px; background:var(--cream-100); padding:12px 14px; font-size:14px; line-height:1.65; color:#1b2b3a; }
+  .ocr-text[contenteditable="true"] { background:#fff; }
+  .ocr-flag { background:rgba(217,119,6,0.22); border-bottom:2px solid var(--amber); border-radius:3px; padding:0 3px; font-weight:600; }
+  .ocr-card + .ocr-card { margin-top:14px; }
+  .stat-click { cursor:pointer; transition:box-shadow .15s; }
+  .stat-click:hover { box-shadow:0 4px 6px -1px rgba(0,0,0,0.1); }
+  @media (max-width: 720px) { .ocr-item { grid-template-columns:1fr; } }
 </style>
 
 <div class="wrap">
@@ -288,19 +297,65 @@
               </div>
             </div>
             <div class="panel" data-p="analytics">
-              <div class="grid4">
-                <div class="card"><div class="statcard__l"><svg class="ic"><use href="#i-groups"></use></svg> Students</div><div class="statcard__v">24</div><div class="statcard__s">across 6 teams</div></div>
-                <div class="card"><div class="statcard__l"><svg class="ic"><use href="#i-check_circle"></use></svg> Prep complete</div><div class="statcard__v">21/24</div><div class="statcard__s">88% ready</div></div>
-                <div class="card"><div class="statcard__l"><svg class="ic"><use href="#i-flag"></use></svg> Needs review</div><div class="statcard__v">3</div><div class="statcard__s">flagged</div></div>
-                <div class="card"><div class="statcard__l"><svg class="ic"><use href="#i-schedule"></use></svg> Awaiting</div><div class="statcard__v">4</div><div class="statcard__s">teams submitted</div></div>
+              <div id="analytics-main">
+                <div class="grid4">
+                  <div class="card"><div class="statcard__l"><svg class="ic"><use href="#i-groups"></use></svg> Students</div><div class="statcard__v">24</div><div class="statcard__s">across 6 teams</div></div>
+                  <div class="card"><div class="statcard__l"><svg class="ic"><use href="#i-check_circle"></use></svg> Prep complete</div><div class="statcard__v">21/24</div><div class="statcard__s">88% ready</div></div>
+                  <div class="card stat-click" onclick="openOcr()" title="Review flagged OCR"><div class="statcard__l"><svg class="ic"><use href="#i-flag"></use></svg> Needs review</div><div class="statcard__v" id="needs-review-count">3</div><div class="statcard__s">flagged &#183; tap to review</div></div>
+                  <div class="card"><div class="statcard__l"><svg class="ic"><use href="#i-schedule"></use></svg> Awaiting</div><div class="statcard__v">4</div><div class="statcard__s">teams submitted</div></div>
+                </div>
+                <div class="card" style="margin-top:16px">
+                  <p class="eyebrow">Preparation &#8594; performance</p>
+                  <div class="barrow"><span>Prep complete</span><span class="bar"><span style="width:88%;background:var(--green)"></span></span><span class="n">88%</span></div>
+                  <div class="barrow"><span>On-time</span><span class="bar"><span style="width:79%;background:var(--sky-fg)"></span></span><span class="n">79%</span></div>
+                  <div class="barrow"><span>OCR issues</span><span class="bar"><span style="width:8%;background:var(--amber)"></span></span><span class="n">8%</span></div>
+                  <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn--ghost" onclick="openOcr()"><svg class="ic"><use href="#i-warning"></use></svg> Review flagged OCR submissions</button></div>
+                  <p class="note" style="margin-top:6px">Students who completed prep on time averaged ~3.2 points higher on the final rubric.</p>
+                </div>
               </div>
-              <div class="card" style="margin-top:16px">
-                <p class="eyebrow">Preparation &#8594; performance</p>
-                <div class="barrow"><span>Prep complete</span><span class="bar"><span style="width:88%;background:var(--green)"></span></span><span class="n">88%</span></div>
-                <div class="barrow"><span>On-time</span><span class="bar"><span style="width:79%;background:var(--sky-fg)"></span></span><span class="n">79%</span></div>
-                <div class="barrow"><span>OCR issues</span><span class="bar"><span style="width:8%;background:var(--amber)"></span></span><span class="n">8%</span></div>
-                <p class="note" style="margin-top:6px">Students who completed prep on time averaged ~3.2 points higher on the final rubric.</p>
+              <div id="ocr-review" style="display:none">
+                <button class="back" onclick="closeOcr()"><svg class="ic"><use href="#i-chevron_left"></use></svg> Back to Analytics</button>
+                <div class="ws-head">
+                  <div><h1 style="font-size:24px">OCR review</h1><p class="lede"><span id="ocr-count">3</span> submissions flagged &#8212; the AI's read of the handwriting is low-confidence. Confirm or fix each.</p></div>
+                </div>
+                <div id="ocr-list">
+                <div class="card ocr-card">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="display:flex;align-items:center;gap:10px"><span class="av" style="background:#0382ed">MC</span><div><div class="rname">Maya Chen</div><div class="rsub">Bridge Design Decision &#183; individual prep</div></div></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)"><svg class="ic"><use href="#i-warning"></use></svg> Low confidence</span></div>
+                  <div class="ocr-item">
+                    <div class="ocr-scan"><svg class="ic ic-lg"><use href="#i-image"></use></svg> bridge_calc.jpg</div>
+                    <div>
+                      <p class="eyebrow" style="margin-bottom:6px">AI read this as</p>
+                      <div class="ocr-text">T<sub>max</sub> = <span class="ocr-flag">1180</span> kN per cable; two cables share the deck load.</div>
+                      <div class="addrow" style="margin-top:12px"><button class="btn btn--navy" onclick="resolveOcr(this)"><svg class="ic"><use href="#i-check_circle"></use></svg> Looks right</button><button class="btn btn--ghost" onclick="editOcr(this)">Edit text</button></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card ocr-card">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="display:flex;align-items:center;gap:10px"><span class="av" style="background:#8a3ffc">LO</span><div><div class="rname">Liam Ortiz</div><div class="rsub">Statics Warm-up &#183; individual prep</div></div></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)"><svg class="ic"><use href="#i-warning"></use></svg> Low confidence</span></div>
+                  <div class="ocr-item">
+                    <div class="ocr-scan"><svg class="ic ic-lg"><use href="#i-image"></use></svg> fbd_scan.jpg</div>
+                    <div>
+                      <p class="eyebrow" style="margin-bottom:6px">AI read this as</p>
+                      <div class="ocr-text">Normal force N = <span class="ocr-flag">4I2</span> N &#8212; is the handwriting &#8220;412&#8221;?</div>
+                      <div class="addrow" style="margin-top:12px"><button class="btn btn--navy" onclick="resolveOcr(this)"><svg class="ic"><use href="#i-check_circle"></use></svg> Looks right</button><button class="btn btn--ghost" onclick="editOcr(this)">Edit text</button></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card ocr-card">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="display:flex;align-items:center;gap:10px"><span class="av" style="background:#0e7c57">PN</span><div><div class="rname">Priya Nair</div><div class="rsub">Materials Selection &#183; individual prep</div></div></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)"><svg class="ic"><use href="#i-warning"></use></svg> Low confidence</span></div>
+                  <div class="ocr-item">
+                    <div class="ocr-scan"><svg class="ic ic-lg"><use href="#i-image"></use></svg> materials_notes.jpg</div>
+                    <div>
+                      <p class="eyebrow" style="margin-bottom:6px">AI read this as</p>
+                      <div class="ocr-text">Yield strength = <span class="ocr-flag">2S0</span> MPa for the selected alloy.</div>
+                      <div class="addrow" style="margin-top:12px"><button class="btn btn--navy" onclick="resolveOcr(this)"><svg class="ic"><use href="#i-check_circle"></use></svg> Looks right</button><button class="btn btn--ghost" onclick="editOcr(this)">Edit text</button></div>
+                    </div>
+                  </div>
+                </div>
+                </div>
+                <div id="ocr-empty" style="display:none"><div class="card" style="display:flex;align-items:center;gap:12px"><span class="tile" style="background:var(--green-bg);color:var(--green);width:40px;height:40px"><svg class="ic ic-lg"><use href="#i-check_circle"></use></svg></span><div><div style="font-weight:600">All clear</div><div class="note">No OCR submissions need review right now.</div></div></div></div>
               </div>
+
             </div>
           </div>
 
@@ -561,4 +616,17 @@
     if (card) refreshTeam(card);
   }
   document.querySelectorAll('.team-card').forEach(function (c) { refreshTeam(c); });
+  function openOcr() { document.getElementById('analytics-main').style.display = 'none'; document.getElementById('ocr-review').style.display = 'block'; document.querySelector('.main').scrollTop = 0; }
+  function closeOcr() { document.getElementById('ocr-review').style.display = 'none'; document.getElementById('analytics-main').style.display = 'block'; }
+  function resolveOcr(btn) {
+    var card = btn.closest('.ocr-card'); if (card) card.remove();
+    var n = document.querySelectorAll('#ocr-list .ocr-card').length;
+    var a = document.getElementById('ocr-count'); if (a) a.textContent = n;
+    var b = document.getElementById('needs-review-count'); if (b) b.textContent = n;
+    if (n === 0) document.getElementById('ocr-empty').style.display = 'block';
+  }
+  function editOcr(btn) {
+    var txt = btn.closest('.ocr-card').querySelector('.ocr-text');
+    txt.setAttribute('contenteditable', 'true'); txt.style.outline = '2px solid var(--sky-fg)'; txt.focus();
+  }
 </script>
