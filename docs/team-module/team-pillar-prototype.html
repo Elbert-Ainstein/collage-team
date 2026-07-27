@@ -182,6 +182,8 @@
   .resp-confirmed { display:inline-flex; align-items:center; gap:6px; color:var(--green); font-weight:600; font-size:13px; }
   .teamsize-ctl { display:inline-flex; align-items:center; gap:8px; font-size:12.5px; font-weight:600; color:var(--muted); }
   .teamsize-ctl select { font-family:inherit; font-size:13px; font-weight:600; color:var(--navy); border:1px solid var(--line); border-radius:8px; padding:6px 8px; background:var(--cream-100); cursor:pointer; }
+  .linklike { background:none; border:0; padding:0; font:inherit; color:inherit; text-decoration:underline; text-underline-offset:2px; cursor:pointer; }
+  .linklike:hover { color:var(--navy); }
   .rec-on { background:#b91c1c !important; }
   .rec-on:hover { background:#a11414 !important; }
   @keyframes wf { 0%,100% { transform:scaleY(0.5); } 50% { transform:scaleY(1.35); } }
@@ -313,7 +315,7 @@
                     <button class="seg" data-tm="per" onclick="setTeamMode('per')">Teams per activity</button>
                   </span>
                 </span>
-                <span class="note" id="team-mode-hint" style="margin:0">Every activity uses the same teams below.</span>
+                <span class="note" id="team-mode-hint" style="margin:0">Every activity uses the same class teams.</span>
               </div>
               <div class="grid2" id="teams-grid">
                 <div class="card team-card">
@@ -433,7 +435,7 @@
           <div id="ws" style="display:none">
             <button class="back" onclick="closeWs()"><svg class="ic"><use href="#i-chevron_left"></use></svg> Back to Team</button>
             <div class="ws-head">
-              <div><h1 id="ws-title" style="font-size:28px">Bridge Design Decision</h1><p class="lede" id="ws-sub">Uploaded activity &#183; Team 3 &#183; team workspace</p></div>
+              <div><h1 id="ws-title" style="font-size:28px">Bridge Design Decision</h1><p class="lede">Uploaded activity &#183; <button class="linklike" onclick="editTeam()" title="Manage in Team &#8250; Teams">Team 3</button> &#183; team workspace</p></div>
               <div class="segmented" id="ws-view">
                 <button class="seg on" data-v="faculty" onclick="setWsView('faculty')"><svg class="ic"><use href="#i-groups"></use></svg> Faculty view</button>
                 <button class="seg" data-v="student" onclick="setWsView('student')"><svg class="ic"><use href="#i-visibility"></use></svg> Student view</button>
@@ -442,7 +444,6 @@
             <div id="ws-faculty">
             <div class="tabs" data-tabs="ws">
               <button class="tab on" data-t="source">Source</button>
-              <button class="tab" data-t="team">Team</button>
               <button class="tab" data-t="resources">Resources</button>
               <button class="tab" data-t="discussion">Discussion</button>
               <button class="tab" data-t="progress">Progress</button>
@@ -459,18 +460,6 @@
                   </div>
                 </div>
                 <p class="foot">The original upload is shown as-is &#8212; there is no builder for team activities.</p>
-              </div>
-            </div>
-            <div class="panel" data-p="team">
-              <div class="card">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h2 style="font-size:19px">Team 3</h2><button class="btn btn--ghost" id="ws-team-edit" onclick="editTeam()">Manage in Team &#8250; Teams</button></div>
-                <p class="note" id="ws-team-note" style="margin:0 0 14px">This activity uses your class teams &#8212; the same set across every activity.</p>
-                <div class="grid2">
-                  <div class="resitem"><span class="av" style="background:#0382ed">MC</span><div style="flex:1"><div class="rname">Maya Chen</div><div class="rsub">Recorder</div></div></div>
-                  <div class="resitem"><span class="av" style="background:#8a3ffc">LO</span><div style="flex:1"><div class="rname">Liam Ortiz</div><div class="rsub">Member</div></div></div>
-                  <div class="resitem"><span class="av" style="background:#0e7c57">PN</span><div style="flex:1"><div class="rname">Priya Nair</div><div class="rsub">Member</div></div></div>
-                  <div class="resitem"><span class="av" style="background:#ff6713">SW</span><div style="flex:1"><div class="rname">Sam Whitfield</div><div class="rsub">Member</div></div></div>
-                </div>
               </div>
             </div>
             <div class="panel" data-p="resources">
@@ -632,11 +621,10 @@
   function openWs(title) {
     var a = ACTIVITIES[title] || ACTIVITIES['Bridge Design Decision'];
     var set = function (id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
-    set('ws-title', title); set('ws-sub', 'Uploaded activity \u00B7 Team 3 \u00B7 team workspace');
+    set('ws-title', title);
     set('ws-file', a.file); set('ws-src-title', title); set('ws-src-sub', a.sub); set('ws-src-brief', a.brief);
     set('ws-stu-title', title); set('ws-stu-meta', a.meta + ' \u00B7 Due Wed 11:59pm'); set('ws-stu-brief', a.brief);
     var sb = document.getElementById('ws-stu-status'); if (sb) { sb.textContent = a.status; sb.style.background = a.sbg; sb.style.color = a.sfg; }
-    applyTeamMode();
     document.getElementById('hub').style.display = 'none'; document.getElementById('ws').style.display = 'block'; setWsView('faculty'); document.querySelector('.main').scrollTop = 0;
   }
   function editTeam() { closeWs(); var t = document.querySelector('#hub [data-tabs=\'hub\'] .tab[data-t=\'teams\']'); if (t) t.click(); document.querySelector('.main').scrollTop = 0; }
@@ -747,14 +735,7 @@
     teamMode = m;
     document.querySelectorAll('#team-mode .seg').forEach(function (b) { b.classList.toggle('on', b.dataset.tm === m); });
     var hint = document.getElementById('team-mode-hint');
-    if (hint) hint.textContent = m === 'per' ? 'Each activity can start from these teams and be regrouped on its own.' : 'Every activity uses the same teams below.';
-    applyTeamMode();
-  }
-  function applyTeamMode() {
-    var note = document.getElementById('ws-team-note');
-    var btn = document.getElementById('ws-team-edit');
-    if (note) note.textContent = teamMode === 'per' ? 'Teams for this activity \u2014 regroup them without changing other activities.' : 'This activity uses your class teams \u2014 the same set across every activity.';
-    if (btn) btn.innerHTML = teamMode === 'per' ? 'Regroup for this activity' : 'Manage in Team \u203A Teams';
+    if (hint) hint.textContent = m === 'per' ? 'Each activity can have its own team composition (regroup per activity).' : 'Every activity uses the same class teams.';
   }
   function refreshTeam(card) {
     var n = card.querySelectorAll('.team-members .member').length;
