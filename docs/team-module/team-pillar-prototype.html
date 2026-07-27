@@ -264,7 +264,11 @@
               <div class="row"><div class="rtitle"><span class="tile" style="background:var(--purple-bg);color:var(--lav)"><svg class="ic"><use href="#i-groups"></use></svg></span><div><div class="rname">Truss Analysis Project Milestone</div><div class="rsub">Team-based · Collective · 25 pts</div></div></div><span class="badge" style="background:var(--sky-bg);color:var(--sky-fg)">Scheduled</span><span class="due">Due Wed 11:59pm</span><button class="btn btn--ghost" onclick="openWs()">Open</button></div>
             </div>
             <div class="panel" data-p="teams">
-              <div class="grid2">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px">
+                <p class="note" style="margin:0">Class teams for this course — create teams, then place students or let them self-assign.</p>
+                <button class="btn btn--navy" style="flex-shrink:0" onclick="newTeam()"><svg class="ic"><use href="#i-add"></use></svg> New team</button>
+              </div>
+              <div class="grid2" id="teams-grid">
                 <div class="card">
                   <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px"><span class="tile" style="background:var(--purple-bg);color:var(--lav);width:32px;height:32px"><svg class="ic"><use href="#i-groups"></use></svg></span><b style="flex:1">Team 3</b><span class="badge" style="background:var(--cream-300);color:var(--muted)">4 members</span></div>
                   <div class="member"><span class="av" style="background:#0382ed">MC</span><span style="flex:1">Maya Chen</span><span class="rolechip">Recorder</span></div>
@@ -500,5 +504,19 @@
       '<span class="badge" style="background:' + t[0] + ';color:' + t[1] + '">' + stuType + '</span>';
     document.getElementById('stu-reslist').appendChild(row);
     stuCancel();
+  }
+
+  // Teams sub-tab: create a new (empty) team card
+  var teamCount = 4;
+  function newTeam() {
+    teamCount++;
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML =
+      '<div style="display:flex;align-items:center;gap:9px;margin-bottom:12px"><span class="tile" style="background:var(--purple-bg);color:var(--lav);width:32px;height:32px"><svg class="ic"><use href="#i-groups"></use></svg></span><b style="flex:1">Team ' + teamCount + '</b><span class="badge" style="background:var(--amber-bg);color:var(--amber)">0 members</span></div>' +
+      '<div class="note" style="display:flex;align-items:center;gap:6px;color:var(--amber)"><svg class="ic"><use href="#i-warning"></use></svg> No students yet</div>' +
+      '<div class="addrow" style="margin-top:14px"><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Add student</button><button class="btn btn--ghost">Roles</button></div>';
+    document.getElementById('teams-grid').appendChild(card);
+    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }
 </script>
