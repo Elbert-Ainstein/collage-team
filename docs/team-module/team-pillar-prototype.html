@@ -145,6 +145,11 @@
   .ic { display:inline-block; vertical-align:-0.15em; width:1.15em; height:1.15em; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; flex-shrink:0; }
   .tile .ic, .mq-ico .ic { width:19px; height:19px; }
   .ic-lg { width:24px; height:24px; }
+  .segmented { display:inline-flex; border:1px solid var(--line); border-radius:9px; overflow:hidden; background:var(--cream-100); box-shadow:0 1px 0 rgba(0,0,0,0.05); }
+  .seg { display:inline-flex; align-items:center; gap:6px; padding:7px 12px; font-size:12.5px; font-weight:600; color:var(--muted); background:none; border:0; cursor:pointer; font-family:inherit; }
+  .seg + .seg { border-left:1px solid var(--line); }
+  .seg.on { background:var(--navy); color:var(--cream-100); }
+  .svbanner { display:flex; align-items:center; gap:8px; margin-top:16px; padding:10px 14px; border:1px dashed #cbb98a; background:rgba(239,223,173,0.3); border-radius:10px; font-size:13px; color:var(--navy); font-weight:500; }
 </style>
 
 <div class="wrap">
@@ -173,7 +178,7 @@
         <button id="nav-team" class="on" onclick="go('team')"><svg class="ic"><use href="#i-groups"></use></svg>&nbsp; Team</button>
       </nav>
       <div class="side__b">
-        <div class="srow" style="cursor:pointer" onclick="go('student')"><svg class="ic"><use href="#i-visibility"></use></svg> &nbsp;View as student <span><svg class="ic"><use href="#i-chevron_right"></use></svg></span></div>
+        <div class="srow"><svg class="ic"><use href="#i-visibility"></use></svg> &nbsp;View as student <span><svg class="ic"><use href="#i-chevron_right"></use></svg></span></div>
         <div class="srow">My courses <span><svg class="ic"><use href="#i-chevron_right"></use></svg></span></div>
         <div class="user">
           <span class="av" style="background:var(--purple);color:var(--navy)">D</span>
@@ -295,8 +300,12 @@
             <button class="back" onclick="closeWs()"><svg class="ic"><use href="#i-chevron_left"></use></svg> Back to Team</button>
             <div class="ws-head">
               <div><h1 style="font-size:28px">Bridge Design Decision</h1><p class="lede">Uploaded activity · Team 3 · team workspace</p></div>
-              <span class="chip" style="color:#b91c1c"><svg class="ic"><use href="#i-description"></use></svg> bridge_design_brief.pdf</span>
+              <div class="segmented" id="ws-view">
+                <button class="seg on" data-v="faculty" onclick="setWsView('faculty')"><svg class="ic"><use href="#i-groups"></use></svg> Faculty view</button>
+                <button class="seg" data-v="student" onclick="setWsView('student')"><svg class="ic"><use href="#i-visibility"></use></svg> Student view</button>
+              </div>
             </div>
+            <div id="ws-faculty">
             <div class="tabs" data-tabs="ws">
               <button class="tab on" data-t="source">Source</button>
               <button class="tab" data-t="team">Team</button>
@@ -361,57 +370,48 @@
                 <p class="foot"><span class="ai"><svg class="ic"><use href="#i-auto_awesome"></use></svg></span> Regenerates automatically as the team adds resources and discussions · faculty-reviewable, never auto-authoritative.</p>
               </div>
             </div>
-          </div>
-        </section>
-
-        <!-- ===================== STUDENT (team view) ===================== -->
-        <section id="screen-student" class="screen">
-          <button class="back" onclick="go('team')"><svg class="ic"><use href="#i-chevron_left"></use></svg> Back to faculty view</button>
-          <div class="ws-head">
-            <div><h1 style="font-size:28px">Your team</h1><p class="lede">Student view · Team 3 · the team side of a team-based activity.</p></div>
-            <span class="chip"><svg class="ic"><use href="#i-visibility"></use></svg> Viewing as Maya Chen</span>
-          </div>
-
-          <div class="card" style="margin-top:16px">
-            <div style="display:flex;align-items:center;gap:12px">
-              <span class="tile" style="background:var(--purple-bg);color:var(--lav)"><svg class="ic"><use href="#i-groups"></use></svg></span>
-              <div style="flex:1"><div class="rname" style="font-size:15px">Bridge Design Decision</div><div class="rsub">Team-based · Collective · 20 pts · Due Wed 11:59pm</div></div>
-              <span class="badge" style="background:var(--orange-bg);color:var(--orange)">Team stage</span>
             </div>
-            <p style="font-size:14px;line-height:1.6;color:#1b2b3a;margin:14px 0 0">Given a 90 m span over a deep gorge, choose a structure, defend it, and back it with a load calculation. Work with your team — share resources, record your discussion, and track progress toward submission.</p>
-          </div>
-
-          <div class="grid2" style="margin-top:16px">
-            <div class="card">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><h2 style="font-size:18px">Team 3</h2><span class="rolechip">You · Recorder</span></div>
-              <div class="member"><span class="av" style="background:#0382ed">MC</span><span style="flex:1">Maya Chen <span class="note">(you)</span></span><span class="rolechip">Recorder</span></div>
-              <div class="member"><span class="av" style="background:#8a3ffc">LO</span><span style="flex:1">Liam Ortiz</span></div>
-              <div class="member"><span class="av" style="background:#0e7c57">PN</span><span style="flex:1">Priya Nair</span></div>
-              <div class="member"><span class="av" style="background:#ff6713">SW</span><span style="flex:1">Sam Whitfield</span></div>
-            </div>
-            <div class="card">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><h2 style="font-size:18px">Record discussion</h2><button class="btn btn--navy"><svg class="ic"><use href="#i-mic"></use></svg> Record</button></div>
-              <p class="note" style="margin-bottom:12px">As Recorder, capture your team's reasoning out loud — it feeds the AI progress report.</p>
-              <div class="disclist">
-                <div class="resitem"><span class="waveform"><i style="height:8px"></i><i style="height:16px"></i><i style="height:22px"></i><i style="height:12px"></i><i style="height:18px"></i><i style="height:8px"></i><i style="height:14px"></i></span><div style="flex:1"><div class="rname">Discussion — Q1</div><div class="rsub">You · 1:05</div></div><button class="btn btn--ghost"><svg class="ic"><use href="#i-play_arrow"></use></svg> Play</button></div>
-                <div class="resitem"><span class="waveform"><i style="height:12px"></i><i style="height:20px"></i><i style="height:10px"></i><i style="height:22px"></i><i style="height:14px"></i><i style="height:18px"></i><i style="height:9px"></i></span><div style="flex:1"><div class="rname">Discussion — Q3</div><div class="rsub">Liam · 1:45</div></div><button class="btn btn--ghost"><svg class="ic"><use href="#i-play_arrow"></use></svg> Play</button></div>
+            <div id="ws-student" style="display:none">
+              <div class="svbanner"><svg class="ic"><use href="#i-visibility"></use></svg> Previewing what a student on Team 3 sees — the same activity, from their side.</div>
+              <div class="card" style="margin-top:14px">
+                <div style="display:flex;align-items:center;gap:12px">
+                  <span class="tile" style="background:var(--purple-bg);color:var(--lav)"><svg class="ic"><use href="#i-groups"></use></svg></span>
+                  <div style="flex:1"><div class="rname" style="font-size:15px">Bridge Design Decision</div><div class="rsub">Team-based · Collective · 20 pts · Due Wed 11:59pm</div></div>
+                  <span class="badge" style="background:var(--orange-bg);color:var(--orange)">Team stage</span>
+                </div>
+                <p style="font-size:14px;line-height:1.6;color:#1b2b3a;margin:14px 0 0">Given a 90 m span over a deep gorge, choose a structure, defend it, and back it with a load calculation. Work with your team — share resources, record your discussion, and track progress toward submission.</p>
+              </div>
+              <div class="grid2" style="margin-top:16px">
+                <div class="card">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><h2 style="font-size:18px">Team 3</h2><span class="rolechip">You · Recorder</span></div>
+                  <div class="member"><span class="av" style="background:#0382ed">MC</span><span style="flex:1">Maya Chen <span class="note">(you)</span></span><span class="rolechip">Recorder</span></div>
+                  <div class="member"><span class="av" style="background:#8a3ffc">LO</span><span style="flex:1">Liam Ortiz</span></div>
+                  <div class="member"><span class="av" style="background:#0e7c57">PN</span><span style="flex:1">Priya Nair</span></div>
+                  <div class="member"><span class="av" style="background:#ff6713">SW</span><span style="flex:1">Sam Whitfield</span></div>
+                </div>
+                <div class="card">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><h2 style="font-size:18px">Record discussion</h2><button class="btn btn--navy"><svg class="ic"><use href="#i-mic"></use></svg> Record</button></div>
+                  <p class="note" style="margin-bottom:12px">As Recorder, capture your team's reasoning out loud — it feeds the AI progress report.</p>
+                  <div class="disclist">
+                    <div class="resitem"><span class="waveform"><i style="height:8px"></i><i style="height:16px"></i><i style="height:22px"></i><i style="height:12px"></i><i style="height:18px"></i><i style="height:8px"></i><i style="height:14px"></i></span><div style="flex:1"><div class="rname">Discussion — Q1</div><div class="rsub">You · 1:05</div></div><button class="btn btn--ghost"><svg class="ic"><use href="#i-play_arrow"></use></svg> Play</button></div>
+                    <div class="resitem"><span class="waveform"><i style="height:12px"></i><i style="height:20px"></i><i style="height:10px"></i><i style="height:22px"></i><i style="height:14px"></i><i style="height:18px"></i><i style="height:9px"></i></span><div style="flex:1"><div class="rname">Discussion — Q3</div><div class="rsub">Liam · 1:45</div></div><button class="btn btn--ghost"><svg class="ic"><use href="#i-play_arrow"></use></svg> Play</button></div>
+                  </div>
+                </div>
+              </div>
+              <div class="card" style="margin-top:16px">
+                <div style="margin-bottom:12px"><h2 style="font-size:18px">Team resources</h2><p class="note">Add your proposal, report, contract, and whiteboard photos — each one updates the progress report.</p></div>
+                <div class="addrow" style="margin-bottom:14px"><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Proposal</button><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Report</button><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Contract</button><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Whiteboard</button></div>
+                <div class="reslist">
+                  <div class="resitem"><span class="tile" style="background:var(--sky-bg);color:var(--sky-fg);width:34px;height:34px"><svg class="ic"><use href="#i-description"></use></svg></span><div style="flex:1"><div class="rname">Proposal — Team 3.pdf</div><div class="rsub">Added by you · Sep 8</div></div><span class="badge" style="background:var(--sky-bg);color:var(--sky-fg)">Proposal</span></div>
+                  <div class="resitem"><span class="tile" style="background:var(--amber-bg);color:var(--amber);width:34px;height:34px"><svg class="ic"><use href="#i-image"></use></svg></span><div style="flex:1"><div class="rname">Whiteboard — load path sketch.jpg</div><div class="rsub">Added by Sam · Sep 10</div></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)">Whiteboard</span></div>
+                </div>
+              </div>
+              <div class="card" style="margin-top:16px">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h2 style="font-size:18px">Your team's progress</h2><span class="badge" style="background:var(--orange-bg);color:var(--orange)"><span class="ai"><svg class="ic"><use href="#i-auto_awesome"></use></svg></span> AI-generated</span></div>
+                <div class="barrow" style="grid-template-columns:auto 1fr 46px;margin:12px 0 14px"><span style="font-weight:600">68% complete</span><span class="bar"><span style="width:68%;background:var(--lav)"></span></span><span class="n">68%</span></div>
+                <p style="font-size:14px;line-height:1.6;margin:0">Your team has converged on a <b>suspension</b> structure backed by a load calculation. Remaining before submission: finalize the tradeoff analysis and a units check. Keep recording your discussion so the report stays current.</p>
               </div>
             </div>
-          </div>
-
-          <div class="card" style="margin-top:16px">
-            <div style="margin-bottom:12px"><h2 style="font-size:18px">Team resources</h2><p class="note">Add your proposal, report, contract, and whiteboard photos — each one updates the progress report.</p></div>
-            <div class="addrow" style="margin-bottom:14px"><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Proposal</button><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Report</button><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Contract</button><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Whiteboard</button></div>
-            <div class="reslist">
-              <div class="resitem"><span class="tile" style="background:var(--sky-bg);color:var(--sky-fg);width:34px;height:34px"><svg class="ic"><use href="#i-description"></use></svg></span><div style="flex:1"><div class="rname">Proposal — Team 3.pdf</div><div class="rsub">Added by you · Sep 8</div></div><span class="badge" style="background:var(--sky-bg);color:var(--sky-fg)">Proposal</span></div>
-              <div class="resitem"><span class="tile" style="background:var(--amber-bg);color:var(--amber);width:34px;height:34px"><svg class="ic"><use href="#i-image"></use></svg></span><div style="flex:1"><div class="rname">Whiteboard — load path sketch.jpg</div><div class="rsub">Added by Sam · Sep 10</div></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)">Whiteboard</span></div>
-            </div>
-          </div>
-
-          <div class="card" style="margin-top:16px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h2 style="font-size:18px">Your team's progress</h2><span class="badge" style="background:var(--orange-bg);color:var(--orange)"><span class="ai"><svg class="ic"><use href="#i-auto_awesome"></use></svg></span> AI-generated</span></div>
-            <div class="barrow" style="grid-template-columns:auto 1fr 46px;margin:12px 0 14px"><span style="font-weight:600">68% complete</span><span class="bar"><span style="width:68%;background:var(--lav)"></span></span><span class="n">68%</span></div>
-            <p style="font-size:14px;line-height:1.6;margin:0">Your team has converged on a <b>suspension</b> structure backed by a load calculation. Remaining before submission: finalize the tradeoff analysis and a units check. Keep recording your discussion so the report stays current.</p>
           </div>
         </section>
 
@@ -461,6 +461,12 @@
       });
     });
   });
-  function openWs() { document.getElementById('hub').style.display = 'none'; document.getElementById('ws').style.display = 'block'; document.querySelector('.main').scrollTop = 0; }
+  function openWs() { document.getElementById('hub').style.display = 'none'; document.getElementById('ws').style.display = 'block'; setWsView('faculty'); document.querySelector('.main').scrollTop = 0; }
+  function setWsView(v) {
+    var student = v === 'student';
+    document.getElementById('ws-faculty').style.display = student ? 'none' : 'block';
+    document.getElementById('ws-student').style.display = student ? 'block' : 'none';
+    document.querySelectorAll('#ws-view .seg').forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); });
+  }
   function closeWs() { document.getElementById('ws').style.display = 'none'; document.getElementById('hub').style.display = 'block'; }
 </script>
