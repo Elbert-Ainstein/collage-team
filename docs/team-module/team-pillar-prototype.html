@@ -58,7 +58,7 @@
   .umail { font-size: 10.5px; color: var(--muted); }
 
   .main { flex: 1; min-width: 0; overflow: auto; padding: 4px 14px 16px 0; }
-  .canvas { border: 1px solid var(--line); background: var(--page); border-radius: 18px; padding: 34px 40px 48px; min-height: calc(100vh - 92px); }
+  .canvas { border: 1px solid var(--line); background: var(--page); border-radius: 18px; padding: 34px 40px 48px; min-height: 420px; }
   .lede { color: var(--muted); font-size: 14px; margin-top: 6px; }
   .screen { display: none; }
   .screen.on { display: block; }
@@ -141,6 +141,7 @@
   .note { font-size: 12.5px; color: var(--muted); }
   a:focus-visible, button:focus-visible { outline: 2px solid var(--sky-fg); outline-offset: 2px; }
   @media (max-width: 1080px) { .grid4 { grid-template-columns: 1fr 1fr; } .stats .stat:nth-child(3) { display: none; } }
+  @media (max-width: 1000px) { .grid2 { grid-template-columns: 1fr; } .grid4 { grid-template-columns: 1fr 1fr; } .canvas { padding: 24px 22px 32px; } .v2-head { align-items: flex-start; } }
   @media (max-width: 720px) { .grid2, .grid4 { grid-template-columns: 1fr; } .side { display: none; } .row, .row__h { grid-template-columns: 1fr auto; } .row .due, .row .badge, .row__h span:nth-child(2), .row__h span:nth-child(3) { display: none; } }
   /* ---- inline SVG icon system (Material-ish outlined, self-contained) ---- */
   .ic { display:inline-block; vertical-align:-0.15em; width:1.15em; height:1.15em; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; flex-shrink:0; }
