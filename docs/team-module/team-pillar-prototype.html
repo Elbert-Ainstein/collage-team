@@ -224,7 +224,7 @@
       <span class="stat"><b>5</b> Summatives</span>
       <span class="stat"><b>72%</b> Avg completion</span>
       <span class="stat"><b>28</b> Students</span>
-      <button class="invite" onclick="go('team')"><svg class="ic"><use href="#i-person_add"></use></svg> Invite</button>
+      <button class="invite" onclick="go('teamv2')"><svg class="ic"><use href="#i-person_add"></use></svg> Invite</button>
     </div>
   </header>
 
@@ -234,8 +234,7 @@
       <nav class="nav">
         <button id="nav-create" onclick="go('create')"><svg class="ic"><use href="#i-auto_awesome"></use></svg>&nbsp; Create</button>
         <button id="nav-library" onclick="go('library')"><svg class="ic"><use href="#i-library_books"></use></svg>&nbsp; Library <span class="soon">soon</span></button>
-        <button id="nav-team" class="on" onclick="go('team')"><svg class="ic"><use href="#i-groups"></use></svg>&nbsp; Team v1</button>
-        <button id="nav-teamv2" onclick="go('teamv2')"><svg class="ic"><use href="#i-groups"></use></svg>&nbsp; Team v2 <span class="soon" style="background:var(--green);color:#fff">new</span></button>
+        <button id="nav-teamv2" class="on" onclick="go('teamv2')"><svg class="ic"><use href="#i-groups"></use></svg>&nbsp; Team</button>
       </nav>
       <div class="side__b">
         <div class="srow">My courses <span><svg class="ic"><use href="#i-chevron_right"></use></svg></span></div>
@@ -306,83 +305,7 @@
         </section>
 
         <!-- ===================== TEAM ===================== -->
-        <section id="screen-team" class="screen on">
-          <div id="hub">
-            <h1 style="font-size:30px">Team</h1>
-            <p class="lede">Run and monitor team-based activities &#8212; everything that happens after an activity is created.</p>
-            <div class="tabs" data-tabs="hub">
-              <button class="tab on" data-t="activities">Activities <span class="count">4</span></button>
-              <button class="tab" data-t="teams">Teams</button>
-              <button class="tab" data-t="analytics">Analytics</button>
-            </div>
-            <div class="panel on" data-p="activities">
-              <div class="row__h"><span>Activity</span><span>Status</span><span>Due</span><span></span></div>
-              <div class="row"><div class="rtitle"><span class="tile" style="background:var(--purple-bg);color:var(--lav)"><svg class="ic"><use href="#i-groups"></use></svg></span><div><div class="rname">Bridge Design Decision</div><div class="rsub">Team-based &#183; Collective &#183; 20 pts</div></div></div><span class="badge" style="background:var(--orange-bg);color:var(--orange)">Team stage</span><span class="due">Due Wed 11:59pm</span><button class="btn btn--ghost" onclick="openWs('Bridge Design Decision')">Open</button></div>
-              <div class="row"><div class="rtitle"><span class="tile" style="background:var(--purple-bg);color:var(--lav)"><svg class="ic"><use href="#i-groups"></use></svg></span><div><div class="rname">Statics Warm-up: Free-body Diagrams</div><div class="rsub">Team-based &#183; Individual &#183; 15 pts</div></div></div><span class="badge" style="background:var(--lav-bg);color:var(--lav)">Grading</span><span class="due">Due Wed 11:59pm</span><button class="btn btn--ghost" onclick="openWs('Statics Warm-up: Free-body Diagrams')">Open</button></div>
-              <div class="row"><div class="rtitle"><span class="tile" style="background:var(--purple-bg);color:var(--lav)"><svg class="ic"><use href="#i-groups"></use></svg></span><div><div class="rname">Materials Selection Case</div><div class="rsub">Team-based &#183; Individual &#183; 20 pts</div></div></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)">Draft</span><span class="due">No due date</span><button class="btn btn--ghost" onclick="openWs('Materials Selection Case')">Open</button></div>
-              <div class="row"><div class="rtitle"><span class="tile" style="background:var(--purple-bg);color:var(--lav)"><svg class="ic"><use href="#i-groups"></use></svg></span><div><div class="rname">Truss Analysis Project Milestone</div><div class="rsub">Team-based &#183; Collective &#183; 25 pts</div></div></div><span class="badge" style="background:var(--sky-bg);color:var(--sky-fg)">Scheduled</span><span class="due">Due Wed 11:59pm</span><button class="btn btn--ghost" onclick="openWs('Truss Analysis Project Milestone')">Open</button></div>
-            </div>
-            <div class="panel" data-p="teams">
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">
-                <p class="note" style="margin:0">Class teams for this course &#8212; create teams, then place students or let them self-assign.</p>
-                <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
-                  <label class="teamsize-ctl">Target team size <select id="target-size" onchange="setTargetSize(this.value)"><option value="any">Any (optional)</option><option value="2">2</option><option value="3">3</option><option value="4" selected>4</option><option value="5">5</option><option value="6">6</option></select></label>
-                  <button class="btn btn--navy" onclick="newTeam()"><svg class="ic"><use href="#i-add"></use></svg> New team</button>
-                </div>
-              </div>
-              <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px">
-                <span class="teamsize-ctl">Team setup
-                  <span class="segmented" id="team-mode">
-                    <button class="seg on" data-tm="shared" onclick="setTeamMode('shared')">Same for every activity</button>
-                    <button class="seg" data-tm="per" onclick="setTeamMode('per')">Teams per activity</button>
-                  </span>
-                </span>
-                <span class="note" id="team-mode-hint" style="margin:0">Every activity uses the same class teams.</span>
-              </div>
-              <div id="team-scope-row" style="display:none;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px">
-                <span class="teamsize-ctl">Teams for
-                  <select id="team-scope" onchange="setScope(this.value)">
-                    <option value="__all__">All activities (default)</option>
-                    <option value="Bridge Design Decision">Bridge Design Decision</option>
-                    <option value="Statics Warm-up: Free-body Diagrams">Statics Warm-up</option>
-                    <option value="Materials Selection Case">Materials Selection Case</option>
-                    <option value="Truss Analysis Project Milestone">Truss Analysis Project Milestone</option>
-                  </select>
-                </span>
-                <span class="note" id="team-scope-note" style="margin:0">The default teams, used by every activity that has no teams of its own.</span>
-              </div>
-              <div class="grid2" id="teams-grid">
-                <div class="card team-card">
-                  <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px"><span class="tile" style="background:var(--purple-bg);color:var(--lav);width:32px;height:32px"><svg class="ic"><use href="#i-groups"></use></svg></span><b style="flex:1">Team 3</b><span class="badge count-badge" style="background:var(--cream-300);color:var(--muted)">4 members</span><button class="icon-btn" title="Delete team" onclick="deleteTeam(this)"><svg class="ic"><use href="#i-delete"></use></svg></button></div>
-                  <div class="team-members"><div class="member"><span class="av" style="background:#0382ed">MC</span><span style="flex:1">Maya Chen</span><span class="rolechip">Recorder</span><button class="mem-x" title="Remove from team" onclick="removeStudent(this)"><svg class="ic"><use href="#i-close"></use></svg></button></div><div class="member"><span class="av" style="background:#8a3ffc">LO</span><span style="flex:1">Liam Ortiz</span><button class="mem-x" title="Remove from team" onclick="removeStudent(this)"><svg class="ic"><use href="#i-close"></use></svg></button></div><div class="member"><span class="av" style="background:#0e7c57">PN</span><span style="flex:1">Priya Nair</span><button class="mem-x" title="Remove from team" onclick="removeStudent(this)"><svg class="ic"><use href="#i-close"></use></svg></button></div><div class="member"><span class="av" style="background:#ff6713">SW</span><span style="flex:1">Sam Whitfield</span><button class="mem-x" title="Remove from team" onclick="removeStudent(this)"><svg class="ic"><use href="#i-close"></use></svg></button></div></div>
-                  <div class="team-warn note" style="display:none;align-items:center;gap:6px;color:var(--amber);margin-top:12px"><svg class="ic"><use href="#i-warning"></use></svg> <span class="warn-text">Fewer than 4 members</span></div>
-                  <div class="addrow" style="margin-top:12px"><button class="btn btn--ghost" onclick="addStudent(this)"><svg class="ic"><use href="#i-add"></use></svg> Add student</button><button class="btn btn--ghost" onclick="assignRoles(this)">Roles</button></div>
-                </div>
-                <div class="card team-card">
-                  <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px"><span class="tile" style="background:var(--purple-bg);color:var(--lav);width:32px;height:32px"><svg class="ic"><use href="#i-groups"></use></svg></span><b style="flex:1">Team 4</b><span class="badge count-badge" style="background:var(--amber-bg);color:var(--amber)">3 members</span><button class="icon-btn" title="Delete team" onclick="deleteTeam(this)"><svg class="ic"><use href="#i-delete"></use></svg></button></div>
-                  <div class="team-members"><div class="member"><span class="av" style="background:#c2410c">AR</span><span style="flex:1">Alex Rivera</span><button class="mem-x" title="Remove from team" onclick="removeStudent(this)"><svg class="ic"><use href="#i-close"></use></svg></button></div><div class="member"><span class="av" style="background:#0369a1">JK</span><span style="flex:1">Jordan Kim</span><button class="mem-x" title="Remove from team" onclick="removeStudent(this)"><svg class="ic"><use href="#i-close"></use></svg></button></div><div class="member"><span class="av" style="background:#7c3aed">TB</span><span style="flex:1">Taylor Brooks</span><button class="mem-x" title="Remove from team" onclick="removeStudent(this)"><svg class="ic"><use href="#i-close"></use></svg></button></div></div>
-                  <div class="team-warn note" style="display:none;align-items:center;gap:6px;color:var(--amber);margin-top:12px"><svg class="ic"><use href="#i-warning"></use></svg> <span class="warn-text">Fewer than 4 members</span></div>
-                  <div class="addrow" style="margin-top:12px"><button class="btn btn--ghost" onclick="addStudent(this)"><svg class="ic"><use href="#i-add"></use></svg> Add student</button><button class="btn btn--ghost" onclick="assignRoles(this)">Roles</button></div>
-                </div>
-              </div>
-            </div>
-            <div class="panel" data-p="analytics">
-              <div id="analytics-main">
-                <div class="grid4">
-                  <div class="card"><div class="statcard__l"><svg class="ic"><use href="#i-groups"></use></svg> Students</div><div class="statcard__v">24</div><div class="statcard__s">across 6 teams</div></div>
-                  <div class="card"><div class="statcard__l"><svg class="ic"><use href="#i-check_circle"></use></svg> Prep complete</div><div class="statcard__v">21/24</div><div class="statcard__s">88% ready</div></div>
-                  <div class="card stat-click" onclick="openOcr('flag')" title="Review flagged transcriptions"><div class="statcard__l"><svg class="ic"><use href="#i-flag"></use></svg> Needs review</div><div class="statcard__v" id="needs-review-count">3</div><div class="statcard__s">flagged &#183; tap to review</div></div>
-                  <div class="card"><div class="statcard__l"><svg class="ic"><use href="#i-schedule"></use></svg> Awaiting</div><div class="statcard__v">4</div><div class="statcard__s">teams submitted</div></div>
-                </div>
-                <div class="card" style="margin-top:16px">
-                  <p class="eyebrow">Preparation &#8594; performance</p>
-                  <div class="barrow"><span>Prep complete</span><span class="bar"><span style="width:88%;background:var(--green)"></span></span><span class="n">88%</span></div>
-                  <div class="barrow"><span>On-time</span><span class="bar"><span style="width:79%;background:var(--sky-fg)"></span></span><span class="n">79%</span></div>
-                  <div class="barrow"><span>OCR issues</span><span class="bar"><span style="width:8%;background:var(--amber)"></span></span><span class="n">8%</span></div>
-                  <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn--ghost" onclick="openOcr('all')"><svg class="ic"><use href="#i-visibility"></use></svg> View all student responses</button></div>
-                  <p class="note" style="margin-top:6px">Students who completed prep on time averaged ~3.2 points higher on the final rubric.</p>
-                </div>
-              </div>
+        <section id="screen-team" class="screen">
               <div id="ocr-review" style="display:none">
                 <button class="back" onclick="closeOcr()"><svg class="ic"><use href="#i-chevron_left"></use></svg> Back to Analytics</button>
                 <div class="ws-head">
@@ -462,9 +385,6 @@
                 </div>
                 <div id="resp-empty" style="display:none"><div class="card"><p class="note" style="margin:0">No responses match this filter &#8212; every transcription here is confirmed.</p></div></div>
               </div>
-
-            </div>
-          </div>
 
           <div id="ws" style="display:none">
             <button class="back" onclick="closeWs()"><svg class="ic"><use href="#i-chevron_left"></use></svg> Back to Team</button>
@@ -579,8 +499,8 @@
         </section>
 
         <!-- ===================== TEAM v2 ===================== -->
-        <section id="screen-teamv2" class="screen">
-          <h1 style="font-size:30px">Team <span class="v2badge">v2</span></h1>
+        <section id="screen-teamv2" class="screen on">
+          <h1 style="font-size:30px">Team</h1>
           <p class="lede">Run and monitor team-based activities.</p>
           <div class="attn"><svg class="ic"><use href="#i-flag"></use></svg> 3 prep responses to review &#183; Bridge Design due Wed &#183; 4 of 6 teams submitted</div>
           <div class="tabs" data-tabs="hubv2">
@@ -650,10 +570,10 @@
 <script>
   function go(name) {
     var ws = document.getElementById('ws'); if (ws) ws.style.display = 'none';
-    var hub = document.getElementById('hub'); if (hub) hub.style.display = 'block';
+    var ocr = document.getElementById('ocr-review'); if (ocr) ocr.style.display = 'none';
     document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('on'); });
     document.getElementById('screen-' + name).classList.add('on');
-    ['create', 'library', 'team', 'teamv2'].forEach(function (n) {
+    ['create', 'library', 'teamv2'].forEach(function (n) {
       var b = document.getElementById('nav-' + n); if (b) b.classList.toggle('on', n === name);
     });
     document.querySelector('.main').scrollTop = 0;
@@ -687,9 +607,9 @@
       r.innerHTML = '<div class=\'rtitle\'><span class=\'tile\' style=\'background:var(--purple-bg);color:var(--lav)\'><svg class=\'ic\'><use href=\'#i-groups\'></use></svg></span><div><div class=\'rname\'>' + title + '</div><div class=\'rsub\'>Team-based \u00B7 Collective \u00B7 20 pts</div></div></div><span class=\'badge\' style=\'background:var(--amber-bg);color:var(--amber)\'>Draft</span><span class=\'due\'>No due date</span><button class=\'btn btn--ghost\' onclick=\'openWs(&quot;' + title + '&quot;)\'>Open</button>';
       panel.appendChild(r);
     }
-    go('team');
-    var at = document.querySelector('#hub [data-tabs=\'hub\'] .tab[data-t=\'activities\']'); if (at) at.click();
-    openWs(title);
+    go('teamv2');
+    var at = document.querySelector('#screen-teamv2 [data-tabs=\'hubv2\'] .tab[data-t=\'activities\']'); if (at) at.click();
+    openWs(title, 'teamv2');
   }
 
   // in-page tabs
@@ -711,7 +631,7 @@
   };
   var wsReturn = 'team';
   function openWs(title, ret) {
-    wsReturn = ret || 'team';
+    wsReturn = ret || 'teamv2';
     var a = ACTIVITIES[title] || ACTIVITIES['Bridge Design Decision'];
     var set = function (id, v) { var e = document.getElementById(id); if (e) e.textContent = v; };
     set('ws-title', title);
@@ -720,18 +640,19 @@
     var sb = document.getElementById('ws-stu-status'); if (sb) { sb.textContent = a.status; sb.style.background = a.sbg; sb.style.color = a.sfg; }
     document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('on'); });
     document.getElementById('screen-team').classList.add('on');
-    document.getElementById('hub').style.display = 'none'; document.getElementById('ws').style.display = 'block';
-    ['team', 'teamv2'].forEach(function (n) { var b = document.getElementById('nav-' + n); if (b) b.classList.toggle('on', n === wsReturn); });
+    document.getElementById('ws').style.display = 'block';
+    var ocr = document.getElementById('ocr-review'); if (ocr) ocr.style.display = 'none';
+    var nb = document.getElementById('nav-teamv2'); if (nb) nb.classList.add('on');
     setWsView('faculty'); document.querySelector('.main').scrollTop = 0;
   }
-  function editTeam() { closeWs(); var t = document.querySelector('#hub [data-tabs=\'hub\'] .tab[data-t=\'teams\']'); if (t) t.click(); document.querySelector('.main').scrollTop = 0; }
+  function editTeam() { go('teamv2'); var t = document.querySelector('#screen-teamv2 [data-tabs=\'hubv2\'] .tab[data-t=\'teams\']'); if (t) t.click(); document.querySelector('.main').scrollTop = 0; }
   function setWsView(v) {
     var student = v === 'student';
     document.getElementById('ws-faculty').style.display = student ? 'none' : 'block';
     document.getElementById('ws-student').style.display = student ? 'block' : 'none';
     document.querySelectorAll('#ws-view .seg').forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); });
   }
-  function closeWs() { document.getElementById('ws').style.display = 'none'; document.getElementById('hub').style.display = 'block'; go(wsReturn); }
+  function closeWs() { document.getElementById('ws').style.display = 'none'; go(wsReturn); }
   // ---- Team v2 ----
   var CLASS_ROSTER = [
     { n: 'Maya Chen', i: 'MC', c: '#0382ed' }, { n: 'Liam Ortiz', i: 'LO', c: '#8a3ffc' }, { n: 'Priya Nair', i: 'PN', c: '#0e7c57' }, { n: 'Sam Whitfield', i: 'SW', c: '#ff6713' },
@@ -926,8 +847,15 @@
     if (card) refreshTeam(card);
   }
   document.querySelectorAll('.team-card').forEach(function (c) { refreshTeam(c); });
-  function openOcr(filter) { document.getElementById('analytics-main').style.display = 'none'; document.getElementById('ocr-review').style.display = 'block'; filterResp(filter || 'all'); document.querySelector('.main').scrollTop = 0; }
-  function closeOcr() { document.getElementById('ocr-review').style.display = 'none'; document.getElementById('analytics-main').style.display = 'block'; }
+  function openOcr(filter) {
+    document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('on'); });
+    document.getElementById('screen-team').classList.add('on');
+    var ws = document.getElementById('ws'); if (ws) ws.style.display = 'none';
+    document.getElementById('ocr-review').style.display = 'block';
+    var nb = document.getElementById('nav-teamv2'); if (nb) nb.classList.add('on');
+    filterResp(filter || 'all'); document.querySelector('.main').scrollTop = 0;
+  }
+  function closeOcr() { document.getElementById('ocr-review').style.display = 'none'; go('teamv2'); var t = document.querySelector('#screen-teamv2 [data-tabs=\'hubv2\'] .tab[data-t=\'analytics\']'); if (t) t.click(); }
   function filterResp(f) {
     document.querySelectorAll('.fchip').forEach(function (c) { c.classList.toggle('on', c.dataset.f === f); });
     var shown = 0;
