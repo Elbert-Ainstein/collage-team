@@ -163,7 +163,23 @@
   .ocr-card + .ocr-card { margin-top:14px; }
   .stat-click { cursor:pointer; transition:box-shadow .15s; }
   .stat-click:hover { box-shadow:0 4px 6px -1px rgba(0,0,0,0.1); }
-  @media (max-width: 720px) { .ocr-item { grid-template-columns:1fr; } }
+  @media (max-width: 720px) { .ocr-item { grid-template-columns:1fr; } .resp-body { grid-template-columns:1fr; } }
+  .resp-body { display:grid; grid-template-columns:220px 1fr; gap:18px; align-items:start; }
+  .resp-card + .resp-card { margin-top:14px; }
+  .scan { cursor:zoom-in; }
+  .scan-paper { background-color:#fff; background-image:repeating-linear-gradient(#fff, #fff 25px, #d3e2f2 26px); border:1px solid var(--line); border-radius:8px; padding:12px 14px 8px; font-family:'Bradley Hand','Segoe Script','Comic Sans MS',cursive; font-size:13px; line-height:26px; color:#26405c; min-height:150px; overflow:hidden; }
+  .scan-paper p { margin:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .scan-cap { margin-top:8px; display:flex; align-items:center; justify-content:center; gap:6px; font-size:11px; color:var(--muted); }
+  .scan-paper--lg { font-size:22px; line-height:44px; min-height:auto; padding:26px; background-image:repeating-linear-gradient(#fff, #fff 43px, #d3e2f2 44px); }
+  .scan-paper--lg p { white-space:normal; }
+  #scan-modal { position:fixed; inset:0; z-index:60; background:rgba(0,0,0,0.55); display:none; align-items:center; justify-content:center; padding:24px; }
+  .scan-modal-box { background:var(--cream-100); border-radius:14px; width:min(560px,94vw); max-height:88vh; overflow:auto; box-shadow:0 20px 60px rgba(0,0,0,0.35); }
+  .scan-modal-head { position:sticky; top:0; background:var(--cream-100); display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid var(--line); font-weight:600; font-size:14px; color:var(--navy); }
+  .scan-modal-head button { border:0; background:none; cursor:pointer; color:var(--muted); display:inline-flex; }
+  .filter-chips { display:flex; gap:8px; margin:14px 0 16px; }
+  .fchip { padding:6px 13px; border-radius:999px; border:1px solid var(--line); background:var(--cream-100); font-size:12.5px; font-weight:600; color:var(--muted); cursor:pointer; font-family:inherit; }
+  .fchip.on { background:var(--navy); color:var(--cream-100); border-color:var(--navy); }
+  .resp-confirmed { display:inline-flex; align-items:center; gap:6px; color:var(--green); font-weight:600; font-size:13px; }
 </style>
 
 <div class="wrap">
@@ -301,7 +317,7 @@
                 <div class="grid4">
                   <div class="card"><div class="statcard__l"><svg class="ic"><use href="#i-groups"></use></svg> Students</div><div class="statcard__v">24</div><div class="statcard__s">across 6 teams</div></div>
                   <div class="card"><div class="statcard__l"><svg class="ic"><use href="#i-check_circle"></use></svg> Prep complete</div><div class="statcard__v">21/24</div><div class="statcard__s">88% ready</div></div>
-                  <div class="card stat-click" onclick="openOcr()" title="Review flagged OCR"><div class="statcard__l"><svg class="ic"><use href="#i-flag"></use></svg> Needs review</div><div class="statcard__v" id="needs-review-count">3</div><div class="statcard__s">flagged &#183; tap to review</div></div>
+                  <div class="card stat-click" onclick="openOcr('flag')" title="Review flagged transcriptions"><div class="statcard__l"><svg class="ic"><use href="#i-flag"></use></svg> Needs review</div><div class="statcard__v" id="needs-review-count">3</div><div class="statcard__s">flagged &#183; tap to review</div></div>
                   <div class="card"><div class="statcard__l"><svg class="ic"><use href="#i-schedule"></use></svg> Awaiting</div><div class="statcard__v">4</div><div class="statcard__s">teams submitted</div></div>
                 </div>
                 <div class="card" style="margin-top:16px">
@@ -309,51 +325,88 @@
                   <div class="barrow"><span>Prep complete</span><span class="bar"><span style="width:88%;background:var(--green)"></span></span><span class="n">88%</span></div>
                   <div class="barrow"><span>On-time</span><span class="bar"><span style="width:79%;background:var(--sky-fg)"></span></span><span class="n">79%</span></div>
                   <div class="barrow"><span>OCR issues</span><span class="bar"><span style="width:8%;background:var(--amber)"></span></span><span class="n">8%</span></div>
-                  <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn--ghost" onclick="openOcr()"><svg class="ic"><use href="#i-warning"></use></svg> Review flagged OCR submissions</button></div>
+                  <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn btn--ghost" onclick="openOcr('all')"><svg class="ic"><use href="#i-visibility"></use></svg> View all student responses</button></div>
                   <p class="note" style="margin-top:6px">Students who completed prep on time averaged ~3.2 points higher on the final rubric.</p>
                 </div>
               </div>
               <div id="ocr-review" style="display:none">
                 <button class="back" onclick="closeOcr()"><svg class="ic"><use href="#i-chevron_left"></use></svg> Back to Analytics</button>
                 <div class="ws-head">
-                  <div><h1 style="font-size:24px">OCR review</h1><p class="lede"><span id="ocr-count">3</span> submissions flagged &#8212; the AI's read of the handwriting is low-confidence. Confirm or fix each.</p></div>
+                  <div><h1 style="font-size:24px">Student responses</h1><p class="lede">Every student's individual prep for this activity. Flagged items need a transcription check &#8212; grading is a separate, faculty-owned step.</p></div>
                 </div>
-                <div id="ocr-list">
-                <div class="card ocr-card">
-                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="display:flex;align-items:center;gap:10px"><span class="av" style="background:#0382ed">MC</span><div><div class="rname">Maya Chen</div><div class="rsub">Bridge Design Decision &#183; individual prep</div></div></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)"><svg class="ic"><use href="#i-warning"></use></svg> Low confidence</span></div>
-                  <div class="ocr-item">
-                    <div class="ocr-scan"><svg class="ic ic-lg"><use href="#i-image"></use></svg> bridge_calc.jpg</div>
+                <div class="filter-chips">
+                  <button class="fchip on" data-f="all" onclick="filterResp('all')">All <span id="fc-all">6</span></button>
+                  <button class="fchip" data-f="flag" onclick="filterResp('flag')">Needs review <span id="fc-flag">3</span></button>
+                </div>
+                <div id="resp-list">
+                <div class="card resp-card" data-flag="1">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="display:flex;align-items:center;gap:10px"><span class="av" style="background:#0382ed">MC</span><div><div class="rname">Maya Chen</div><div class="rsub">Bridge Design Decision &#183; individual prep</div></div></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)"><svg class="ic"><use href="#i-warning"></use></svg> Needs review</span></div>
+                  <div class="resp-body">
+                    <div class="scan" data-file="bridge_calc.jpg" onclick="openScan(this)"><div class="scan-paper"><p>Bridge Design Decision</p><p>Choice: suspension bridge</p><p>T_max = 1180 kN / cable</p><p>Two cables carry the deck</p><p>Safety factor = 2.0</p></div><div class="scan-cap"><svg class="ic"><use href="#i-image"></use></svg> bridge_calc.jpg &#183; click to enlarge</div></div>
                     <div>
-                      <p class="eyebrow" style="margin-bottom:6px">AI read this as</p>
+                      <p class="eyebrow" style="margin-bottom:6px">AI transcription</p>
                       <div class="ocr-text">T<sub>max</sub> = <span class="ocr-flag">1180</span> kN per cable; two cables share the deck load.</div>
-                      <div class="addrow" style="margin-top:12px"><button class="btn btn--navy" onclick="resolveOcr(this)"><svg class="ic"><use href="#i-check_circle"></use></svg> Looks right</button><button class="btn btn--ghost" onclick="editOcr(this)">Edit text</button></div>
+                      <div class="addrow" style="margin-top:12px"><button class="btn btn--navy" onclick="confirmOcr(this)"><svg class="ic"><use href="#i-check_circle"></use></svg> Confirm transcription</button><button class="btn btn--ghost" onclick="editOcr(this)">Edit text</button></div>
                     </div>
                   </div>
                 </div>
-                <div class="card ocr-card">
-                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="display:flex;align-items:center;gap:10px"><span class="av" style="background:#8a3ffc">LO</span><div><div class="rname">Liam Ortiz</div><div class="rsub">Statics Warm-up &#183; individual prep</div></div></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)"><svg class="ic"><use href="#i-warning"></use></svg> Low confidence</span></div>
-                  <div class="ocr-item">
-                    <div class="ocr-scan"><svg class="ic ic-lg"><use href="#i-image"></use></svg> fbd_scan.jpg</div>
+                <div class="card resp-card" data-flag="1">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="display:flex;align-items:center;gap:10px"><span class="av" style="background:#8a3ffc">LO</span><div><div class="rname">Liam Ortiz</div><div class="rsub">Bridge Design Decision &#183; individual prep</div></div></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)"><svg class="ic"><use href="#i-warning"></use></svg> Needs review</span></div>
+                  <div class="resp-body">
+                    <div class="scan" data-file="fbd_scan.jpg" onclick="openScan(this)"><div class="scan-paper"><p>Free-body diagram</p><p>Sum of Fy = 0</p><p>Normal force N = 412 N</p><p>Friction f = 0.3 N</p></div><div class="scan-cap"><svg class="ic"><use href="#i-image"></use></svg> fbd_scan.jpg &#183; click to enlarge</div></div>
                     <div>
-                      <p class="eyebrow" style="margin-bottom:6px">AI read this as</p>
-                      <div class="ocr-text">Normal force N = <span class="ocr-flag">4I2</span> N &#8212; is the handwriting &#8220;412&#8221;?</div>
-                      <div class="addrow" style="margin-top:12px"><button class="btn btn--navy" onclick="resolveOcr(this)"><svg class="ic"><use href="#i-check_circle"></use></svg> Looks right</button><button class="btn btn--ghost" onclick="editOcr(this)">Edit text</button></div>
+                      <p class="eyebrow" style="margin-bottom:6px">AI transcription</p>
+                      <div class="ocr-text">Normal force N = <span class="ocr-flag">4I2</span> N &#8212; handwriting could be &#8220;412&#8221;.</div>
+                      <div class="addrow" style="margin-top:12px"><button class="btn btn--navy" onclick="confirmOcr(this)"><svg class="ic"><use href="#i-check_circle"></use></svg> Confirm transcription</button><button class="btn btn--ghost" onclick="editOcr(this)">Edit text</button></div>
                     </div>
                   </div>
                 </div>
-                <div class="card ocr-card">
-                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="display:flex;align-items:center;gap:10px"><span class="av" style="background:#0e7c57">PN</span><div><div class="rname">Priya Nair</div><div class="rsub">Materials Selection &#183; individual prep</div></div></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)"><svg class="ic"><use href="#i-warning"></use></svg> Low confidence</span></div>
-                  <div class="ocr-item">
-                    <div class="ocr-scan"><svg class="ic ic-lg"><use href="#i-image"></use></svg> materials_notes.jpg</div>
+                <div class="card resp-card" data-flag="1">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="display:flex;align-items:center;gap:10px"><span class="av" style="background:#0e7c57">PN</span><div><div class="rname">Priya Nair</div><div class="rsub">Bridge Design Decision &#183; individual prep</div></div></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)"><svg class="ic"><use href="#i-warning"></use></svg> Needs review</span></div>
+                  <div class="resp-body">
+                    <div class="scan" data-file="materials_notes.jpg" onclick="openScan(this)"><div class="scan-paper"><p>Materials selection</p><p>Yield strength = 250 MPa</p><p>Density 2.7 g/cm3</p><p>Pick: aluminium alloy</p></div><div class="scan-cap"><svg class="ic"><use href="#i-image"></use></svg> materials_notes.jpg &#183; click to enlarge</div></div>
                     <div>
-                      <p class="eyebrow" style="margin-bottom:6px">AI read this as</p>
+                      <p class="eyebrow" style="margin-bottom:6px">AI transcription</p>
                       <div class="ocr-text">Yield strength = <span class="ocr-flag">2S0</span> MPa for the selected alloy.</div>
-                      <div class="addrow" style="margin-top:12px"><button class="btn btn--navy" onclick="resolveOcr(this)"><svg class="ic"><use href="#i-check_circle"></use></svg> Looks right</button><button class="btn btn--ghost" onclick="editOcr(this)">Edit text</button></div>
+                      <div class="addrow" style="margin-top:12px"><button class="btn btn--navy" onclick="confirmOcr(this)"><svg class="ic"><use href="#i-check_circle"></use></svg> Confirm transcription</button><button class="btn btn--ghost" onclick="editOcr(this)">Edit text</button></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card resp-card" data-flag="0">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="display:flex;align-items:center;gap:10px"><span class="av" style="background:#ff6713">SW</span><div><div class="rname">Sam Whitfield</div><div class="rsub">Bridge Design Decision &#183; individual prep</div></div></div><span class="badge" style="background:var(--green-bg);color:var(--green)"><svg class="ic"><use href="#i-check_circle"></use></svg> High confidence</span></div>
+                  <div class="resp-body">
+                    <div class="scan" data-file="sam_prep.jpg" onclick="openScan(this)"><div class="scan-paper"><p>Bridge type: arch</p><p>Mainly compression</p><p>Load path is clear</p><p>TODO: cost estimate</p></div><div class="scan-cap"><svg class="ic"><use href="#i-image"></use></svg> sam_prep.jpg &#183; click to enlarge</div></div>
+                    <div>
+                      <p class="eyebrow" style="margin-bottom:6px">AI transcription</p>
+                      <div class="ocr-text">Arch bridge, primarily in compression. Load path is clear; still needs a cost estimate.</div>
+                      <div class="addrow" style="margin-top:12px"><button class="btn btn--ghost" onclick="editOcr(this)">Edit text</button></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card resp-card" data-flag="0">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="display:flex;align-items:center;gap:10px"><span class="av" style="background:#c2410c">AT</span><div><div class="rname">Ava Thompson</div><div class="rsub">Bridge Design Decision &#183; individual prep</div></div></div><span class="badge" style="background:var(--green-bg);color:var(--green)"><svg class="ic"><use href="#i-check_circle"></use></svg> High confidence</span></div>
+                  <div class="resp-body">
+                    <div class="scan" data-file="ava_prep.jpg" onclick="openScan(this)"><div class="scan-paper"><p>Cable-stayed design</p><p>Tower height 40 m</p><p>Deck span 90 m</p><p>Stay tension computed</p></div><div class="scan-cap"><svg class="ic"><use href="#i-image"></use></svg> ava_prep.jpg &#183; click to enlarge</div></div>
+                    <div>
+                      <p class="eyebrow" style="margin-bottom:6px">AI transcription</p>
+                      <div class="ocr-text">Cable-stayed design; 40 m tower, 90 m deck span; stay tension computed.</div>
+                      <div class="addrow" style="margin-top:12px"><button class="btn btn--ghost" onclick="editOcr(this)">Edit text</button></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="card resp-card" data-flag="0">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><div style="display:flex;align-items:center;gap:10px"><span class="av" style="background:#0369a1">KN</span><div><div class="rname">Kai Nakamura</div><div class="rsub">Bridge Design Decision &#183; individual prep</div></div></div><span class="badge" style="background:var(--green-bg);color:var(--green)"><svg class="ic"><use href="#i-check_circle"></use></svg> High confidence</span></div>
+                  <div class="resp-body">
+                    <div class="scan" data-file="kai_prep.jpg" onclick="openScan(this)"><div class="scan-paper"><p>Truss comparison</p><p>Warren vs Pratt</p><p>Choose Pratt truss</p><p>Member forces listed</p></div><div class="scan-cap"><svg class="ic"><use href="#i-image"></use></svg> kai_prep.jpg &#183; click to enlarge</div></div>
+                    <div>
+                      <p class="eyebrow" style="margin-bottom:6px">AI transcription</p>
+                      <div class="ocr-text">Compared Warren vs Pratt trusses; chose Pratt; listed the member forces.</div>
+                      <div class="addrow" style="margin-top:12px"><button class="btn btn--ghost" onclick="editOcr(this)">Edit text</button></div>
                     </div>
                   </div>
                 </div>
                 </div>
-                <div id="ocr-empty" style="display:none"><div class="card" style="display:flex;align-items:center;gap:12px"><span class="tile" style="background:var(--green-bg);color:var(--green);width:40px;height:40px"><svg class="ic ic-lg"><use href="#i-check_circle"></use></svg></span><div><div style="font-weight:600">All clear</div><div class="note">No OCR submissions need review right now.</div></div></div></div>
+                <div id="resp-empty" style="display:none"><div class="card"><p class="note" style="margin:0">No responses match this filter &#8212; every transcription here is confirmed.</p></div></div>
               </div>
 
             </div>
@@ -489,6 +542,12 @@
   </div>
 </div>
 
+<div id="scan-modal" onclick="if(event.target===this)closeScan()">
+  <div class="scan-modal-box">
+    <div class="scan-modal-head"><span id="scan-modal-title">scan</span><button onclick="closeScan()" title="Close"><svg class="ic"><use href="#i-close"></use></svg></button></div>
+    <div style="padding:16px"><div class="scan-paper scan-paper--lg" id="scan-modal-body"></div></div>
+  </div>
+</div>
 <script>
   function go(name) {
     document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('on'); });
@@ -616,17 +675,38 @@
     if (card) refreshTeam(card);
   }
   document.querySelectorAll('.team-card').forEach(function (c) { refreshTeam(c); });
-  function openOcr() { document.getElementById('analytics-main').style.display = 'none'; document.getElementById('ocr-review').style.display = 'block'; document.querySelector('.main').scrollTop = 0; }
+  function openOcr(filter) { document.getElementById('analytics-main').style.display = 'none'; document.getElementById('ocr-review').style.display = 'block'; filterResp(filter || 'all'); document.querySelector('.main').scrollTop = 0; }
   function closeOcr() { document.getElementById('ocr-review').style.display = 'none'; document.getElementById('analytics-main').style.display = 'block'; }
-  function resolveOcr(btn) {
-    var card = btn.closest('.ocr-card'); if (card) card.remove();
-    var n = document.querySelectorAll('#ocr-list .ocr-card').length;
-    var a = document.getElementById('ocr-count'); if (a) a.textContent = n;
-    var b = document.getElementById('needs-review-count'); if (b) b.textContent = n;
-    if (n === 0) document.getElementById('ocr-empty').style.display = 'block';
+  function filterResp(f) {
+    document.querySelectorAll('.fchip').forEach(function (c) { c.classList.toggle('on', c.dataset.f === f); });
+    var shown = 0;
+    document.querySelectorAll('#resp-list .resp-card').forEach(function (card) {
+      var vis = f === 'all' || card.getAttribute('data-flag') === '1';
+      card.style.display = vis ? 'block' : 'none'; if (vis) shown++;
+    });
+    document.getElementById('resp-empty').style.display = shown === 0 ? 'block' : 'none';
+  }
+  function recountResp() {
+    var flag = document.querySelectorAll('#resp-list .resp-card[data-flag="1"]').length;
+    var all = document.querySelectorAll('#resp-list .resp-card').length;
+    var a = document.getElementById('fc-all'); if (a) a.textContent = all;
+    var f = document.getElementById('fc-flag'); if (f) f.textContent = flag;
+    var nr = document.getElementById('needs-review-count'); if (nr) nr.textContent = flag;
+  }
+  function confirmOcr(btn) {
+    var card = btn.closest('.resp-card'); card.setAttribute('data-flag', '0');
+    var badge = card.querySelector('.badge'); if (badge) { badge.style.background = 'var(--green-bg)'; badge.style.color = 'var(--green)'; badge.innerHTML = '<svg class="ic"><use href="#i-check_circle"></use></svg> Transcription confirmed'; }
+    var act = card.querySelector('.addrow'); if (act) act.innerHTML = '<span class="resp-confirmed"><svg class="ic"><use href="#i-check_circle"></use></svg> Confirmed by you</span>';
+    recountResp();
   }
   function editOcr(btn) {
-    var txt = btn.closest('.ocr-card').querySelector('.ocr-text');
+    var txt = btn.closest('.resp-card').querySelector('.ocr-text');
     txt.setAttribute('contenteditable', 'true'); txt.style.outline = '2px solid var(--sky-fg)'; txt.focus();
   }
+  function openScan(el) {
+    document.getElementById('scan-modal-title').textContent = el.getAttribute('data-file');
+    document.getElementById('scan-modal-body').innerHTML = el.querySelector('.scan-paper').innerHTML;
+    document.getElementById('scan-modal').style.display = 'flex';
+  }
+  function closeScan() { document.getElementById('scan-modal').style.display = 'none'; }
 </script>
