@@ -141,20 +141,26 @@
   a:focus-visible, button:focus-visible { outline: 2px solid var(--sky-fg); outline-offset: 2px; }
   @media (max-width: 1080px) { .grid4 { grid-template-columns: 1fr 1fr; } .stats .stat:nth-child(3) { display: none; } }
   @media (max-width: 720px) { .grid2, .grid4 { grid-template-columns: 1fr; } .side { display: none; } .row, .row__h { grid-template-columns: 1fr auto; } .row .due, .row .badge, .row__h span:nth-child(2), .row__h span:nth-child(3) { display: none; } }
+  /* ---- inline SVG icon system (Material-ish outlined, self-contained) ---- */
+  .ic { display:inline-block; vertical-align:-0.15em; width:1.15em; height:1.15em; fill:none; stroke:currentColor; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; flex-shrink:0; }
+  .tile .ic, .mq-ico .ic { width:19px; height:19px; }
+  .ic-lg { width:24px; height:24px; }
 </style>
 
 <div class="wrap">
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><symbol id="i-auto_awesome" viewBox="0 0 24 24"><path d="M12 3.2l1.9 5.5 5.5 1.9-5.5 1.9L12 18l-1.9-5.5L4.6 10.6l5.5-1.9z"/><path d="M18.6 14.8l.6 1.9 1.9.6-1.9.6-.6 1.9-.6-1.9-1.9-.6 1.9-.6z"/></symbol><symbol id="i-menu_book" viewBox="0 0 24 24"><path d="M12 6.6C10.4 5.4 8.2 5 6 5.5v12.2c2.2-.5 4.4-.1 6 1.1 1.6-1.2 3.8-1.6 6-1.1V5.5c-2.2-.5-4.4-.1-6 1.1z"/><path d="M12 6.6V19"/></symbol><symbol id="i-library_books" viewBox="0 0 24 24"><rect x="4.5" y="5" width="3.3" height="14" rx="0.7"/><rect x="9.2" y="5" width="3.3" height="14" rx="0.7"/><path d="M14.5 6.2l3.1.8-3 12.2-3.1-.8"/></symbol><symbol id="i-groups" viewBox="0 0 24 24"><circle cx="9" cy="9" r="2.5"/><path d="M4.3 18.2a4.7 4.7 0 0 1 9.4 0"/><circle cx="16.4" cy="9.6" r="2"/><path d="M15.1 14.5a4.2 4.2 0 0 1 4.7 3.5"/></symbol><symbol id="i-quiz" viewBox="0 0 24 24"><rect x="4" y="4.5" width="16" height="15" rx="2.2"/><path d="M9.2 9.4a2.1 2.1 0 1 1 3.1 1.8c-.8.5-1.1 1-1.1 1.9"/><path d="M11.2 15.6v.1"/></symbol><symbol id="i-description" viewBox="0 0 24 24"><path d="M7 3.5h6.2L18 8.2V20.5H7z"/><path d="M13.1 3.6V8.1h4.7"/><path d="M9.6 12.4h6M9.6 15.4h6"/></symbol><symbol id="i-image" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="M4.8 16.6l4.4-4 3 2.6 3.4-3.2L20 15"/></symbol><symbol id="i-mic" viewBox="0 0 24 24"><rect x="9.5" y="3.2" width="5" height="10" rx="2.5"/><path d="M6.5 11a5.5 5.5 0 0 0 11 0"/><path d="M12 16.6V20M9.2 20h5.6"/></symbol><symbol id="i-play_arrow" viewBox="0 0 24 24"><path d="M8 5.6l10.4 6.4L8 18.4z" fill="currentColor" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol><symbol id="i-chevron_left" viewBox="0 0 24 24"><path d="M14.5 6l-6 6 6 6"/></symbol><symbol id="i-chevron_right" viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></symbol><symbol id="i-expand_more" viewBox="0 0 24 24"><path d="M6 9.5l6 6 6-6"/></symbol><symbol id="i-visibility" viewBox="0 0 24 24"><path d="M2.6 12S6 5.8 12 5.8 21.4 12 21.4 12 18 18.2 12 18.2 2.6 12 2.6 12z"/><circle cx="12" cy="12" r="2.7"/></symbol><symbol id="i-check_circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.3 12.2l2.5 2.5 4.9-5.4"/></symbol><symbol id="i-warning" viewBox="0 0 24 24"><path d="M12 4.3L2.9 20h18.2z"/><path d="M12 10.2v4.2M12 17.3v.1"/></symbol><symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4"/><path d="M6 4.6h11l-2.2 3.4L17 11.4H6"/></symbol><symbol id="i-schedule" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.4V12l3.2 1.9"/></symbol><symbol id="i-arrow_upward" viewBox="0 0 24 24"><path d="M12 19V5.6M6.6 11L12 5.6 17.4 11"/></symbol><symbol id="i-add" viewBox="0 0 24 24"><path d="M12 5.5v13M5.5 12h13"/></symbol><symbol id="i-person_add" viewBox="0 0 24 24"><circle cx="9.5" cy="8" r="3.3"/><path d="M3.9 19a5.6 5.6 0 0 1 11.2 0"/><path d="M18.5 8.3v5.6M15.7 11.1h5.6"/></symbol><symbol id="i-upload_file" viewBox="0 0 24 24"><path d="M12 15.5V5.5M7.8 9.7L12 5.5l4.2 4.2"/><path d="M5 15v3.6a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V15"/></symbol><symbol id="i-attach_file" viewBox="0 0 24 24"><path d="M17.6 9l-7.4 7.4a3 3 0 0 1-4.3-4.3l8.1-8.1a2 2 0 0 1 2.9 2.9l-8 8a1 1 0 0 1-1.5-1.4l6.9-6.9"/></symbol></defs></svg>
+  
   <header class="topbar">
     <div class="topbar__l">
       <span class="fd">Faculty Dashboard</span>
-      <span class="chip">📘&nbsp; Physical Science 101 · Unit 2 — Matter &amp; Energy</span>
+      <span class="chip"><svg class="ic"><use href="#i-menu_book"></use></svg>&nbsp; Physical Science 101 · Unit 2 — Matter &amp; Energy</span>
     </div>
     <div class="stats">
       <span class="stat"><b>6</b> Lessons</span>
       <span class="stat"><b>5</b> Summatives</span>
       <span class="stat"><b>72%</b> Avg completion</span>
       <span class="stat"><b>28</b> Students</span>
-      <button class="invite" onclick="go('team')">＋ Invite</button>
+      <button class="invite" onclick="go('team')"><svg class="ic"><use href="#i-person_add"></use></svg> Invite</button>
     </div>
   </header>
 
@@ -162,13 +168,13 @@
     <aside class="side">
       <div class="brand"><span class="logo">Collage<b><span class="g1">Λ</span><span class="g2">I</span></b></span></div>
       <nav class="nav">
-        <button id="nav-create" onclick="go('create')">✦&nbsp; Create</button>
-        <button id="nav-library" onclick="go('library')">▤&nbsp; Library <span class="soon">soon</span></button>
-        <button id="nav-team" class="on" onclick="go('team')">◐&nbsp; Team</button>
+        <button id="nav-create" onclick="go('create')"><svg class="ic"><use href="#i-auto_awesome"></use></svg>&nbsp; Create</button>
+        <button id="nav-library" onclick="go('library')"><svg class="ic"><use href="#i-library_books"></use></svg>&nbsp; Library <span class="soon">soon</span></button>
+        <button id="nav-team" class="on" onclick="go('team')"><svg class="ic"><use href="#i-groups"></use></svg>&nbsp; Team</button>
       </nav>
       <div class="side__b">
-        <div class="srow" style="cursor:pointer" onclick="go('student')">👁 &nbsp;View as student <span>›</span></div>
-        <div class="srow">My courses <span>›</span></div>
+        <div class="srow" style="cursor:pointer" onclick="go('student')"><svg class="ic"><use href="#i-visibility"></use></svg> &nbsp;View as student <span><svg class="ic"><use href="#i-chevron_right"></use></svg></span></div>
+        <div class="srow">My courses <span><svg class="ic"><use href="#i-chevron_right"></use></svg></span></div>
         <div class="user">
           <span class="av" style="background:var(--purple);color:var(--navy)">D</span>
           <div style="flex:1;min-width:0"><div class="uname">Devanshu</div><div class="umail">devanshu@collage-ai.com</div></div>
@@ -190,39 +196,39 @@
             <div id="lesson-input"><textarea placeholder="Describe the lesson you want to generate — a topic, learning goals, or what it should cover…"></textarea></div>
             <div id="activity-input" style="display:none">
               <div class="dropzone">
-                <span style="font-size:22px;color:var(--muted)">⬆</span>
+                <span style="color:var(--muted)"><svg class="ic ic-lg"><use href="#i-upload_file"></use></svg></span>
                 <div class="dz-hint">Drag &amp; drop the activity brief, or</div>
                 <div class="addrow">
-                  <button class="btn btn--ghost" onclick="uploadActivity()">▤ Upload files</button>
-                  <button class="btn btn--ghost" onclick="uploadActivity()">✦ Use sample PDF</button>
+                  <button class="btn btn--ghost" onclick="uploadActivity()"><svg class="ic"><use href="#i-description"></use></svg> Upload files</button>
+                  <button class="btn btn--ghost" onclick="uploadActivity()"><svg class="ic"><use href="#i-auto_awesome"></use></svg> Use sample PDF</button>
                 </div>
                 <div class="dz-sub">slides, PDFs, docs, text, images, or video — up to 25 MB each</div>
               </div>
             </div>
             <div class="prompt__bar">
-              <button class="pill">📎</button>
-              <button class="pill" id="mode-pill" onclick="toggleMode()"><span id="mode-icon">📖</span> <span id="mode-label">Generate Lesson</span> ▾</button>
-              <button class="send" id="send-btn">↑</button>
+              <button class="pill"><svg class="ic"><use href="#i-attach_file"></use></svg></button>
+              <button class="pill" id="mode-pill" onclick="toggleMode()"><span id="mode-icon"><svg class="ic"><use href="#i-menu_book"></use></svg></span> <span id="mode-label">Generate Lesson</span> <svg class="ic"><use href="#i-expand_more"></use></svg></button>
+              <button class="send" id="send-btn"><svg class="ic"><use href="#i-arrow_upward"></use></svg></button>
             </div>
           </div>
 
           <div class="options">
-            <button class="opt hl" onclick="setLesson()"><span class="tile" style="background:var(--sky-bg);color:var(--sky-fg)">📖</span><span><span class="opt__t">Create a Lesson from your sources</span></span></button>
-            <button class="opt" onclick="setLesson()"><span class="tile" style="background:#fdf4d4;color:var(--amber)">▤</span><span><span class="opt__t">Create an Assessment from sources and existing lessons</span></span></button>
-            <button class="opt" id="opt-activity" onclick="setActivity()"><span class="tile" style="background:var(--purple-bg);color:var(--lav)">◍</span><span><span class="opt__t">Upload a team activity</span><span class="opt__d">Upload a PDF brief — your teams collaborate on it (resources, discussion, AI progress report). No builder.</span></span></button>
-            <button class="opt" onclick="setLesson()"><span class="tile" style="background:#eef0ee;color:var(--muted)">⤒</span><span><span class="opt__t">Upload an assessment you already have</span></span></button>
+            <button class="opt hl" onclick="setLesson()"><span class="tile" style="background:var(--sky-bg);color:var(--sky-fg)"><svg class="ic"><use href="#i-menu_book"></use></svg></span><span><span class="opt__t">Create a Lesson from your sources</span></span></button>
+            <button class="opt" onclick="setLesson()"><span class="tile" style="background:#fdf4d4;color:var(--amber)"><svg class="ic"><use href="#i-quiz"></use></svg></span><span><span class="opt__t">Create an Assessment from sources and existing lessons</span></span></button>
+            <button class="opt" id="opt-activity" onclick="setActivity()"><span class="tile" style="background:var(--purple-bg);color:var(--lav)"><svg class="ic"><use href="#i-groups"></use></svg></span><span><span class="opt__t">Upload a team activity</span><span class="opt__d">Upload a PDF brief — your teams collaborate on it (resources, discussion, AI progress report). No builder.</span></span></button>
+            <button class="opt" onclick="setLesson()"><span class="tile" style="background:#eef0ee;color:var(--muted)"><svg class="ic"><use href="#i-upload_file"></use></svg></span><span><span class="opt__t">Upload an assessment you already have</span></span></button>
           </div>
 
           <h2 class="section-h">Course content</h2>
           <div class="tabs">
-            <button class="tab on">📖 Lessons <span class="count">6</span></button>
-            <button class="tab">▤ Summatives <span class="count">5</span></button>
+            <button class="tab on"><svg class="ic"><use href="#i-menu_book"></use></svg> Lessons <span class="count">6</span></button>
+            <button class="tab"><svg class="ic"><use href="#i-description"></use></svg> Summatives <span class="count">5</span></button>
           </div>
           <div class="row__h"><span>Lesson</span><span>Status</span><span>Due</span><span></span></div>
-          <div class="row"><div class="rtitle"><span class="tile" style="background:var(--sky-bg);color:var(--sky-fg)">📖</span><span class="rname">Classifying Samples for States of Matter</span></div><span class="badge" style="background:var(--green-bg);color:var(--green)">Published</span><span class="due">No due date</span><button class="btn btn--navy">✦ Generate</button></div>
-          <div class="row"><div class="rtitle"><span class="tile" style="background:var(--sky-bg);color:var(--sky-fg)">📖</span><span class="rname">Particle Motion &amp; Kinetic Energy</span></div><span class="badge" style="background:var(--green-bg);color:var(--green)">Published</span><span class="due">No due date</span><button class="btn btn--navy">✦ Generate</button></div>
-          <div class="row"><div class="rtitle"><span class="tile" style="background:var(--sky-bg);color:var(--sky-fg)">📖</span><span class="rname">Phase Transitions &amp; Heating Curves</span></div><span class="badge" style="background:var(--green-bg);color:var(--green)">Published</span><span class="due">Due Jul 21</span><button class="btn btn--navy">✦ Generate</button></div>
-          <div class="row"><div class="rtitle"><span class="tile" style="background:var(--sky-bg);color:var(--sky-fg)">📖</span><span class="rname">Density &amp; Measurement Lab</span></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)">Draft</span><span class="due">Due Jul 28</span><button class="btn btn--navy">✦ Generate</button></div>
+          <div class="row"><div class="rtitle"><span class="tile" style="background:var(--sky-bg);color:var(--sky-fg)"><svg class="ic"><use href="#i-menu_book"></use></svg></span><span class="rname">Classifying Samples for States of Matter</span></div><span class="badge" style="background:var(--green-bg);color:var(--green)">Published</span><span class="due">No due date</span><button class="btn btn--navy"><svg class="ic"><use href="#i-auto_awesome"></use></svg> Generate</button></div>
+          <div class="row"><div class="rtitle"><span class="tile" style="background:var(--sky-bg);color:var(--sky-fg)"><svg class="ic"><use href="#i-menu_book"></use></svg></span><span class="rname">Particle Motion &amp; Kinetic Energy</span></div><span class="badge" style="background:var(--green-bg);color:var(--green)">Published</span><span class="due">No due date</span><button class="btn btn--navy"><svg class="ic"><use href="#i-auto_awesome"></use></svg> Generate</button></div>
+          <div class="row"><div class="rtitle"><span class="tile" style="background:var(--sky-bg);color:var(--sky-fg)"><svg class="ic"><use href="#i-menu_book"></use></svg></span><span class="rname">Phase Transitions &amp; Heating Curves</span></div><span class="badge" style="background:var(--green-bg);color:var(--green)">Published</span><span class="due">Due Jul 21</span><button class="btn btn--navy"><svg class="ic"><use href="#i-auto_awesome"></use></svg> Generate</button></div>
+          <div class="row"><div class="rtitle"><span class="tile" style="background:var(--sky-bg);color:var(--sky-fg)"><svg class="ic"><use href="#i-menu_book"></use></svg></span><span class="rname">Density &amp; Measurement Lab</span></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)">Draft</span><span class="due">Due Jul 28</span><button class="btn btn--navy"><svg class="ic"><use href="#i-auto_awesome"></use></svg> Generate</button></div>
         </section>
 
         <!-- ===================== LIBRARY ===================== -->
@@ -230,7 +236,7 @@
           <h1 style="font-size:30px">Library</h1>
           <p class="lede">A shared library of content and resources.</p>
           <div class="card" style="display:flex;align-items:center;gap:16px;margin-top:22px;padding:26px">
-            <span class="tile" style="background:var(--sky-bg);color:var(--sky-fg);width:48px;height:48px;font-size:22px">▤</span>
+            <span class="tile" style="background:var(--sky-bg);color:var(--sky-fg);width:48px;height:48px;font-size:22px"><svg class="ic ic-lg"><use href="#i-library_books"></use></svg></span>
             <div><div style="font-weight:600">Coming soon</div><div class="note" style="margin-top:2px">The Library is a separate surface and isn't part of this build yet.</div></div>
           </div>
         </section>
@@ -247,33 +253,33 @@
             </div>
             <div class="panel on" data-p="activities">
               <div class="row__h"><span>Activity</span><span>Status</span><span>Due</span><span></span></div>
-              <div class="row"><div class="rtitle"><span class="tile" style="background:var(--purple-bg);color:var(--lav)">◍</span><div><div class="rname">Bridge Design Decision</div><div class="rsub">Team-based · Collective · 20 pts</div></div></div><span class="badge" style="background:var(--orange-bg);color:var(--orange)">Team stage</span><span class="due">Due Wed 11:59pm</span><button class="btn btn--navy" onclick="openWs()">Open</button></div>
-              <div class="row"><div class="rtitle"><span class="tile" style="background:var(--purple-bg);color:var(--lav)">◍</span><div><div class="rname">Statics Warm-up: Free-body Diagrams</div><div class="rsub">Team-based · Individual · 15 pts</div></div></div><span class="badge" style="background:var(--lav-bg);color:var(--lav)">Grading</span><span class="due">Due Wed 11:59pm</span><button class="btn btn--ghost" onclick="openWs()">Open</button></div>
-              <div class="row"><div class="rtitle"><span class="tile" style="background:var(--purple-bg);color:var(--lav)">◍</span><div><div class="rname">Materials Selection Case</div><div class="rsub">Team-based · Individual · 20 pts</div></div></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)">Draft</span><span class="due">No due date</span><button class="btn btn--ghost" onclick="openWs()">Open</button></div>
-              <div class="row"><div class="rtitle"><span class="tile" style="background:var(--purple-bg);color:var(--lav)">◍</span><div><div class="rname">Truss Analysis Project Milestone</div><div class="rsub">Team-based · Collective · 25 pts</div></div></div><span class="badge" style="background:var(--sky-bg);color:var(--sky-fg)">Scheduled</span><span class="due">Due Wed 11:59pm</span><button class="btn btn--ghost" onclick="openWs()">Open</button></div>
+              <div class="row"><div class="rtitle"><span class="tile" style="background:var(--purple-bg);color:var(--lav)"><svg class="ic"><use href="#i-groups"></use></svg></span><div><div class="rname">Bridge Design Decision</div><div class="rsub">Team-based · Collective · 20 pts</div></div></div><span class="badge" style="background:var(--orange-bg);color:var(--orange)">Team stage</span><span class="due">Due Wed 11:59pm</span><button class="btn btn--navy" onclick="openWs()">Open</button></div>
+              <div class="row"><div class="rtitle"><span class="tile" style="background:var(--purple-bg);color:var(--lav)"><svg class="ic"><use href="#i-groups"></use></svg></span><div><div class="rname">Statics Warm-up: Free-body Diagrams</div><div class="rsub">Team-based · Individual · 15 pts</div></div></div><span class="badge" style="background:var(--lav-bg);color:var(--lav)">Grading</span><span class="due">Due Wed 11:59pm</span><button class="btn btn--ghost" onclick="openWs()">Open</button></div>
+              <div class="row"><div class="rtitle"><span class="tile" style="background:var(--purple-bg);color:var(--lav)"><svg class="ic"><use href="#i-groups"></use></svg></span><div><div class="rname">Materials Selection Case</div><div class="rsub">Team-based · Individual · 20 pts</div></div></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)">Draft</span><span class="due">No due date</span><button class="btn btn--ghost" onclick="openWs()">Open</button></div>
+              <div class="row"><div class="rtitle"><span class="tile" style="background:var(--purple-bg);color:var(--lav)"><svg class="ic"><use href="#i-groups"></use></svg></span><div><div class="rname">Truss Analysis Project Milestone</div><div class="rsub">Team-based · Collective · 25 pts</div></div></div><span class="badge" style="background:var(--sky-bg);color:var(--sky-fg)">Scheduled</span><span class="due">Due Wed 11:59pm</span><button class="btn btn--ghost" onclick="openWs()">Open</button></div>
             </div>
             <div class="panel" data-p="teams">
               <div class="grid2">
                 <div class="card">
-                  <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px"><span class="tile" style="background:var(--purple-bg);color:var(--lav);width:32px;height:32px">◐</span><b style="flex:1">Team 3</b><span class="badge" style="background:var(--cream-300);color:var(--muted)">4 members</span></div>
+                  <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px"><span class="tile" style="background:var(--purple-bg);color:var(--lav);width:32px;height:32px"><svg class="ic"><use href="#i-groups"></use></svg></span><b style="flex:1">Team 3</b><span class="badge" style="background:var(--cream-300);color:var(--muted)">4 members</span></div>
                   <div class="member"><span class="av" style="background:#0382ed">MC</span><span style="flex:1">Maya Chen</span><span class="rolechip">Recorder</span></div>
                   <div class="member"><span class="av" style="background:#8a3ffc">LO</span><span style="flex:1">Liam Ortiz</span></div>
                   <div class="member"><span class="av" style="background:#0e7c57">PN</span><span style="flex:1">Priya Nair</span></div>
                   <div class="member"><span class="av" style="background:#ff6713">SW</span><span style="flex:1">Sam Whitfield</span></div>
                 </div>
                 <div class="card">
-                  <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px"><span class="tile" style="background:var(--purple-bg);color:var(--lav);width:32px;height:32px">◐</span><b style="flex:1">Team 4</b><span class="badge" style="background:var(--amber-bg);color:var(--amber)">3 members</span></div>
-                  <div class="note" style="display:flex;align-items:center;gap:6px;color:var(--amber)">⚠ Fewer than 4 members</div>
-                  <div class="addrow" style="margin-top:14px"><button class="btn btn--ghost">＋ Add student</button><button class="btn btn--ghost">Roles</button></div>
+                  <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px"><span class="tile" style="background:var(--purple-bg);color:var(--lav);width:32px;height:32px"><svg class="ic"><use href="#i-groups"></use></svg></span><b style="flex:1">Team 4</b><span class="badge" style="background:var(--amber-bg);color:var(--amber)">3 members</span></div>
+                  <div class="note" style="display:flex;align-items:center;gap:6px;color:var(--amber)"><svg class="ic"><use href="#i-warning"></use></svg> Fewer than 4 members</div>
+                  <div class="addrow" style="margin-top:14px"><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Add student</button><button class="btn btn--ghost">Roles</button></div>
                 </div>
               </div>
             </div>
             <div class="panel" data-p="analytics">
               <div class="grid4">
-                <div class="card"><div class="statcard__l">👥 Students</div><div class="statcard__v">24</div><div class="statcard__s">across 6 teams</div></div>
-                <div class="card"><div class="statcard__l">✔ Prep complete</div><div class="statcard__v">21/24</div><div class="statcard__s">88% ready</div></div>
-                <div class="card"><div class="statcard__l">⚑ Needs review</div><div class="statcard__v">3</div><div class="statcard__s">flagged</div></div>
-                <div class="card"><div class="statcard__l">◷ Awaiting</div><div class="statcard__v">4</div><div class="statcard__s">teams submitted</div></div>
+                <div class="card"><div class="statcard__l"><svg class="ic"><use href="#i-groups"></use></svg> Students</div><div class="statcard__v">24</div><div class="statcard__s">across 6 teams</div></div>
+                <div class="card"><div class="statcard__l"><svg class="ic"><use href="#i-check_circle"></use></svg> Prep complete</div><div class="statcard__v">21/24</div><div class="statcard__s">88% ready</div></div>
+                <div class="card"><div class="statcard__l"><svg class="ic"><use href="#i-flag"></use></svg> Needs review</div><div class="statcard__v">3</div><div class="statcard__s">flagged</div></div>
+                <div class="card"><div class="statcard__l"><svg class="ic"><use href="#i-schedule"></use></svg> Awaiting</div><div class="statcard__v">4</div><div class="statcard__s">teams submitted</div></div>
               </div>
               <div class="card" style="margin-top:16px">
                 <p class="eyebrow">Preparation → performance</p>
@@ -286,10 +292,10 @@
           </div>
 
           <div id="ws" style="display:none">
-            <button class="back" onclick="closeWs()">‹ Back to Team</button>
+            <button class="back" onclick="closeWs()"><svg class="ic"><use href="#i-chevron_left"></use></svg> Back to Team</button>
             <div class="ws-head">
               <div><h1 style="font-size:28px">Bridge Design Decision</h1><p class="lede">Uploaded activity · Team 3 · team workspace</p></div>
-              <span class="chip" style="color:#b91c1c">▤ bridge_design_brief.pdf</span>
+              <span class="chip" style="color:#b91c1c"><svg class="ic"><use href="#i-description"></use></svg> bridge_design_brief.pdf</span>
             </div>
             <div class="tabs" data-tabs="ws">
               <button class="tab on" data-t="source">Source</button>
@@ -301,7 +307,7 @@
             <div class="panel on" data-p="source">
               <div class="card">
                 <div class="pdf">
-                  <div class="pdf__bar"><span style="color:#b91c1c;font-weight:600">▤ bridge_design_brief.pdf</span><span class="note">6 pages</span></div>
+                  <div class="pdf__bar"><span style="color:#b91c1c;font-weight:600"><svg class="ic"><use href="#i-description"></use></svg> bridge_design_brief.pdf</span><span class="note">6 pages</span></div>
                   <div class="pdf__body">
                     <p style="font-size:20px;font-weight:600;margin:0 0 10px">Bridge Design Decision</p>
                     <p style="color:var(--muted);margin:0 0 14px">Evaluate structural options against site constraints and justify a load-bearing decision.</p>
@@ -326,33 +332,33 @@
             <div class="panel" data-p="resources">
               <div class="card">
                 <div style="margin-bottom:14px"><h2 style="font-size:19px">Team resources</h2><p class="note">Proposal, report, contract, and whiteboard photos — each add feeds the progress report.</p></div>
-                <div class="addrow" style="margin-bottom:14px"><button class="btn btn--ghost">＋ Proposal</button><button class="btn btn--ghost">＋ Report</button><button class="btn btn--ghost">＋ Contract</button><button class="btn btn--ghost">＋ Whiteboard</button></div>
+                <div class="addrow" style="margin-bottom:14px"><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Proposal</button><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Report</button><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Contract</button><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Whiteboard</button></div>
                 <div class="reslist">
-                  <div class="resitem"><span class="tile" style="background:var(--sky-bg);color:var(--sky-fg);width:34px;height:34px">▤</span><div style="flex:1"><div class="rname">Proposal — Team 3.pdf</div><div class="rsub">Added by Maya · Sep 8</div></div><span class="badge" style="background:var(--sky-bg);color:var(--sky-fg)">Proposal</span></div>
-                  <div class="resitem"><span class="tile" style="background:var(--amber-bg);color:var(--amber);width:34px;height:34px">▦</span><div style="flex:1"><div class="rname">Whiteboard — load path sketch.jpg</div><div class="rsub">Added by Sam · Sep 10</div></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)">Whiteboard</span></div>
-                  <div class="resitem"><span class="tile" style="background:var(--green-bg);color:var(--green);width:34px;height:34px">▤</span><div style="flex:1"><div class="rname">Report — draft v1.pdf</div><div class="rsub">Added by Priya · Sep 11</div></div><span class="badge" style="background:var(--green-bg);color:var(--green)">Report</span></div>
+                  <div class="resitem"><span class="tile" style="background:var(--sky-bg);color:var(--sky-fg);width:34px;height:34px"><svg class="ic"><use href="#i-description"></use></svg></span><div style="flex:1"><div class="rname">Proposal — Team 3.pdf</div><div class="rsub">Added by Maya · Sep 8</div></div><span class="badge" style="background:var(--sky-bg);color:var(--sky-fg)">Proposal</span></div>
+                  <div class="resitem"><span class="tile" style="background:var(--amber-bg);color:var(--amber);width:34px;height:34px"><svg class="ic"><use href="#i-image"></use></svg></span><div style="flex:1"><div class="rname">Whiteboard — load path sketch.jpg</div><div class="rsub">Added by Sam · Sep 10</div></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)">Whiteboard</span></div>
+                  <div class="resitem"><span class="tile" style="background:var(--green-bg);color:var(--green);width:34px;height:34px"><svg class="ic"><use href="#i-description"></use></svg></span><div style="flex:1"><div class="rname">Report — draft v1.pdf</div><div class="rsub">Added by Priya · Sep 11</div></div><span class="badge" style="background:var(--green-bg);color:var(--green)">Report</span></div>
                 </div>
               </div>
             </div>
             <div class="panel" data-p="discussion">
               <div class="card">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><div><h2 style="font-size:19px">Audio discussions</h2><p class="note">Recorded in the team stage — replayable, and fed into the progress report.</p></div><button class="btn btn--navy">● Record</button></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><div><h2 style="font-size:19px">Audio discussions</h2><p class="note">Recorded in the team stage — replayable, and fed into the progress report.</p></div><button class="btn btn--navy"><svg class="ic"><use href="#i-mic"></use></svg> Record</button></div>
                 <div class="disclist">
-                  <div class="resitem"><span class="waveform"><i style="height:8px"></i><i style="height:16px"></i><i style="height:22px"></i><i style="height:12px"></i><i style="height:18px"></i><i style="height:8px"></i><i style="height:14px"></i></span><div style="flex:1"><div class="rname">Discussion — Q1</div><div class="rsub">Maya · 1:05</div></div><button class="btn btn--ghost">▶ Play</button></div>
-                  <div class="resitem"><span class="waveform"><i style="height:12px"></i><i style="height:20px"></i><i style="height:10px"></i><i style="height:22px"></i><i style="height:14px"></i><i style="height:18px"></i><i style="height:9px"></i></span><div style="flex:1"><div class="rname">Discussion — Q3</div><div class="rsub">Liam · 1:45</div></div><button class="btn btn--ghost">▶ Play</button></div>
+                  <div class="resitem"><span class="waveform"><i style="height:8px"></i><i style="height:16px"></i><i style="height:22px"></i><i style="height:12px"></i><i style="height:18px"></i><i style="height:8px"></i><i style="height:14px"></i></span><div style="flex:1"><div class="rname">Discussion — Q1</div><div class="rsub">Maya · 1:05</div></div><button class="btn btn--ghost"><svg class="ic"><use href="#i-play_arrow"></use></svg> Play</button></div>
+                  <div class="resitem"><span class="waveform"><i style="height:12px"></i><i style="height:20px"></i><i style="height:10px"></i><i style="height:22px"></i><i style="height:14px"></i><i style="height:18px"></i><i style="height:9px"></i></span><div style="flex:1"><div class="rname">Discussion — Q3</div><div class="rsub">Liam · 1:45</div></div><button class="btn btn--ghost"><svg class="ic"><use href="#i-play_arrow"></use></svg> Play</button></div>
                 </div>
               </div>
             </div>
             <div class="panel" data-p="progress">
               <div class="card">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h2 style="font-size:19px">Project progress report</h2><span class="badge" style="background:var(--orange-bg);color:var(--orange)"><span class="ai">✦</span> AI-generated</span></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h2 style="font-size:19px">Project progress report</h2><span class="badge" style="background:var(--orange-bg);color:var(--orange)"><span class="ai"><svg class="ic"><use href="#i-auto_awesome"></use></svg></span> AI-generated</span></div>
                 <div class="barrow" style="grid-template-columns:auto 1fr 46px;margin:12px 0 16px"><span style="font-weight:600">68% complete</span><span class="bar"><span style="width:68%;background:var(--lav)"></span></span><span class="n">68%</span></div>
                 <p style="font-size:14.5px;line-height:1.6;margin:0 0 16px">Team 3 has converged on a <b>suspension</b> structure and backed it with a load calculation (T<sub>max</sub> ≈ 1180 kN per cable). The proposal and a report draft are in; the whiteboard sketch shows a sound load path. Remaining: finalize the tradeoff analysis and units check before submission.</p>
                 <p class="eyebrow">Highlights</p>
-                <div class="highlight"><span class="ai">✦</span><span>Strong load-path reasoning surfaced in the Q3 discussion recording.</span></div>
-                <div class="highlight"><span class="ai">✦</span><span>Report draft aligns with the proposal — good internal consistency.</span></div>
-                <div class="highlight"><span class="ai">✦</span><span>One member still frames horizontal cable force as the max tension — worth a check-in.</span></div>
-                <p class="foot"><span class="ai">✦</span> Regenerates automatically as the team adds resources and discussions · faculty-reviewable, never auto-authoritative.</p>
+                <div class="highlight"><span class="ai"><svg class="ic"><use href="#i-auto_awesome"></use></svg></span><span>Strong load-path reasoning surfaced in the Q3 discussion recording.</span></div>
+                <div class="highlight"><span class="ai"><svg class="ic"><use href="#i-auto_awesome"></use></svg></span><span>Report draft aligns with the proposal — good internal consistency.</span></div>
+                <div class="highlight"><span class="ai"><svg class="ic"><use href="#i-auto_awesome"></use></svg></span><span>One member still frames horizontal cable force as the max tension — worth a check-in.</span></div>
+                <p class="foot"><span class="ai"><svg class="ic"><use href="#i-auto_awesome"></use></svg></span> Regenerates automatically as the team adds resources and discussions · faculty-reviewable, never auto-authoritative.</p>
               </div>
             </div>
           </div>
@@ -360,15 +366,15 @@
 
         <!-- ===================== STUDENT (team view) ===================== -->
         <section id="screen-student" class="screen">
-          <button class="back" onclick="go('team')">‹ Back to faculty view</button>
+          <button class="back" onclick="go('team')"><svg class="ic"><use href="#i-chevron_left"></use></svg> Back to faculty view</button>
           <div class="ws-head">
             <div><h1 style="font-size:28px">Your team</h1><p class="lede">Student view · Team 3 · the team side of a team-based activity.</p></div>
-            <span class="chip">👁 Viewing as Maya Chen</span>
+            <span class="chip"><svg class="ic"><use href="#i-visibility"></use></svg> Viewing as Maya Chen</span>
           </div>
 
           <div class="card" style="margin-top:16px">
             <div style="display:flex;align-items:center;gap:12px">
-              <span class="tile" style="background:var(--purple-bg);color:var(--lav)">◍</span>
+              <span class="tile" style="background:var(--purple-bg);color:var(--lav)"><svg class="ic"><use href="#i-groups"></use></svg></span>
               <div style="flex:1"><div class="rname" style="font-size:15px">Bridge Design Decision</div><div class="rsub">Team-based · Collective · 20 pts · Due Wed 11:59pm</div></div>
               <span class="badge" style="background:var(--orange-bg);color:var(--orange)">Team stage</span>
             </div>
@@ -384,26 +390,26 @@
               <div class="member"><span class="av" style="background:#ff6713">SW</span><span style="flex:1">Sam Whitfield</span></div>
             </div>
             <div class="card">
-              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><h2 style="font-size:18px">Record discussion</h2><button class="btn btn--navy">● Record</button></div>
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><h2 style="font-size:18px">Record discussion</h2><button class="btn btn--navy"><svg class="ic"><use href="#i-mic"></use></svg> Record</button></div>
               <p class="note" style="margin-bottom:12px">As Recorder, capture your team's reasoning out loud — it feeds the AI progress report.</p>
               <div class="disclist">
-                <div class="resitem"><span class="waveform"><i style="height:8px"></i><i style="height:16px"></i><i style="height:22px"></i><i style="height:12px"></i><i style="height:18px"></i><i style="height:8px"></i><i style="height:14px"></i></span><div style="flex:1"><div class="rname">Discussion — Q1</div><div class="rsub">You · 1:05</div></div><button class="btn btn--ghost">▶ Play</button></div>
-                <div class="resitem"><span class="waveform"><i style="height:12px"></i><i style="height:20px"></i><i style="height:10px"></i><i style="height:22px"></i><i style="height:14px"></i><i style="height:18px"></i><i style="height:9px"></i></span><div style="flex:1"><div class="rname">Discussion — Q3</div><div class="rsub">Liam · 1:45</div></div><button class="btn btn--ghost">▶ Play</button></div>
+                <div class="resitem"><span class="waveform"><i style="height:8px"></i><i style="height:16px"></i><i style="height:22px"></i><i style="height:12px"></i><i style="height:18px"></i><i style="height:8px"></i><i style="height:14px"></i></span><div style="flex:1"><div class="rname">Discussion — Q1</div><div class="rsub">You · 1:05</div></div><button class="btn btn--ghost"><svg class="ic"><use href="#i-play_arrow"></use></svg> Play</button></div>
+                <div class="resitem"><span class="waveform"><i style="height:12px"></i><i style="height:20px"></i><i style="height:10px"></i><i style="height:22px"></i><i style="height:14px"></i><i style="height:18px"></i><i style="height:9px"></i></span><div style="flex:1"><div class="rname">Discussion — Q3</div><div class="rsub">Liam · 1:45</div></div><button class="btn btn--ghost"><svg class="ic"><use href="#i-play_arrow"></use></svg> Play</button></div>
               </div>
             </div>
           </div>
 
           <div class="card" style="margin-top:16px">
             <div style="margin-bottom:12px"><h2 style="font-size:18px">Team resources</h2><p class="note">Add your proposal, report, contract, and whiteboard photos — each one updates the progress report.</p></div>
-            <div class="addrow" style="margin-bottom:14px"><button class="btn btn--ghost">＋ Proposal</button><button class="btn btn--ghost">＋ Report</button><button class="btn btn--ghost">＋ Contract</button><button class="btn btn--ghost">＋ Whiteboard</button></div>
+            <div class="addrow" style="margin-bottom:14px"><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Proposal</button><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Report</button><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Contract</button><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Whiteboard</button></div>
             <div class="reslist">
-              <div class="resitem"><span class="tile" style="background:var(--sky-bg);color:var(--sky-fg);width:34px;height:34px">▤</span><div style="flex:1"><div class="rname">Proposal — Team 3.pdf</div><div class="rsub">Added by you · Sep 8</div></div><span class="badge" style="background:var(--sky-bg);color:var(--sky-fg)">Proposal</span></div>
-              <div class="resitem"><span class="tile" style="background:var(--amber-bg);color:var(--amber);width:34px;height:34px">▦</span><div style="flex:1"><div class="rname">Whiteboard — load path sketch.jpg</div><div class="rsub">Added by Sam · Sep 10</div></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)">Whiteboard</span></div>
+              <div class="resitem"><span class="tile" style="background:var(--sky-bg);color:var(--sky-fg);width:34px;height:34px"><svg class="ic"><use href="#i-description"></use></svg></span><div style="flex:1"><div class="rname">Proposal — Team 3.pdf</div><div class="rsub">Added by you · Sep 8</div></div><span class="badge" style="background:var(--sky-bg);color:var(--sky-fg)">Proposal</span></div>
+              <div class="resitem"><span class="tile" style="background:var(--amber-bg);color:var(--amber);width:34px;height:34px"><svg class="ic"><use href="#i-image"></use></svg></span><div style="flex:1"><div class="rname">Whiteboard — load path sketch.jpg</div><div class="rsub">Added by Sam · Sep 10</div></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)">Whiteboard</span></div>
             </div>
           </div>
 
           <div class="card" style="margin-top:16px">
-            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h2 style="font-size:18px">Your team's progress</h2><span class="badge" style="background:var(--orange-bg);color:var(--orange)"><span class="ai">✦</span> AI-generated</span></div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><h2 style="font-size:18px">Your team's progress</h2><span class="badge" style="background:var(--orange-bg);color:var(--orange)"><span class="ai"><svg class="ic"><use href="#i-auto_awesome"></use></svg></span> AI-generated</span></div>
             <div class="barrow" style="grid-template-columns:auto 1fr 46px;margin:12px 0 14px"><span style="font-weight:600">68% complete</span><span class="bar"><span style="width:68%;background:var(--lav)"></span></span><span class="n">68%</span></div>
             <p style="font-size:14px;line-height:1.6;margin:0">Your team has converged on a <b>suspension</b> structure backed by a load calculation. Remaining before submission: finalize the tradeoff analysis and a units check. Keep recording your discussion so the report stays current.</p>
           </div>
@@ -428,14 +434,14 @@
   function setLesson() {
     document.getElementById('lesson-input').style.display = 'block';
     document.getElementById('activity-input').style.display = 'none';
-    document.getElementById('mode-icon').textContent = '📖';
+    document.getElementById('mode-icon').innerHTML = '<svg class="ic"><use href="#i-menu_book"></use></svg>';
     document.getElementById('mode-label').textContent = 'Generate Lesson';
     document.getElementById('opt-activity').classList.remove('hl2');
   }
   function setActivity() {
     document.getElementById('lesson-input').style.display = 'none';
     document.getElementById('activity-input').style.display = 'block';
-    document.getElementById('mode-icon').textContent = '◍';
+    document.getElementById('mode-icon').innerHTML = '<svg class="ic"><use href="#i-groups"></use></svg>';
     document.getElementById('mode-label').textContent = 'Upload Activity';
     document.getElementById('opt-activity').classList.add('hl2');
   }
