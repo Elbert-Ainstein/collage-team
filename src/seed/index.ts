@@ -243,7 +243,7 @@ export function seedTeamResources(): TeamResource[] {
   return [
     { id: "res-1", teamId: TEAM, activityId: ACT, kind: "proposal", name: "Team 3 — Bridge proposal.pdf", addedBy: MAYA.id, addedAt: "2026-09-08T10:15:00" },
     { id: "res-2", teamId: TEAM, activityId: ACT, kind: "whiteboard", name: "Load-path sketch (whiteboard).jpg", addedBy: LIAM.id, addedAt: "2026-09-09T13:40:00" },
-    { id: "res-3", teamId: TEAM, activityId: ACT, kind: "contract", name: "Team contract — roles & norms.pdf", addedBy: PRIYA.id, addedAt: "2026-09-07T09:00:00" },
+    { id: "res-3", teamId: TEAM, activityId: ACT, kind: "contract", name: "Team agreement — roles & norms.pdf", addedBy: PRIYA.id, addedAt: "2026-09-07T09:00:00" },
   ];
 }
 
@@ -262,9 +262,9 @@ export function seedProgressReports(): ProgressReport[] {
       generatedAt: "2026-09-10T15:00:00",
       percentComplete: 70,
       summary:
-        "Team 3 has converged on a suspension bridge and backed it with a load calculation (T_max ≈ 1180 kN per cable). Roles are set via the team contract; the proposal and a load-path sketch are in place. Remaining: finalize the tradeoff analysis and record a closing discussion.",
+        "Team 3 has converged on a suspension bridge and backed it with a load calculation (T_max ≈ 1180 kN per cable). Roles are set via the team agreement; the proposal and a load-path sketch are in place. Remaining: finalize the tradeoff analysis and record a closing discussion.",
       highlights: [
-        "Proposal + team contract uploaded — roles clear",
+        "Proposal + team agreement uploaded — roles clear",
         "Load calculation reviewed on audio (2 discussions logged)",
         "Open: tradeoff analysis not yet documented",
       ],

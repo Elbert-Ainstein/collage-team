@@ -83,7 +83,7 @@ export function regenerateProgressReport(teamId: string, activityId: string): Pr
   const kinds = new Set(resources.map((r) => r.kind));
   const highlights: string[] = [];
   if (kinds.has("proposal")) highlights.push("Proposal uploaded");
-  if (kinds.has("contract")) highlights.push("Team contract in place — roles clear");
+  if (kinds.has("contract")) highlights.push("Team agreement in place — roles clear");
   if (kinds.has("whiteboard")) highlights.push("Whiteboard/working sketch captured");
   if (discussions.length) highlights.push(`${discussions.length} discussion${discussions.length > 1 ? "s" : ""} recorded`);
   if (!kinds.has("report")) highlights.push("Open: final report not yet added");

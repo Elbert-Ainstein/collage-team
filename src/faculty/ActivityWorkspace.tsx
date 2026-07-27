@@ -126,7 +126,7 @@ function TeamTab() {
 const RESOURCE_META: Record<ResourceKind, { icon: string; label: string; tint: string }> = {
   proposal: { icon: "description", label: "Proposal", tint: "bg-sky/40 text-[#0369a1]" },
   report: { icon: "summarize", label: "Report", tint: "bg-[#e7f5ef] text-[#0e7c57]" },
-  contract: { icon: "handshake", label: "Contract", tint: "bg-brand-purple/25 text-[#7c3aed]" },
+  contract: { icon: "handshake", label: "Team agreement", tint: "bg-brand-purple/25 text-[#7c3aed]" },
   whiteboard: { icon: "photo_camera", label: "Whiteboard", tint: "bg-[#fff4e5] text-[#b45309]" },
 };
 
@@ -145,7 +145,7 @@ function ResourcesTab({ activityId }: { activityId: string }) {
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h2 className="font-serif text-xl font-semibold text-navy">Team resources</h2>
-          <p className="text-xs text-muted-fg">Proposal, report, contract, and whiteboard photos — each add feeds the progress report.</p>
+          <p className="text-xs text-muted-fg">Proposal, report, team agreement, and whiteboard photos — each add feeds the progress report.</p>
         </div>
         <div className="flex gap-2">
           {(Object.keys(RESOURCE_META) as ResourceKind[]).map((k) => (
@@ -157,7 +157,7 @@ function ResourcesTab({ activityId }: { activityId: string }) {
       </div>
       {resources.length === 0 ? (
         <div className="rounded-xl border-2 border-dashed border-[#cfc6ac] bg-page py-10 text-center text-sm text-muted-fg">
-          No resources yet — add a proposal, report, contract, or whiteboard photo.
+          No resources yet — add a proposal, report, team agreement, or whiteboard photo.
         </div>
       ) : (
         <div className="flex flex-col gap-2">

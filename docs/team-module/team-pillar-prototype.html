@@ -340,8 +340,8 @@
             </div>
             <div class="panel" data-p="resources">
               <div class="card">
-                <div style="margin-bottom:14px"><h2 style="font-size:19px">Team resources</h2><p class="note">Proposal, report, contract, and whiteboard photos — each add feeds the progress report.</p></div>
-                <div class="addrow" style="margin-bottom:14px"><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Proposal</button><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Report</button><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Contract</button><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Whiteboard</button></div>
+                <div style="margin-bottom:14px"><h2 style="font-size:19px">Team resources</h2><p class="note">Proposal, report, team agreement, and whiteboard photos — each add feeds the progress report.</p></div>
+                <div class="addrow" style="margin-bottom:14px"><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Proposal</button><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Report</button><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Team agreement</button><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Whiteboard</button></div>
                 <div class="reslist">
                   <div class="resitem"><span class="tile" style="background:var(--sky-bg);color:var(--sky-fg);width:34px;height:34px"><svg class="ic"><use href="#i-description"></use></svg></span><div style="flex:1"><div class="rname">Proposal — Team 3.pdf</div><div class="rsub">Added by Maya · Sep 8</div></div><span class="badge" style="background:var(--sky-bg);color:var(--sky-fg)">Proposal</span></div>
                   <div class="resitem"><span class="tile" style="background:var(--amber-bg);color:var(--amber);width:34px;height:34px"><svg class="ic"><use href="#i-image"></use></svg></span><div style="flex:1"><div class="rname">Whiteboard — load path sketch.jpg</div><div class="rsub">Added by Sam · Sep 10</div></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)">Whiteboard</span></div>
@@ -399,8 +399,8 @@
                 </div>
               </div>
               <div class="card" style="margin-top:16px">
-                <div style="margin-bottom:12px"><h2 style="font-size:18px">Team resources</h2><p class="note">Add your proposal, report, contract, and whiteboard photos — each one updates the progress report.</p></div>
-                <div class="addrow" style="margin-bottom:14px"><button class="btn btn--ghost" onclick="stuUpload('Proposal')"><svg class="ic"><use href="#i-add"></use></svg> Proposal</button><button class="btn btn--ghost" onclick="stuUpload('Report')"><svg class="ic"><use href="#i-add"></use></svg> Report</button><button class="btn btn--ghost" onclick="stuUpload('Contract')"><svg class="ic"><use href="#i-add"></use></svg> Contract</button><button class="btn btn--ghost" onclick="stuUpload('Whiteboard')"><svg class="ic"><use href="#i-add"></use></svg> Whiteboard</button></div>
+                <div style="margin-bottom:12px"><h2 style="font-size:18px">Team resources</h2><p class="note">Add your proposal, report, team agreement, and whiteboard photos — each one updates the progress report.</p></div>
+                <div class="addrow" style="margin-bottom:14px"><button class="btn btn--ghost" onclick="stuUpload('Proposal')"><svg class="ic"><use href="#i-add"></use></svg> Proposal</button><button class="btn btn--ghost" onclick="stuUpload('Report')"><svg class="ic"><use href="#i-add"></use></svg> Report</button><button class="btn btn--ghost" onclick="stuUpload('Team agreement')"><svg class="ic"><use href="#i-add"></use></svg> Team agreement</button><button class="btn btn--ghost" onclick="stuUpload('Whiteboard')"><svg class="ic"><use href="#i-add"></use></svg> Whiteboard</button></div>
                 <div class="dropzone" id="stu-dz" style="display:none;margin-bottom:14px">
                   <span style="color:var(--muted)"><svg class="ic ic-lg"><use href="#i-upload_file"></use></svg></span>
                   <div class="dz-hint">Drag &amp; drop your <span id="stu-dz-type">Proposal</span> here, or</div>
@@ -480,7 +480,7 @@
   var STU_TINTS = {
     Proposal:  ['var(--sky-bg)', 'var(--sky-fg)', 'i-description', '.pdf'],
     Report:    ['var(--green-bg)', 'var(--green)', 'i-description', '.pdf'],
-    Contract:  ['var(--lav-bg)', 'var(--lav)', 'i-description', '.pdf'],
+    'Team agreement': ['var(--lav-bg)', 'var(--lav)', 'i-description', '.pdf'],
     Whiteboard:['var(--amber-bg)', 'var(--amber)', 'i-image', '.jpg']
   };
   var stuType = 'Proposal';
