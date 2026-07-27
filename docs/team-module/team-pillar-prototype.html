@@ -180,6 +180,8 @@
   .fchip { padding:6px 13px; border-radius:999px; border:1px solid var(--line); background:var(--cream-100); font-size:12.5px; font-weight:600; color:var(--muted); cursor:pointer; font-family:inherit; }
   .fchip.on { background:var(--navy); color:var(--cream-100); border-color:var(--navy); }
   .resp-confirmed { display:inline-flex; align-items:center; gap:6px; color:var(--green); font-weight:600; font-size:13px; }
+  .teamsize-ctl { display:inline-flex; align-items:center; gap:8px; font-size:12.5px; font-weight:600; color:var(--muted); }
+  .teamsize-ctl select { font-family:inherit; font-size:13px; font-weight:600; color:var(--navy); border:1px solid var(--line); border-radius:8px; padding:6px 8px; background:var(--cream-100); cursor:pointer; }
 </style>
 
 <div class="wrap">
@@ -293,9 +295,12 @@
               <div class="row"><div class="rtitle"><span class="tile" style="background:var(--purple-bg);color:var(--lav)"><svg class="ic"><use href="#i-groups"></use></svg></span><div><div class="rname">Truss Analysis Project Milestone</div><div class="rsub">Team-based &#183; Collective &#183; 25 pts</div></div></div><span class="badge" style="background:var(--sky-bg);color:var(--sky-fg)">Scheduled</span><span class="due">Due Wed 11:59pm</span><button class="btn btn--ghost" onclick="openWs()">Open</button></div>
             </div>
             <div class="panel" data-p="teams">
-              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">
                 <p class="note" style="margin:0">Class teams for this course &#8212; create teams, then place students or let them self-assign.</p>
-                <button class="btn btn--navy" style="flex-shrink:0" onclick="newTeam()"><svg class="ic"><use href="#i-add"></use></svg> New team</button>
+                <div style="display:flex;align-items:center;gap:12px;flex-shrink:0">
+                  <label class="teamsize-ctl">Target team size <select id="target-size" onchange="setTargetSize(this.value)"><option value="any">Any (optional)</option><option value="2">2</option><option value="3">3</option><option value="4" selected>4</option><option value="5">5</option><option value="6">6</option></select></label>
+                  <button class="btn btn--navy" onclick="newTeam()"><svg class="ic"><use href="#i-add"></use></svg> New team</button>
+                </div>
               </div>
               <div class="grid2" id="teams-grid">
                 <div class="card team-card">
@@ -651,13 +656,16 @@
     { n: 'Devon Walsh', i: 'DW', c: '#0f766e' }, { n: 'Mia Santos', i: 'MS', c: '#9333ea' }
   ];
   var poolIdx = 3;
+  var targetSize = '4';
+  function setTargetSize(v) { targetSize = v; document.querySelectorAll('.team-card').forEach(function (c) { refreshTeam(c); }); }
   function refreshTeam(card) {
     var n = card.querySelectorAll('.team-members .member').length;
-    var low = n < 4;
+    var target = targetSize === 'any' ? 0 : parseInt(targetSize, 10);
+    var low = target > 0 && n < target;
     var badge = card.querySelector('.count-badge');
     if (badge) { badge.textContent = n + (n === 1 ? ' member' : ' members'); badge.style.background = low ? 'var(--amber-bg)' : 'var(--cream-300)'; badge.style.color = low ? 'var(--amber)' : 'var(--muted)'; }
     var warn = card.querySelector('.team-warn');
-    if (warn) { warn.style.display = low ? 'flex' : 'none'; var wt = warn.querySelector('.warn-text'); if (wt) wt.textContent = n === 0 ? 'No students yet' : 'Fewer than 4 members'; }
+    if (warn) { warn.style.display = low ? 'flex' : 'none'; var wt = warn.querySelector('.warn-text'); if (wt) wt.textContent = n === 0 ? 'No students yet' : ('Fewer than ' + target + ' members'); }
   }
   function addStudent(btn) {
     var card = btn.closest('.team-card');
