@@ -478,7 +478,7 @@
             <div id="ws-faculty">
             <div class="tabs" data-tabs="ws">
               <button class="tab on" data-t="source">Source</button>
-              <button class="tab" data-t="resources">Resources</button>
+              <button class="tab" data-t="submission">Submission</button>
               <button class="tab" data-t="discussion">Discussion</button>
               <button class="tab" data-t="progress">Progress</button>
             </div>
@@ -496,16 +496,14 @@
                 <p class="foot">The original upload is shown as-is &#8212; there is no builder for team activities.</p>
               </div>
             </div>
-            <div class="panel" data-p="resources">
+            <div class="panel" data-p="submission">
               <div class="card">
-                <div style="margin-bottom:14px"><h2 style="font-size:19px">Team resources</h2><p class="note">Proposal, report, team agreement, and whiteboard photos &#8212; each add feeds the progress report.</p></div>
-                <div class="addrow" style="margin-bottom:14px"><button class="btn btn--ghost" onclick="resOpen(this,'Proposal')"><svg class="ic"><use href="#i-add"></use></svg> Proposal</button><button class="btn btn--ghost" onclick="resOpen(this,'Report')"><svg class="ic"><use href="#i-add"></use></svg> Report</button><button class="btn btn--ghost" onclick="resOpen(this,'Team agreement')"><svg class="ic"><use href="#i-add"></use></svg> Team agreement</button><button class="btn btn--ghost" onclick="resOpen(this,'Whiteboard')"><svg class="ic"><use href="#i-add"></use></svg> Whiteboard</button></div>
-                <div class="dropzone res-dz" style="display:none;margin-bottom:14px"><span style="color:var(--muted)"><svg class="ic ic-lg"><use href="#i-upload_file"></use></svg></span><div class="dz-hint">Drag &amp; drop the <span class="res-dz-type">Proposal</span> here, or</div><div class="addrow"><button class="btn btn--navy" onclick="resAdd(this)"><svg class="ic"><use href="#i-upload_file"></use></svg> Browse files</button><button class="btn btn--ghost" onclick="resCancel(this)">Cancel</button></div><div class="dz-sub">PDF, image, or doc &#8212; up to 25 MB</div></div>
-                <div class="reslist res-list">
-                  <div class="resitem"><span class="tile" style="background:var(--sky-bg);color:var(--sky-fg);width:34px;height:34px"><svg class="ic"><use href="#i-description"></use></svg></span><div style="flex:1"><div class="rname">Proposal &#8212; Team 3.pdf</div><div class="rsub">Added by Maya &#183; Sep 8</div></div><span class="badge" style="background:var(--sky-bg);color:var(--sky-fg)">Proposal</span></div>
-                  <div class="resitem"><span class="tile" style="background:var(--amber-bg);color:var(--amber);width:34px;height:34px"><svg class="ic"><use href="#i-image"></use></svg></span><div style="flex:1"><div class="rname">Whiteboard &#8212; load path sketch.jpg</div><div class="rsub">Added by Sam &#183; Sep 10</div></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)">Whiteboard</span></div>
-                  <div class="resitem"><span class="tile" style="background:var(--green-bg);color:var(--green);width:34px;height:34px"><svg class="ic"><use href="#i-description"></use></svg></span><div style="flex:1"><div class="rname">Report &#8212; draft v1.pdf</div><div class="rsub">Added by Priya &#183; Sep 11</div></div><span class="badge" style="background:var(--green-bg);color:var(--green)">Report</span></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px"><h2 style="font-size:19px">Team 3&#8217;s submission</h2><span class="badge" style="background:var(--green-bg);color:var(--green)"><svg class="ic"><use href="#i-check_circle"></use></svg> Submitted Wed 10:42pm</span></div>
+                <div class="reslist">
+                  <div class="resitem"><span class="tile" style="background:var(--sky-bg);color:var(--sky-fg);width:34px;height:34px"><svg class="ic"><use href="#i-description"></use></svg></span><div style="flex:1"><div class="rname">Bridge Design Decision &#8212; Team 3 final.pdf</div><div class="rsub">Collective submission &#183; 4 authors</div></div><button class="btn btn--ghost"><svg class="ic"><use href="#i-description"></use></svg> View</button></div>
                 </div>
+                <p style="font-size:14.5px;line-height:1.6;margin:14px 0 0">Team 3 submitted a <b>suspension</b> design backed by a load calculation (T<sub>max</sub> &#8776; 1180 kN per cable) and a tradeoff analysis &#8212; ready to grade.</p>
+                <p class="foot"><svg class="ic"><use href="#i-visibility"></use></svg> The team&#8217;s working resources (proposal drafts, whiteboard photos) stay with the students for their own reference &#8212; you see the submitted final plus the AI progress report.</p>
               </div>
             </div>
             <div class="panel" data-p="discussion">
