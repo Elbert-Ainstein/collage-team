@@ -400,8 +400,14 @@
               </div>
               <div class="card" style="margin-top:16px">
                 <div style="margin-bottom:12px"><h2 style="font-size:18px">Team resources</h2><p class="note">Add your proposal, report, contract, and whiteboard photos — each one updates the progress report.</p></div>
-                <div class="addrow" style="margin-bottom:14px"><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Proposal</button><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Report</button><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Contract</button><button class="btn btn--ghost"><svg class="ic"><use href="#i-add"></use></svg> Whiteboard</button></div>
-                <div class="reslist">
+                <div class="addrow" style="margin-bottom:14px"><button class="btn btn--ghost" onclick="stuUpload('Proposal')"><svg class="ic"><use href="#i-add"></use></svg> Proposal</button><button class="btn btn--ghost" onclick="stuUpload('Report')"><svg class="ic"><use href="#i-add"></use></svg> Report</button><button class="btn btn--ghost" onclick="stuUpload('Contract')"><svg class="ic"><use href="#i-add"></use></svg> Contract</button><button class="btn btn--ghost" onclick="stuUpload('Whiteboard')"><svg class="ic"><use href="#i-add"></use></svg> Whiteboard</button></div>
+                <div class="dropzone" id="stu-dz" style="display:none;margin-bottom:14px">
+                  <span style="color:var(--muted)"><svg class="ic ic-lg"><use href="#i-upload_file"></use></svg></span>
+                  <div class="dz-hint">Drag &amp; drop your <span id="stu-dz-type">Proposal</span> here, or</div>
+                  <div class="addrow"><button class="btn btn--navy" onclick="stuAdd()"><svg class="ic"><use href="#i-upload_file"></use></svg> Browse files</button><button class="btn btn--ghost" onclick="stuCancel()">Cancel</button></div>
+                  <div class="dz-sub">PDF, image, or doc — up to 25 MB</div>
+                </div>
+                <div class="reslist" id="stu-reslist">
                   <div class="resitem"><span class="tile" style="background:var(--sky-bg);color:var(--sky-fg);width:34px;height:34px"><svg class="ic"><use href="#i-description"></use></svg></span><div style="flex:1"><div class="rname">Proposal — Team 3.pdf</div><div class="rsub">Added by you · Sep 8</div></div><span class="badge" style="background:var(--sky-bg);color:var(--sky-fg)">Proposal</span></div>
                   <div class="resitem"><span class="tile" style="background:var(--amber-bg);color:var(--amber);width:34px;height:34px"><svg class="ic"><use href="#i-image"></use></svg></span><div style="flex:1"><div class="rname">Whiteboard — load path sketch.jpg</div><div class="rsub">Added by Sam · Sep 10</div></div><span class="badge" style="background:var(--amber-bg);color:var(--amber)">Whiteboard</span></div>
                 </div>
@@ -469,4 +475,30 @@
     document.querySelectorAll('#ws-view .seg').forEach(function (b) { b.classList.toggle('on', b.dataset.v === v); });
   }
   function closeWs() { document.getElementById('ws').style.display = 'none'; document.getElementById('hub').style.display = 'block'; }
+
+  // student view: adding a resource opens an upload field, then appends a row
+  var STU_TINTS = {
+    Proposal:  ['var(--sky-bg)', 'var(--sky-fg)', 'i-description', '.pdf'],
+    Report:    ['var(--green-bg)', 'var(--green)', 'i-description', '.pdf'],
+    Contract:  ['var(--lav-bg)', 'var(--lav)', 'i-description', '.pdf'],
+    Whiteboard:['var(--amber-bg)', 'var(--amber)', 'i-image', '.jpg']
+  };
+  var stuType = 'Proposal';
+  function stuUpload(type) {
+    stuType = type;
+    document.getElementById('stu-dz-type').textContent = type;
+    document.getElementById('stu-dz').style.display = '';
+  }
+  function stuCancel() { document.getElementById('stu-dz').style.display = 'none'; }
+  function stuAdd() {
+    var t = STU_TINTS[stuType] || STU_TINTS.Proposal;
+    var row = document.createElement('div');
+    row.className = 'resitem';
+    row.innerHTML =
+      '<span class="tile" style="background:' + t[0] + ';color:' + t[1] + ';width:34px;height:34px"><svg class="ic"><use href="#' + t[2] + '"></use></svg></span>' +
+      '<div style="flex:1"><div class="rname">' + stuType + ' — Team 3' + t[3] + '</div><div class="rsub">Added by you · just now</div></div>' +
+      '<span class="badge" style="background:' + t[0] + ';color:' + t[1] + '">' + stuType + '</span>';
+    document.getElementById('stu-reslist').appendChild(row);
+    stuCancel();
+  }
 </script>
