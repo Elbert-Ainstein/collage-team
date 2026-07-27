@@ -168,23 +168,24 @@
 
   <section>
     <div class="sec-head"><span class="sec-num">02</span><h2>The one idea</h2></div>
-    <p class="lead"><b>Make the activity the spine.</b> &#8220;Team&#8221;, &#8220;grading&#8221;, and &#8220;OCR review&#8221; aren&#8217;t <em>places</em> &#8212; they&#8217;re <b>stages of an activity</b>. So the workspace becomes a status-driven stepper, and the top nav collapses to two job-based destinations.</p>
+    <p class="lead"><b>Make the activity the spine.</b> &#8220;Team&#8221;, &#8220;grading&#8221;, and &#8220;OCR review&#8221; aren&#8217;t <em>places</em> &#8212; they&#8217;re <b>stages of an activity</b>. So the workspace becomes a status-driven stepper &#8212; and it all lives inside <b>one</b> renamed tab. The nav itself stays a light touch (your call): keep three tabs, rename two to what they actually do.</p>
   </section>
 
   <section>
     <div class="sec-head"><span class="sec-num">03</span><h2>Navigation: before &#8594; after</h2></div>
+    <p class="lead" style="margin-bottom:18px">Light touch, per your call: keep the three tabs, rename two to what they actually do, and let <b>Activities</b> carry the spine.</p>
     <div class="grid2">
       <div class="card pad nav-card before">
-        <h3>Before &#183; 3 tabs</h3>
-        <div class="navrow strike"><span class="name">Create</span><span class="desc"><span class="tag t-decoy">decoy</span> a &#8220;what do you want to create?&#8221; lesson-builder dashboard &#8212; in an app with no builder.</span></div>
-        <div class="navrow strike"><span class="name">Library</span><span class="desc"><span class="tag t-dead">dead</span> permanent &#8220;coming soon&#8221;.</span></div>
-        <div class="navrow strike"><span class="name">Team</span><span class="desc"><span class="tag t-junk">junk drawer</span> secretly owns activities, roster, analytics, OCR review, and grading.</span></div>
+        <h3>Before &#183; names that lie</h3>
+        <div class="navrow"><span class="name">Create</span><span class="desc"><span class="tag t-decoy">decoy</span> a &#8220;what do you want to create?&#8221; lesson-builder dashboard &#8212; in an app with no builder.</span></div>
+        <div class="navrow"><span class="name">Library</span><span class="desc"><span class="tag t-dead">dead</span> permanent &#8220;coming soon.&#8221;</span></div>
+        <div class="navrow"><span class="name">Team</span><span class="desc"><span class="tag t-junk">junk drawer</span> secretly owns activities, roster, analytics, OCR review, and grading.</span></div>
       </div>
       <div class="card pad nav-card after">
-        <h3>After &#183; 2 destinations</h3>
-        <div class="navrow"><span class="name">Activities</span><span class="desc">The home &amp; run-state list: a &#8220;Needs your attention&#8221; strip, one status card per activity, one <b>New activity</b> button. No separate dashboard.</span></div>
-        <div class="navrow"><span class="name">Students</span><span class="desc">The one canonical roster + a single stable set of class teams, set up once for the course.</span></div>
-        <div class="navrow"><span class="name" style="color:var(--faint)">Library</span><span class="desc">Demoted to a greyed footer link. <b>Team, Analytics, Grading, Create</b> all leave the nav &#8212; they become stages or cuts.</span></div>
+        <h3>After &#183; 3 tabs, renamed to intent</h3>
+        <div class="navrow"><span class="name">Course&nbsp;Designer</span><span class="desc"><span class="tag" style="color:var(--sky);background:var(--sky-soft)">was Create</span> the AI co-designer for course content &#8212; same tab, a name that matches the job.</span></div>
+        <div class="navrow"><span class="name">Library</span><span class="desc">Kept as-is (the content library, still to come).</span></div>
+        <div class="navrow"><span class="name">Activities</span><span class="desc"><span class="tag" style="color:var(--green);background:var(--green-soft)">was Team</span> the home for running team activities: the activity list + the per-activity stepper (Set&nbsp;up &#8594; Prep &#8594; Team&nbsp;stage &#8594; Grade), plus teams, roster &amp; grading &#8212; all in here.</span></div>
       </div>
     </div>
   </section>
@@ -240,7 +241,7 @@
         <div class="ba"><div class="b"><span class="lbl">Before</span>Every activity opens the same hard-coded single team; no way to run/monitor the class.</div><div class="a"><span class="lbl">After</span>Team stage opens on all N teams with a switcher; click one to drill in.</div></div>
       </div>
       <div class="change">
-        <div class="ct">4 &#183; Rebuild <b>Students</b> to lead with the roster + one &#8220;Form teams&#8221; action.</div>
+        <div class="ct">4 &#183; Simplify <b>team formation</b> (a section inside Activities) &#8212; lead with the roster + one &#8220;Form teams&#8221; action.</div>
         <div class="ba"><div class="b"><span class="lbl">Before</span>Four to five stacked controls (target size, mode toggle, scope dropdown&#8230;) before a single team is visible.</div><div class="a"><span class="lbl">After</span>Teams show immediately; one &#8220;Form teams&#8221; auto-distributes the roster (Random / Balanced); everything else in a slim toolbar.</div></div>
       </div>
       <div class="change">
@@ -254,10 +255,9 @@
     <div class="sec-head"><span class="sec-num">08</span><h2>Cut list &#8212; for the pilot</h2></div>
     <p class="lead" style="margin-bottom:16px">Deferred, <em>not</em> deleted. Removing these is most of the fix.</p>
     <div class="card pad">
-      <div class="cut"><span class="x">&#215;</span><div><b>Library tab</b> <span class="n">&#8212; a permanent &#8220;coming soon&#8221; decoy. &#8594; greyed footer link.</span></div></div>
-      <div class="cut"><span class="x">&#215;</span><div><b>The whole &#8220;Create&#8221; dashboard</b> <span class="n">&#8212; Lesson / Assessment / Flashcards / Worksheets cards (all &#8220;coming soon&#8221;), the Generate-Lesson default, and the course-content list. &#8594; replaced by one &#8220;New activity &#8594; upload brief.&#8221;</span></div></div>
-      <div class="cut"><span class="x">&#215;</span><div><b>The Team hub &amp; its sub-tabs</b> <span class="n">&#8212; Team is a property of an activity, not a destination.</span></div></div>
-      <div class="cut"><span class="x">&#215;</span><div><b>The Analytics tab</b> <span class="n">&#8212; 4 vanity stats + a bar chart. The one live number becomes an attention count on the Activities row; a light reflection view may return later.</span></div></div>
+      <div class="cut"><span class="x">&#215;</span><div><b>The dead create-cards</b> <span class="n">&#8212; Lesson / Assessment / Flashcards / Worksheets that all route to &#8220;coming soon.&#8221; Course Designer (was Create) stays, but its cards should point at real destinations or be hidden until real.</span></div></div>
+      <div class="cut"><span class="x">&#215;</span><div><b>The flat Activities / Teams / Analytics sub-tab row</b> <span class="n">&#8212; inside the renamed Activities tab, reorganize around the activity spine instead of a flat sub-tab strip.</span></div></div>
+      <div class="cut"><span class="x">&#215;</span><div><b>The vanity Analytics dashboard</b> <span class="n">&#8212; 4 stat cards + a bar chart. Defer it; its one live number becomes an attention count on the Activities list; a light reflection view can live on an activity&#8217;s Released stage.</span></div></div>
       <div class="cut"><span class="x">&#215;</span><div><b>Per-activity teams</b> <span class="n">&#8212; the same/per-activity toggle + &#8220;Teams for&#8221; scope dropdown (built earlier today). One stable set of class teams.</span></div></div>
       <div class="cut"><span class="x">&#215;</span><div><b>&#8220;Target team size&#8221; as a header slot</b> <span class="n">&#8212; inert; fold into the Form-teams flow.</span></div></div>
       <div class="cut"><span class="x">&#215;</span><div><b>Student audio &#8220;Record discussion&#8221;</b> <span class="n">&#8212; faked (fabricated duration, no playback, saves to a tab that doesn&#8217;t exist). Cut, including the copy.</span></div></div>
