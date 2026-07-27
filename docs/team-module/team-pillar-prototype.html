@@ -317,6 +317,18 @@
                 </span>
                 <span class="note" id="team-mode-hint" style="margin:0">Every activity uses the same class teams.</span>
               </div>
+              <div id="team-scope-row" style="display:none;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px">
+                <span class="teamsize-ctl">Teams for
+                  <select id="team-scope" onchange="setScope(this.value)">
+                    <option value="__all__">All activities (default)</option>
+                    <option value="Bridge Design Decision">Bridge Design Decision</option>
+                    <option value="Statics Warm-up: Free-body Diagrams">Statics Warm-up</option>
+                    <option value="Materials Selection Case">Materials Selection Case</option>
+                    <option value="Truss Analysis Project Milestone">Truss Analysis Project Milestone</option>
+                  </select>
+                </span>
+                <span class="note" id="team-scope-note" style="margin:0">The default teams, used by every activity that has no teams of its own.</span>
+              </div>
               <div class="grid2" id="teams-grid">
                 <div class="card team-card">
                   <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px"><span class="tile" style="background:var(--purple-bg);color:var(--lav);width:32px;height:32px"><svg class="ic"><use href="#i-groups"></use></svg></span><b style="flex:1">Team 3</b><span class="badge count-badge" style="background:var(--cream-300);color:var(--muted)">4 members</span><button class="icon-btn" title="Delete team" onclick="deleteTeam(this)"><svg class="ic"><use href="#i-delete"></use></svg></button></div>
@@ -731,11 +743,27 @@
   var targetSize = '4';
   function setTargetSize(v) { targetSize = v; document.querySelectorAll('.team-card').forEach(function (c) { refreshTeam(c); }); }
   var teamMode = 'shared';
+  var teamScopes = {};
+  var currentScope = '__all__';
   function setTeamMode(m) {
     teamMode = m;
     document.querySelectorAll('#team-mode .seg').forEach(function (b) { b.classList.toggle('on', b.dataset.tm === m); });
     var hint = document.getElementById('team-mode-hint');
-    if (hint) hint.textContent = m === 'per' ? 'Each activity can have its own team composition (regroup per activity).' : 'Every activity uses the same class teams.';
+    if (hint) hint.textContent = m === 'per' ? 'Each activity can have its own team composition \u2014 pick an activity below to regroup it.' : 'Every activity uses the same class teams.';
+    var row = document.getElementById('team-scope-row');
+    if (row) row.style.display = m === 'per' ? 'flex' : 'none';
+    if (m !== 'per' && currentScope !== '__all__') { var sel = document.getElementById('team-scope'); if (sel) sel.value = '__all__'; setScope('__all__'); }
+  }
+  function setScope(v) {
+    var grid = document.getElementById('teams-grid');
+    teamScopes[currentScope] = grid.innerHTML;                 // save the scope you're leaving
+    grid.innerHTML = teamScopes[v] || teamScopes['__all__'];   // new activity scope starts from the class default
+    currentScope = v;
+    var note = document.getElementById('team-scope-note');
+    if (note) note.textContent = v === '__all__'
+      ? 'The default teams, used by every activity that has no teams of its own.'
+      : 'Teams for this activity only \u2014 started from your class teams; add, remove, or regroup without affecting other activities.';
+    document.querySelectorAll('.team-card').forEach(function (c) { refreshTeam(c); });
   }
   function refreshTeam(card) {
     var n = card.querySelectorAll('.team-members .member').length;
