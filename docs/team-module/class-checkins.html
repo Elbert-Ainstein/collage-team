@@ -2960,37 +2960,51 @@ class Component extends DCLogic {
     return {
       tab:"teams", theme:null, narrow:(typeof window!=="undefined"&&window.innerWidth<820),
       activities:[
-        {id:"a1",classId:"AP50A",title:"Membrane Transport — Case 4",stage:2,resubmitMode:"team",r1:18,r2:4,posted:false,
+        {id:"a1",classId:"AP50A",week:1,dates:"Sep 8–12",title:"Membrane Transport — Case 4",stage:2,resubmitMode:"team",r1:18,r2:4,posted:false,
           brief:{heading:"Case 4 — Predicting solute movement across a semipermeable membrane",
             paras:["A cell with an internal osmolarity of 300 mOsm is placed in a bath containing 240 mOsm of solute B. The membrane is permeable to water but not to solute B.",
               "Predict the direction of net water movement, the change in cell volume, and the final internal osmolarity. State the assumption your prediction depends on most heavily.",
               "Then explain what would change if a carrier for solute B were inserted into the membrane, and whether that transport would require ATP."],
             files:[{name:"case-4-brief.pdf",size:"212 KB"},{name:"membrane-figure.png",size:"88 KB"}]}},
-        {id:"a2",classId:"AP50A",title:"Enzyme Kinetics — Readiness Check",stage:1,resubmitMode:"choice",r1:9,r2:0,posted:false,
+        {id:"a2",classId:"AP50A",week:2,dates:"Sep 15–19",title:"Enzyme Kinetics — Readiness Check",stage:1,resubmitMode:"choice",r1:9,r2:0,posted:false,
           brief:{heading:"Readiness check — Enzyme kinetics, Ch. 6",
             paras:["Before class, read Ch. 6 §2–4 and answer: how do Km and Vmax respond to a competitive inhibitor, and how would you distinguish competitive from non-competitive inhibition from a single Lineweaver–Burk plot?",
               "Bring one worked example. You will compare answers with your assigned partner before resubmitting."],
             files:[{name:"ch6-readiness.pdf",size:"140 KB"}]}},
-        {id:"a3",classId:"AP50B",title:"Membrane Transport — Case 4",stage:0,resubmitMode:"team",r1:0,r2:0,posted:false,
+        {id:"a3",classId:"AP50B",week:1,dates:"Sep 9–13",title:"Membrane Transport — Case 4",stage:0,resubmitMode:"team",r1:0,r2:0,posted:false,
           brief:{heading:"Case 4 — Predicting solute movement across a semipermeable membrane",
             paras:["Same case as Section A, opening a week later. A cell at 300 mOsm sits in a 240 mOsm bath; the membrane passes water but not solute B.",
               "Predict net water movement, volume change, and final internal osmolarity — and name the assumption you lean on hardest."],
             files:[{name:"case-4-brief.pdf",size:"212 KB"}]}},
-        {id:"a4",classId:"AP50B",title:"Diffusion Lab — Prep Quiz",stage:1,resubmitMode:"individual",r1:0,r2:0,posted:false,
+        {id:"a4",classId:"AP50B",week:2,dates:"Sep 16–20",title:"Diffusion Lab — Prep Quiz",stage:1,resubmitMode:"individual",r1:0,r2:0,posted:false,
           brief:{heading:"Prep quiz — Diffusion lab (agar cubes)",
             paras:["Answer before lab: how does surface-area-to-volume ratio change the time for phenolphthalein to clear a cube, and what would you measure to test it?",
               "Round 2 is an individual resubmission — each student revises their own answer after the bench discussion."],
-            files:[{name:"diffusion-lab-handout.pdf",size:"96 KB"}]}}
+            files:[{name:"diffusion-lab-handout.pdf",size:"96 KB"}]}},
+        {id:"a5",classId:"AP50A",week:3,dates:"Sep 22–26",title:"Diffusion & Osmosis — Agar Lab",stage:0,resubmitMode:"team",r1:0,r2:0,posted:false,
+          brief:{heading:"Agar-cube lab — surface-area-to-volume and diffusion time",
+            paras:["Predict how the surface-area-to-volume ratio changes the time for phenolphthalein to clear an agar cube, and what you would measure to test it.",
+              "The team readiness check follows the individual prep; bring your predicted ranking of the three cube sizes."],
+            files:[{name:"agar-lab-handout.pdf",size:"96 KB"}]}},
+        {id:"a6",classId:"AP50A",week:4,dates:"Sep 29–Oct 3",title:"Cell Signaling — Case 7",stage:0,resubmitMode:"team",r1:0,r2:0,posted:false,
+          brief:{heading:"Case 7 — Second messengers and signal amplification",
+            paras:["Trace how a single hormone-binding event is amplified through a G-protein / cAMP cascade, and identify the step where the signal is most tightly regulated.",
+              "Individual readiness check before class; team readiness check in session."],
+            files:[{name:"case-7-brief.pdf",size:"180 KB"}]}}
       ],
       columns:[
         {id:"iRAT",activityId:"a1",label:"iRAT",type:"individual",phase:"Readiness",scale:"points",max:10},
         {id:"tRAT",activityId:"a1",label:"tRAT",type:"team",phase:"Readiness",scale:"points",max:15},
-        {id:"PART",activityId:"a1",label:"Participation",type:"individual",phase:"Participation",scale:"ci",max:1},
-        {id:"MS2",activityId:"a1",label:"Milestone 2",type:"team",phase:"Milestone",scale:"points",max:20},
-        {id:"RQ",activityId:"a2",label:"Readiness quiz",type:"individual",phase:"Readiness",scale:"points",max:10},
+        {id:"RQ",activityId:"a2",label:"iRAT",type:"individual",phase:"Readiness",scale:"points",max:10},
+        {id:"w2t",activityId:"a2",label:"tRAT",type:"team",phase:"Readiness",scale:"points",max:15},
+        {id:"w3i",activityId:"a5",label:"iRAT",type:"individual",phase:"Readiness",scale:"points",max:10},
+        {id:"w3t",activityId:"a5",label:"tRAT",type:"team",phase:"Readiness",scale:"points",max:15},
+        {id:"w4i",activityId:"a6",label:"iRAT",type:"individual",phase:"Readiness",scale:"points",max:10},
+        {id:"w4t",activityId:"a6",label:"tRAT",type:"team",phase:"Readiness",scale:"points",max:15},
         {id:"bIRAT",activityId:"a3",label:"iRAT",type:"individual",phase:"Readiness",scale:"points",max:10},
-        {id:"bPART",activityId:"a3",label:"Participation",type:"individual",phase:"Participation",scale:"ci",max:1},
-        {id:"bQUIZ",activityId:"a4",label:"Prep quiz",type:"individual",phase:"Readiness",scale:"points",max:10}
+        {id:"bTRAT",activityId:"a3",label:"tRAT",type:"team",phase:"Readiness",scale:"points",max:15},
+        {id:"bQUIZ",activityId:"a4",label:"iRAT",type:"individual",phase:"Readiness",scale:"points",max:10},
+        {id:"bTEAM",activityId:"a4",label:"tRAT",type:"team",phase:"Readiness",scale:"points",max:15}
       ],
       cells:this.seedCells(teams),
       collapsed:{},
@@ -2999,6 +3013,8 @@ class Component extends DCLogic {
       teamSets:{
         s1:{id:"s1",name:"Case 4 · teams of 4",activityId:"a1",classId:"AP50A",size:4,locked:false,teams},
         s2:{id:"s2",name:"Enzyme Kinetics · pairs",activityId:"a2",classId:"AP50A",size:2,locked:true,teams:pairs},
+        s5:{id:"s5",name:"Agar Lab · teams of 4",activityId:"a5",classId:"AP50A",size:4,locked:false,teams},
+        s6:{id:"s6",name:"Case 7 · teams of 4",activityId:"a6",classId:"AP50A",size:4,locked:false,teams},
         b1:{id:"b1",name:"Case 4 · teams of 4",activityId:"a3",classId:"AP50B",size:4,locked:false,teams:[]},
         b2:{id:"b2",name:"Diffusion Lab · pairs",activityId:"a4",classId:"AP50B",size:2,locked:false,teams:[]}},
       classId:"AP50A",
@@ -3036,6 +3052,9 @@ class Component extends DCLogic {
     c["MS2|t1"]={st:"scored",score:18};
     c["MS2|t2"]={st:"sub"};
     c["MS2|t4"]={st:"none"};
+    c["w2t|t1"]={st:"sub"};
+    c["w2t|t2"]={st:"discussing"};
+    c["w2t|t4"]={st:"none"};
     return c;
   }
 
@@ -3273,7 +3292,7 @@ class Component extends DCLogic {
       if(last&&last.id===c.activityId) last.span++;
       else groups.push({id:c.activityId,title:act?act.title:"Activity",span:1,act});
     });
-    const groupVMs=groups.map(g=>({span:g.span,title:g.title,meta:g.act?("owns "+g.span+" check-in"+(g.span>1?"s":"")):"",
+    const groupVMs=groups.map(g=>({span:g.span,title:g.act&&g.act.week?("Week "+g.act.week):g.title,meta:g.act?(g.act.title+(g.act.dates?(" · "+g.act.dates):"")):"",
       onOpen:()=>this.setState({tab:"activities",activityView:g.id,lens:"faculty",facultyTab:"source"}),
       style:{background:"var(--paper3)",borderRight:"1px solid var(--line)",borderBottom:"1px solid var(--line)",borderLeft:"1px solid var(--line)",textAlign:"left",padding:"6px 10px",fontWeight:600}}));
     const colVMs=cols.map(c=>{
@@ -3327,7 +3346,7 @@ class Component extends DCLogic {
     const gbSubtitle=S.roster.length===0?S.classId+" · no roster loaded yet"
       :this.gbEmpty()?S.classId+" · roster loaded, no check-ins yet"
       :mode==="done"?S.classId+" · all columns locked to scored values"
-      :S.classId+" · rows are students grouped by team; columns are check-ins under the activity that owns them.";
+      :S.classId+" · two check-ins a week — an individual iRAT then a team tRAT — grouped by week.";
 
     // panel
     const o=S.open;
