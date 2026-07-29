@@ -1,0 +1,973 @@
+<style>
+/* ===== Class Check-ins — self-contained team-based-learning tool =====
+   Paper/ink aesthetic. System fonts + inline SVG only. Light + dark. */
+:root{
+  --paper:#fffcf2; --paper2:#fffcf2; --paper3:#fcf8ec; --canvas:#fbf9f3; --activeBg:#f5ead0;
+  --ink:#002341; --ink2:#41637f; --ink3:#7d94a6;
+  --line:#e5e5e5; --line2:#eee9dc;
+  --purple:#dca2fd;
+  --blue:#0382ed; --blueBg:#dbeeff;
+  --amber:#b45309; --amberBg:#fdf1cd;
+  --green:#15803d; --greenBg:#e2f2e8;
+  --serif:Georgia,"Iowan Old Style","Times New Roman",serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --hand:"Snell Roundhand","Segoe Script","Bradley Hand","Comic Sans MS",cursive;
+  --shadowCard:0 1px 0 0 rgba(0,35,65,.05);
+  --shadowFloat:0 1px 2px 0 rgba(0,35,65,.10);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --paper:#00182a; --paper2:#063049; --paper3:#0e3354; --canvas:#002341; --activeBg:#0e3354;
+    --ink:#fcf8ec; --ink2:#b7c8d5; --ink3:#88a2b5;
+    --line:#12415f; --line2:#0d3450;
+    --blue:#79c0ff; --blueBg:#0b3a5c;
+    --amber:#e6b53c; --amberBg:#3a2f12;
+    --green:#5cc98e; --greenBg:#0f3a2a;
+    --shadowCard:0 1px 0 0 rgba(0,0,0,.25);
+    --shadowFloat:0 1px 3px 0 rgba(0,0,0,.35);
+  }
+}
+:root[data-theme="light"]{
+  --paper:#fffcf2; --paper2:#fffcf2; --paper3:#fcf8ec; --canvas:#fbf9f3; --activeBg:#f5ead0;
+  --ink:#002341; --ink2:#41637f; --ink3:#7d94a6;
+  --line:#e5e5e5; --line2:#eee9dc;
+  --blue:#0382ed; --blueBg:#dbeeff;
+  --amber:#b45309; --amberBg:#fdf1cd;
+  --green:#15803d; --greenBg:#e2f2e8;
+  --shadowCard:0 1px 0 0 rgba(0,35,65,.05);
+  --shadowFloat:0 1px 2px 0 rgba(0,35,65,.10);
+}
+:root[data-theme="dark"]{
+  --paper:#00182a; --paper2:#063049; --paper3:#0e3354; --canvas:#002341; --activeBg:#0e3354;
+  --ink:#fcf8ec; --ink2:#b7c8d5; --ink3:#88a2b5;
+  --line:#12415f; --line2:#0d3450;
+  --blue:#79c0ff; --blueBg:#0b3a5c;
+  --amber:#e6b53c; --amberBg:#3a2f12;
+  --green:#5cc98e; --greenBg:#0f3a2a;
+  --shadowCard:0 1px 0 0 rgba(0,0,0,.25);
+  --shadowFloat:0 1px 3px 0 rgba(0,0,0,.35);
+}
+#tbl-app,#tbl-app *{box-sizing:border-box}
+#tbl-app{
+  font-family:var(--sans);font-size:14px;line-height:1.45;color:var(--ink);
+  background:var(--paper);min-height:100vh;max-width:100%;overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;text-wrap:pretty;
+}
+#tbl-app input,#tbl-app textarea,#tbl-app select{font:inherit;color:inherit}#tbl-app button{font:inherit}
+#tbl-app button{cursor:pointer}
+#tbl-app svg{display:inline-block;vertical-align:middle}
+#tbl-app *{scrollbar-width:thin;scrollbar-color:rgba(120,140,160,.4) transparent}
+#tbl-app *::-webkit-scrollbar{width:8px;height:8px}
+#tbl-app *::-webkit-scrollbar-track{background:transparent}
+#tbl-app *::-webkit-scrollbar-thumb{background:rgba(120,140,160,.4);border-radius:9999px}
+@keyframes tblPulse{0%,100%{opacity:1}50%{opacity:.32}}
+@keyframes tblFade{from{opacity:0}to{opacity:1}}
+
+/* layout */
+.t-shell{min-height:100vh;display:flex;background:var(--paper);max-width:100%}
+.t-sidebar{width:238px;flex:0 0 238px;display:flex;flex-direction:column;padding:22px 14px 14px}
+.t-brand{font-family:var(--serif);font-size:21px;line-height:1.18;font-weight:700;letter-spacing:-.01em}
+.t-ctxmeta{display:flex;align-items:center;gap:6px;margin-top:6px;font-size:11.5px;color:var(--ink2)}
+.t-num{font-variant-numeric:tabular-nums}
+.t-seg2{display:flex;gap:3px;margin-top:11px;padding:3px;border:1px solid var(--line);background:var(--paper3);border-radius:11px}
+.t-segbtn{flex:1;border:1px solid transparent;background:transparent;color:var(--ink2);font-size:11.5px;padding:5px 8px;border-radius:8px;transition:background 120ms,color 120ms}
+.t-segbtn.on{border-color:var(--ink);background:var(--ink);color:var(--paper3);font-weight:600}
+.t-nav{display:flex;flex-direction:column;gap:4px;margin-top:4px}
+.t-navbtn{display:flex;align-items:center;gap:10px;height:38px;width:100%;padding:0 11px;border-radius:10px;border:1px solid transparent;background:transparent;color:var(--ink2);font-size:13.5px;text-align:left;transition:background 120ms,color 120ms}
+.t-navbtn.on{border-color:var(--line);background:var(--activeBg);color:var(--ink);font-weight:600}
+.t-navbtn span.lbl{flex:1;min-width:0;text-align:left}
+.t-loopcard{border:1px solid var(--line);background:var(--paper3);border-radius:12px;padding:11px 12px;box-shadow:var(--shadowCard)}
+.t-kicker{font-size:10px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3)}
+.t-looprow{display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink2)}
+.t-lnum{display:inline-flex;align-items:center;justify-content:center;width:21px;height:21px;flex:0 0 auto;border-radius:999px;background:var(--purple);color:#002341;font-size:11.5px;font-weight:600}
+.t-themebtn{display:flex;align-items:center;gap:10px;border:1px solid transparent;background:transparent;color:var(--ink2);font-size:12.5px;padding:9px 11px;border-radius:10px;transition:background 120ms}
+.t-themebtn:hover{background:var(--paper3);color:var(--ink)}
+.t-fac{display:flex;align-items:center;gap:9px;padding:7px 11px;border-radius:10px}
+.t-main{flex:1;min-width:0;max-width:100%;display:flex;padding:12px 12px 12px 0}
+.t-narrow .t-main{padding:10px 10px 84px}
+.t-canvas{flex:1;min-width:0;border:1px solid var(--line);background:var(--canvas);border-radius:16px;box-shadow:var(--shadowFloat);padding:26px 30px 34px}
+.t-narrow .t-canvas{padding:16px 14px 24px}
+.t-topstrip{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:15px;padding-bottom:13px;border-bottom:1px solid var(--line)}
+.t-bottomnav{position:fixed;left:10px;right:10px;bottom:10px;z-index:40;display:flex;gap:4px;padding:5px;border:1px solid var(--line);border-radius:16px;background:var(--paper2);box-shadow:var(--shadowFloat)}
+.t-bnbtn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;border:1px solid transparent;border-radius:12px;background:transparent;color:var(--ink2);font-size:11px;padding:8px 4px}
+.t-bnbtn.on{border-color:var(--line);background:var(--activeBg);color:var(--ink);font-weight:600}
+
+/* headings */
+.t-h1{margin:0;font-family:var(--serif);font-size:24px;font-weight:700;letter-spacing:-.015em;color:var(--ink)}
+.t-h2{margin:0;font-family:var(--serif);font-size:18px;font-weight:700}
+.t-sub{font-size:12px;color:var(--ink2)}
+.t-row{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:10px}
+.t-spacer{flex:1}
+
+/* chips + buttons */
+.t-chip{font-size:10.5px;padding:2px 9px;border-radius:999px;border:1px solid var(--line);background:var(--paper3);color:var(--ink2);white-space:nowrap;display:inline-flex;align-items:center;gap:4px}
+.t-chip.blue{border-color:var(--blue);background:var(--blueBg);color:var(--blue)}
+.t-chip.amber{border-color:var(--amber);background:var(--amberBg);color:var(--amber)}
+.t-chip.green{border-color:var(--green);background:var(--greenBg);color:var(--green)}
+.t-chip.purple{border-color:var(--purple);background:rgba(220,162,253,.16);color:var(--ink)}
+.t-btn{font-family:inherit;border:1px solid var(--line);background:var(--paper2);color:var(--ink);font-size:12px;padding:5px 11px;border-radius:10px;cursor:pointer;box-shadow:var(--shadowCard)}
+.t-btn.primary{border-color:var(--ink);background:var(--ink);color:var(--paper);box-shadow:none}
+.t-btn.ghost{background:transparent;color:var(--ink2);box-shadow:none}
+.t-btn.line{background:var(--paper3);color:var(--ink);box-shadow:none}
+.t-btn.green{border-color:var(--green);background:var(--greenBg);color:var(--green);box-shadow:none}
+.t-btn.amber{border-color:var(--amber);background:var(--amberBg);color:var(--amber);box-shadow:none}
+.t-btn.sm{font-size:11px;padding:2px 8px}
+.t-card{border:1px solid var(--line);background:var(--paper2);border-radius:10px;padding:13px}
+.t-in{border:1px solid var(--line);background:var(--paper);border-radius:10px;padding:5px 7px;font-size:13px;color:var(--ink)}
+.t-in:focus{outline:1px solid var(--purple)}
+.t-pill{border:1px solid var(--line);background:var(--paper2);color:var(--ink2);font-size:12px;padding:5px 12px;border-radius:999px;white-space:nowrap;box-shadow:var(--shadowCard)}
+.t-pill.on{border-color:var(--ink);background:var(--ink);color:var(--paper3);box-shadow:none}
+
+/* avatar */
+.t-av{display:inline-flex;align-items:center;justify-content:center;border-radius:8px;flex:0 0 auto;color:#002341;font-weight:600;letter-spacing:.01em}
+
+/* loop bar + cell key */
+.t-loopbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:6px 10px;border:1px solid var(--line);background:var(--paper3);border-radius:10px;margin-bottom:10px}
+.t-looppill{display:inline-flex;align-items:center;gap:7px;font-size:11.5px;padding:3px 11px 3px 4px;border-radius:999px;border:1px solid var(--line);background:var(--paper3);color:var(--ink2)}
+.t-looppill .n{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;border-radius:999px;background:var(--purple);color:#002341;font-size:10.5px;font-weight:600}
+.t-key{display:flex;gap:9px 18px;flex-wrap:wrap;align-items:center;margin:0 0 10px;padding:10px 12px;border:1px solid var(--line);background:var(--paper2);border-radius:12px;font-size:11.5px;color:var(--ink2);box-shadow:var(--shadowCard)}
+.t-keyitem{display:inline-flex;align-items:center;gap:6px}
+.t-keyglyph{display:inline-flex;align-items:center;justify-content:center;width:26px;height:22px;border-radius:6px;border:1px solid var(--line);font-size:13px;font-variant-numeric:tabular-nums}
+
+/* gradebook */
+.t-gbwrap{border:1px solid var(--line);border-radius:10px;background:var(--paper2);overflow-x:auto;max-width:100%}
+table.t-gb{border-collapse:separate;border-spacing:0;font-size:13px;min-width:100%}
+table.t-gb th,table.t-gb td{padding:0}
+.t-gbname{position:sticky;left:0;z-index:2;border-right:1px solid var(--line);text-align:left;min-width:210px}
+th.t-gbname.hdr{z-index:3;background:var(--paper3);border-bottom:1px solid var(--line);padding:6px 10px;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);font-weight:500}
+.t-grp{background:var(--paper3);border-right:1px solid var(--line);border-bottom:1px solid var(--line);border-left:1px solid var(--line);text-align:left;padding:6px 10px}
+.t-grp button{border:0;background:transparent;padding:0;color:var(--ink);font-family:var(--serif);font-size:15px;font-weight:700;letter-spacing:-.01em;text-align:left;cursor:pointer}
+.t-grp .meta{font-size:11px;color:var(--ink3);margin-left:8px}
+.t-th{background:var(--paper2);border-right:1px solid var(--line2);border-bottom:1px solid var(--line);border-left:1px solid var(--line2);text-align:left;padding:7px 10px;vertical-align:top;min-width:96px}
+.t-th button{border:0;background:transparent;padding:0;color:var(--ink);font-size:12px;font-weight:600;display:block;text-align:left;cursor:pointer}
+.t-th .meta{font-size:10.5px;color:var(--ink3);margin-top:2px;white-space:nowrap}
+.t-th .summ{font-size:10.5px;color:var(--ink2);margin-top:3px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.t-rowteam .t-gbname{background:var(--paper3);border-bottom:1px solid var(--line2);padding:5px 10px;font-weight:600;font-size:12.5px}
+.t-rowstu .t-gbname{background:var(--paper2);border-bottom:1px solid var(--line2);padding:4px 10px 4px 24px;font-weight:400;font-size:12.5px}
+.t-rowstu.unassigned .t-gbname{padding-left:10px}
+.t-namecell{display:flex;align-items:center;gap:7px}
+.t-caret{display:flex;align-items:center;border:0;background:transparent;padding:0;color:var(--ink2);width:18px;cursor:pointer}
+.t-td{border-right:1px solid var(--line2);border-bottom:1px solid var(--line2)}
+.t-cell{width:100%;min-width:70px;height:34px;display:flex;align-items:center;justify-content:center;gap:5px;border:0;background:transparent;font-size:13.5px;font-variant-numeric:tabular-nums;transition:background 120ms,color 120ms,box-shadow 120ms;font-family:inherit;cursor:pointer}
+.t-cell.mismatch{color:var(--line);cursor:default}
+.t-cell.ring{box-shadow:inset 0 0 0 2px var(--purple)}
+.t-pulse{animation:tblPulse 1.4s ease-in-out infinite}
+
+/* stage bar */
+.t-stagebar{display:flex;gap:2px}
+.t-seg{flex:1 1 0;min-width:0;text-align:center;font-size:10.5px;letter-spacing:.02em;padding:5px 4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border:1px solid var(--line);border-left-width:0;color:var(--ink3)}
+.t-seg:first-child{border-left-width:1px;border-top-left-radius:9px;border-bottom-left-radius:9px}
+.t-seg:last-child{border-top-right-radius:9px;border-bottom-right-radius:9px}
+.t-seg.done{background:var(--activeBg);color:var(--ink2)}
+.t-seg.cur{background:var(--ink);color:var(--paper3);border-color:var(--ink);font-weight:600}
+
+/* grid helpers */
+.t-grid{display:grid;gap:12px}
+.t-cards2{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}
+.t-cards3{grid-template-columns:repeat(auto-fill,minmax(320px,1fr))}
+.t-autofit{grid-template-columns:repeat(auto-fit,minmax(280px,1fr));align-items:start}
+
+/* teams */
+.t-teamcard{border:1px solid var(--line);background:var(--paper2);border-radius:10px;padding:12px}
+.t-teamcard.under{border-color:var(--amber)}
+.t-memberrow{display:flex;align-items:center;gap:7px;padding:3px 4px;border-bottom:1px solid var(--line2)}
+.t-warn{margin-top:8px;display:flex;align-items:center;gap:6px;border:1px solid var(--amber);background:var(--amberBg);color:var(--amber);border-radius:10px;padding:4px 7px;font-size:11.5px}
+.t-rolechip{border:1px solid var(--line);background:var(--paper3);color:var(--ink2);font-size:10px;padding:1px 7px;border-radius:999px;cursor:pointer;white-space:nowrap}
+.t-x{border:0;background:transparent;color:var(--ink3);font-size:12px;padding:0 3px;cursor:pointer}
+.t-x:hover{color:var(--ink)}
+
+/* workspace tabs */
+.t-tabs{display:flex;gap:0;border-bottom:1px solid var(--line);margin-bottom:14px;flex-wrap:wrap}
+.t-tab{border:0;border-bottom:2px solid transparent;background:transparent;color:var(--ink2);font-size:13px;padding:9px 13px;cursor:pointer}
+.t-tab.on{border-bottom-color:var(--ink);color:var(--ink);font-weight:600;font-family:var(--serif)}
+.t-lensbox{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.t-lens{border:0;background:transparent;color:var(--ink2);font-size:12px;padding:5px 11px;cursor:pointer}
+.t-lens.on{background:var(--ink);color:var(--paper)}
+.t-stepcard{flex:1 1 200px;display:flex;flex-direction:column;gap:2px;border:1px solid var(--line);background:var(--paper2);border-radius:12px;padding:11px 13px;box-shadow:var(--shadowCard);text-align:left;cursor:pointer;transition:background 120ms,border-color 120ms}
+.t-stepcard.on{border-color:var(--purple);background:rgba(220,162,253,.16);box-shadow:none}
+.t-stepcard.locked{opacity:.6}
+
+/* panel + overlays */
+.t-panel{position:fixed;top:12px;right:12px;bottom:12px;width:min(430px,92vw);z-index:45;display:flex;flex-direction:column;background:var(--paper2);border:1px solid var(--line);border-radius:16px;box-shadow:0 8px 30px rgba(0,35,65,.18);animation:tblFade 120ms;overflow:hidden}
+.t-narrow .t-panel{top:auto;left:8px;right:8px;bottom:8px;width:auto;max-height:86vh;border-radius:18px}
+.t-panelhead{display:flex;align-items:center;gap:9px;padding:11px 14px;border-bottom:1px solid var(--line)}
+.t-panelbody{padding:14px;overflow-y:auto;flex:1}
+.t-scan{margin-top:10px;cursor:zoom-in;border:1px solid var(--line);border-radius:12px;padding:12px 16px;overflow:hidden;background:repeating-linear-gradient(var(--paper2) 0px,var(--paper2) 25px,var(--line2) 25px,var(--line2) 26px)}
+.t-scanline{font-family:var(--hand);font-size:17px;line-height:26px;color:var(--ink)}
+.t-flag{background:var(--amberBg);color:var(--amber);border-bottom:1px solid var(--amber);padding:0 2px}
+.t-overlay{position:fixed;inset:0;z-index:50;background:var(--paper);overflow-y:auto;animation:tblFade 120ms}
+.t-modalback{position:fixed;inset:0;z-index:60;background:rgba(0,24,42,.6);display:flex;align-items:center;justify-content:center;padding:18px;animation:tblFade 120ms}
+.t-modal{background:var(--paper2);border:1px solid var(--line);border-radius:10px;max-width:760px;width:100%;max-height:90vh;overflow:auto}
+.t-dz{border:1px dashed var(--line);background:var(--paper);border-radius:10px;padding:18px 14px;text-align:center;cursor:pointer;transition:all 120ms}
+.t-uc{text-transform:uppercase;letter-spacing:.09em}
+label.t-fld{display:grid;gap:4px;font-size:11px;color:var(--ink3);letter-spacing:.06em;text-transform:uppercase}
+label.t-fld .t-in,label.t-fld select{text-transform:none;letter-spacing:0}
+.t-wave{display:block;background:var(--line)}
+</style>
+
+<div id="tbl-app"></div>
+
+<script>
+(function(){
+"use strict";
+var app=document.getElementById("tbl-app");
+
+/* ---------- constants ---------- */
+var ROSTER=["Maya Chen","Liam Ortiz","Priya Nair","Sam Whitfield","Ava Thompson","Kai Nakamura","Ben Okafor","Cora Marsh","Dev Patel","Sofia Rossi","Jamal Harris","Grace Kim","Noah Bergstrom","Aisha Rahman","Leo Martin","Elena Petrova","Marcus Webb","Yuki Tanaka","Hannah Cohen","Diego Alvarez","Zoe Mitchell","Omar Haddad","Ruby Sinclair","Theo Novak"];
+var ROSTER_B=["Nina Alvarez","Owen Brooks","Tess Nakagawa","Ravi Menon","Iris Chen","Felix Duarte","Mona Sayed","Caleb Wright","Lena Fischer","Jonah Reyes","Amara Diallo","Pete Lindqvist","Sana Iqbal","Tomas Vega","Bea Okonkwo","Hugo Ferrari","Quinn Delaney","Rosa Mendez"];
+var ROLES=["Facilitator","Scribe","Skeptic","Reporter","Timekeeper"];
+var STAGES=["Setup","Individual","Discuss","Resubmit","Closed"];
+var PASTELS=["#d5efff","#adddc0","#f6cee7","#ffe770","#dca2fd","#fdd7a2","#c2e5ff","#efdfad"];
+var CLASSES=[
+  {id:"AP50A",label:"AP50A",meta:"Section A · MWF 9:00 · Lab 214"},
+  {id:"AP50B",label:"AP50B",meta:"Section B · TTh 1:30 · Lab 118"}
+];
+var TEAM_ANSWER=["Net water efflux; the cell shrinks until internal","osmolarity reaches 240 mOsm. Assumption: solute B is","fully impermeant. A carrier for B would make it permeant","— facilitated diffusion, no ATP required."];
+
+/* ---------- helpers ---------- */
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c];});}
+function initials(n){return n.split(" ").map(function(w){return w[0];}).join("").slice(0,2).toUpperCase();}
+function hash(s){var h=0;for(var i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))%360;return h;}
+function avatar(n,size){var s=size||20;return '<span class="t-av" style="width:'+s+'px;height:'+s+'px;background:'+PASTELS[hash(n)%PASTELS.length]+';font-size:'+(s*0.42)+'px">'+esc(initials(n))+'</span>';}
+function icon(name,sz){var s=sz||18;var p={
+  groups:'<circle cx="9" cy="8" r="3.1"/><path d="M3.2 19c0-3 2.7-5 5.8-5s5.8 2 5.8 5"/><path d="M16 5.6a3 3 0 0 1 0 5.8"/><path d="M18.8 19c0-2-1-3.6-2.6-4.6"/>',
+  table:'<rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M3 9.5h18M3 14.5h18M9 4.5v15"/>',
+  clipboard:'<rect x="6" y="4.5" width="12" height="16" rx="2"/><path d="M9 4.5V3.5h6v1"/><path d="M8.5 9.5h7M8.5 13h7M8.5 16.5h4"/>',
+  chevdown:'<path d="M6 9.5l6 6 6-6"/>',
+  chevright:'<path d="M9.5 6l6 6-6 6"/>',
+  moon:'<path d="M20 14.4A8 8 0 1 1 9.6 4a6.5 6.5 0 0 0 10.4 10.4z"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5 5l1.6 1.6M17.4 17.4L19 19M19 5l-1.6 1.6M6.6 17.4L5 19"/>',
+  upload:'<path d="M12 15.5V4M8 8l4-4 4 4"/><path d="M4 15v3.2A1.8 1.8 0 0 0 5.8 20h12.4a1.8 1.8 0 0 0 1.8-1.8V15"/>',
+  check:'<path d="M4.5 12.5l5 5L20 6.5"/>',
+  file:'<path d="M6.5 3.5h7l4 4v13h-11z"/><path d="M13.5 3.5v4h4"/>'
+};
+return '<svg width="'+s+'" height="'+s+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">'+(p[name]||"")+'</svg>';}
+
+/* ---------- seed data ---------- */
+function seedTeams(){
+  var t=[
+    {id:"t1",name:"Team Helix",members:["Maya Chen","Liam Ortiz","Priya Nair","Sam Whitfield"]},
+    {id:"t2",name:"Team Ribosome",members:["Ava Thompson","Kai Nakamura","Ben Okafor","Cora Marsh"]},
+    {id:"t3",name:"Team Vesicle",members:["Dev Patel","Sofia Rossi","Jamal Harris"]},
+    {id:"t4",name:"Team Mitosis",members:["Grace Kim","Noah Bergstrom","Aisha Rahman","Leo Martin"]},
+    {id:"t5",name:"Team Cytosol",members:["Elena Petrova","Marcus Webb","Yuki Tanaka","Hannah Cohen"]},
+    {id:"t6",name:"Team Axon",members:["Diego Alvarez","Zoe Mitchell","Omar Haddad","Ruby Sinclair"]}
+  ];
+  return t.map(function(x){return{id:x.id,name:x.name,members:x.members.slice(),roles:x.members.map(function(m,i){return ROLES[i%5];})};});
+}
+function seedPairs(){var p=[];for(var i=0;i<ROSTER.length;i+=2){p.push({id:"p"+i,name:"Pair "+(i/2+1),members:[ROSTER[i],ROSTER[i+1]],roles:["Facilitator","Skeptic"]});}return p;}
+
+function seedCells(){
+  var c={};
+  var w1={"Maya Chen":{st:"scored",score:9},"Liam Ortiz":{st:"flag"},"Priya Nair":{st:"flag"},
+    "Sam Whitfield":{st:"sub"},"Ava Thompson":{st:"scored",score:8},"Dev Patel":{st:"flag"},
+    "Sofia Rossi":{st:"none"},"Jamal Harris":{st:"none"},"Grace Kim":{st:"none"},"Theo Novak":{st:"none"},
+    "Cora Marsh":{st:"excused"},"Diego Alvarez":{st:"excused"}};
+  ROSTER.forEach(function(n,i){c["w1i|"+n]=w1[n]||{st:"scored",score:6+((i*7)%5)};});
+  c["w1t|t1"]={st:"scored",score:13};c["w1t|t2"]={st:"scored",score:12};c["w1t|t3"]={st:"none"};
+  c["w1t|t4"]={st:"scored",score:14};c["w1t|t5"]={st:"discussing"};c["w1t|t6"]={st:"scored",score:11};
+  var w2={"Maya Chen":{st:"sub"},"Kai Nakamura":{st:"sub"},"Ben Okafor":{st:"sub"},"Grace Kim":{st:"sub"},
+    "Zoe Mitchell":{st:"sub"},"Liam Ortiz":{st:"flag"},"Elena Petrova":{st:"flag"},
+    "Priya Nair":{st:"scored",score:8},"Sam Whitfield":{st:"scored",score:7}};
+  ROSTER.forEach(function(n){c["w2i|"+n]=w2[n]||{st:"none"};});
+  c["w2t|t1"]={st:"sub"};c["w2t|t5"]={st:"discussing"};
+  return c;
+}
+function seedResponses(){
+  function mk(name,flag,lines,tPre,tFlag,tPost){return{name:name,status:flag?"flag":"high",lines:lines,tPre:tPre,tFlag:tFlag,tPost:tPost,editing:false,override:null};}
+  return[
+    mk("Maya Chen",false,["Water moves toward the higher solute","concentration until the osmotic","pressures balance. Net flux = 0 at","equilibrium, not zero movement."],"Water moves toward the higher solute concentration until the osmotic pressures balance. Net flux = ","0"," at equilibrium, not zero movement."),
+    mk("Liam Ortiz",true,["Glucose 118.0 mg/dL outside, so the","cell should shrink slightly as water","leaves. Carrier is saturated above","Km so transport plateaus."],"Glucose ","1180"," mg/dL outside, so the cell should shrink slightly as water leaves. Carrier is saturated above Km so transport plateaus."),
+    mk("Priya Nair",true,["Δosmolarity = 412 mOsm across the","membrane, therefore solute B cannot","cross — only water responds to the","gradient here."],"Δosmolarity = ","4l2"," mOsm across the membrane, therefore solute B cannot cross — only water responds to the gradient here."),
+    mk("Sam Whitfield",false,["Semipermeable means solute B is","blocked; water leaves the cell, volume","drops, internal osmolarity rises until","it matches outside."],"Semipermeable means solute B is blocked; water leaves the cell, volume drops, internal osmolarity rises until it matches ","outside","."),
+    mk("Dev Patel",true,["Outside osmolarity 280 mM vs inside","300 mM, so water enters the cell and","it swells. Transporter is passive, no","ATP needed."],"Outside osmolarity ","2Bo"," mM vs inside 300 mM, so water enters the cell and it swells. Transporter is passive, no ATP needed."),
+    mk("Ava Thompson",false,["Facilitated diffusion still runs down","the gradient — it just needs the","carrier. No energy input, so it stops","at equilibrium."],"Facilitated diffusion still runs down the gradient — it just needs the carrier. No energy input, so it stops at ","equilibrium",".")
+  ];
+}
+
+var state={
+  tab:"checkins",theme:null,narrow:(window.innerWidth<820),
+  classId:"AP50A",
+  activities:[
+    {id:"a1",classId:"AP50A",week:1,topic:"Membrane Transport",dates:"Sep 2–6",title:"Membrane Transport — Case 4",stage:2,resubmitMode:"team",r1:18,r2:4,posted:false,
+      brief:{heading:"Case 4 — Predicting solute movement across a semipermeable membrane",
+        paras:["A cell with an internal osmolarity of 300 mOsm is placed in a bath containing 240 mOsm of solute B. The membrane is permeable to water but not to solute B.",
+          "Predict the direction of net water movement, the change in cell volume, and the final internal osmolarity. State the assumption your prediction depends on most heavily.",
+          "Then explain what would change if a carrier for solute B were inserted into the membrane, and whether that transport would require ATP."],
+        files:[{name:"case-4-brief.pdf",size:"212 KB"},{name:"membrane-figure.png",size:"88 KB"}]}},
+    {id:"a2",classId:"AP50A",week:2,topic:"Enzyme Kinetics",dates:"Sep 9–13",title:"Enzyme Kinetics — Readiness Check",stage:2,resubmitMode:"choice",r1:14,r2:1,posted:false,
+      brief:{heading:"Readiness check — Enzyme kinetics, Ch. 6",
+        paras:["Before class, read Ch. 6 §2–4 and answer: how do Km and Vmax respond to a competitive inhibitor, and how would you distinguish competitive from non-competitive inhibition from a single Lineweaver–Burk plot?",
+          "Bring one worked example. You will compare answers with your assigned partner before resubmitting."],
+        files:[{name:"ch6-readiness.pdf",size:"140 KB"}]}},
+    {id:"a5",classId:"AP50A",week:3,topic:"Diffusion & Osmosis",dates:"Sep 16–20",title:"Diffusion & Osmosis — Agar Lab",stage:0,resubmitMode:"team",r1:0,r2:0,posted:false,
+      brief:{heading:"Lab prep — Diffusion & osmosis in agar cubes",
+        paras:["Before lab, predict how surface-area-to-volume ratio changes the time for phenolphthalein to clear a cube, and name what you would measure to test it.",
+          "The team answer is due after the bench run; bring your individual prediction to compare against your results."],
+        files:[{name:"agar-lab-handout.pdf",size:"96 KB"}]}},
+    {id:"a6",classId:"AP50A",week:4,topic:"Cell Signaling",dates:"Sep 23–27",title:"Cell Signaling — Pathway Case",stage:0,resubmitMode:"team",r1:0,r2:0,posted:false,
+      brief:{heading:"Case — Tracing a GPCR signaling cascade",
+        paras:["Given a ligand binding a G-protein-coupled receptor, trace the cascade to the second messenger and predict how a loss-of-function mutation in adenylyl cyclase changes the cellular response.",
+          "State where amplification happens, and one experiment that would localize the defect."],
+        files:[{name:"signaling-case.pdf",size:"180 KB"}]}},
+    {id:"a3",classId:"AP50B",week:1,topic:"Membrane Transport",dates:"Sep 9–13",title:"Membrane Transport — Case 4",stage:0,resubmitMode:"team",r1:0,r2:0,posted:false,
+      brief:{heading:"Case 4 — Predicting solute movement across a semipermeable membrane",
+        paras:["Same case as Section A, opening a week later. A cell at 300 mOsm sits in a 240 mOsm bath; the membrane passes water but not solute B.",
+          "Predict net water movement, volume change, and final internal osmolarity — and name the assumption you lean on hardest."],
+        files:[{name:"case-4-brief.pdf",size:"212 KB"}]}},
+    {id:"a4",classId:"AP50B",week:2,topic:"Diffusion Lab",dates:"Sep 16–20",title:"Diffusion Lab — Prep Quiz",stage:1,resubmitMode:"individual",r1:0,r2:0,posted:false,
+      brief:{heading:"Prep quiz — Diffusion lab (agar cubes)",
+        paras:["Answer before lab: how does surface-area-to-volume ratio change the time for phenolphthalein to clear a cube, and what would you measure to test it?",
+          "Round 2 is an individual resubmission — each student revises their own answer after the bench discussion."],
+        files:[{name:"diffusion-lab-handout.pdf",size:"96 KB"}]}}
+  ],
+  columns:[
+    {id:"w1i",activityId:"a1",label:"iRAT",type:"individual",phase:"Readiness",scale:"points",max:10},
+    {id:"w1t",activityId:"a1",label:"tRAT",type:"team",phase:"Readiness",scale:"points",max:15},
+    {id:"w2i",activityId:"a2",label:"iRAT",type:"individual",phase:"Readiness",scale:"points",max:10},
+    {id:"w2t",activityId:"a2",label:"tRAT",type:"team",phase:"Readiness",scale:"points",max:15},
+    {id:"w3i",activityId:"a5",label:"iRAT",type:"individual",phase:"Readiness",scale:"points",max:10},
+    {id:"w3t",activityId:"a5",label:"tRAT",type:"team",phase:"Readiness",scale:"points",max:15},
+    {id:"w4i",activityId:"a6",label:"iRAT",type:"individual",phase:"Readiness",scale:"points",max:10},
+    {id:"w4t",activityId:"a6",label:"tRAT",type:"team",phase:"Readiness",scale:"points",max:15},
+    {id:"b1i",activityId:"a3",label:"iRAT",type:"individual",phase:"Readiness",scale:"points",max:10},
+    {id:"b1t",activityId:"a3",label:"tRAT",type:"team",phase:"Readiness",scale:"points",max:15},
+    {id:"b2i",activityId:"a4",label:"iRAT",type:"individual",phase:"Readiness",scale:"points",max:10},
+    {id:"b2t",activityId:"a4",label:"tRAT",type:"team",phase:"Readiness",scale:"points",max:15}
+  ],
+  cells:seedCells(),
+  collapsed:{},
+  open:null,panelScore:"",
+  addOpen:false,form:{label:"",type:"individual",phase:"Readiness",scale:"points",activity:"a1"},
+  teamSets:{
+    s1:{id:"s1",name:"Case 4 · teams of 4",activityId:"a1",classId:"AP50A",size:4,locked:false,teams:seedTeams()},
+    s2:{id:"s2",name:"Enzyme Kinetics · pairs",activityId:"a2",classId:"AP50A",size:2,locked:true,teams:seedPairs()},
+    b1:{id:"b1",name:"Case 4 · teams of 4",activityId:"a3",classId:"AP50B",size:4,locked:false,teams:[]},
+    b2:{id:"b2",name:"Diffusion Lab · pairs",activityId:"a4",classId:"AP50B",size:2,locked:false,teams:[]}
+  },
+  classRosters:{AP50A:ROSTER.slice(),AP50B:[]},
+  roster:ROSTER.slice(),
+  teamSetId:"s1",queries:{},newStudent:"",uploadNote:{},
+  activityView:null,lens:"faculty",facultyTab:"source",
+  r1Status:"draft",r1Text:"",r1File:"No file chosen yet.",
+  r2Text:"",r2Status:"open",r2Fork:null,
+  resources:[{text:"Photo of our whiteboard flux diagram",by:"Priya Nair · Scribe"},{text:"Note: check units on Δosmolarity before we answer",by:"Liam Ortiz"}],
+  resourceText:"",
+  responses:seedResponses(),
+  revOpen:false,revFilter:"all",modal:null,stuStep:1,legendOpen:true
+};
+
+/* ---------- derived ---------- */
+function activitiesOfClass(){return state.activities.filter(function(a){return a.classId===state.classId;});}
+function firstActivity(){return activitiesOfClass()[0]||state.activities[0];}
+function setsOfClass(){return Object.keys(state.teamSets).map(function(k){return state.teamSets[k];}).filter(function(s){return s.classId===state.classId;});}
+function teamSetForActivity(id){var inC=setsOfClass();return inC.filter(function(s){return s.activityId===id;})[0]||inC[0]||state.teamSets.s1;}
+function gbTeams(){return teamSetForActivity(firstActivity().id).teams;}
+function curSet(){return state.teamSets[state.teamSetId];}
+function colById(id){return state.columns.filter(function(c){return c.id===id;})[0];}
+function actById(id){return state.activities.filter(function(a){return a.id===id;})[0];}
+function visibleColumns(){var ids=activitiesOfClass().map(function(a){return a.id;});return state.columns.filter(function(c){return ids.indexOf(c.activityId)>=0;});}
+function cellFor(colId,entityId){return state.cells[colId+"|"+entityId]||{st:"none"};}
+function assigned(){var a=[];curSet().teams.forEach(function(t){t.members.forEach(function(m){a.push(m);});});return a;}
+function unassigned(){var a=assigned();return state.roster.filter(function(n){return a.indexOf(n)<0;});}
+function teamOf(name){var ts=gbTeams();for(var i=0;i<ts.length;i++)if(ts[i].members.indexOf(name)>=0)return ts[i];return null;}
+function activityCols(actId){var i=null,t=null;state.columns.forEach(function(c){if(c.activityId===actId){if(c.type==="individual"&&!i)i=c;if(c.type==="team"&&!t)t=c;}});return{i:i,t:t};}
+function effectiveTheme(){if(state.theme)return state.theme;return(window.matchMedia&&window.matchMedia("(prefers-color-scheme: dark)").matches)?"dark":"light";}
+function applyTheme(){var r=document.documentElement;if(state.theme)r.setAttribute("data-theme",state.theme);else r.removeAttribute("data-theme");}
+
+/* ---------- focus capture ---------- */
+function captureFocus(){var el=document.activeElement;if(el&&el.dataset&&el.dataset.fid){var o={fid:el.dataset.fid};try{o.start=el.selectionStart;o.end=el.selectionEnd;}catch(e){}return o;}return null;}
+function restoreFocus(f){if(!f)return;var el=app.querySelector('[data-fid="'+f.fid+'"]');if(el){el.focus();try{if(f.start!=null)el.setSelectionRange(f.start,f.end);}catch(e){}}}
+
+/* ---------- small view helpers ---------- */
+function stageBar(cur){return '<div class="t-stagebar">'+STAGES.map(function(l,i){var cls=i<cur?"done":(i===cur?"cur":"todo");return '<span class="t-seg '+cls+'">'+esc(l)+'</span>';}).join("")+'</div>';}
+function chip(txt,kind){return '<span class="t-chip'+(kind?" "+kind:"")+'">'+esc(txt)+'</span>';}
+
+/* cell rendering */
+function cellHTML(col,entityId,isTeamRow){
+  var isMatch=(col.type==="team")===isTeamRow;
+  if(!isMatch){
+    var title=col.type==="team"?"Team check-in — recorded on the team row":"Individual check-in — recorded on each student row";
+    return '<td class="t-td"><div class="t-cell mismatch" title="'+esc(title)+'">·</div></td>';
+  }
+  var c=cellFor(col.id,entityId);
+  var o=state.open;var ring=o&&o.colId===col.id&&o.entityId===entityId;
+  var glyph="—",num="",color="var(--ink3)",bg="transparent",gcolor,pulse="";
+  var round=col.type==="team"?"Round 2 · team":"Round 1 · individual";var ttl="";
+  if(c.st==="none"){glyph=isTeamRow?"··":"—";ttl="Not started · "+round;}
+  else if(c.st==="sub"){glyph="●";color="var(--blue)";bg="var(--blueBg)";ttl="Submitted, unscored · "+round;}
+  else if(c.st==="flag"){glyph="⚑";color="var(--amber)";bg="var(--amberBg)";ttl="Needs review · "+round;}
+  else if(c.st==="excused"){glyph="·";color="var(--ink3)";ttl="Excused / absent · "+round;}
+  else if(c.st==="discussing"){glyph="●";color="var(--amber)";bg="var(--amberBg)";ttl="Team discussion in progress · "+round;pulse=" t-pulse";}
+  else if(c.st==="scored"){if(c.ci){glyph="✓";}else{glyph=isTeamRow?"✓":"";num=String(c.score);}color="var(--ink)";if(isTeamRow)bg="var(--greenBg)";ttl="Scored · "+round;}
+  gcolor=(c.st==="scored"&&!c.ci&&!isTeamRow)?"transparent":color;
+  return '<td class="t-td"><button class="t-cell'+(ring?" ring":"")+'" title="'+esc(ttl)+'" data-act="openCell" data-col="'+col.id+'" data-entity="'+esc(entityId)+'" data-teamrow="'+(isTeamRow?1:0)+'" style="color:'+color+';background:'+bg+'">'+
+    '<span class="'+pulse.trim()+'" style="color:'+gcolor+';font-size:13px">'+glyph+'</span>'+(num?'<span class="t-num">'+esc(num)+'</span>':'')+'</button></td>';
+}
+
+/* ---------- SHELL ---------- */
+function sidebar(){
+  var classCount=state.roster.length?state.roster.length+" students":"no roster";
+  var tabs=[["checkins","Check-ins","table"],["teams","Roster","groups"],["activities","Activities","clipboard"]];
+  return '<aside class="t-sidebar">'+
+    '<div style="padding:0 10px 20px">'+
+      '<div class="t-brand">Intro to Systems Biology</div>'+
+      '<div class="t-ctxmeta"><span class="t-num">'+esc(classCount)+'</span><span style="color:var(--ink3)">·</span><span>Fall</span></div>'+
+      '<div class="t-seg2">'+CLASSES.map(function(c){return '<button class="t-segbtn'+(c.id===state.classId?" on":"")+'" data-act="switchClass:'+c.id+'">'+esc(c.label)+'</button>';}).join("")+'</div>'+
+    '</div>'+
+    '<nav class="t-nav">'+tabs.map(function(t){return '<button class="t-navbtn'+(state.tab===t[0]?" on":"")+'" data-act="tab:'+t[0]+'">'+icon(t[2])+'<span class="lbl">'+esc(t[1])+'</span></button>';}).join("")+'</nav>'+
+    '<div style="margin-top:auto;display:flex;flex-direction:column;gap:6px">'+
+      '<div class="t-loopcard"><div class="t-kicker">The loop</div>'+
+        '<div style="display:flex;flex-direction:column;gap:6px;margin-top:8px">'+
+          '<span class="t-looprow"><span class="t-lnum">1</span>Individual attempt</span>'+
+          '<span class="t-looprow"><span class="t-lnum">2</span>Team discussion</span>'+
+          '<span class="t-looprow"><span class="t-lnum">3</span>Resubmit</span>'+
+        '</div></div>'+
+      '<button class="t-themebtn" data-act="toggleTheme">'+icon(effectiveTheme()==="dark"?"sun":"moon")+'<span>'+(effectiveTheme()==="dark"?"Light mode":"Dark mode")+'</span></button>'+
+      '<div class="t-fac"><span class="t-av" style="width:30px;height:30px;background:var(--purple);font-size:12px">RS</span>'+
+        '<div style="min-width:0;flex:1"><div style="font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Dr. R. Sandoval</div><div style="font-size:10.5px;color:var(--ink3)">Faculty · this class</div></div></div>'+
+    '</div></aside>';
+}
+function topStrip(){
+  var classCount=state.roster.length?state.roster.length+" students":"no roster";
+  return '<div class="t-topstrip">'+
+    '<span style="font-family:var(--serif);font-size:17px;font-weight:700">Intro to Systems Biology</span>'+
+    '<div class="t-seg2" style="margin-top:0">'+CLASSES.map(function(c){return '<button class="t-segbtn'+(c.id===state.classId?" on":"")+'" data-act="switchClass:'+c.id+'">'+esc(c.label)+'</button>';}).join("")+'</div>'+
+    '<span style="font-size:11.5px;color:var(--ink2)">'+esc(classCount)+' · Fall</span>'+
+    '<span class="t-spacer"></span>'+
+    '<button class="t-btn ghost" style="display:flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px" data-act="toggleTheme">'+icon(effectiveTheme()==="dark"?"sun":"moon",15)+(effectiveTheme()==="dark"?"Light":"Dark")+'</button>'+
+    '</div>';
+}
+function bottomNav(){
+  var tabs=[["checkins","Check-ins","table"],["teams","Roster","groups"],["activities","Activities","clipboard"]];
+  return '<nav class="t-bottomnav">'+tabs.map(function(t){return '<button class="t-bnbtn'+(state.tab===t[0]?" on":"")+'" data-act="tab:'+t[0]+'">'+icon(t[2],19)+'<span>'+esc(t[1])+'</span></button>';}).join("")+'</nav>';
+}
+
+/* ---------- CHECK-INS ---------- */
+function viewCheckins(){
+  var cols=visibleColumns();
+  var noRoster=state.roster.length===0;
+  var h='<section>'+
+    '<div class="t-row">'+
+      '<h1 class="t-h1">Check-ins</h1>'+
+      '<span class="t-sub">two check-ins a week — an individual iRAT then a team tRAT — grouped by week.</span>'+
+      '<span class="t-spacer"></span>'+
+      '<button class="t-btn primary" data-act="gbAddToggle">+ Add check-in</button>'+
+    '</div>';
+  /* loop bar */
+  h+='<div class="t-loopbar"><span class="t-kicker">The loop</span>'+
+    [["1","Individual attempt"],["2","Team discussion"],["3","Resubmit"]].map(function(x){return '<span class="t-looppill"><span class="n">'+x[0]+'</span>'+esc(x[1])+'</span>';}).join("")+
+    '<span class="t-spacer"></span>'+
+    '<button class="t-btn sm ghost" style="border:1px solid var(--line)" data-act="gbLegend">'+(state.legendOpen?"Hide":"Show")+' cell key</button></div>';
+  /* legend */
+  if(state.legendOpen){
+    var legend=[["—","not started","var(--ink3)","transparent"],["●","submitted, unscored","var(--blue)","var(--blueBg)"],
+      ["⚑","needs review","var(--amber)","var(--amberBg)"],["4","scored","var(--ink)","transparent"],
+      ["·","excused / absent","var(--ink3)","transparent"],["✓","team submitted + scored","var(--green)","var(--greenBg)"],
+      ["··","team not submitted","var(--ink3)","transparent"],["●","team discussing (pulsing)","var(--amber)","var(--amberBg)"]];
+    h+='<div class="t-key"><span class="t-kicker">Cell key</span>'+legend.map(function(l){return '<span class="t-keyitem"><span class="t-keyglyph" style="color:'+l[2]+';background:'+l[3]+'">'+l[0]+'</span>'+esc(l[1])+'</span>';}).join("")+'</div>';
+  }
+  /* add form */
+  if(state.addOpen){
+    var opts=activitiesOfClass().map(function(a){return '<option value="'+a.id+'"'+(state.form.activity===a.id?" selected":"")+'>Week '+a.week+' · '+esc(a.title)+'</option>';}).join("");
+    h+='<form data-act="gbAddSubmit" style="border:1px solid var(--line);background:var(--paper2);border-radius:10px;padding:12px;margin-bottom:12px;display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));align-items:end;animation:tblFade 120ms">'+
+      '<label class="t-fld">Label<input class="t-in" data-field="f_label" data-fid="f_label" data-evt="input" value="'+esc(state.form.label)+'" placeholder="e.g. iRAT 5"></label>'+
+      '<label class="t-fld">Type<select class="t-in" data-field="f_type" data-fid="f_type" data-evt="change"><option value="individual"'+(state.form.type==="individual"?" selected":"")+'>Individual</option><option value="team"'+(state.form.type==="team"?" selected":"")+'>Team</option></select></label>'+
+      '<label class="t-fld">Phase<select class="t-in" data-field="f_phase" data-fid="f_phase" data-evt="change"><option'+(state.form.phase==="Readiness"?" selected":"")+'>Readiness</option><option'+(state.form.phase==="Participation"?" selected":"")+'>Participation</option><option'+(state.form.phase==="Milestone"?" selected":"")+'>Milestone</option></select></label>'+
+      '<label class="t-fld">Scale<select class="t-in" data-field="f_scale" data-fid="f_scale" data-evt="change"><option value="points"'+(state.form.scale==="points"?" selected":"")+'>Points</option><option value="ci"'+(state.form.scale==="ci"?" selected":"")+'>Complete / incomplete</option></select></label>'+
+      '<label class="t-fld">Week / activity<select class="t-in" data-field="f_activity" data-fid="f_activity" data-evt="change">'+opts+'</select></label>'+
+      '<div style="display:flex;gap:8px"><button type="submit" class="t-btn primary">Append column</button><button type="button" class="t-btn ghost" style="border:1px solid var(--line)" data-act="gbAddCancel">Cancel</button></div>'+
+    '</form>';
+  }
+  if(noRoster){
+    h+='<div style="display:flex;gap:14px;flex-wrap:wrap;align-items:center;border:1px solid var(--line);background:var(--paper2);border-radius:14px;padding:20px;box-shadow:var(--shadowCard)">'+
+      '<span style="color:var(--ink2)">'+icon("groups",26)+'</span>'+
+      '<div style="flex:1;min-width:220px"><div style="font-family:var(--serif);font-size:18px;font-weight:700">No students to grade yet</div>'+
+      '<div style="font-size:12.5px;color:var(--ink2);margin-top:4px;max-width:58ch">'+esc(state.classId)+' has no roster yet. Load the class list in Roster, then its weekly check-in columns fill in here.</div></div>'+
+      '<button class="t-btn primary" data-act="tab:teams">Go to Roster</button></div>';
+    return h+'</section>';
+  }
+  /* groups by week (consecutive same-activity columns) */
+  var groups=[];cols.forEach(function(c){var last=groups[groups.length-1];if(last&&last.id===c.activityId)last.span++;else groups.push({id:c.activityId,span:1});});
+  var grpHTML=groups.map(function(g){var a=actById(g.id);return '<th class="t-grp" colspan="'+g.span+'"><button data-act="groupOpen:'+g.id+'">Week '+(a?a.week:"?")+'</button><span class="meta">'+esc((a?a.topic+" · "+a.dates:""))+'</span></th>';}).join("");
+  var colHTML=cols.map(function(c){
+    var a=actById(c.activityId);
+    var chipTxt="",chipKind="";
+    if(a&&a.posted){chipTxt="Posted";chipKind="green";}
+    else if(a&&c.type==="team"&&a.stage===2){chipTxt="Stage: Discuss";chipKind="amber";}
+    else if(a&&c.type==="individual"&&a.stage===1){chipTxt="Stage: Individual";chipKind="amber";}
+    var meta=(c.type==="team"?"Team · ":"Individual · ")+c.phase+" · "+(c.scale==="ci"?"C/I":c.max+" pts");
+    return '<th class="t-th"><button data-act="colOpen:'+c.activityId+'">'+esc(c.label)+'</button><div class="meta">'+esc(meta)+'</div>'+(chipTxt?'<span class="t-chip '+chipKind+'" style="margin-top:4px">'+esc(chipTxt)+'</span>':'')+'</th>';
+  }).join("");
+  /* rows */
+  var rows="";var teams=gbTeams();
+  teams.forEach(function(t){
+    var inCount=t.members.filter(function(m){return cellFor("w1i"===0?"":visibleColumns()[0].id,m).st!=="none";}).length;
+    var iCol=activityCols(firstActivity().id).i;var tCol=activityCols(firstActivity().id).t;
+    inCount=t.members.filter(function(m){return cellFor(iCol.id,m).st!=="none";}).length;
+    var target=teamSetForActivity(firstActivity().id).size;
+    var behind=inCount<target-1||cellFor(tCol.id,t.id).st==="none";
+    var collapsed=!!state.collapsed[t.id];
+    rows+='<tr class="t-rowteam"><th scope="row" class="t-gbname"><div class="t-namecell">'+
+      '<button class="t-caret" data-act="teamToggle:'+t.id+'">'+icon(collapsed?"chevright":"chevdown",18)+'</button>'+
+      '<span style="white-space:nowrap">'+esc(t.name)+'</span><span class="t-spacer"></span>'+
+      '<span style="font-size:11px;color:'+(behind?"var(--amber)":"var(--ink2)")+';white-space:nowrap" class="t-num">'+inCount+"/"+t.members.length+' in'+(behind?"  ⚠":"")+'</span></div></th>'+
+      cols.map(function(c){return cellHTML(c,t.id,true);}).join("")+'</tr>';
+    if(!collapsed){t.members.forEach(function(m){
+      rows+='<tr class="t-rowstu"><th scope="row" class="t-gbname"><div class="t-namecell">'+avatar(m,20)+'<span style="white-space:nowrap">'+esc(m)+'</span></div></th>'+
+        cols.map(function(c){return cellHTML(c,m,false);}).join("")+'</tr>';
+    });}
+  });
+  unassigned().forEach(function(m){
+    rows+='<tr class="t-rowstu unassigned"><th scope="row" class="t-gbname"><div class="t-namecell">'+avatar(m,20)+'<span style="white-space:nowrap">'+esc(m)+'</span><span class="t-spacer"></span><span style="font-size:11px;color:var(--amber)">unassigned</span></div></th>'+
+      cols.map(function(c){return cellHTML(c,m,false);}).join("")+'</tr>';
+  });
+  h+='<div class="t-gbwrap"><table class="t-gb"><thead>'+
+    '<tr><th class="t-gbname hdr">Student / team</th>'+grpHTML+'</tr>'+
+    '<tr><th class="t-gbname hdr"></th>'+colHTML+'</tr>'+
+    '</thead><tbody>'+rows+'</tbody></table></div>';
+  return h+'</section>';
+}
+
+/* ---------- ROSTER / TEAMS ---------- */
+function viewRoster(){
+  var set=curSet();var un=unassigned();
+  var h='<section><div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:4px">'+
+    '<h1 class="t-h1">Roster</h1>'+
+    '<span class="t-sub">'+esc(state.classId)+' · load the class list, then form teams. Teams are assigned by faculty — self-selection is not offered.</span></div>';
+  if(state.roster.length===0){
+    h+='<div style="border:1px solid var(--line);background:var(--paper2);border-radius:14px;padding:22px;box-shadow:var(--shadowCard)">'+
+      '<div style="font-family:var(--serif);font-size:19px;font-weight:700">No roster for '+esc(state.classId)+' yet</div>'+
+      '<div style="font-size:12.5px;color:var(--ink2);margin-top:5px;max-width:58ch">Upload the class list, or paste names below. Teams and check-ins for this section unlock once the roster is in.</div>'+
+      '<div class="t-dz" style="margin-top:16px;padding:26px 18px" data-act="rosterUpload"><div style="color:var(--ink2)">'+icon("upload",28)+'</div>'+
+        '<div style="font-size:13.5px;font-weight:600;margin-top:7px">Upload roster from your computer</div>'+
+        '<div style="font-size:12px;color:var(--ink2)">.csv or .xlsx — one student per row (name, email)</div>'+
+        '<button class="t-btn primary" style="margin-top:10px" data-act="rosterUpload">Choose file</button></div>'+
+      '<div style="margin-top:14px;display:flex;gap:9px;flex-wrap:wrap;align-items:center">'+
+        '<input class="t-in" style="flex:1;min-width:200px;padding:7px 10px" data-field="newStudent" data-fid="newStudent" data-evt="input" value="'+esc(state.newStudent)+'" placeholder="…or paste names, one per line">'+
+        '<button class="t-btn line" style="padding:7px 13px" data-act="addStudent">Add to roster</button></div></div>';
+    return h+'</section>';
+  }
+  h+='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:12px 0"><span class="t-kicker">Team set</span>'+
+    setsOfClass().map(function(s){return '<button class="t-pill'+(s.id===state.teamSetId?" on":"")+'" data-act="teamSetSelect:'+s.id+'">'+esc(s.name)+'</button>';}).join("")+'</div>';
+  var placed=un.length===0;
+  var underN=set.teams.filter(function(t){return t.members.length<set.size;}).length;
+  var status=placed?(underN===0?"All "+state.roster.length+" students placed":"All placed · "+underN+" under target"):un.length+" unassigned · "+underN+" under target";
+  h+='<div style="border:1px solid var(--line);background:var(--paper2);border-radius:10px;padding:11px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px">'+
+    '<label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2)">Team size<input type="number" min="2" max="8" class="t-in t-num" style="width:56px;padding:4px 6px" data-field="teamSize" data-fid="teamSize" data-evt="change" value="'+set.size+'"></label>'+
+    '<span style="font-size:11.5px;color:var(--ink3)">changing the size re-forms the teams for this set</span>'+
+    '<button class="t-btn line" data-act="autoForm">Auto-form teams</button>'+
+    '<button class="t-btn line" data-act="assignRoles">Assign roles</button>'+
+    '<button class="t-btn line" data-act="addTeam">+ Add team</button>'+
+    '<button class="'+(set.locked?"t-btn green":"t-btn primary")+'" data-act="publish">'+(set.locked?"✓ Published · Locked":"Publish teams")+'</button>'+
+    '<span class="t-spacer"></span><span style="font-size:11.5px;color:var(--ink2)" class="t-num">'+esc(status)+'</span></div>';
+  h+='<div class="t-grid t-cards2">'+set.teams.map(function(t){
+    var under=t.members.length<set.size;
+    var q=state.queries[t.id]||"";
+    var matches=q.trim()?un.filter(function(n){return n.toLowerCase().indexOf(q.toLowerCase())>=0;}).slice(0,4):[];
+    var warn=under?(t.members.length===0?"No students yet":"Fewer than "+set.size+" members"):"";
+    return '<div class="t-teamcard'+(under?" under":"")+'">'+
+      '<div style="display:flex;align-items:center;gap:8px">'+
+        '<input class="t-in" style="flex:1;min-width:0;border-color:transparent;background:transparent;font-size:13.5px;font-weight:600;padding:2px 4px" data-field="teamName" data-team="'+t.id+'" data-fid="tn_'+t.id+'" data-evt="input" value="'+esc(t.name)+'">'+
+        '<span class="t-chip'+(under?" amber":"")+'">'+t.members.length+" / "+set.size+'</span>'+
+        '<button class="t-x" title="Delete team" data-act="teamDelete:'+t.id+'">✕</button></div>'+
+      '<div style="display:flex;flex-direction:column;gap:5px;margin-top:9px">'+t.members.map(function(m,i){
+        return '<div class="t-memberrow">'+avatar(m,20)+'<span style="font-size:12.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(m)+'</span>'+
+          '<button class="t-rolechip" data-act="memberRole" data-team="'+t.id+'" data-idx="'+i+'">'+esc(t.roles[i]||"—")+'</button>'+
+          '<button class="t-x" title="Remove from team" data-act="memberRemove" data-team="'+t.id+'" data-idx="'+i+'">✕</button></div>';
+      }).join("")+'</div>'+
+      (warn?'<div class="t-warn"><span>⚑</span><span>'+esc(warn)+'</span></div>':'')+
+      '<div style="margin-top:9px"><input class="t-in" style="width:100%;padding:4px 6px;font-size:12px" data-field="teamQuery" data-team="'+t.id+'" data-fid="tq_'+t.id+'" data-evt="input" value="'+esc(q)+'" placeholder="Add student…"></div>'+
+      '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px">'+matches.map(function(n){return '<button class="t-btn ghost" style="border:1px dashed var(--line);font-size:11.5px;padding:2px 7px;border-radius:12px" data-act="teamAddMatch" data-team="'+t.id+'" data-name="'+esc(n)+'">+ '+esc(n)+'</button>';}).join("")+'</div>'+
+    '</div>';
+  }).join("")+'</div>';
+  /* unassigned pool */
+  h+='<div style="border:1px solid var(--line);background:var(--paper2);border-radius:10px;padding:11px;margin-top:16px">'+
+    '<div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px"><span class="t-kicker">Unassigned roster · add or import</span><span style="font-size:11.5px;color:var(--ink2)" class="t-num">'+un.length+' of '+state.roster.length+'</span></div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap">'+(un.length?un.map(function(n){return '<span style="display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:14px;padding:2px 8px 2px 3px;background:var(--paper)">'+avatar(n,18)+'<span style="font-size:12px">'+esc(n)+'</span></span>';}).join(""):'<span style="font-size:12px;color:var(--ink3)">Every student is placed.</span>')+'</div>'+
+    '<div style="margin-top:9px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
+      '<input class="t-in" style="flex:1;min-width:200px;padding:5px 7px;font-size:12.5px" data-field="newStudent" data-fid="newStudent" data-evt="input" value="'+esc(state.newStudent)+'" placeholder="Add student — paste one name per line">'+
+      '<button class="t-btn line" data-act="addStudent">Add to roster</button>'+
+      '<button class="t-btn" style="display:flex;align-items:center;gap:6px" data-act="rosterUpload">'+icon("upload",16)+'Upload roster</button></div>'+
+    (state.uploadNote[state.classId]?'<div style="margin-top:8px;font-size:11.5px;color:var(--green);display:flex;align-items:center;gap:6px">'+icon("check",15)+esc(state.uploadNote[state.classId])+'</div>':'')+
+  '</div>';
+  return h+'</section>';
+}
+
+/* ---------- ACTIVITIES ---------- */
+function viewActivities(){
+  if(state.activityView)return viewWorkspace();
+  var h='<section><div class="t-row"><h1 class="t-h1">Activities</h1>'+
+    '<span class="t-sub">Each activity runs the loop once and owns its weekly check-in columns.</span>'+
+    '<span class="t-spacer"></span><button class="t-btn primary" data-act="actNew">+ New activity</button></div>';
+  h+='<div class="t-grid t-cards3">'+activitiesOfClass().map(function(a){
+    var set=teamSetForActivity(a.id);
+    var chips=a.stage===0?[["Opens next Mon",""],["Not published",""]]:
+      a.resubmitMode==="team"?[["Opens Mon",""],["Individual due Wed 11:59pm","amber"],["Team due Fri 5pm",""]]:
+      [["Opens today",""],["Individual due in 6h","amber"]];
+    var counts2=a.resubmitMode==="individual"?a.r2+"/"+state.roster.length+" individual resubmissions":a.r2+"/"+set.teams.length+" team answers in";
+    return '<div class="t-card">'+
+      '<div style="display:flex;gap:2px;margin-bottom:11px">'+stageBar(a.stage)+'</div>'+
+      '<button style="border:0;background:transparent;padding:0;text-align:left;font-family:var(--serif);font-size:19px;font-weight:700;color:var(--ink);letter-spacing:-.015em;cursor:pointer" data-act="actOpen:'+a.id+'">Week '+a.week+' · '+esc(a.title)+'</button>'+
+      '<div style="font-size:12px;color:var(--ink2);margin-top:4px">'+esc(set.name+" · "+set.teams.length+" teams"+(set.locked?" · locked":""))+'</div>'+
+      '<div style="font-size:12.5px;color:var(--ink);margin-top:9px" class="t-num">'+a.r1+'/'+state.roster.length+' individual attempts in</div>'+
+      '<div style="font-size:12px;color:var(--ink2);margin-top:2px" class="t-num">'+esc(counts2)+'</div>'+
+      '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:11px">'+chips.map(function(c){return chip(c[0],c[1]);}).join("")+'</div>'+
+      '<div style="display:flex;gap:8px;margin-top:12px;align-items:center"><button class="t-btn line" data-act="actOpen:'+a.id+'">Open workspace</button><span style="font-size:11.5px;color:var(--ink3)">Round 2 mode: '+esc(a.resubmitMode)+'</span></div>'+
+    '</div>';
+  }).join("")+'</div>';
+  return h+'</section>';
+}
+
+function viewWorkspace(){
+  var av=actById(state.activityView);
+  var set=teamSetForActivity(av.id);
+  var ac=activityCols(av.id);var iCol=ac.i,tCol=ac.t;
+  var h='<section><div style="border:1px solid var(--line);background:var(--paper2);border-radius:10px;padding:13px;margin-bottom:12px">'+
+    '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">'+
+      '<button class="t-btn ghost" style="border:1px solid var(--line)" data-act="wsBack">← Activities</button>'+
+      '<h1 style="margin:0;font-family:var(--serif);font-size:22px;font-weight:700;letter-spacing:-.015em">Week '+av.week+' · '+esc(av.title)+'</h1>'+
+      '<span class="t-spacer"></span>'+
+      '<div class="t-lensbox">'+[["faculty","View as faculty"],["student","View as student"]].map(function(l){return '<button class="t-lens'+(state.lens===l[0]?" on":"")+'" data-act="wsLens:'+l[0]+'">'+esc(l[1])+'</button>';}).join("")+'</div>'+
+    '</div>'+
+    '<div style="display:flex;gap:2px;margin-top:11px;flex-wrap:wrap">'+stageBar(av.stage)+'</div>'+
+    '<div style="font-size:11.5px;color:var(--ink2);margin-top:7px">Individual attempt → Team discussion → Resubmit  ·  Round 2 mode: '+esc(av.resubmitMode)+'</div>'+
+  '</div>';
+  if(state.lens==="faculty")h+=wsFaculty(av,set,iCol,tCol);else h+=wsStudent(av,set);
+  return h+'</section>';
+}
+function wsFaculty(av,set,iCol,tCol){
+  var tabs=[["source","Source"],["submission","Submission"],["discussion","Discussion"],["progress","Progress"]];
+  var h='<nav class="t-tabs">'+tabs.map(function(t){return '<button class="t-tab'+(state.facultyTab===t[0]?" on":"")+'" data-act="wsTab:'+t[0]+'">'+esc(t[1])+'</button>';}).join("")+'</nav>';
+  if(state.facultyTab==="source"){
+    h+='<div class="t-grid t-autofit">'+
+      '<div class="t-card" style="padding:15px"><div class="t-kicker" style="margin-bottom:8px">Source · read-only</div>'+
+        '<div style="font-size:12px;color:var(--ink2);margin-bottom:12px;padding-bottom:9px;border-bottom:1px solid var(--line2)">The original upload is shown as-is.</div>'+
+        '<h2 style="margin:0 0 9px;font-family:var(--serif);font-size:18px;font-weight:700;letter-spacing:-.01em">'+esc(av.brief.heading)+'</h2>'+
+        av.brief.paras.map(function(p){return '<p style="margin:0 0 9px;font-size:13.5px;color:var(--ink);max-width:66ch">'+esc(p)+'</p>';}).join("")+'</div>'+
+      '<div class="t-card" style="padding:15px"><div class="t-kicker" style="margin-bottom:9px">Attached files</div>'+
+        av.brief.files.map(function(f){return '<div style="display:flex;gap:8px;align-items:baseline;padding:7px 0;border-bottom:1px solid var(--line2);font-size:13px"><span style="color:var(--ink3)">'+icon("file",16)+'</span><span style="flex:1">'+esc(f.name)+'</span><span style="font-size:11.5px;color:var(--ink3)" class="t-num">'+esc(f.size)+'</span></div>';}).join("")+'</div></div>';
+  }else if(state.facultyTab==="submission"){
+    var flagged=state.responses.filter(function(r){return r.status==="flag";}).length;
+    var r2kind=av.resubmitMode==="team"?"team answer":(av.resubmitMode==="individual"?"individual resubmission":"student's choice");
+    var r2val=av.resubmitMode==="individual"?av.r2+" / "+state.roster.length:av.r2+" / "+set.teams.length;
+    var r2note=av.resubmitMode==="team"?"one shared answer per team":"each identity is recorded separately";
+    h+='<div class="t-grid t-cards2" style="margin-bottom:14px">'+
+      '<div class="t-card" style="padding:14px"><div class="t-kicker">Round 1 · individual attempt</div><div style="font-family:var(--serif);font-size:30px;font-weight:700;margin:7px 0 2px" class="t-num">'+av.r1+' / '+state.roster.length+'</div><div style="font-size:12.5px;color:var(--ink2)">individual attempts in · '+flagged+' transcriptions flagged</div></div>'+
+      '<div class="t-card" style="padding:14px"><div class="t-kicker">Round 2 · '+esc(r2kind)+'</div><div style="font-family:var(--serif);font-size:30px;font-weight:700;margin:7px 0 2px" class="t-num">'+esc(r2val)+'</div><div style="font-size:12.5px;color:var(--ink2)">'+esc(r2note)+'</div></div>'+
+      '<div class="t-card" style="padding:14px;display:flex;flex-direction:column;justify-content:space-between"><div style="font-size:12.5px;color:var(--ink2)">Faculty see what was submitted — per student and per team. Transcription confirmation is a separate step from grading.</div><button class="t-btn primary" style="margin-top:10px" data-act="wsReview">Review student responses</button></div></div>';
+    h+='<div class="t-card" style="padding:0;overflow-x:auto"><table style="border-collapse:collapse;width:100%;font-size:13px;min-width:520px"><thead><tr>'+
+      ["Team","Round 1 in","Round 2","Members"].map(function(x){return '<th style="text-align:left;padding:7px 11px;border-bottom:1px solid var(--line);font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);font-weight:500">'+x+'</th>';}).join("")+'</tr></thead><tbody>'+
+      set.teams.map(function(t){
+        var r1in=t.members.filter(function(m){return cellFor(iCol.id,m).st!=="none";}).length;
+        var c=cellFor(tCol.id,t.id);
+        var r2=c.st==="scored"?"Submitted ✓":(c.st==="discussing"?"Discussing…":(c.st==="sub"?"Submitted ●":"Not submitted ··"));
+        var kind=c.st==="scored"?"green":(c.st==="discussing"?"amber":(c.st==="sub"?"blue":""));
+        return '<tr><td style="padding:7px 11px;border-bottom:1px solid var(--line2);font-weight:500">'+esc(t.name)+'</td><td style="padding:7px 11px;border-bottom:1px solid var(--line2)" class="t-num">'+r1in+' / '+t.members.length+'</td><td style="padding:7px 11px;border-bottom:1px solid var(--line2)">'+chip(r2,kind)+'</td><td style="padding:7px 11px;border-bottom:1px solid var(--line2);color:var(--ink2);font-size:12.5px">'+esc(t.members.map(function(m){return m.split(" ")[0];}).join(", "))+'</td></tr>';
+      }).join("")+'</tbody></table></div>';
+  }else if(state.facultyTab==="discussion"){
+    h+='<div style="border:1px solid var(--line);background:var(--paper3);border-radius:10px;padding:10px 12px;font-size:12.5px;color:var(--ink2);margin-bottom:13px">You see what each team <strong style="color:var(--ink);font-weight:600">submitted</strong> in Round 2 — not their private working space.</div>';
+    h+='<div class="t-grid t-cards3">'+set.teams.map(function(t,ti){
+      var c=cellFor(tCol.id,t.id);var submitted=c.st==="scored"||c.st==="sub";
+      var status=submitted?"Round 2 submitted":(c.st==="discussing"?"Discussion in progress":"Nothing submitted");
+      var kind=submitted?"green":(c.st==="discussing"?"amber":"");
+      var answer=submitted?["Net water efflux; the cell shrinks until internal osmolarity reaches 240 mOsm. Assumption: solute B is fully impermeant.","Water leaves the cell. Volume falls ~20%. With a carrier for B, B enters down its gradient — facilitated diffusion, no ATP.","Cell shrinks; equilibrium at 240 mOsm. Adding a carrier makes B permeant, so the osmotic effect disappears over time."][ti%3]:"— not submitted —";
+      var attribution=submitted?"Submitted by "+t.members[ti%t.members.length].split(" ")[0]+" on behalf of the team · Round 2":"Round 2 open until Fri 5pm";
+      var wave="";for(var i=0;i<26;i++){wave+='<span class="t-wave" style="flex:1;min-width:2px;height:'+(5+(hash(t.name+i)%14))+'px"></span>';}
+      return '<div class="t-card">'+
+        '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:13.5px;font-weight:600">'+esc(t.name)+'</span><span class="t-spacer"></span>'+chip(status,kind)+'</div>'+
+        '<div style="margin-top:10px;border-top:1px solid var(--line2);padding-top:9px"><div class="t-kicker" style="margin-bottom:5px">Round 2 · submitted answer</div><div style="font-size:13px;color:var(--ink);max-width:60ch">'+esc(answer)+'</div><div style="font-size:11.5px;color:var(--ink2);margin-top:6px">'+esc(attribution)+'</div></div>'+
+        '<div style="margin-top:11px;border-top:1px solid var(--line2);padding-top:9px"><div class="t-kicker" style="margin-bottom:6px">Discussion audio · demo placeholder</div>'+
+          '<div style="display:flex;align-items:center;gap:9px"><button class="t-btn line sm" data-act="noop">▶ Play</button><span style="display:flex;align-items:flex-end;gap:2px;height:18px;flex:1">'+wave+'</span><span style="font-size:11px;color:var(--ink3)" class="t-num">0'+(2+ti%4)+':1'+(ti%6)+'</span></div>'+
+          '<div style="font-size:11px;color:var(--ink3);margin-top:5px">Demo placeholder — no real audio is recorded or played.</div></div>'+
+      '</div>';
+    }).join("")+'</div>';
+  }else{ /* progress */
+    var funnel=[
+      {label:"① Individual attempt",value:av.r1+" / "+state.roster.length,pct:state.roster.length?Math.round(av.r1/state.roster.length*100):0},
+      {label:"② Team discussion started",value:av.resubmitMode==="individual"?"—":set.teams.filter(function(t){return cellFor(tCol.id,t.id).st!=="none";}).length+" / "+set.teams.length,pct:av.resubmitMode==="individual"?0:(set.teams.length?Math.round(set.teams.filter(function(t){return cellFor(tCol.id,t.id).st!=="none";}).length/set.teams.length*100):0)},
+      {label:"③ Resubmitted",value:av.resubmitMode==="individual"?av.r2+" / "+state.roster.length:av.r2+" / "+set.teams.length,pct:av.resubmitMode==="individual"?(state.roster.length?Math.round(av.r2/state.roster.length*100):0):(set.teams.length?Math.round(av.r2/set.teams.length*100):0)}
+    ];
+    var who="";set.teams.slice(0,3).forEach(function(t){
+      var tc=cellFor(tCol.id,t.id);
+      who+='<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid var(--line2);font-size:12.5px"><span style="width:14px;color:'+(tc.st==="scored"?"var(--green)":"var(--ink3)")+'">'+(tc.st==="scored"?"✓":"··")+'</span><span style="flex:1;font-weight:600">'+esc(t.name)+'</span><span style="font-size:11.5px;color:var(--ink2)">Round 2 · team</span></div>';
+      t.members.forEach(function(m){var c=cellFor(iCol.id,m);var g=c.st==="scored"?"✓":(c.st==="sub"?"●":(c.st==="flag"?"⚑":"—"));var col=c.st==="scored"?"var(--green)":(c.st==="sub"?"var(--blue)":(c.st==="flag"?"var(--amber)":"var(--ink3)"));var st=c.st==="scored"?"Round 1 · scored":(c.st==="sub"?"Round 1 · unscored":(c.st==="flag"?"Round 1 · needs review":"Round 1 · not started"));
+        who+='<div style="display:flex;align-items:center;gap:8px;padding:5px 0 5px 16px;border-bottom:1px solid var(--line2);font-size:12.5px"><span style="width:14px;color:'+col+'">'+g+'</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(m)+'</span><span style="font-size:11.5px;color:var(--ink2);white-space:nowrap">'+st+'</span></div>';});
+    });
+    var nCols=state.columns.filter(function(c){return c.activityId===av.id;}).length;
+    h+='<div class="t-grid t-autofit">'+
+      '<div class="t-card" style="padding:14px"><div class="t-kicker" style="margin-bottom:11px">Loop funnel</div>'+funnel.map(function(f){return '<div style="margin-bottom:11px"><div style="display:flex;font-size:12.5px;margin-bottom:4px"><span>'+esc(f.label)+'</span><span class="t-spacer"></span><span class="t-num" style="color:var(--ink2)">'+esc(f.value)+'</span></div><div style="height:7px;background:var(--paper3);border:1px solid var(--line2);border-radius:1px;overflow:hidden"><div style="height:100%;width:'+f.pct+'%;background:var(--ink)"></div></div></div>';}).join("")+'</div>'+
+      '<div class="t-card" style="padding:14px"><div class="t-kicker" style="margin-bottom:9px">Who\'s done</div>'+who+'</div>'+
+      '<div class="t-card" style="padding:14px"><div class="t-kicker" style="margin-bottom:8px">Post to gradebook</div><div style="font-size:12.5px;color:var(--ink2);margin-bottom:11px">Writes this activity\'s Round 1 and Round 2 scores into its check-in columns and marks the headers Posted.</div>'+
+        '<button class="'+(av.posted?"t-btn green":"t-btn primary")+'" data-act="wsPost">'+(av.posted?"✓ Posted to gradebook":"Post check-ins to gradebook")+'</button>'+
+        '<div style="font-size:11.5px;color:var(--ink2);margin-top:9px">'+(av.posted?"Column headers in Check-ins now read Posted.":"Affects "+nCols+" columns owned by this activity.")+'</div></div></div>';
+  }
+  return h;
+}
+function wsStudent(av,set){
+  var myTeam=set.teams[0];var r1done=state.r1Status==="submitted";var mode=av.resubmitMode;
+  var steps=[{num:"1",label:"Your attempt",state:r1done?"Submitted ✓ · Round 1":"Draft · Round 1"},
+    {num:"2",label:"Team discussion",state:r1done?"Open · private to "+(myTeam?myTeam.name:"your team"):"Opens after Round 1"},
+    {num:"3",label:mode==="team"?"Team answer":"Resubmit",state:r1done?(state.r2Status==="submitted"?"Submitted ✓ · Round 2":"Ready · Round 2"):"Locked"}];
+  var h='<div style="display:flex;gap:9px;flex-wrap:wrap;margin-bottom:14px">'+steps.map(function(s,i){var on=state.stuStep===i+1;var locked=i>0&&!r1done;return '<button class="t-stepcard'+(on?" on":"")+(locked?" locked":"")+'" data-act="stuStep:'+(i+1)+'"><span style="display:flex;align-items:center;gap:8px"><span class="t-lnum">'+s.num+'</span><span style="font-size:13px;font-weight:600">'+esc(s.label)+'</span></span><span style="font-size:11.5px;color:var(--ink2)">'+esc(s.state)+'</span></button>';}).join("")+'</div>';
+  var strip=[["iRAT · Round 1 · "+(r1done?"submitted ●":"draft —"),r1done?"blue":""],["Participation · complete ✓","green"],[mode==="team"?"tRAT · Round 2 · team":"tRAT · Round 2 · your choice",""]];
+  h+='<div style="border:1px solid var(--line);background:var(--paper3);border-radius:10px;padding:9px 11px;font-size:12px;color:var(--ink2);margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap;align-items:center"><span class="t-kicker">Your check-ins</span>'+strip.map(function(x){return chip(x[0],x[1]);}).join("")+'<span style="font-size:11.5px;color:var(--ink3)">Only your own row — peers\' scores are never shown to students.</span></div>';
+  if(state.stuStep===1){
+    h+='<div class="t-card" style="padding:14px;margin-bottom:12px"><div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:11px"><span class="t-lnum">1</span><h2 class="t-h2">Your attempt <span style="font-weight:400;color:var(--ink2);font-size:12.5px">· Round 1 · individual</span></h2><span class="t-spacer"></span>'+chip(r1done?"Submitted ✓ — editable until the deadline":"Saved as draft — only you can see this.",r1done?"green":"")+'</div>'+
+      '<div class="t-grid" style="grid-template-columns:repeat(auto-fit,minmax(260px,1fr));align-items:start">'+
+        '<div style="border:1px solid var(--line2);background:var(--paper);border-radius:10px;padding:12px"><div class="t-kicker" style="margin-bottom:7px">Brief · read-only</div><h3 style="margin:0 0 8px;font-family:var(--serif);font-size:16px;font-weight:700">'+esc(av.brief.heading)+'</h3>'+av.brief.paras.map(function(p){return '<p style="margin:0 0 8px;font-size:13px;color:var(--ink2);max-width:60ch">'+esc(p)+'</p>';}).join("")+'</div>'+
+        '<div><div class="t-dz" style="border-color:'+(r1done?"var(--green)":"var(--line)")+';background:'+(r1done?"var(--greenBg)":"var(--paper)")+'" data-act="stuDrop"><div style="font-size:13px;font-weight:600;margin-bottom:3px">Upload your answer</div><div style="font-size:12px;color:var(--ink2)">or take a photo of handwritten work</div><div style="font-size:11.5px;color:var(--ink3);margin-top:7px">'+esc(state.r1File)+'</div></div>'+
+          '<textarea data-field="r1Text" data-fid="r1Text" data-evt="input" placeholder="…or type your answer" rows="4" style="width:100%;margin-top:9px;padding:8px;font-size:13px;resize:vertical" class="t-in">'+esc(state.r1Text)+'</textarea>'+
+          '<div style="display:flex;gap:9px;align-items:center;margin-top:9px;flex-wrap:wrap"><button class="'+(r1done?"t-btn":"t-btn primary")+'" style="'+(r1done?"border-color:var(--ink)":"")+'" data-act="stuSubmitR1">'+(r1done?"Update Round 1 submission":"Submit Round 1")+'</button><span style="font-size:12px;color:var(--ink2)">'+(r1done?"Your Round 1 attempt is recorded under your name only.":"Draft — nobody else can see this yet.")+'</span></div></div>'+
+      '</div></div>';
+  }else if(state.stuStep===2){
+    var peers=(myTeam?myTeam.members:[]).map(function(m,i){return{name:m,role:(myTeam.roles[i]||"—"),summary:r1done?["Net efflux, cell shrinks to 240 mOsm.","Says volume drops ~20%, B impermeant.","Thinks B enters — flagged as disagreement.","Carrier ⇒ facilitated diffusion, no ATP."][i%4]:"Hidden until you submit Round 1.",meta:r1done?"Round 1 · individual · shared inside the team":"Round 1 · individual"};});
+    h+='<div class="t-card" style="padding:14px;margin-bottom:12px"><div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:5px"><span class="t-lnum">2</span><h2 class="t-h2">Team discussion <span style="font-weight:400;color:var(--ink2);font-size:12.5px">· '+esc(myTeam?myTeam.name:"your team")+' · private</span></h2></div>'+
+      '<div style="font-size:12px;color:var(--ink2);margin-bottom:11px">These team resources stay private to your team — faculty see what you submit, not your working space.</div>'+
+      '<div class="t-grid" style="grid-template-columns:repeat(auto-fit,minmax(190px,1fr))">'+peers.map(function(p){return '<div style="border:1px solid var(--line2);background:var(--paper);border-radius:10px;padding:10px"><div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">'+avatar(p.name,20)+'<span style="font-size:12.5px;font-weight:500;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.name)+'</span></div><div style="font-size:12px;color:var(--ink2);max-width:44ch">'+esc(p.summary)+'</div><div style="font-size:11px;color:var(--ink3);margin-top:6px">'+esc(p.meta)+'</div></div>';}).join("")+'</div>'+
+      '<div style="margin-top:12px;border-top:1px solid var(--line2);padding-top:11px"><div class="t-kicker" style="margin-bottom:7px">Add a resource</div>'+
+        '<div style="display:flex;gap:9px;flex-wrap:wrap;align-items:center"><button class="t-btn ghost" style="border:1px dashed var(--line)" data-act="stuAddResource">Upload file or photo</button><input class="t-in" style="flex:1;min-width:170px;padding:6px 8px;font-size:12.5px" data-field="resourceText" data-fid="resourceText" data-evt="input" value="'+esc(state.resourceText)+'" placeholder="Note for your team"><button class="t-btn line" data-act="stuAddResource">Add</button></div>'+
+        '<div style="display:flex;flex-direction:column;gap:5px;margin-top:9px">'+state.resources.map(function(r){return '<div style="display:flex;gap:8px;align-items:baseline;font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--line2)"><span style="color:var(--ink3)">'+icon("file",15)+'</span><span style="flex:1">'+esc(r.text)+'</span><span style="font-size:11px;color:var(--ink3)">'+esc(r.by)+'</span></div>';}).join("")+'</div></div></div>';
+  }else{
+    var step3Title=mode==="team"?"Team answer · one shared submission":(mode==="choice"?"Resubmit · team or your own":"Resubmit your own answer");
+    var step3Note=mode==="team"?"Any member uploads; it counts for everyone in "+(myTeam?myTeam.name:"the team")+".":(mode==="choice"?"Choose how your Round 2 answer is counted. This choice is recorded with the submission.":"Each member resubmits individually; your Round 2 answer counts only for you.");
+    h+='<div class="t-card" style="padding:14px;opacity:'+(r1done?1:.62)+';filter:'+(r1done?"none":"grayscale(1)")+'"><div style="display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;margin-bottom:5px"><span class="t-lnum">3</span><h2 class="t-h2">'+esc(step3Title)+'</h2><span class="t-spacer"></span><span style="font-size:11.5px;color:var(--ink2)">Round 2</span></div>'+
+      '<div style="font-size:12.5px;color:var(--ink2);margin-bottom:11px">'+esc(step3Note)+'</div>';
+    if(!r1done){
+      h+='<div style="display:flex;gap:8px;align-items:center;border:1px solid var(--amber);background:var(--amberBg);color:var(--amber);border-radius:10px;padding:8px 11px;font-size:12.5px"><span>⚑</span><span>Submit your own answer first to unlock the team step.</span></div>';
+    }else if(mode==="choice"&&!state.r2Fork){
+      h+='<div class="t-grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr))">'+
+        '<button style="border:1px solid var(--line);background:var(--paper);border-radius:10px;padding:12px;text-align:left;display:block;cursor:pointer" data-act="stuFork:team"><span style="display:block;font-size:13px;font-weight:600">Submit as team</span><span style="display:block;font-size:12px;color:var(--ink2);margin-top:4px">A team answer counts for everyone.</span></button>'+
+        '<button style="border:1px solid var(--line);background:var(--paper);border-radius:10px;padding:12px;text-align:left;display:block;cursor:pointer" data-act="stuFork:own"><span style="display:block;font-size:13px;font-weight:600">Submit my own answer</span><span style="display:block;font-size:12px;color:var(--ink2);margin-top:4px">Your own answer counts only for you.</span></button></div>';
+    }else{
+      var asTeam=mode==="team"||state.r2Fork==="team";
+      var done=state.r2Status==="submitted";
+      var note=done?(asTeam?"Submitted by "+(myTeam?myTeam.members[2].split(" ")[0]:"Priya")+" on behalf of the team · Round 2 · team identity":"Round 2 · individual identity — counts only for you"):(asTeam?"A team answer counts for everyone.":"Your own answer counts only for you.");
+      h+='<textarea class="t-in" data-field="r2Text" data-fid="r2Text" data-evt="input" placeholder="'+esc(asTeam?"Your team's Round 2 answer":"Your own Round 2 answer")+'" rows="3" style="width:100%;padding:8px;font-size:13px;resize:vertical">'+esc(state.r2Text)+'</textarea>'+
+        '<div style="display:flex;gap:9px;align-items:center;margin-top:9px;flex-wrap:wrap"><button class="'+(done?"t-btn green":"t-btn primary")+'" data-act="stuSubmitR2">'+(done?"Submitted ✓ — Round 2 recorded":(asTeam?"Submit team answer":"Submit my own answer"))+'</button><span style="font-size:12px;color:var(--ink2)">'+esc(note)+'</span></div>';
+    }
+    h+='</div>';
+  }
+  return h;
+}
+
+/* ---------- PANEL ---------- */
+function panelHTML(){
+  var o=state.open;if(!o)return "";
+  var col=colById(o.colId);var act=actById(col.activityId);
+  var teamRow=!!o.isTeamRow;
+  var teams=gbTeams();
+  var team=teamRow?teams.filter(function(t){return t.id===o.entityId;})[0]:teamOf(o.entityId);
+  var subject=teamRow?(team?team.name:o.entityId):o.entityId;
+  var resp=state.responses.filter(function(r){return r.name===o.entityId;})[0];
+  var lines=teamRow?TEAM_ANSWER:(resp?resp.lines:["No scan on file for this student yet.","This is a demo placeholder response."]);
+  var scanCap=(teamRow?"team-answer":(o.entityId.split(" ")[0].toLowerCase()+"-irat"))+".jpg · click to enlarge";
+  var tPre=resp?resp.tPre:"Transcription pending — ";var tFlag=resp?resp.tFlag:"";var tPost=resp?resp.tPost:"no OCR run yet.";
+  var flagStyle=(resp&&resp.status==="flag")?"t-flag":"";
+  var list=teamRow?teams.map(function(t){return t.id;}):state.roster;
+  var nextIdx=(list.indexOf(o.entityId)+1)%list.length;
+  var nextName=teamRow?((teams.filter(function(t){return t.id===list[nextIdx];})[0]||{}).name||"top of column"):list[nextIdx];
+  var scaleNote=col.scale==="ci"?"complete / incomplete":"out of "+col.max+" points";
+  return '<aside class="t-panel'+(state.narrow?" narrow":"")+'">'+
+    '<div class="t-panelhead"><div style="min-width:0;flex:1"><div style="font-family:var(--serif);font-size:17px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(subject)+'</div><div style="font-size:11.5px;color:var(--ink2);margin-top:2px">'+esc(col.label+" · "+act.title+(teamRow?" · team identity":" · student identity"))+'</div></div>'+
+      '<button class="t-btn ghost" style="border:1px solid var(--line);padding:2px 8px" data-act="panelClose">✕</button></div>'+
+    '<div class="t-panelbody">'+
+      '<div class="t-kicker" style="margin-bottom:7px">'+(teamRow?"Round 2 · team submission":"Round 1 · individual submission")+' · uploaded work</div>'+
+      '<div class="t-scan" style="max-height:150px" data-act="panelEnlarge">'+lines.map(function(l){return '<div class="t-scanline">'+esc(l)+'</div>';}).join("")+'</div>'+
+      '<div style="font-size:11.5px;color:var(--ink3);margin-top:6px">'+esc(scanCap)+'</div>'+
+      '<div style="margin-top:13px;border:1px solid var(--line);background:var(--paper);border-radius:10px;padding:11px"><div class="t-kicker" style="margin-bottom:6px">AI transcription</div><div style="font-size:13px;line-height:1.55">'+esc(tPre)+'<span class="'+flagStyle+'">'+esc(tFlag)+'</span>'+esc(tPost)+'</div></div>'+
+      '<div style="margin-top:13px;display:flex;gap:9px;align-items:end;flex-wrap:wrap"><label class="t-fld">Score<input class="t-in t-num" style="width:88px;padding:6px 8px;font-size:15px" data-field="score" data-fid="score" data-evt="input" value="'+esc(state.panelScore)+'"></label><span style="font-size:12px;color:var(--ink2);padding-bottom:7px">'+esc(scaleNote)+'</span></div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px"><button class="t-btn green" data-act="panelComplete">✓ Mark complete</button><button class="t-btn amber" data-act="panelFlag">⚑ Needs review</button><button class="t-btn primary" data-act="panelSaveNext">Save &amp; next ↓</button></div>'+
+      '<div style="font-size:11.5px;color:var(--ink2);margin-top:10px">Save &amp; next → '+esc(nextName||"top of column")+', same column. You never leave the grid.</div>'+
+      '<button class="t-btn ghost" style="margin-top:14px;border:1px solid var(--line)" data-act="panelOpenWs">Open '+esc(act.title.split(" — ")[0])+' workspace →</button>'+
+    '</div></aside>';
+}
+
+/* ---------- RESPONSES REVIEW ---------- */
+function reviewHTML(){
+  if(!state.revOpen)return "";
+  var av=actById(state.activityView)||firstActivity();
+  var iCol=activityCols(av.id).i||colById("w1i");
+  var counts={all:state.responses.length,flag:state.responses.filter(function(r){return r.status==="flag";}).length,unscored:state.responses.filter(function(r){return cellFor(iCol.id,r.name).st!=="scored";}).length};
+  var filters=[["all","All",counts.all],["flag","Needs review",counts.flag],["team","By team",gbTeams().length],["unscored","Unscored",counts.unscored]];
+  var list=state.responses.map(function(r,i){return{r:r,i:i};});
+  if(state.revFilter==="flag")list=list.filter(function(x){return x.r.status==="flag";});
+  if(state.revFilter==="unscored")list=list.filter(function(x){return cellFor(iCol.id,x.r.name).st!=="scored";});
+  if(state.revFilter==="team")list=list.slice().sort(function(a,b){var ta=teamOf(a.r.name),tb=teamOf(b.r.name);return((ta&&ta.name)||"").localeCompare((tb&&tb.name)||"");});
+  var cards=list.map(function(x){
+    var r=x.r,i=x.i;var t=teamOf(r.name);
+    var badge=r.status==="flag"?"⚑ Needs review":(r.status==="confirmed"?"✓ Transcription confirmed":"● High confidence");
+    var bk=r.status==="flag"?"amber":(r.status==="confirmed"?"green":"blue");
+    var note=r.status==="confirmed"?"Confirmed by you — grading is a separate step.":(r.status==="flag"?"Confirming the transcription is not grading.":"");
+    var transHTML;
+    if(r.override!=null)transHTML=esc(r.override);
+    else transHTML=esc(r.tPre)+'<span class="'+(r.status==="flag"?"t-flag":"")+'">'+esc(r.tFlag)+'</span>'+esc(r.tPost);
+    return '<div class="t-card" style="padding:14px">'+
+      '<div style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">'+avatar(r.name,24)+'<span style="font-size:13.5px;font-weight:600">'+esc(r.name)+'</span><span style="font-size:12px;color:var(--ink2)">· individual prep · Round 1'+(t?" · "+esc(t.name):"")+'</span><span class="t-spacer"></span>'+chip(badge,bk)+'</div>'+
+      '<div class="t-scan" style="max-height:140px" data-act="revEnlarge" data-idx="'+i+'">'+r.lines.map(function(l){return '<div class="t-scanline">'+esc(l)+'</div>';}).join("")+'</div>'+
+      '<div style="font-size:11.5px;color:var(--ink3);margin-top:6px">'+esc(r.name.split(" ")[0].toLowerCase())+'-irat-case4.jpg · click to enlarge</div>'+
+      '<div style="margin-top:11px;border:1px solid var(--line2);background:var(--paper);border-radius:10px;padding:11px"><div class="t-kicker" style="margin-bottom:6px">AI transcription</div>'+
+        '<div'+(r.editing?' contenteditable="true" data-fid="tr_'+i+'"':'')+' style="font-size:13px;line-height:1.55;'+(r.editing?"outline:1px solid var(--blue);padding:3px;border-radius:10px":"")+'">'+transHTML+'</div></div>'+
+      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:11px;align-items:center">'+
+        (r.status==="flag"?'<button class="t-btn primary" data-act="revConfirm:'+i+'">Confirm transcription</button>':'')+
+        '<button class="t-btn ghost" style="border:1px solid var(--line)" data-act="revEdit:'+i+'">'+(r.editing?"Done editing":"Edit text")+'</button>'+
+        '<span style="font-size:11.5px;color:var(--ink2)">'+esc(note)+'</span></div>'+
+    '</div>';
+  }).join("");
+  return '<div class="t-overlay">'+
+    '<div style="display:flex;align-items:center;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line);background:var(--paper2);position:sticky;top:0;z-index:2;flex-wrap:wrap"><button class="t-btn ghost" style="border:1px solid var(--line)" data-act="revClose">← Back</button><div style="min-width:0"><div style="font-family:var(--serif);font-size:17px;font-weight:700">Student responses · '+esc(av.title)+'</div><div style="font-size:11.5px;color:var(--ink2)">Every student\'s response, flagged or not. Confirming a transcription is a faculty step, distinct from grading.</div></div></div>'+
+    '<div style="padding:14px 16px 60px;max-width:900px;margin:0 auto"><div style="display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px">'+filters.map(function(f){return '<button class="t-pill'+(state.revFilter===f[0]?" on":"")+'" data-act="revFilter:'+f[0]+'">'+esc(f[1])+' · '+f[2]+'</button>';}).join("")+'</div>'+
+      (cards?'':'<div style="border:1px dashed var(--line);border-radius:10px;padding:26px;text-align:center;color:var(--ink2);font-size:13px">Nothing in this filter. Every student\'s response stays reachable under All.</div>')+
+      '<div style="display:flex;flex-direction:column;gap:12px">'+cards+'</div></div></div>';
+}
+
+/* ---------- MODAL ---------- */
+function modalHTML(){
+  if(!state.modal)return "";
+  return '<div class="t-modalback" data-act="modalClose"><div class="t-modal" data-act="modalStop"><div style="display:flex;align-items:center;gap:9px;padding:10px 13px;border-bottom:1px solid var(--line)"><span style="font-size:12.5px;color:var(--ink2);flex:1;min-width:0">'+esc(state.modal.caption)+'</span><button class="t-btn ghost" style="border:1px solid var(--line);padding:2px 8px" data-act="modalClose">✕</button></div>'+
+    '<div style="padding:20px;background:repeating-linear-gradient(var(--paper2) 0px,var(--paper2) 37px,var(--line2) 37px,var(--line2) 38px)">'+state.modal.lines.map(function(l){return '<div style="font-family:var(--hand);font-size:25px;line-height:38px;color:var(--ink)">'+esc(l)+'</div>';}).join("")+'</div></div></div>';
+}
+
+/* ---------- RENDER ---------- */
+function render(focus){
+  var f=focus||captureFocus();
+  applyTheme();
+  var body;
+  if(state.tab==="checkins")body=viewCheckins();
+  else if(state.tab==="teams")body=viewRoster();
+  else body=viewActivities();
+  var html='<div class="t-shell'+(state.narrow?" t-narrow":"")+'">'+
+    (state.narrow?"":sidebar())+
+    '<main class="t-main"><div class="t-canvas">'+(state.narrow?topStrip():"")+body+'</div></main>'+
+    (state.narrow?bottomNav():"")+
+    panelHTML()+reviewHTML()+modalHTML()+
+  '</div>';
+  app.innerHTML=html;
+  restoreFocus(f);
+}
+
+/* ---------- MUTATIONS ---------- */
+function switchClass(id){
+  var roster=state.classRosters[id]||[];
+  var firstSet=Object.keys(state.teamSets).map(function(k){return state.teamSets[k];}).filter(function(s){return s.classId===id;})[0];
+  state.classId=id;state.roster=roster;state.teamSetId=firstSet?firstSet.id:state.teamSetId;
+  state.open=null;state.collapsed={};state.revOpen=false;state.activityView=null;
+  var act=state.activities.filter(function(a){return a.classId===id;})[0];
+  state.form.activity=act?act.id:state.form.activity;
+}
+function setTeams(fn){var s=curSet();var r=fn(s);for(var k in r)s[k]=r[k];}
+function autoForm(){
+  var set=curSet();var size=set.size;var pool=state.roster.slice();var teams=[];
+  var names=["Team Helix","Team Ribosome","Team Vesicle","Team Mitosis","Team Cytosol","Team Axon","Team Lysosome","Team Codon","Team Flagellum","Team Nucleus","Team Golgi","Team Plasmid"];
+  for(var i=0;i<pool.length;i+=size){var members=pool.slice(i,i+size);teams.push({id:"g"+i+"_"+Date.now(),name:names[teams.length]||("Team "+(teams.length+1)),members:members,roles:members.map(function(m,j){return ROLES[j%5];})});}
+  setTeams(function(){return{teams:teams,locked:false};});
+}
+function openCell(colId,entityId,isTeamRow){var c=cellFor(colId,entityId);state.open={colId:colId,entityId:entityId,isTeamRow:isTeamRow};state.panelScore=c.st==="scored"?String(c.score):"";}
+function markComplete(){var o=state.open;if(!o)return;var col=colById(o.colId);var raw=(state.panelScore||"").trim();var val=col&&col.scale==="ci"?{st:"scored",score:"✓",ci:true}:{st:"scored",score:raw===""?(col?col.max:10):raw};state.cells[o.colId+"|"+o.entityId]=val;}
+function saveNext(){var o=state.open;if(!o)return;markComplete();var teams=gbTeams();var list=o.isTeamRow?teams.map(function(t){return t.id;}):state.roster;var i=list.indexOf(o.entityId);var next=list[(i+1)%list.length];var c=cellFor(o.colId,next);state.open={colId:o.colId,entityId:next,isTeamRow:o.isTeamRow};state.panelScore=c.st==="scored"?String(c.score):"";}
+
+/* ---------- EVENTS ---------- */
+app.addEventListener("click",function(e){
+  var el=e.target.closest("[data-act]");if(!el)return;
+  var parts=el.dataset.act.split(":");var act=parts[0];var arg=parts[1];
+  var d=el.dataset;
+  switch(act){
+    case "noop": return;
+    case "modalStop": e.stopPropagation(); return;
+    case "tab": state.tab=arg;state.revOpen=false;break;
+    case "switchClass": switchClass(arg);break;
+    case "toggleTheme": state.theme=(effectiveTheme()==="dark"?"light":"dark");break;
+    case "gbAddToggle": state.addOpen=!state.addOpen;break;
+    case "gbAddCancel": state.addOpen=false;break;
+    case "gbAddSubmit": return;
+    case "gbLegend": state.legendOpen=!state.legendOpen;break;
+    case "groupOpen": state.tab="activities";state.activityView=arg;state.lens="faculty";state.facultyTab="submission";break;
+    case "colOpen": state.tab="activities";state.activityView=arg;state.lens="faculty";state.facultyTab="submission";break;
+    case "teamToggle": state.collapsed[arg]=!state.collapsed[arg];break;
+    case "openCell": openCell(d.col,d.entity,d.teamrow==="1");break;
+    case "panelClose": state.open=null;break;
+    case "panelComplete": markComplete();break;
+    case "panelFlag": if(state.open)state.cells[state.open.colId+"|"+state.open.entityId]={st:"flag"};break;
+    case "panelSaveNext": saveNext();break;
+    case "panelEnlarge": {var o=state.open;if(o){var col=colById(o.colId);var teams=gbTeams();var team=o.isTeamRow?teams.filter(function(t){return t.id===o.entityId;})[0]:null;var subj=o.isTeamRow?(team?team.name:o.entityId):o.entityId;var resp=state.responses.filter(function(r){return r.name===o.entityId;})[0];var lines=o.isTeamRow?TEAM_ANSWER:(resp?resp.lines:["No scan on file."]);state.modal={caption:subj+" · "+col.label+" · "+(o.isTeamRow?"Round 2":"Round 1"),lines:lines};}break;}
+    case "panelOpenWs": {var o2=state.open;if(o2){var c2=colById(o2.colId);state.tab="activities";state.activityView=c2.activityId;state.lens="faculty";state.facultyTab="submission";state.open=null;}break;}
+    case "teamSetSelect": state.teamSetId=arg;break;
+    case "teamDelete": setTeams(function(s){return{teams:s.teams.filter(function(x){return x.id!==arg;})};});break;
+    case "teamAddMatch": setTeams(function(s){return{teams:s.teams.map(function(x){if(x.id!==d.team)return x;return{id:x.id,name:x.name,members:x.members.concat([d.name]),roles:x.roles.concat([ROLES[x.members.length%5]])};})};});state.queries[d.team]="";break;
+    case "memberRole": setTeams(function(s){return{teams:s.teams.map(function(x){if(x.id!==d.team)return x;var idx=+d.idx;return{id:x.id,name:x.name,members:x.members,roles:x.roles.map(function(r,j){return j===idx?ROLES[(ROLES.indexOf(r)+1)%5]:r;})};})};});break;
+    case "memberRemove": setTeams(function(s){return{teams:s.teams.map(function(x){if(x.id!==d.team)return x;var idx=+d.idx;return{id:x.id,name:x.name,members:x.members.filter(function(_,j){return j!==idx;}),roles:x.roles.filter(function(_,j){return j!==idx;})};})};});break;
+    case "rosterUpload": {var names=state.classId==="AP50B"?ROSTER_B:ROSTER;var merged=state.classRosters[state.classId].slice();names.forEach(function(n){if(merged.indexOf(n)<0)merged.push(n);});state.classRosters[state.classId]=merged;state.roster=merged;state.uploadNote[state.classId]="roster-"+state.classId.toLowerCase()+".csv · "+names.length+" students imported";break;}
+    case "addStudent": {var add=state.newStudent.split(/[\n,]/).map(function(x){return x.trim();}).filter(Boolean);if(add.length){var m2=state.roster.concat(add);state.roster=m2;state.classRosters[state.classId]=m2;state.newStudent="";}break;}
+    case "autoForm": autoForm();break;
+    case "assignRoles": setTeams(function(s){return{teams:s.teams.map(function(t){return{id:t.id,name:t.name,members:t.members,roles:t.members.map(function(m,i){return ROLES[i%5];})};})};});break;
+    case "addTeam": setTeams(function(s){return{teams:s.teams.concat([{id:"n"+Date.now(),name:"New team",members:[],roles:[]}])};});break;
+    case "publish": setTeams(function(s){return{locked:!s.locked};});break;
+    case "actNew": {var na={id:"a"+Date.now(),classId:state.classId,week:activitiesOfClass().length+1,topic:"Untitled",dates:"TBD",title:"Untitled activity",stage:0,resubmitMode:"team",r1:0,r2:0,posted:false,brief:{heading:"Untitled activity",paras:["Add the prompt, reading, or case body here."],files:[]}};state.activities.push(na);state.activityView=na.id;state.lens="faculty";state.facultyTab="source";break;}
+    case "actOpen": state.activityView=arg;state.lens="faculty";state.facultyTab="source";break;
+    case "wsBack": state.activityView=null;break;
+    case "wsLens": state.lens=arg;break;
+    case "wsTab": state.facultyTab=arg;break;
+    case "wsReview": state.revOpen=true;break;
+    case "wsPost": {var avp=actById(state.activityView);if(avp)avp.posted=true;break;}
+    case "stuStep": {var av2=actById(state.activityView);if((+arg)>1&&state.r1Status!=="submitted")return;state.stuStep=+arg;break;}
+    case "stuDrop": state.r1File="irat-case4-photo.jpg · 1.4 MB attached";break;
+    case "stuSubmitR1": state.r1Status="submitted";state.stuStep=2;break;
+    case "stuAddResource": {var txt=(state.resourceText||"").trim()||"Uploaded file · scratch-notes.jpg";var mt=curSet().teams[0];state.resources.push({text:txt,by:(mt?mt.members[0]:"You")+" · added just now"});state.resourceText="";break;}
+    case "stuFork": state.r2Fork=arg;break;
+    case "stuSubmitR2": state.r2Status="submitted";break;
+    case "revClose": state.revOpen=false;break;
+    case "revFilter": state.revFilter=arg;break;
+    case "revConfirm": {var ri=+arg;var elc=app.querySelector('[data-fid="tr_'+ri+'"]');if(elc)state.responses[ri].override=elc.innerText;state.responses[ri].status="confirmed";state.responses[ri].editing=false;break;}
+    case "revEdit": {var re=+arg;var r=state.responses[re];if(r.editing){var elr=app.querySelector('[data-fid="tr_'+re+'"]');if(elr)r.override=elr.innerText;r.editing=false;}else{state.responses.forEach(function(x){x.editing=false;});r.editing=true;}break;}
+    case "revEnlarge": {var rr=state.responses[+d.idx];state.modal={caption:rr.name+" · iRAT · Round 1 · individual",lines:rr.lines};break;}
+    case "modalClose": state.modal=null;break;
+    default: return;
+  }
+  render();
+});
+
+/* form submit (add check-in) */
+app.addEventListener("submit",function(e){
+  var el=e.target.closest("[data-act]");if(!el)return;
+  if(el.dataset.act==="gbAddSubmit"){
+    e.preventDefault();
+    var f=state.form;var id="c"+Date.now();
+    state.columns.push({id:id,activityId:f.activity,label:f.label||"New check-in",type:f.type,phase:f.phase,scale:f.scale,max:f.scale==="ci"?1:10});
+    state.addOpen=false;state.form.label="";
+    render();
+  }
+});
+
+/* field edits */
+function onEdit(e){
+  var el=e.target;var f=el.dataset.field;if(!f||el.isContentEditable)return;
+  if((el.dataset.evt||"input")!==e.type)return;
+  var fc=captureFocus();var v=el.value;var d=el.dataset;
+  switch(f){
+    case "score": state.panelScore=v;break;
+    case "newStudent": state.newStudent=v;break;
+    case "resourceText": state.resourceText=v;break;
+    case "r1Text": state.r1Text=v;break;
+    case "r2Text": state.r2Text=v;break;
+    case "f_label": state.form.label=v;break;
+    case "f_type": state.form.type=v;break;
+    case "f_phase": state.form.phase=v;break;
+    case "f_scale": state.form.scale=v;break;
+    case "f_activity": state.form.activity=v;break;
+    case "teamName": setTeams(function(s){return{teams:s.teams.map(function(x){return x.id===d.team?{id:x.id,name:v,members:x.members,roles:x.roles}:x;})};});break;
+    case "teamQuery": state.queries[d.team]=v;break;
+    case "teamSize": {var n=Math.max(2,Math.min(8,Number(v)||2));setTeams(function(){return{size:n};});autoForm();break;}
+    default: return;
+  }
+  render(fc);
+}
+app.addEventListener("input",onEdit);
+app.addEventListener("change",onEdit);
+
+/* resize -> narrow toggle */
+window.addEventListener("resize",function(){var n=window.innerWidth<820;if(n!==state.narrow){state.narrow=n;render();}});
+
+/* boot */
+render();
+})();
+</script>
