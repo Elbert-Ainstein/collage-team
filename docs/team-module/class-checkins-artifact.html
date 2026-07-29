@@ -145,6 +145,14 @@ th.t-gbname.hdr{z-index:3;background:var(--paper3);border-bottom:1px solid var(-
 .t-rowteam .t-gbname{background:var(--paper3);border-bottom:1px solid var(--line2);padding:5px 10px;font-weight:600;font-size:12.5px}
 .t-rowstu .t-gbname{background:var(--paper2);border-bottom:1px solid var(--line2);padding:4px 10px 4px 24px;font-weight:400;font-size:12.5px}
 .t-rowstu.unassigned .t-gbname{padding-left:10px}
+.t-grp .t-lift{display:block;margin:3px 0 0;font-size:10.5px;font-weight:600;font-variant-numeric:tabular-nums;letter-spacing:0;text-transform:none}
+.t-gbtot{position:sticky;right:0;z-index:2;background:var(--paper2);border-left:1px solid var(--line);text-align:right;padding:5px 12px;font-size:12px;white-space:nowrap;min-width:104px;font-variant-numeric:tabular-nums}
+th.t-gbtot.hdr{z-index:3;background:var(--paper3);border-bottom:1px solid var(--line);vertical-align:bottom;white-space:normal;font-size:10.5px;letter-spacing:.09em;text-transform:uppercase;color:var(--ink3);font-weight:500}
+.t-rowteam .t-gbtot{background:var(--paper3);font-weight:700;border-bottom:1px solid var(--line2)}
+.t-rowstu .t-gbtot{background:var(--paper2);border-bottom:1px solid var(--line2)}
+.t-movebar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;border:1px solid var(--ink);background:var(--activeBg);border-radius:10px;padding:9px 12px;margin-bottom:14px;position:sticky;top:8px;z-index:5;box-shadow:var(--shadowFloat)}
+.t-selbox{width:16px;height:16px;accent-color:var(--blue);cursor:pointer;flex:none;margin:0}
+.t-memberrow.sel{background:var(--blueBg);border-radius:7px}
 .t-namecell{display:flex;align-items:center;gap:7px}
 .t-caret{display:flex;align-items:center;border:0;background:transparent;padding:0;color:var(--ink2);width:18px;cursor:pointer}
 .t-td{border-right:1px solid var(--line2);border-bottom:1px solid var(--line2)}
@@ -354,7 +362,7 @@ var state={
   resources:[{text:"Photo of our whiteboard flux diagram",by:"Priya Nair · Scribe"},{text:"Note: check units on Δosmolarity before we answer",by:"Liam Ortiz"}],
   resourceText:"",
   responses:seedResponses(),
-  revOpen:false,revFilter:"all",modal:null,stuStep:1,legendOpen:true
+  revOpen:false,revFilter:"all",modal:null,stuStep:1,legendOpen:true,sel:{}
 };
 
 /* extend AP50A across the full fall semester (weeks 5-14) */
@@ -467,6 +475,14 @@ function bottomNav(){
 }
 
 /* ---------- CHECK-INS ---------- */
+/* gradebook: individual->team lift, term totals, jump-to-week */
+function colMeanNum(colId,ids){var v=ids.map(function(id){return cellFor(colId,id);}).filter(function(c){return c.st==="scored"&&!c.ci;}).map(function(c){return Number(c.score);}).filter(function(n){return !isNaN(n);});return v.length?v.reduce(function(a,b){return a+b;},0)/v.length:null;}
+function weekLift(actId){var cc=activityCols(actId);if(!cc.i||!cc.t)return null;var im=colMeanNum(cc.i.id,state.roster),tm=colMeanNum(cc.t.id,gbTeams().map(function(t){return t.id;}));if(im==null||tm==null)return null;var ip=Math.round(im/cc.i.max*100),tp=Math.round(tm/cc.t.max*100);return{ip:ip,tp:tp,d:tp-ip};}
+function studentTotal(name){var e=0,p=0;visibleColumns().forEach(function(c){if(c.scale==="ci")return;var cell;if(c.type==="individual")cell=cellFor(c.id,name);else{var tm=teamOf(name);cell=tm?cellFor(c.id,tm.id):{st:"none"};}if(cell.st==="scored"&&!cell.ci){var n=Number(cell.score);if(!isNaN(n)){e+=n;p+=c.max;}}});return{e:e,p:p,pct:p?Math.round(e/p*100):null};}
+function teamTotal(teamId){var e=0,p=0;visibleColumns().forEach(function(c){if(c.type!=="team"||c.scale==="ci")return;var cell=cellFor(c.id,teamId);if(cell.st==="scored"&&!cell.ci){var n=Number(cell.score);if(!isNaN(n)){e+=n;p+=c.max;}}});return{e:e,p:p,pct:p?Math.round(e/p*100):null};}
+function totalCellHTML(kind,id){var t=kind==="team"?teamTotal(id):studentTotal(id);var inner=t.p?("<b>"+t.e+"/"+t.p+"</b> · "+t.pct+"%"):'<span style="color:var(--ink3)">—</span>';return '<td class="t-gbtot'+(kind==="team"?" team":"")+'">'+inner+'</td>';}
+function currentWeekAct(){var a=activitiesOfClass().filter(function(x){return x.stage>=1;});if(!a.length)return firstActivity();return a.sort(function(x,y){return y.week-x.week;})[0];}
+function jumpToWeek(actId){var wrap=app.querySelector(".t-gbwrap");if(!wrap)return;var th=wrap.querySelector('[data-wk="'+actId+'"]');if(!th)return;var nm=wrap.querySelector(".t-gbname");var nameW=nm?nm.offsetWidth:210;var wr=wrap.getBoundingClientRect(),tr=th.getBoundingClientRect();wrap.scrollLeft+=(tr.left-wr.left)-nameW-8;}
 function viewCheckins(){
   var cols=visibleColumns();
   var noRoster=state.roster.length===0;
@@ -481,6 +497,7 @@ function viewCheckins(){
   h+='<div class="t-loopbar"><span class="t-kicker">The loop</span>'+
     [["1","Individual attempt"],["2","Team discussion"],["3","Resubmit"]].map(function(x){return '<span class="t-looppill"><span class="n">'+x[0]+'</span>'+esc(x[1])+'</span>';}).join("")+
     '<span class="t-spacer"></span>'+
+    '<button class="t-btn sm ghost" style="border:1px solid var(--line)" data-act="gbJumpWeek">Jump to this week</button>'+
     '<button class="t-btn sm ghost" style="border:1px solid var(--line)" data-act="gbLegend">'+(state.legendOpen?"Hide":"Show")+' cell key</button></div>';
   /* legend */
   if(state.legendOpen){
@@ -512,7 +529,7 @@ function viewCheckins(){
   }
   /* groups by week (consecutive same-activity columns) */
   var groups=[];cols.forEach(function(c){var last=groups[groups.length-1];if(last&&last.id===c.activityId)last.span++;else groups.push({id:c.activityId,span:1});});
-  var grpHTML=groups.map(function(g){var a=actById(g.id);return '<th class="t-grp" colspan="'+g.span+'"><button data-act="groupOpen:'+g.id+'">Week '+(a?a.week:"?")+'</button><span class="meta">'+esc((a?a.topic+" · "+a.dates:""))+'</span></th>';}).join("");
+  var grpHTML=groups.map(function(g){var a=actById(g.id);var lf=weekLift(g.id);return '<th class="t-grp" colspan="'+g.span+'" data-wk="'+g.id+'"><button data-act="groupOpen:'+g.id+'">Week '+(a?a.week:"?")+'</button><span class="meta">'+esc((a?a.topic+" · "+a.dates:""))+'</span>'+(lf?('<span class="t-lift" style="color:'+(lf.d>=0?"var(--green)":"var(--amber)")+'">iRAT '+lf.ip+'% → tRAT '+lf.tp+'% · '+(lf.d>=0?"+":"")+lf.d+'</span>'):"")+'</th>';}).join("");
   var colHTML=cols.map(function(c){
     var a=actById(c.activityId);
     var chipTxt="",chipKind="";
@@ -535,18 +552,18 @@ function viewCheckins(){
       '<button class="t-caret" data-act="teamToggle:'+t.id+'">'+icon(collapsed?"chevright":"chevdown",18)+'</button>'+
       '<span style="white-space:nowrap">'+esc(t.name)+'</span><span class="t-spacer"></span>'+
       '<span style="font-size:11px;color:'+(behind?"var(--amber)":"var(--ink2)")+';white-space:nowrap" class="t-num">'+inCount+"/"+t.members.length+' in'+(behind?"  ⚠":"")+'</span></div></th>'+
-      cols.map(function(c){return cellHTML(c,t.id,true);}).join("")+'</tr>';
+      cols.map(function(c){return cellHTML(c,t.id,true);}).join("")+totalCellHTML("team",t.id)+'</tr>';
     if(!collapsed){t.members.forEach(function(m){
       rows+='<tr class="t-rowstu"><th scope="row" class="t-gbname"><div class="t-namecell">'+avatar(m,20)+'<span style="white-space:nowrap">'+esc(m)+'</span></div></th>'+
-        cols.map(function(c){return cellHTML(c,m,false);}).join("")+'</tr>';
+        cols.map(function(c){return cellHTML(c,m,false);}).join("")+totalCellHTML("student",m)+'</tr>';
     });}
   });
   unassigned().forEach(function(m){
     rows+='<tr class="t-rowstu unassigned"><th scope="row" class="t-gbname"><div class="t-namecell">'+avatar(m,20)+'<span style="white-space:nowrap">'+esc(m)+'</span><span class="t-spacer"></span><span style="font-size:11px;color:var(--amber)">unassigned</span></div></th>'+
-      cols.map(function(c){return cellHTML(c,m,false);}).join("")+'</tr>';
+      cols.map(function(c){return cellHTML(c,m,false);}).join("")+totalCellHTML("student",m)+'</tr>';
   });
   h+='<div class="t-gbwrap"><table class="t-gb"><thead>'+
-    '<tr><th class="t-gbname hdr">Student / team</th>'+grpHTML+'</tr>'+
+    '<tr><th class="t-gbname hdr">Student / team</th>'+grpHTML+'<th class="t-gbtot hdr" rowspan="2">Term total</th></tr>'+
     '<tr><th class="t-gbname hdr"></th>'+colHTML+'</tr>'+
     '</thead><tbody>'+rows+'</tbody></table></div>';
   return h+'</section>';
@@ -580,10 +597,16 @@ function viewRoster(){
     '<label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2)">Team size<input type="number" min="2" max="8" class="t-in t-num" style="width:56px;padding:4px 6px" data-field="teamSize" data-fid="teamSize" data-evt="change" value="'+set.size+'"></label>'+
     '<span style="font-size:11.5px;color:var(--ink3)">changing the size re-forms the teams for this set</span>'+
     '<button class="t-btn line" data-act="autoForm">Auto-form teams</button>'+
-    '<button class="t-btn line" data-act="assignRoles">Assign roles</button>'+
     '<button class="t-btn line" data-act="addTeam">+ Add team</button>'+
     '<button class="'+(set.locked?"t-btn green":"t-btn primary")+'" data-act="publish">'+(set.locked?"✓ Published · Locked":"Publish teams")+'</button>'+
     '<span class="t-spacer"></span><span style="font-size:11.5px;color:var(--ink2)" class="t-num">'+esc(status)+'</span></div>';
+  var selN=selectedNames();
+  if(selN.length){
+    h+='<div class="t-movebar"><span class="t-num" style="font-weight:600">'+selN.length+' selected</span>'+
+      '<label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2)">Move to <select class="t-in" style="padding:5px 8px" data-field="moveSel" data-fid="moveSel" data-evt="change"><option value="">Choose…</option>'+
+      set.teams.map(function(t){return '<option value="'+t.id+'">'+esc(t.name)+'</option>';}).join("")+'<option value="__un__">Unassigned</option></select></label>'+
+      '<button class="t-btn ghost" style="border:1px solid var(--line)" data-act="selClear">Clear</button></div>';
+  }
   h+='<div class="t-grid t-cards2">'+set.teams.map(function(t){
     var under=t.members.length<set.size;
     var q=state.queries[t.id]||"";
@@ -595,9 +618,7 @@ function viewRoster(){
         '<span class="t-chip'+(under?" amber":"")+'">'+t.members.length+" / "+set.size+'</span>'+
         '<button class="t-x" title="Delete team" data-act="teamDelete:'+t.id+'">✕</button></div>'+
       '<div style="display:flex;flex-direction:column;gap:5px;margin-top:9px">'+t.members.map(function(m,i){
-        return '<div class="t-memberrow">'+avatar(m,20)+'<span style="font-size:12.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(m)+'</span>'+
-          '<button class="t-rolechip" data-act="memberRole" data-team="'+t.id+'" data-idx="'+i+'">'+esc(t.roles[i]||"—")+'</button>'+
-          '<button class="t-x" title="Remove from team" data-act="memberRemove" data-team="'+t.id+'" data-idx="'+i+'">✕</button></div>';
+        return '<div class="t-memberrow'+(state.sel[m]?" sel":"")+'"><input type="checkbox" class="t-selbox" data-field="selBox" data-fid="selb_'+t.id+'_'+i+'" data-name="'+esc(m)+'" data-evt="change"'+(state.sel[m]?" checked":"")+'>'+avatar(m,20)+'<span style="font-size:12.5px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(m)+'</span></div>';
       }).join("")+'</div>'+
       (warn?'<div class="t-warn"><span>⚑</span><span>'+esc(warn)+'</span></div>':'')+
       '<div style="margin-top:9px"><input class="t-in" style="width:100%;padding:4px 6px;font-size:12px" data-field="teamQuery" data-team="'+t.id+'" data-fid="tq_'+t.id+'" data-evt="input" value="'+esc(q)+'" placeholder="Add student…"></div>'+
@@ -607,7 +628,7 @@ function viewRoster(){
   /* unassigned pool */
   h+='<div style="border:1px solid var(--line);background:var(--paper2);border-radius:10px;padding:11px;margin-top:16px">'+
     '<div style="display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin-bottom:8px"><span class="t-kicker">Unassigned roster · add or import</span><span style="font-size:11.5px;color:var(--ink2)" class="t-num">'+un.length+' of '+state.roster.length+'</span></div>'+
-    '<div style="display:flex;gap:6px;flex-wrap:wrap">'+(un.length?un.map(function(n){return '<span style="display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:14px;padding:2px 8px 2px 3px;background:var(--paper)">'+avatar(n,18)+'<span style="font-size:12px">'+esc(n)+'</span></span>';}).join(""):'<span style="font-size:12px;color:var(--ink3)">Every student is placed.</span>')+'</div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap">'+(un.length?un.map(function(n,i){return '<label style="display:inline-flex;align-items:center;gap:6px;border:1px solid '+(state.sel[n]?"var(--blue)":"var(--line)")+';border-radius:14px;padding:2px 8px 2px 6px;background:var(--paper);cursor:pointer"><input type="checkbox" class="t-selbox" data-field="selBox" data-fid="selu_'+i+'" data-name="'+esc(n)+'" data-evt="change"'+(state.sel[n]?" checked":"")+'>'+avatar(n,18)+'<span style="font-size:12px">'+esc(n)+'</span></label>';}).join(""):'<span style="font-size:12px;color:var(--ink3)">Every student is placed.</span>')+'</div>'+
     '<div style="margin-top:9px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">'+
       '<input class="t-in" style="flex:1;min-width:200px;padding:5px 7px;font-size:12.5px" data-field="newStudent" data-fid="newStudent" data-evt="input" value="'+esc(state.newStudent)+'" placeholder="Add student — paste one name per line">'+
       '<button class="t-btn line" data-act="addStudent">Add to roster</button>'+
@@ -874,7 +895,7 @@ function switchClass(id){
   var roster=state.classRosters[id]||[];
   var firstSet=Object.keys(state.teamSets).map(function(k){return state.teamSets[k];}).filter(function(s){return s.classId===id;})[0];
   state.classId=id;state.roster=roster;state.teamSetId=firstSet?firstSet.id:state.teamSetId;
-  state.open=null;state.collapsed={};state.revOpen=false;state.activityView=null;
+  state.open=null;state.collapsed={};state.revOpen=false;state.activityView=null;state.sel={};
   var act=state.activities.filter(function(a){return a.classId===id;})[0];
   state.form.activity=act?act.id:state.form.activity;
 }
@@ -884,6 +905,16 @@ function autoForm(){
   var names=["Team Helix","Team Ribosome","Team Vesicle","Team Mitosis","Team Cytosol","Team Axon","Team Lysosome","Team Codon","Team Flagellum","Team Nucleus","Team Golgi","Team Plasmid"];
   for(var i=0;i<pool.length;i+=size){var members=pool.slice(i,i+size);teams.push({id:"g"+i+"_"+Date.now(),name:names[teams.length]||("Team "+(teams.length+1)),members:members,roles:members.map(function(m,j){return ROLES[j%5];})});}
   setTeams(function(){return{teams:teams,locked:false};});
+}
+function selectedNames(){return Object.keys(state.sel).filter(function(n){return state.sel[n];});}
+function moveSelected(dest){
+  var names=selectedNames();if(!names.length)return;
+  setTeams(function(s){
+    var teams=s.teams.map(function(t){var M=[],R=[];t.members.forEach(function(m,i){if(names.indexOf(m)<0){M.push(m);R.push(t.roles[i]);}});return{id:t.id,name:t.name,members:M,roles:R};});
+    if(dest!=="__un__"){teams=teams.map(function(t){if(t.id!==dest)return t;var M=t.members.slice(),R=t.roles.slice();names.forEach(function(n){if(M.indexOf(n)<0){M.push(n);R.push(ROLES[(M.length-1)%5]);}});return{id:t.id,name:t.name,members:M,roles:R};});}
+    return{teams:teams};
+  });
+  state.sel={};
 }
 function openCell(colId,entityId,isTeamRow){var c=cellFor(colId,entityId);state.open={colId:colId,entityId:entityId,isTeamRow:isTeamRow};state.panelScore=c.st==="scored"?String(c.score):"";}
 function markComplete(){var o=state.open;if(!o)return;var col=colById(o.colId);var raw=(state.panelScore||"").trim();var val=col&&col.scale==="ci"?{st:"scored",score:"✓",ci:true}:{st:"scored",score:raw===""?(col?col.max:10):raw};state.cells[o.colId+"|"+o.entityId]=val;}
@@ -904,6 +935,7 @@ app.addEventListener("click",function(e){
     case "gbAddCancel": state.addOpen=false;break;
     case "gbAddSubmit": return;
     case "gbLegend": state.legendOpen=!state.legendOpen;break;
+    case "gbJumpWeek": jumpToWeek(currentWeekAct().id); return;
     case "groupOpen": state.tab="activities";state.activityView=arg;state.lens="faculty";state.facultyTab="submission";break;
     case "colOpen": state.tab="activities";state.activityView=arg;state.lens="faculty";state.facultyTab="submission";break;
     case "teamToggle": state.collapsed[arg]=!state.collapsed[arg];break;
@@ -914,7 +946,8 @@ app.addEventListener("click",function(e){
     case "panelSaveNext": saveNext();break;
     case "panelEnlarge": {var o=state.open;if(o){var col=colById(o.colId);var teams=gbTeams();var team=o.isTeamRow?teams.filter(function(t){return t.id===o.entityId;})[0]:null;var subj=o.isTeamRow?(team?team.name:o.entityId):o.entityId;var resp=state.responses.filter(function(r){return r.name===o.entityId;})[0];var lines=o.isTeamRow?TEAM_ANSWER:(resp?resp.lines:["No scan on file."]);state.modal={caption:subj+" · "+col.label+" · "+(o.isTeamRow?"Round 2":"Round 1"),lines:lines};}break;}
     case "panelOpenWs": {var o2=state.open;if(o2){var c2=colById(o2.colId);state.tab="activities";state.activityView=c2.activityId;state.lens="faculty";state.facultyTab="submission";state.open=null;}break;}
-    case "teamSetSelect": state.teamSetId=arg;break;
+    case "teamSetSelect": state.teamSetId=arg;state.sel={};break;
+    case "selClear": state.sel={};break;
     case "teamDelete": setTeams(function(s){return{teams:s.teams.filter(function(x){return x.id!==arg;})};});break;
     case "teamAddMatch": setTeams(function(s){return{teams:s.teams.map(function(x){if(x.id!==d.team)return x;return{id:x.id,name:x.name,members:x.members.concat([d.name]),roles:x.roles.concat([ROLES[x.members.length%5]])};})};});state.queries[d.team]="";break;
     case "memberRole": setTeams(function(s){return{teams:s.teams.map(function(x){if(x.id!==d.team)return x;var idx=+d.idx;return{id:x.id,name:x.name,members:x.members,roles:x.roles.map(function(r,j){return j===idx?ROLES[(ROLES.indexOf(r)+1)%5]:r;})};})};});break;
@@ -980,6 +1013,8 @@ function onEdit(e){
     case "teamName": setTeams(function(s){return{teams:s.teams.map(function(x){return x.id===d.team?{id:x.id,name:v,members:x.members,roles:x.roles}:x;})};});break;
     case "teamQuery": state.queries[d.team]=v;break;
     case "teamSize": {var n=Math.max(2,Math.min(8,Number(v)||2));setTeams(function(){return{size:n};});autoForm();break;}
+    case "selBox": if(el.checked)state.sel[d.name]=true;else delete state.sel[d.name];break;
+    case "moveSel": if(v)moveSelected(v);break;
     default: return;
   }
   render(fc);
@@ -992,5 +1027,6 @@ window.addEventListener("resize",function(){var n=window.innerWidth<820;if(n!==s
 
 /* boot */
 render();
+(function(){function jw(){try{if(state.tab==="checkins")jumpToWeek(currentWeekAct().id);}catch(e){}}if(typeof requestAnimationFrame!=="undefined")requestAnimationFrame(jw);setTimeout(jw,180);})();
 })();
 </script>
