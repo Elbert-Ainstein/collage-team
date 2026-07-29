@@ -357,6 +357,29 @@ var state={
   revOpen:false,revFilter:"all",modal:null,stuStep:1,legendOpen:true
 };
 
+/* extend AP50A across the full fall semester (weeks 5-14) */
+(function(){
+  var wk=[
+    {w:5,t:"Metabolism & ATP",d:"Sep 30\u2013Oct 4",ti:"Metabolism \u2014 Glycolysis & the ATP ledger",b:"Predict the net ATP yield of glycolysis under aerobic vs anaerobic conditions, and identify the regulated step."},
+    {w:6,t:"Gene Expression",d:"Oct 7\u201311",ti:"Gene Expression \u2014 Operons & regulation",b:"Explain how a repressible operon responds to end-product abundance, and predict the effect of a promoter mutation."},
+    {w:7,t:"Transcription & Translation",d:"Oct 14\u201318",ti:"Central Dogma \u2014 From sequence to protein",b:"Given a coding strand, predict the mRNA and peptide, and explain how a single frameshift changes the product."},
+    {w:8,t:"Cell Cycle & Division",d:"Oct 21\u201325",ti:"Cell Cycle \u2014 Checkpoints & control",b:"Trace a cell through the G1/S checkpoint and predict how a cyclin loss-of-function stalls division."},
+    {w:9,t:"Feedback & Homeostasis",d:"Oct 28\u2013Nov 1",ti:"Homeostasis \u2014 Negative feedback loops",b:"Model a negative-feedback loop for blood glucose and predict the response to a set-point shift."},
+    {w:10,t:"Neuronal Signaling",d:"Nov 4\u20138",ti:"Neurons \u2014 The action potential",b:"Explain the ionic basis of the action potential and predict the effect of blocking voltage-gated Na+ channels."},
+    {w:11,t:"Immune Networks",d:"Nov 11\u201315",ti:"Immunity \u2014 Clonal selection & memory",b:"Predict how clonal selection produces specificity and memory, and where a checkpoint inhibitor acts."},
+    {w:12,t:"Population Dynamics",d:"Nov 18\u201322",ti:"Populations \u2014 Logistic growth",b:"Given r and K, predict a population\u2019s trajectory and identify where density dependence dominates."},
+    {w:13,t:"Systems Modeling",d:"Dec 2\u20136",ti:"Systems \u2014 Building a compartment model",b:"Sketch a two-compartment model of a signaling pathway and predict its steady state."},
+    {w:14,t:"Synthesis & Review",d:"Dec 9\u201313",ti:"Synthesis \u2014 Integrating the semester",b:"Connect three systems from the term into one regulatory story and defend the tightest control point."}
+  ];
+  wk.forEach(function(x){
+    var id="aw"+x.w;
+    state.activities.push({id:id,classId:"AP50A",week:x.w,topic:x.t,dates:x.d,title:x.ti,stage:0,resubmitMode:"team",r1:0,r2:0,posted:false,
+      brief:{heading:x.ti,paras:[x.b,"Individual iRAT before class; team tRAT in session."],files:[]}});
+    state.columns.push({id:"w"+x.w+"i",activityId:id,label:"iRAT",type:"individual",phase:"Readiness",scale:"points",max:10});
+    state.columns.push({id:"w"+x.w+"t",activityId:id,label:"tRAT",type:"team",phase:"Readiness",scale:"points",max:15});
+  });
+})();
+
 /* ---------- derived ---------- */
 function activitiesOfClass(){return state.activities.filter(function(a){return a.classId===state.classId;});}
 function firstActivity(){return activitiesOfClass()[0]||state.activities[0];}
