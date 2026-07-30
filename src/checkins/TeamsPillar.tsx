@@ -219,7 +219,7 @@ export function TeamsPillar(props: PillarProps) {
     const act = activities.find((a) => a.id === activityId) ?? null;
     const name = act
       ? `${act.title} · teams of ${DEFAULT_SIZE}`
-      : `All-class · teams of ${DEFAULT_SIZE}`;
+      : `Whole session · teams of ${DEFAULT_SIZE}`;
     await run(async () => {
       const created = await createTeamSet({
         courseId,
@@ -322,7 +322,7 @@ export function TeamsPillar(props: PillarProps) {
     >
       <h1 className="t-h1">Teams</h1>
       <span className="t-sub">
-        Team sets belong to an activity — the same class can be teams of four for one activity and
+        Team sets belong to an activity — the same session can be teams of four for one activity and
         pairs for another. Teams are assigned by faculty — self-selection is not offered.
       </span>
     </div>
@@ -364,7 +364,7 @@ export function TeamsPillar(props: PillarProps) {
         value={newSetActivity}
         onChange={(e) => setNewSetActivity(e.target.value)}
       >
-        <option value="">All-class (not tied to an activity)</option>
+        <option value="">Whole session (not tied to an activity)</option>
         {activities.map((a) => (
           <option key={a.id} value={a.id}>
             {weekLabel(a)} · {a.title}
@@ -442,7 +442,7 @@ export function TeamsPillar(props: PillarProps) {
         <span style={{ fontSize: 11.5, color: "var(--ink2)" }}>
           {activeActivity
             ? `Used by ${weekLabel(activeActivity)} · ${activeActivity.title}`
-            : "All-class set — not tied to an activity"}
+            : "Whole-session set — not tied to an activity"}
         </span>
       </div>
 

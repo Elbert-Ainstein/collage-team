@@ -163,30 +163,31 @@ export function ClassCheckins() {
         <ErrorBanner error={error} />
         <div className="t-card" style={{ padding: 22, maxWidth: 560 }}>
           <div style={{ fontFamily: "var(--serif)", fontSize: 20, fontWeight: 700 }}>
-            {courses.length ? "New class" : "Create your class"}
+            {courses.length ? "New session" : "Create your first session"}
           </div>
           <div style={{ fontSize: 12.5, color: "var(--ink2)", marginTop: 5, marginBottom: 14 }}>
-            Name your section, then add the roster. Everything from here writes to your database.
+            A session is one teaching section of a course — AP50A and AP50B are two sessions of
+            the same course, each with its own roster, teams and check-ins.
           </div>
           <div style={{ display: "grid", gap: 10 }}>
             <label className="t-fld">
-              Class name
+              Course
               <input
                 className="t-in"
                 autoFocus
                 value={form.name}
-                placeholder="e.g. Intro to Systems Biology"
+                placeholder="e.g. Applied Physics 50"
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 onKeyDown={(e) => e.key === "Enter" && void onCreateCourse()}
               />
             </label>
             <div style={{ display: "flex", gap: 10 }}>
               <label className="t-fld" style={{ flex: 1 }}>
-                Code (optional)
+                Session
                 <input
                   className="t-in"
                   value={form.code}
-                  placeholder="AP 50"
+                  placeholder="AP50A"
                   onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
                 />
               </label>
@@ -206,7 +207,7 @@ export function ClassCheckins() {
                 onClick={() => void onCreateCourse()}
                 disabled={!form.name.trim()}
               >
-                Create class
+                Create session
               </button>
               {courses.length > 0 && (
                 <button
@@ -310,7 +311,7 @@ export function ClassCheckins() {
             <button
               className="t-segbtn"
               style={{ flex: "0 0 auto", padding: "5px 9px" }}
-              title="Add another section"
+              title="Add another session"
               onClick={() => setCreating(true)}
             >
               +
@@ -526,6 +527,7 @@ function RosterEditor({
 }) {
   const [names, setNames] = useState("");
   const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [pending, setPending] = useState<{
     fileName: string;
@@ -606,14 +608,18 @@ function RosterEditor({
     }
   };
 
+  // Two-step in-app confirmation rather than window.confirm(), which browsers
+  // suppress in embedded contexts — the delete would silently never run.
   const destroy = async () => {
-    if (!window.confirm(`Delete "${course.name}" and everything in it? This cannot be undone.`))
-      return;
+    setBusy(true);
     try {
       await deleteCourse(course.id);
+      setConfirmDelete(false);
       await onDeleted();
     } catch (e) {
       onError(e);
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -622,22 +628,59 @@ function RosterEditor({
       <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
         <h1 className="t-h1">Roster</h1>
         <span className="t-sub">
-          {course.name} · {roster.length} student{roster.length === 1 ? "" : "s"} — teams are
-          assigned by faculty; self-selection is not offered.
+          {course.code ? `${course.code} · ` : ""}
+          {roster.length} student{roster.length === 1 ? "" : "s"} — teams are assigned by faculty;
+          self-selection is not offered.
         </span>
       </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "12px 0 14px" }}>
         <button className="t-btn line" onClick={onNewClass}>
-          + New class
+          + New session
         </button>
-        <button
-          className="t-btn ghost"
-          style={{ border: "1px solid var(--line)", color: "var(--amber)" }}
-          onClick={() => void destroy()}
-        >
-          Delete class
-        </button>
+        {confirmDelete ? (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+              border: "1px solid var(--amber)",
+              background: "var(--amberBg)",
+              borderRadius: 10,
+              padding: "4px 6px 4px 11px",
+            }}
+          >
+            <span style={{ fontSize: 12, color: "var(--amber)" }}>
+              Delete <strong>{course.code || course.name}</strong> — its {roster.length} student
+              {roster.length === 1 ? "" : "s"}, weeks, teams and scores go with it. This can’t be
+              undone.
+            </span>
+            <button
+              className="t-btn amber"
+              onClick={() => void destroy()}
+              disabled={busy}
+            >
+              {busy ? "Deleting…" : "Delete session"}
+            </button>
+            <button
+              className="t-btn ghost"
+              style={{ border: "1px solid var(--line)" }}
+              onClick={() => setConfirmDelete(false)}
+              disabled={busy}
+            >
+              Cancel
+            </button>
+          </span>
+        ) : (
+          <button
+            className="t-btn ghost"
+            style={{ border: "1px solid var(--line)", color: "var(--amber)" }}
+            onClick={() => setConfirmDelete(true)}
+          >
+            Delete session
+          </button>
+        )}
       </div>
 
       <div className="t-card" style={{ padding: 14 }}>

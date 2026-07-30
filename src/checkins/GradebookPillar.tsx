@@ -718,7 +718,7 @@ export function GradebookPillar(props: PillarProps) {
     body = (
       <EmptyState
         title="No students to grade yet"
-        body="This class has no roster yet. Load the class list in Roster, then its weekly check-in columns fill in here."
+        body="This session has no roster yet. Load the session roster in Roster, then its weekly check-in columns fill in here."
       />
     );
   } else if (!activities.length) {
