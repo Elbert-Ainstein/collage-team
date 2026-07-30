@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
 import { Icon } from "./icons";
 import {
@@ -13,6 +13,7 @@ import {
   removeStudent,
 } from "./data";
 import type { Activity, Course, Student } from "./types";
+import { isSupportedRosterFile, parseRoster, type ParsedStudent } from "./rosterImport";
 import { Avatar, ErrorBanner } from "./ui";
 import { TeamsPillar } from "./TeamsPillar";
 import { GradebookPillar } from "./GradebookPillar";
@@ -388,6 +389,13 @@ function RosterEditor({
 }) {
   const [names, setNames] = useState("");
   const [busy, setBusy] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [pending, setPending] = useState<{
+    fileName: string;
+    students: ParsedStudent[];
+    warnings: string[];
+  } | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const add = async () => {
     const list = names
@@ -399,6 +407,51 @@ function RosterEditor({
     try {
       await addStudents(course.id, list, roster.length);
       setNames("");
+      onChanged();
+    } catch (e) {
+      onError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Read + parse a dropped/chosen roster file into the confirm step. */
+  const takeFile = async (file: File) => {
+    if (!isSupportedRosterFile(file.name)) {
+      onError(
+        new Error(
+          `“${file.name}” isn’t a readable roster file. Use .csv, .tsv or .txt — ` +
+            `in Excel or Google Sheets choose File → Save as / Download → CSV.`,
+        ),
+      );
+      return;
+    }
+    try {
+      const text = await file.text();
+      const { students, warnings } = parseRoster(text);
+      if (!students.length) {
+        onError(
+          new Error(`No student names found in “${file.name}”. Expected a column of names.`),
+        );
+        return;
+      }
+      setPending({ fileName: file.name, students, warnings });
+    } catch (e) {
+      onError(e);
+    }
+  };
+
+  /** Names already on the roster are skipped rather than duplicated. */
+  const existing = new Set(roster.map((s) => s.name.trim().toLowerCase()));
+  const fresh = pending?.students.filter((s) => !existing.has(s.name.trim().toLowerCase())) ?? [];
+  const dupeCount = (pending?.students.length ?? 0) - fresh.length;
+
+  const confirmImport = async () => {
+    if (!pending || !fresh.length) return;
+    setBusy(true);
+    try {
+      await addStudents(course.id, fresh, roster.length);
+      setPending(null);
       onChanged();
     } catch (e) {
       onError(e);
@@ -479,7 +532,136 @@ function RosterEditor({
             ))}
           </div>
         )}
-        <div style={{ display: "flex", gap: 9, flexWrap: "wrap", alignItems: "flex-start" }}>
+        {/* ---- import from a file ---- */}
+        {pending ? (
+          <div
+            style={{
+              border: "1px solid var(--line)",
+              borderRadius: 10,
+              padding: 12,
+              background: "var(--paper3)",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+              <span style={{ fontWeight: 600, fontSize: 13 }}>
+                {pending.fileName} — {fresh.length} student{fresh.length === 1 ? "" : "s"} to import
+              </span>
+              {dupeCount > 0 && (
+                <span className="t-chip amber">
+                  {dupeCount} already on the roster · skipped
+                </span>
+              )}
+            </div>
+            {pending.warnings.map((w) => (
+              <div key={w} style={{ fontSize: 11.5, color: "var(--ink2)", marginTop: 4 }}>
+                {w}
+              </div>
+            ))}
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 5,
+                margin: "10px 0",
+                maxHeight: 148,
+                overflowY: "auto",
+              }}
+            >
+              {fresh.map((s, i) => (
+                <span
+                  key={`${s.name}-${i}`}
+                  title={s.email}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 6,
+                    border: "1px solid var(--line)",
+                    borderRadius: 14,
+                    padding: "2px 9px 2px 3px",
+                    background: "var(--paper)",
+                    fontSize: 12,
+                  }}
+                >
+                  <Avatar name={s.name} size={18} />
+                  {s.name}
+                </span>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                className="t-btn primary"
+                onClick={() => void confirmImport()}
+                disabled={busy || !fresh.length}
+              >
+                {busy ? "Importing…" : `Import ${fresh.length} student${fresh.length === 1 ? "" : "s"}`}
+              </button>
+              <button
+                className="t-btn ghost"
+                style={{ border: "1px solid var(--line)" }}
+                onClick={() => setPending(null)}
+                disabled={busy}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div
+            className="t-dz"
+            style={{
+              padding: "20px 16px",
+              // Concrete values in both states: mixing `border` (from .t-dz) with a
+              // conditional `borderColor` makes React warn about shorthand conflicts.
+              borderColor: dragOver ? "var(--blue)" : "var(--line)",
+              background: dragOver ? "var(--blueBg)" : "transparent",
+              cursor: "pointer",
+            }}
+            onClick={() => fileRef.current?.click()}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOver(true);
+            }}
+            onDragLeave={() => setDragOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setDragOver(false);
+              const f = e.dataTransfer.files?.[0];
+              if (f) void takeFile(f);
+            }}
+          >
+            <div style={{ color: "var(--ink2)" }}>
+              <Icon name="upload" size={26} />
+            </div>
+            <div style={{ fontSize: 13.5, fontWeight: 600, marginTop: 7 }}>
+              Upload the class list
+            </div>
+            <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 2 }}>
+              Drop a .csv, .tsv or .txt here, or click to choose — a column of names, optionally
+              with emails. (In Excel: File → Save as → CSV.)
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".csv,.tsv,.txt,text/csv,text/plain"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void takeFile(f);
+                e.target.value = "";
+              }}
+            />
+          </div>
+        )}
+
+        <div
+          style={{
+            display: "flex",
+            gap: 9,
+            flexWrap: "wrap",
+            alignItems: "flex-start",
+            marginTop: 12,
+          }}
+        >
           <textarea
             className="t-in"
             style={{
@@ -490,7 +672,7 @@ function RosterEditor({
               padding: "7px 10px",
             }}
             value={names}
-            placeholder="Add students — one name per line"
+            placeholder="…or paste names — one per line"
             onChange={(e) => setNames(e.target.value)}
           />
           <button className="t-btn primary" onClick={() => void add()} disabled={!names.trim() || busy}>

@@ -58,12 +58,22 @@ export async function listStudents(courseId: string): Promise<Student[]> {
       .order("position").order("created_at"),
   ) ?? [];
 }
+/** Accepts bare names (pasted) or {name, email} entries (imported from a file). */
 export async function addStudents(
-  courseId: string, names: string[], startPos: number,
+  courseId: string,
+  entries: (string | { name: string; email?: string })[],
+  startPos: number,
 ): Promise<Student[]> {
-  const rows = names.map((name, i) => ({
-    course_id: courseId, name, position: startPos + i, avatar_tint: tintFor(name),
-  }));
+  const rows = entries.map((e, i) => {
+    const { name, email } = typeof e === "string" ? { name: e, email: undefined } : e;
+    return {
+      course_id: courseId,
+      name,
+      email: email ?? null,
+      position: startPos + i,
+      avatar_tint: tintFor(name),
+    };
+  });
   return unwrap(await db().from("students").insert(rows).select()) ?? [];
 }
 export async function removeStudent(id: string): Promise<void> {
