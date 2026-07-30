@@ -9,3 +9,7 @@ playwright-report
 test-results
 .vercel
 dist
+
+# local env (Supabase keys)
+.env.local
+.env*.local
