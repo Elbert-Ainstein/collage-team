@@ -8,6 +8,7 @@ import {
   listActivities,
   ensureSessions,
   listStudents,
+  listCheckIns,
   listTeamSets,
   removeStudent,
 } from "./data";
@@ -19,12 +20,13 @@ import { GradebookPillar } from "./GradebookPillar";
 import { ActivitiesPillar } from "./ActivitiesPillar";
 import "./checkins.css";
 
-type Tab = "checkins" | "teams" | "activities";
+type Tab = "roster" | "teams" | "activities" | "checkins";
 
-// Ordered the way a course is actually set up and then run:
-// who is in the class → what they do each week → what it produced.
+// One page per setup step, in the order a course is actually built:
+// who is in it → who works together → what they do each week → what it produced.
 const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: "teams", label: "Roster", icon: "groups" },
+  { id: "roster", label: "Roster", icon: "groups" },
+  { id: "teams", label: "Teams", icon: "table" },
   { id: "activities", label: "Activities", icon: "clipboard" },
   { id: "checkins", label: "Check-ins", icon: "table" },
 ];
@@ -36,8 +38,9 @@ export function ClassCheckins() {
   const [courseId, setCourseId] = useState<string | null>(null);
   const [roster, setRoster] = useState<Student[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [tab, setTab] = useState<Tab>("teams");
+  const [tab, setTab] = useState<Tab>("roster");
   const [hasTeams, setHasTeams] = useState(false);
+  const [hasCheckIns, setHasCheckIns] = useState(false);
   /** Only auto-pick the opening tab once per class, never after the user navigates. */
   const landedFor = useRef<string | null>(null);
   const [theme, setTheme] = useState<"light" | "dark" | null>(null);
@@ -61,6 +64,7 @@ export function ClassCheckins() {
       setRoster([]);
       setActivities([]);
       setHasTeams(false);
+      setHasCheckIns(false);
       return;
     }
     const [r, a, ts] = await Promise.all([
@@ -71,12 +75,18 @@ export function ClassCheckins() {
     setRoster(r);
     setActivities(a);
     setHasTeams(ts.length > 0);
+    const cis = a.length ? await listCheckIns(a.map((x) => x.id)) : [];
+    setHasCheckIns(cis.length > 0);
 
     // Open on the first unfinished step so a new class starts at the roster and
     // a set-up class starts on the gradebook.
     if (landedFor.current !== courseId) {
       landedFor.current = courseId;
-      setTab(r.length === 0 ? "teams" : a.length === 0 ? "activities" : "checkins");
+      // Open on the first unfinished step; a fully set-up session opens on the
+      // gradebook, which is also where the last step (adding check-ins) happens.
+      setTab(
+        r.length === 0 ? "roster" : ts.length === 0 ? "teams" : a.length === 0 ? "activities" : "checkins",
+      );
     }
   }, [courseId]);
 
@@ -164,24 +174,21 @@ export function ClassCheckins() {
         roster={roster}
         activities={activities}
         hasTeams={hasTeams}
+        hasCheckIns={hasCheckIns}
         tab={tab}
         onGo={setTab}
       />
-      {tab === "checkins" && <GradebookPillar {...pillarProps} />}
-      {tab === "activities" && <ActivitiesPillar {...pillarProps} />}
-      {tab === "teams" && (
-        <>
-          <RosterEditor
-            course={course}
-            roster={roster}
-            onChanged={() => void refresh().catch(fail)}
-            onError={fail}
-          />
-          <div style={{ marginTop: 20 }}>
-            <TeamsPillar {...pillarProps} />
-          </div>
-        </>
+      {tab === "roster" && (
+        <RosterEditor
+          course={course}
+          roster={roster}
+          onChanged={() => void refresh().catch(fail)}
+          onError={fail}
+        />
       )}
+      {tab === "teams" && <TeamsPillar {...pillarProps} />}
+      {tab === "activities" && <ActivitiesPillar {...pillarProps} />}
+      {tab === "checkins" && <GradebookPillar {...pillarProps} />}
     </>
   );
 
@@ -282,21 +289,29 @@ function SetupGuide({
   roster,
   activities,
   hasTeams,
+  hasCheckIns,
   tab,
   onGo,
 }: {
   roster: Student[];
   activities: Activity[];
   hasTeams: boolean;
+  hasCheckIns: boolean;
   tab: Tab;
   onGo: (t: Tab) => void;
 }) {
   const steps: { id: Tab; label: string; done: boolean; hint: string }[] = [
     {
-      id: "teams",
-      label: "Add your students",
+      id: "roster",
+      label: "Upload the roster",
       done: roster.length > 0,
-      hint: roster.length ? `${roster.length} on the roster` : "Upload or paste the class list",
+      hint: roster.length ? `${roster.length} students` : "Upload or paste the class list",
+    },
+    {
+      id: "teams",
+      label: "Form the teams",
+      done: hasTeams,
+      hint: hasTeams ? "Teams formed" : "Assign students to teams",
     },
     {
       id: "activities",
@@ -307,10 +322,10 @@ function SetupGuide({
         : "An activity is one week of the loop",
     },
     {
-      id: "teams",
-      label: "Form the teams",
-      done: hasTeams,
-      hint: hasTeams ? "Teams formed" : "Assign students to teams",
+      id: "checkins",
+      label: "Add the check-ins",
+      done: hasCheckIns,
+      hint: hasCheckIns ? "Check-ins added" : "An individual iRAT and a team tRAT",
     },
   ];
 
@@ -325,7 +340,7 @@ function SetupGuide({
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
         <span className="t-kicker">Getting started</span>
         <span style={{ fontSize: 11.5, color: "var(--ink2)" }}>
-          three steps before the gradebook has anything to show
+          four steps to set up the session
         </span>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 10 }}>

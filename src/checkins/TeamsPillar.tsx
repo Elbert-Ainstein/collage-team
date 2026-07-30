@@ -37,7 +37,7 @@ function labelForSet(s: TeamSet, activities: Activity[]): string {
 }
 
 export function TeamsPillar(props: PillarProps) {
-  const { courseId, roster, activities } = props;
+  const { courseId, roster, activities, refresh } = props;
 
   const [sets, setSets] = useState<TeamSet[]>([]);
   const [activeSetId, setActiveSetId] = useState<string | null>(null);
@@ -236,6 +236,9 @@ export function TeamsPillar(props: PillarProps) {
       setSel(new Set());
       setActiveSetId(created.id);
       await reload(created.id);
+      // The parent tracks whether any team set exists (setup guide), so a
+      // created/deleted set has to be reported upward.
+      await refresh();
     });
   };
 
@@ -325,6 +328,7 @@ export function TeamsPillar(props: PillarProps) {
       setActiveSetId(next);
       if (next) await reload(next);
       else applyTeams([]);
+      await refresh();
     });
   };
 
