@@ -5,10 +5,8 @@ import { isSupabaseConfigured } from "@/lib/supabaseClient";
 import { Icon } from "./icons";
 import {
   addStudents,
-  createCourse,
-  deleteCourse,
   listActivities,
-  listCourses,
+  ensureSessions,
   listStudents,
   listTeamSets,
   removeStudent,
@@ -42,16 +40,16 @@ export function ClassCheckins() {
   const [hasTeams, setHasTeams] = useState(false);
   /** Only auto-pick the opening tab once per class, never after the user navigates. */
   const landedFor = useRef<string | null>(null);
-  const [creating, setCreating] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark" | null>(null);
   const [narrow, setNarrow] = useState(false);
-  const [form, setForm] = useState({ name: "", code: "", term: "" });
 
   const course = courses.find((c) => c.id === courseId) ?? null;
   const fail = (e: unknown) => setError(String((e as Error)?.message ?? e));
 
+  // Single-course tool: the AP50A / AP50B sessions are provisioned, never created
+  // by hand, so there is no new/delete-session UI.
   const loadCourses = useCallback(async () => {
-    const cs = await listCourses();
+    const cs = await ensureSessions();
     setCourses(cs);
     setCourseId((prev) => (prev && cs.some((c) => c.id === prev) ? prev : cs[0]?.id ?? null));
     return cs;
@@ -112,24 +110,6 @@ export function ClassCheckins() {
       typeof window !== "undefined" &&
       Boolean(window.matchMedia?.("(prefers-color-scheme: dark)").matches));
 
-  const onCreateCourse = async () => {
-    if (!form.name.trim()) return;
-    setError(null);
-    try {
-      const c = await createCourse({
-        name: form.name.trim(),
-        code: form.code.trim(),
-        term: form.term.trim(),
-      });
-      setForm({ name: "", code: "", term: "" });
-      setCreating(false);
-      await loadCourses();
-      setCourseId(c.id);
-      setTab("teams");
-    } catch (e) {
-      fail(e);
-    }
-  };
 
   // ---------- gates ----------
   if (!isSupabaseConfigured) {
@@ -157,71 +137,17 @@ export function ClassCheckins() {
     );
   }
 
-  if (!course || creating) {
+  if (!course) {
     return (
       <Frame dark={dark} onTheme={() => setTheme(dark ? "light" : "dark")}>
         <ErrorBanner error={error} />
         <div className="t-card" style={{ padding: 22, maxWidth: 560, margin: "0 auto" }}>
-          <div style={{ fontFamily: "var(--serif)", fontSize: 20, fontWeight: 700 }}>
-            {courses.length ? "New session" : "Create your first session"}
+          <div style={{ fontFamily: "var(--serif)", fontSize: 19, fontWeight: 700 }}>
+            Couldn’t load the AP 50 sessions
           </div>
-          <div style={{ fontSize: 12.5, color: "var(--ink2)", marginTop: 5, marginBottom: 14 }}>
-            A session is one teaching section of a course — AP50A and AP50B are two sessions of
-            the same course, each with its own roster, teams and check-ins.
-          </div>
-          <div style={{ display: "grid", gap: 10 }}>
-            <label className="t-fld">
-              Course
-              <input
-                className="t-in"
-                autoFocus
-                value={form.name}
-                placeholder="e.g. Applied Physics 50"
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                onKeyDown={(e) => e.key === "Enter" && void onCreateCourse()}
-              />
-            </label>
-            <div style={{ display: "flex", gap: 10 }}>
-              <label className="t-fld" style={{ flex: 1 }}>
-                Session
-                <input
-                  className="t-in"
-                  value={form.code}
-                  placeholder="AP50A"
-                  onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
-                />
-              </label>
-              <label className="t-fld" style={{ flex: 1 }}>
-                Term (optional)
-                <input
-                  className="t-in"
-                  value={form.term}
-                  placeholder="Fall"
-                  onChange={(e) => setForm((f) => ({ ...f, term: e.target.value }))}
-                />
-              </label>
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-              <button
-                className="t-btn primary"
-                onClick={() => void onCreateCourse()}
-                disabled={!form.name.trim()}
-              >
-                Create session
-              </button>
-              {courses.length > 0 && (
-                <button
-                  className="t-btn ghost"
-                  style={{ border: "1px solid var(--line)" }}
-                  onClick={() => {
-                    setCreating(false);
-                    setForm({ name: "", code: "", term: "" });
-                  }}
-                >
-                  Cancel
-                </button>
-              )}
-            </div>
+          <div style={{ fontSize: 12.5, color: "var(--ink2)", marginTop: 6 }}>
+            The app provisions AP50A and AP50B automatically. Check the database connection and
+            reload.
           </div>
         </div>
       </Frame>
@@ -249,11 +175,6 @@ export function ClassCheckins() {
             course={course}
             roster={roster}
             onChanged={() => void refresh().catch(fail)}
-            onNewClass={() => setCreating(true)}
-            onDeleted={async () => {
-              const cs = await loadCourses();
-              setCourseId(cs[0]?.id ?? null);
-            }}
             onError={fail}
           />
           <div style={{ marginTop: 20 }}>
@@ -308,14 +229,6 @@ export function ClassCheckins() {
                 {c.code || c.name}
               </button>
             ))}
-            <button
-              className="t-segbtn"
-              style={{ flex: "0 0 auto", padding: "5px 9px" }}
-              title="Add another session"
-              onClick={() => setCreating(true)}
-            >
-              +
-            </button>
           </div>
           <div className="t-nav" style={{ marginTop: 14 }}>
             {nav(false)}
@@ -514,20 +427,15 @@ function RosterEditor({
   course,
   roster,
   onChanged,
-  onNewClass,
-  onDeleted,
   onError,
 }: {
   course: Course;
   roster: Student[];
   onChanged: () => void;
-  onNewClass: () => void;
-  onDeleted: () => Promise<void>;
   onError: (e: unknown) => void;
 }) {
   const [names, setNames] = useState("");
   const [busy, setBusy] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [pending, setPending] = useState<{
     fileName: string;
@@ -608,20 +516,6 @@ function RosterEditor({
     }
   };
 
-  // Two-step in-app confirmation rather than window.confirm(), which browsers
-  // suppress in embedded contexts — the delete would silently never run.
-  const destroy = async () => {
-    setBusy(true);
-    try {
-      await deleteCourse(course.id);
-      setConfirmDelete(false);
-      await onDeleted();
-    } catch (e) {
-      onError(e);
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <section>
@@ -634,54 +528,6 @@ function RosterEditor({
         </span>
       </div>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", margin: "12px 0 14px" }}>
-        <button className="t-btn line" onClick={onNewClass}>
-          + New session
-        </button>
-        {confirmDelete ? (
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              flexWrap: "wrap",
-              border: "1px solid var(--amber)",
-              background: "var(--amberBg)",
-              borderRadius: 10,
-              padding: "4px 6px 4px 11px",
-            }}
-          >
-            <span style={{ fontSize: 12, color: "var(--amber)" }}>
-              Delete <strong>{course.code || course.name}</strong> — its {roster.length} student
-              {roster.length === 1 ? "" : "s"}, weeks, teams and scores go with it. This can’t be
-              undone.
-            </span>
-            <button
-              className="t-btn amber"
-              onClick={() => void destroy()}
-              disabled={busy}
-            >
-              {busy ? "Deleting…" : "Delete session"}
-            </button>
-            <button
-              className="t-btn ghost"
-              style={{ border: "1px solid var(--line)" }}
-              onClick={() => setConfirmDelete(false)}
-              disabled={busy}
-            >
-              Cancel
-            </button>
-          </span>
-        ) : (
-          <button
-            className="t-btn ghost"
-            style={{ border: "1px solid var(--line)", color: "var(--amber)" }}
-            onClick={() => setConfirmDelete(true)}
-          >
-            Delete session
-          </button>
-        )}
-      </div>
 
       <div className="t-card" style={{ padding: 14 }}>
         {roster.length === 0 ? (
