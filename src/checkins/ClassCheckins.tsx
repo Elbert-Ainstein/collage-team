@@ -135,7 +135,7 @@ export function ClassCheckins() {
   if (!isSupabaseConfigured) {
     return (
       <Frame dark={dark} onTheme={() => setTheme(dark ? "light" : "dark")}>
-        <div className="t-card" style={{ padding: 22 }}>
+        <div className="t-card" style={{ padding: 22, maxWidth: 560, margin: "0 auto" }}>
           <div style={{ fontFamily: "var(--serif)", fontSize: 19, fontWeight: 700 }}>
             Connect your database
           </div>
@@ -161,7 +161,7 @@ export function ClassCheckins() {
     return (
       <Frame dark={dark} onTheme={() => setTheme(dark ? "light" : "dark")}>
         <ErrorBanner error={error} />
-        <div className="t-card" style={{ padding: 22, maxWidth: 560 }}>
+        <div className="t-card" style={{ padding: 22, maxWidth: 560, margin: "0 auto" }}>
           <div style={{ fontFamily: "var(--serif)", fontSize: 20, fontWeight: 700 }}>
             {courses.length ? "New session" : "Create your first session"}
           </div>
