@@ -6,6 +6,7 @@ import {
   createTeam,
   createTeamSet,
   deleteTeam,
+  deleteTeamSet,
   listTeamSets,
   listTeams,
   moveStudents,
@@ -50,6 +51,7 @@ export function TeamsPillar(props: PillarProps) {
   const [loadingTeams, setLoadingTeams] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmDeleteSet, setConfirmDeleteSet] = useState(false);
 
   /** Last name we know the DB holds for each team, so blur only writes real edits. */
   const savedNames = useRef<Record<string, string>>({});
@@ -309,6 +311,23 @@ export function TeamsPillar(props: PillarProps) {
     });
   };
 
+  /** Deleting a set takes its teams — and any team scores recorded against them. */
+  const onDeleteSet = async () => {
+    if (!activeSetId) return;
+    const doomed = activeSetId;
+    await run(async () => {
+      await deleteTeamSet(doomed);
+      const remaining = sets.filter((s) => s.id !== doomed);
+      setSets(remaining);
+      setConfirmDeleteSet(false);
+      setSel(new Set());
+      const next = remaining[0]?.id ?? null;
+      setActiveSetId(next);
+      if (next) await reload(next);
+      else applyTeams([]);
+    });
+  };
+
   // ---------- render ----------
   const header = (
     <div
@@ -522,6 +541,45 @@ export function TeamsPillar(props: PillarProps) {
         >
           {activeSet?.locked ? "✓ Published · Locked" : "Publish teams"}
         </button>
+        {confirmDeleteSet ? (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+              border: "1px solid var(--amber)",
+              background: "var(--amberBg)",
+              borderRadius: 10,
+              padding: "4px 6px 4px 11px",
+            }}
+          >
+            <span style={{ fontSize: 11.5, color: "var(--amber)" }}>
+              Delete this set — its {teams.length} team{teams.length === 1 ? "" : "s"} and any team
+              scores recorded against them go too. Students stay on the roster.
+            </span>
+            <button className="t-btn amber" onClick={onDeleteSet} disabled={busy}>
+              {busy ? "Deleting…" : "Delete set"}
+            </button>
+            <button
+              className="t-btn ghost"
+              style={{ border: "1px solid var(--line)" }}
+              onClick={() => setConfirmDeleteSet(false)}
+              disabled={busy}
+            >
+              Cancel
+            </button>
+          </span>
+        ) : (
+          <button
+            className="t-btn ghost"
+            style={{ border: "1px solid var(--line)", color: "var(--amber)" }}
+            onClick={() => setConfirmDeleteSet(true)}
+            disabled={busy}
+          >
+            Delete set
+          </button>
+        )}
         <span className="t-spacer" />
         <span className="t-num" style={{ fontSize: 11.5, color: "var(--ink2)" }}>
           {status}

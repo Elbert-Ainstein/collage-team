@@ -132,6 +132,15 @@ export async function createTeamSet(input: {
     }).select().single(),
   );
 }
+/**
+ * Removes the set, its teams and their memberships (FK cascade). Any team-level
+ * results recorded against those teams go with them — callers must say so.
+ */
+export async function deleteTeamSet(id: string): Promise<void> {
+  const { error } = await db().from("team_sets").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+}
+
 export async function setTeamSetLocked(id: string, locked: boolean): Promise<void> {
   const { error } = await db().from("team_sets").update({ locked }).eq("id", id);
   if (error) throw new Error(error.message);
