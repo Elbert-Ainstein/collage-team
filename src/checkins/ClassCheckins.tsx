@@ -10,6 +10,7 @@ import {
   listActivities,
   listCourses,
   listStudents,
+  listTeamSets,
   removeStudent,
 } from "./data";
 import type { Activity, Course, Student } from "./types";
@@ -22,10 +23,12 @@ import "./checkins.css";
 
 type Tab = "checkins" | "teams" | "activities";
 
+// Ordered the way a course is actually set up and then run:
+// who is in the class → what they do each week → what it produced.
 const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: "checkins", label: "Check-ins", icon: "table" },
   { id: "teams", label: "Roster", icon: "groups" },
   { id: "activities", label: "Activities", icon: "clipboard" },
+  { id: "checkins", label: "Check-ins", icon: "table" },
 ];
 
 export function ClassCheckins() {
@@ -35,7 +38,10 @@ export function ClassCheckins() {
   const [courseId, setCourseId] = useState<string | null>(null);
   const [roster, setRoster] = useState<Student[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [tab, setTab] = useState<Tab>("checkins");
+  const [tab, setTab] = useState<Tab>("teams");
+  const [hasTeams, setHasTeams] = useState(false);
+  /** Only auto-pick the opening tab once per class, never after the user navigates. */
+  const landedFor = useRef<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark" | null>(null);
   const [narrow, setNarrow] = useState(false);
@@ -56,11 +62,24 @@ export function ClassCheckins() {
     if (!courseId) {
       setRoster([]);
       setActivities([]);
+      setHasTeams(false);
       return;
     }
-    const [r, a] = await Promise.all([listStudents(courseId), listActivities(courseId)]);
+    const [r, a, ts] = await Promise.all([
+      listStudents(courseId),
+      listActivities(courseId),
+      listTeamSets(courseId),
+    ]);
     setRoster(r);
     setActivities(a);
+    setHasTeams(ts.length > 0);
+
+    // Open on the first unfinished step so a new class starts at the roster and
+    // a set-up class starts on the gradebook.
+    if (landedFor.current !== courseId) {
+      landedFor.current = courseId;
+      setTab(r.length === 0 ? "teams" : a.length === 0 ? "activities" : "checkins");
+    }
   }, [courseId]);
 
   useEffect(() => {
@@ -214,6 +233,13 @@ export function ClassCheckins() {
   const body = (
     <>
       <ErrorBanner error={error} />
+      <SetupGuide
+        roster={roster}
+        activities={activities}
+        hasTeams={hasTeams}
+        tab={tab}
+        onGo={setTab}
+      />
       {tab === "checkins" && <GradebookPillar {...pillarProps} />}
       {tab === "activities" && <ActivitiesPillar {...pillarProps} />}
       {tab === "teams" && (
@@ -329,6 +355,117 @@ export function ClassCheckins() {
         </div>
       </main>
       {narrow && <nav className="t-bottomnav">{nav(true)}</nav>}
+    </div>
+  );
+}
+
+/**
+ * A course isn't usable until it has students, a week, and teams. Until then the
+ * app says plainly what the next step is and takes you there — the gradebook is
+ * meaningless with an empty roster.
+ */
+function SetupGuide({
+  roster,
+  activities,
+  hasTeams,
+  tab,
+  onGo,
+}: {
+  roster: Student[];
+  activities: Activity[];
+  hasTeams: boolean;
+  tab: Tab;
+  onGo: (t: Tab) => void;
+}) {
+  const steps: { id: Tab; label: string; done: boolean; hint: string }[] = [
+    {
+      id: "teams",
+      label: "Add your students",
+      done: roster.length > 0,
+      hint: roster.length ? `${roster.length} on the roster` : "Upload or paste the class list",
+    },
+    {
+      id: "activities",
+      label: "Create the first week",
+      done: activities.length > 0,
+      hint: activities.length
+        ? `${activities.length} week${activities.length === 1 ? "" : "s"}`
+        : "An activity is one week of the loop",
+    },
+    {
+      id: "teams",
+      label: "Form the teams",
+      done: hasTeams,
+      hint: hasTeams ? "Teams formed" : "Assign students to teams",
+    },
+  ];
+
+  if (steps.every((s) => s.done)) return null;
+  const nextIdx = steps.findIndex((s) => !s.done);
+
+  return (
+    <div
+      className="t-card"
+      style={{ padding: 14, marginBottom: 16, background: "var(--paper3)" }}
+    >
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
+        <span className="t-kicker">Getting started</span>
+        <span style={{ fontSize: 11.5, color: "var(--ink2)" }}>
+          three steps before the gradebook has anything to show
+        </span>
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 10 }}>
+        {steps.map((s, i) => {
+          const isNext = i === nextIdx;
+          return (
+            <div
+              key={s.label}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                padding: "7px 9px",
+                borderRadius: 9,
+                border: "1px solid " + (isNext ? "var(--line)" : "transparent"),
+                background: isNext ? "var(--activeBg)" : "transparent",
+                opacity: s.done ? 0.62 : 1,
+              }}
+            >
+              <span
+                className="t-lnum"
+                style={
+                  s.done
+                    ? { background: "var(--greenBg)", color: "var(--green)" }
+                    : undefined
+                }
+              >
+                {s.done ? "✓" : i + 1}
+              </span>
+              <span
+                style={{
+                  fontSize: 13,
+                  fontWeight: isNext ? 600 : 400,
+                  textDecoration: s.done ? "line-through" : "none",
+                }}
+              >
+                {s.label}
+              </span>
+              <span style={{ fontSize: 11.5, color: "var(--ink2)" }}>{s.hint}</span>
+              <span className="t-spacer" />
+              {!s.done && (
+                <button
+                  className={isNext ? "t-btn primary sm" : "t-btn ghost sm"}
+                  style={isNext ? undefined : { border: "1px solid var(--line)" }}
+                  onClick={() => onGo(s.id)}
+                  disabled={tab === s.id && isNext}
+                >
+                  {tab === s.id && isNext ? "You're here" : "Go"}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
