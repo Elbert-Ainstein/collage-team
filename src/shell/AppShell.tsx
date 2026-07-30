@@ -17,6 +17,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   useEffect(() => setMounted(true), []);
 
+  // The real Class Check-ins app owns its own chrome (and its own Supabase data),
+  // so render it bare — no old role rail / sidebar / faculty shell.
+  if (pathname.startsWith("/ck")) {
+    return <>{children}</>;
+  }
+
   if (!mounted) {
     return <div className="app-boot" aria-hidden />;
   }
