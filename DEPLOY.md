@@ -137,4 +137,5 @@ students will see the URL.
 - [ ] Both `NEXT_PUBLIC_SUPABASE_*` variables added
 - [ ] First deploy succeeded and the URL opens
 - [ ] Migration `0002_unique_session_code.sql` run in Supabase
+- [ ] Migration `0003_teams_board.sql` run in Supabase (team lock, roster attributes, cadence)
 - [ ] **Auth in place before any real student data**

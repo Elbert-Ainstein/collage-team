@@ -1,12 +1,27 @@
 // DB row types (mirror supabase/migrations/0001_init.sql).
 
+/**
+ * How often teams change. Asked once at roster-import time in plain words, so
+ * "team set" never has to appear in the UI.
+ *   semester — one set of teams; every activity uses it unless it overrides.
+ *   activity — each activity gets its own set, seeded from the roster.
+ */
+export type TeamCadence = "semester" | "activity";
+
 export interface Course {
   id: string;
   name: string;
   code: string | null;
   term: string | null;
+  team_cadence: TeamCadence;
   created_at: string;
 }
+
+/**
+ * Extra roster columns, kept as-is so teams can be mixed by them. Keys are the
+ * lower-cased column headers from the imported file ("major", "skill tag", …).
+ */
+export type StudentAttrs = Record<string, string>;
 
 export interface Student {
   id: string;
@@ -14,6 +29,7 @@ export interface Student {
   name: string;
   email: string | null;
   avatar_tint: string | null;
+  attrs: StudentAttrs;
   position: number;
   created_at: string;
 }
@@ -56,6 +72,8 @@ export interface Team {
   id: string;
   team_set_id: string;
   name: string;
+  /** A locked team is preserved by "Re-roll unlocked" — members and all. */
+  locked: boolean;
   position: number;
   created_at: string;
 }

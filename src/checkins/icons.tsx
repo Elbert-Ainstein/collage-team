@@ -17,6 +17,14 @@ const PATHS: Record<string, string> = {
     '<path d="M12 15.5V4M8 8l4-4 4 4"/><path d="M4 15v3.2A1.8 1.8 0 0 0 5.8 20h12.4a1.8 1.8 0 0 0 1.8-1.8V15"/>',
   check: '<path d="M4.5 12.5l5 5L20 6.5"/>',
   file: '<path d="M6.5 3.5h7l4 4v13h-11z"/><path d="M13.5 3.5v4h4"/>',
+  // Board controls: re-roll, add team, and the per-team lock.
+  shuffle:
+    '<path d="M16 3.5l3.5 3-3.5 3"/><path d="M16 14.5l3.5 3-3.5 3"/><path d="M4 6.5h4.2l8.3 11h3"/><path d="M4 17.5h4.2l2.4-3.2"/><path d="M14.2 9.7l2.3-3.2h3"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  lock:
+    '<rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7.8a4 4 0 0 1 8 0v2.7"/>',
+  lockopen:
+    '<rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7.8a4 4 0 0 1 7.7-1.4"/>',
 };
 
 export function Icon({ name, size = 18 }: { name: keyof typeof PATHS | string; size?: number }) {

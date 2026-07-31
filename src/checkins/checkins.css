@@ -8,6 +8,7 @@
   --purple:#dca2fd;
   --blue:#0382ed; --blueBg:#dbeeff;
   --amber:#b45309; --amberBg:#fdf1cd;
+  --accent:#ff6713; --accentBg:#fff3eb;
   --green:#15803d; --greenBg:#e2f2e8;
   --serif:Georgia,"Iowan Old Style","Times New Roman",serif;
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
@@ -22,6 +23,7 @@
     --line:#12415f; --line2:#0d3450;
     --blue:#79c0ff; --blueBg:#0b3a5c;
     --amber:#e6b53c; --amberBg:#3a2f12;
+    --accent:#ff8a47; --accentBg:#4a2411;
     --green:#5cc98e; --greenBg:#0f3a2a;
     --shadowCard:0 1px 0 0 rgba(0,0,0,.25);
     --shadowFloat:0 1px 3px 0 rgba(0,0,0,.35);
@@ -33,6 +35,7 @@
   --line:#e5e5e5; --line2:#eee9dc;
   --blue:#0382ed; --blueBg:#dbeeff;
   --amber:#b45309; --amberBg:#fdf1cd;
+  --accent:#ff6713; --accentBg:#fff3eb;
   --green:#15803d; --greenBg:#e2f2e8;
   --shadowCard:0 1px 0 0 rgba(0,35,65,.05);
   --shadowFloat:0 1px 2px 0 rgba(0,35,65,.10);
@@ -43,6 +46,7 @@
   --line:#12415f; --line2:#0d3450;
   --blue:#79c0ff; --blueBg:#0b3a5c;
   --amber:#e6b53c; --amberBg:#3a2f12;
+  --accent:#ff8a47; --accentBg:#4a2411;
   --green:#5cc98e; --greenBg:#0f3a2a;
   --shadowCard:0 1px 0 0 rgba(0,0,0,.25);
   --shadowFloat:0 1px 3px 0 rgba(0,0,0,.35);
@@ -235,7 +239,8 @@ label.t-fld .t-in,label.t-fld select{text-transform:none;letter-spacing:0}
 /* roster upload — prominent while the roster is empty */
 .t-dzbig{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;padding:44px 24px;border:2px dashed var(--line);border-radius:14px;background:var(--paper3);cursor:pointer;transition:border-color 120ms,background 120ms}
 .t-dzbig:hover{border-color:var(--ink3)}
-.t-dzbig.over{border-color:var(--blue);background:var(--blueBg)}
+/* orange is the drag-target signal everywhere, the roster dropzone included */
+.t-dzbig.over{border-color:var(--accent);background:var(--accentBg)}
 .t-dzbig .big{font-family:var(--serif);font-size:19px;font-weight:700;color:var(--ink)}
 .t-dzbig .sub{font-size:12.5px;color:var(--ink2);max-width:46ch;text-align:center;line-height:1.5}
 .t-orline{display:flex;align-items:center;gap:12px;margin:16px 0 12px;color:var(--ink3);font-size:11.5px;letter-spacing:.07em;text-transform:uppercase}
@@ -244,3 +249,121 @@ label.t-fld .t-in,label.t-fld select{text-transform:none;letter-spacing:0}
 /* the four steps must fit without clipping: drop the hints before they do */
 @media (max-width:1240px){.t-step .hint{display:none}}
 @media (max-width:900px){.t-step .lab{font-size:11.5px}.t-steprule{flex-basis:18px}}
+
+/* ===== Roster & teams board =====
+   File-folder tabs → toolbar → board (tray + team cards) → selection bar. */
+
+/* tabs: labelled with the thing the teams belong to, never "team set" */
+.t-foldertabs{display:flex;gap:3px;flex-wrap:wrap;margin:16px 0 0;padding:0 2px}
+.t-foldertab{display:flex;align-items:baseline;gap:7px;height:34px;padding:0 14px;
+  border:1px solid var(--line);border-bottom-color:var(--line);border-radius:10px 10px 0 0;
+  margin-bottom:-1px;background:var(--paper3);color:var(--ink2);font-size:12.5px;
+  transition:background 120ms,color 120ms}
+.t-foldertab:hover{background:var(--activeBg)}
+.t-foldertab.on{background:var(--paper2);border-bottom-color:var(--paper2);color:var(--ink);font-weight:600}
+.t-foldertab .note{font-size:10px;color:var(--ink3);font-weight:400;font-variant-numeric:tabular-nums}
+.t-foldertab.add{border-style:dashed;color:var(--ink3);font-size:12px}
+
+/* toolbar: four forming controls, status, publish */
+/* toolbar → board → selection bar are one stacked slab: only the outer corners
+   of the stack are rounded, and the tabs knock out the top-left one. */
+.t-boardbar{display:flex;gap:9px;flex-wrap:wrap;align-items:center;
+  padding:11px 13px;border:1px solid var(--line);border-bottom:0;background:var(--paper2);
+  border-radius:0 10px 0 0}
+.t-boardbar .t-btn{display:inline-flex;align-items:center;gap:6px}
+.t-stepper{display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 9px;
+  border:1px solid var(--line);border-radius:9px;background:var(--paper)}
+.t-stepper .lbl{font-size:12px;color:var(--ink2);white-space:nowrap}
+.t-stepper .n{font-size:13px;font-weight:600;min-width:12px;text-align:center}
+.t-sq{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
+  border:0;border-radius:6px;background:var(--paper3);color:var(--ink);font-size:14px;line-height:1;
+  transition:background 120ms}
+.t-sq:hover:not(:disabled){background:var(--activeBg)}
+.t-sq:disabled{color:var(--ink3);cursor:default}
+.t-mixby{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--ink2);white-space:nowrap}
+.t-mixby select{padding:5px 7px;font-size:12px}
+
+/* board */
+.t-board{display:grid;grid-template-columns:236px minmax(0,1fr);gap:0;
+  border:1px solid var(--line);border-top:0;overflow:hidden;min-height:340px}
+.t-tray{display:flex;flex-direction:column;gap:9px;padding:12px;
+  background:var(--paper3);border-right:1px solid var(--line);transition:background 120ms}
+.t-tray.over{background:var(--accentBg)}
+.t-trayhead{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.t-traydrop{display:flex;flex-direction:column;gap:3px;flex:1;min-height:120px;max-height:420px;
+  overflow-y:auto;border:1px dashed var(--line);border-radius:11px;padding:7px}
+.t-tray.over .t-traydrop{border-color:var(--accent)}
+.t-trayempty{font-size:11.5px;color:var(--ink3);padding:8px 4px;line-height:1.45}
+.t-teamgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(212px,1fr));gap:11px;
+  align-content:start;padding:14px;background:var(--canvas);max-height:560px;overflow-y:auto}
+.t-teamsempty{grid-column:1/-1;border:1px dashed var(--line);background:var(--paper2);
+  border-radius:11px;padding:18px}
+
+/* team card */
+.t-tcard{display:flex;flex-direction:column;gap:8px;background:var(--paper2);
+  border:1px solid var(--line);border-radius:12px;padding:10px;box-shadow:var(--shadowCard);
+  transition:border-color 120ms,box-shadow 120ms,background 120ms}
+.t-tcard.locked{border-color:var(--blue)}
+.t-tcard.over{border-color:var(--accent);box-shadow:0 0 0 3px rgba(255,103,19,.15)}
+.t-tchead{display:flex;align-items:center;gap:6px}
+.t-tcname{flex:1;min-width:0;border:1px solid transparent;background:transparent;color:var(--ink);
+  font-size:13px;font-weight:600;letter-spacing:-.01em;padding:2px 4px;border-radius:6px}
+.t-tcname:hover{border-color:var(--line)}
+.t-tcname:focus{outline:1px solid var(--purple);border-color:transparent}
+.t-count{font-size:10.5px;font-variant-numeric:tabular-nums;color:var(--ink3);
+  background:var(--paper3);border-radius:999px;padding:1px 7px;white-space:nowrap}
+.t-count.over{background:var(--amberBg);color:var(--amber)}
+.t-lock{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;
+  border:0;border-radius:6px;background:transparent;color:var(--ink3);transition:background 120ms,color 120ms}
+.t-lock:hover{background:var(--paper3);color:var(--ink2)}
+.t-lock.on{background:var(--blueBg);color:var(--blue)}
+.t-mixbar{display:flex;gap:2px;height:4px;border-radius:999px;overflow:hidden}
+.t-mixbar span{display:block;min-width:3px}
+.t-tcmembers{display:flex;flex-direction:column;gap:3px}
+.t-tcempty{border:1px dashed var(--line);border-radius:8px;padding:12px 8px;text-align:center;
+  font-size:11.5px;color:var(--ink3)}
+
+/* a student row — draggable in a card or the tray */
+.t-srow{display:flex;align-items:center;gap:7px;height:29px;padding:0 6px;border-radius:7px;
+  cursor:grab;user-select:none;transition:background 120ms,box-shadow 120ms}
+.t-srow:hover{background:var(--paper3)}
+.t-srow.sel{background:var(--blueBg);box-shadow:inset 0 0 0 1.5px var(--blue)}
+.t-srow.drag{opacity:.4}
+.t-srow .nm{flex:1;min-width:0;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.t-srow .dot{width:6px;height:6px;border-radius:999px;flex:none}
+
+/* selection bar */
+.t-selbar{display:flex;align-items:center;gap:9px;flex-wrap:wrap;min-height:42px;
+  padding:9px 14px;margin-top:0;border:1px solid var(--line);border-top:0;
+  border-radius:0 0 12px 12px;background:var(--paper2);color:var(--ink3);font-size:12px;
+  transition:background 120ms,color 120ms}
+.t-selbar.on{background:var(--ink);border-color:var(--ink);color:var(--paper3)}
+/* `#tbl-app select{color:inherit}` outranks a plain class rule, so the id has to
+   be carried here too — without it the select inherits the bar's cream text and
+   "Move to…" disappears against its own cream background. */
+#tbl-app .t-selbar.on select{background:var(--paper);color:var(--ink);border-color:transparent}
+/* currentColor, so the outline reads against the bar in both themes — the bar
+   inverts (navy in light, cream in dark) and a fixed border loses one of them. */
+.t-selbar.on .t-btn.ghost{color:var(--paper3);border:1px solid currentColor}
+
+/* cadence — asked once, at import time, in plain words */
+.t-cadence{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:12px}
+.t-radiocard{display:flex;gap:10px;align-items:flex-start;text-align:left;padding:13px;
+  border:1px solid var(--line);background:var(--paper);border-radius:12px;cursor:pointer;
+  transition:border-color 120ms,background 120ms}
+.t-radiocard:hover{border-color:var(--ink3)}
+.t-radiocard.on{border:1.5px solid var(--ink);background:var(--paper2)}
+.t-radiocard .ind{display:inline-flex;align-items:center;justify-content:center;flex:none;
+  width:18px;height:18px;margin-top:1px;border:1px solid var(--line);border-radius:999px;
+  background:var(--paper);color:var(--paper3);transition:background 120ms,border-color 120ms}
+.t-radiocard.on .ind{background:var(--ink);border-color:var(--ink)}
+.t-radiocard .ttl{font-size:13.5px;font-weight:600}
+.t-radiocard .bdy{font-size:12px;color:var(--ink2);margin-top:3px;line-height:1.45}
+
+/* the board is a desktop tool: below this the tray stacks above the cards */
+@media (max-width:860px){
+  .t-board{grid-template-columns:minmax(0,1fr)}
+  .t-tray{border-right:0;border-bottom:1px solid var(--line)}
+  .t-traydrop{max-height:200px}
+  .t-teamgrid{max-height:none}
+}

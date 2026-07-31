@@ -12,6 +12,13 @@ Once it's done and you've pasted two values into `.env.local`, I wire up everyth
 1. In the project, open **SQL Editor** → **New query**.
 2. Paste the entire contents of [`migrations/0001_init.sql`](migrations/0001_init.sql) and click **Run**.
 3. You should see "Success". (Check **Table Editor** — you'll see `courses`, `students`, `activities`, `teams`, `check_ins`, `check_in_results`, etc. All empty. That's correct — the AP50A placeholder is gone; real data comes from you.)
+4. Do the same for the later migrations, in order — each is a **New query**, paste, **Run**:
+   - [`migrations/0002_unique_session_code.sql`](migrations/0002_unique_session_code.sql)
+   - [`migrations/0003_teams_board.sql`](migrations/0003_teams_board.sql) — the team lock, roster
+     attributes, and the teams-change-how-often setting. Until this one is run, the teams board
+     still works but locking a team fails and there is nothing to mix teams by.
+
+   All of them are safe to re-run if you are unsure whether one took.
 
 ## 3. Grab the two keys I need
 In the project: **Project Settings → API**. Copy:

@@ -11,47 +11,53 @@ import {
   listTeams,
   moveStudents,
   renameTeam,
+  setTeamLocked,
   setTeamSetLocked,
   setTeamSetSize,
 } from "./data";
-import type { Activity, Student, TeamSet, TeamWithMembers } from "./types";
+import {
+  MIX_BY_NONE,
+  TEAM_SIZE_DEFAULT,
+  TEAM_SIZE_MAX,
+  TEAM_SIZE_MIN,
+  teamName,
+  type MixBy,
+} from "./constants";
+import { attrTint, mixableAttrs } from "./attrs";
+import type { Student, TeamCadence, TeamSet, TeamWithMembers } from "./types";
 import { Avatar, EmptyState, ErrorBanner, weekLabel, type PillarProps } from "./ui";
+import { Icon } from "./icons";
 
-const DEFAULT_SIZE = 4;
-const UNASSIGNED = "__un__";
+/** The unassigned tray, as a drop target id. */
+const TRAY = "tray";
+type DropTarget = string | typeof TRAY | null;
 
 function msg(e: unknown): string {
   return String((e as Error)?.message ?? e);
 }
 
 function clampSize(n: number): number {
-  if (!Number.isFinite(n)) return DEFAULT_SIZE;
-  return Math.max(2, Math.min(8, Math.round(n)));
+  if (!Number.isFinite(n)) return TEAM_SIZE_DEFAULT;
+  return Math.max(TEAM_SIZE_MIN, Math.min(TEAM_SIZE_MAX, Math.round(n)));
 }
 
-/** Label for a team set: its own name, else the activity it belongs to. */
-function labelForSet(s: TeamSet, activities: Activity[]): string {
-  if (s.name) return s.name;
-  const a = activities.find((x) => x.id === s.activity_id);
-  return a ? `${weekLabel(a)} · teams` : "All-class teams";
+interface TeamsPillarProps extends PillarProps {
+  cadence: TeamCadence;
 }
 
-export function TeamsPillar(props: PillarProps) {
-  const { courseId, roster, activities, refresh } = props;
-
+export function TeamsPillar({ courseId, roster, activities, refresh, cadence }: TeamsPillarProps) {
   const [sets, setSets] = useState<TeamSet[]>([]);
   const [activeSetId, setActiveSetId] = useState<string | null>(null);
   const [teams, setTeams] = useState<TeamWithMembers[]>([]);
   const [sel, setSel] = useState<Set<string>>(() => new Set<string>());
-  const [queries, setQueries] = useState<Record<string, string>>({});
-  const [sizeInput, setSizeInput] = useState(String(DEFAULT_SIZE));
-  const [creatingSet, setCreatingSet] = useState(false);
-  const [newSetActivity, setNewSetActivity] = useState("");
+  const [dragging, setDragging] = useState<string[]>([]);
+  const [dragOver, setDragOver] = useState<DropTarget>(null);
+  const [query, setQuery] = useState("");
+  const [mixBy, setMixBy] = useState<MixBy>(MIX_BY_NONE);
   const [loadingSets, setLoadingSets] = useState(true);
   const [loadingTeams, setLoadingTeams] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [confirmDeleteSet, setConfirmDeleteSet] = useState(false);
 
   /** Last name we know the DB holds for each team, so blur only writes real edits. */
   const savedNames = useRef<Record<string, string>>({});
@@ -65,7 +71,7 @@ export function TeamsPillar(props: PillarProps) {
     setTeams(ts);
   }, []);
 
-  // ---- load team sets for this course ----
+  // ---- load the sets for this course ----
   useEffect(() => {
     let alive = true;
     setLoadingSets(true);
@@ -115,13 +121,15 @@ export function TeamsPillar(props: PillarProps) {
     () => sets.find((s) => s.id === activeSetId) ?? null,
     [sets, activeSetId],
   );
-  const activeSetKey = activeSet?.id;
-  const activeSetSize = activeSet?.team_size ?? DEFAULT_SIZE;
+  const size = activeSet?.team_size ?? TEAM_SIZE_DEFAULT;
 
-  // keep the size box in step with the working set
+  /** Mix-by options come from the roster's own extra columns. */
+  const attrs = useMemo(() => mixableAttrs(roster), [roster]);
   useEffect(() => {
-    setSizeInput(String(activeSetSize));
-  }, [activeSetKey, activeSetSize]);
+    // A roster without the current attribute (re-import, section switch) falls
+    // back to a plain shuffle rather than silently mixing by nothing.
+    if (mixBy !== MIX_BY_NONE && !attrs.includes(mixBy)) setMixBy(MIX_BY_NONE);
+  }, [attrs, mixBy]);
 
   const reload = useCallback(
     async (id: string) => {
@@ -130,7 +138,7 @@ export function TeamsPillar(props: PillarProps) {
     [roster, applyTeams],
   );
 
-  /** Run a mutation: surface failures, then re-read the teams to reconcile. */
+  /** Run a mutation: surface failures, then re-read to reconcile. */
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
     setError(null);
@@ -138,8 +146,8 @@ export function TeamsPillar(props: PillarProps) {
       await fn();
     } catch (e: unknown) {
       setError(msg(e));
-      // Re-read both the teams and the roster: the usual cause of a write
-      // failing here is that this page is out of date with the database.
+      // The usual cause of a write failing here is this page being out of date
+      // with the database, so re-read both the teams and the roster.
       try {
         if (activeSetId) await reload(activeSetId);
         await refresh();
@@ -157,24 +165,14 @@ export function TeamsPillar(props: PillarProps) {
     teams.forEach((t) => t.members.forEach((m) => ids.add(m.id)));
     return ids;
   }, [teams]);
-  const unassigned = useMemo(
-    () => roster.filter((s) => !assigned.has(s.id)),
-    [roster, assigned],
-  );
-  const underN = teams.filter((t) => t.members.length < activeSetSize).length;
-  const status =
-    unassigned.length === 0
-      ? underN === 0
-        ? `All ${roster.length} students placed`
-        : `All placed · ${underN} under target`
-      : `${unassigned.length} unassigned · ${underN} under target`;
+  const unassigned = useMemo(() => roster.filter((s) => !assigned.has(s.id)), [roster, assigned]);
 
   // ---------- selection ----------
-  const toggleSel = (studentId: string, on: boolean) => {
+  const toggleSel = (studentId: string) => {
     setSel((prev) => {
       const next = new Set(prev);
-      if (on) next.add(studentId);
-      else next.delete(studentId);
+      if (next.has(studentId)) next.delete(studentId);
+      else next.add(studentId);
       return next;
     });
   };
@@ -216,55 +214,90 @@ export function TeamsPillar(props: PillarProps) {
     });
   };
 
+  // ---------- drag and drop ----------
+  /** A drag carries the whole selection when the grabbed student is part of it. */
+  const dragPayload = (studentId: string): string[] =>
+    sel.has(studentId) ? Array.from(sel) : [studentId];
+
+  const onDragStart = (e: React.DragEvent, studentId: string) => {
+    const ids = dragPayload(studentId);
+    setDragging(ids);
+    e.dataTransfer.effectAllowed = "move";
+    // A payload is required for Firefox to start the drag at all.
+    e.dataTransfer.setData("text/plain", ids.join(","));
+  };
+
+  const onDragEnd = () => {
+    setDragging([]);
+    setDragOver(null);
+  };
+
+  const onDropOn = (target: DropTarget) => {
+    if (!dragging.length) return;
+    const ids = dragging;
+    setDragging([]);
+    setDragOver(null);
+    void move(ids, target === TRAY ? null : target);
+  };
+
+  /** Drop-target handlers, shared by the team cards and the tray. */
+  const dropProps = (target: DropTarget) => ({
+    onDragOver: (e: React.DragEvent) => {
+      if (!dragging.length) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      setDragOver(target);
+    },
+    onDragLeave: (e: React.DragEvent) => {
+      // Ignore leaves fired while crossing a child element.
+      if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+      setDragOver((prev) => (prev === target ? null : prev));
+    },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      onDropOn(target);
+    },
+  });
+
   // ---------- mutations ----------
-  const onCreateSet = async () => {
-    const activityId = newSetActivity || null;
-    const act = activities.find((a) => a.id === activityId) ?? null;
-    const name = act
-      ? `${act.title} · teams of ${DEFAULT_SIZE}`
-      : `Whole session · teams of ${DEFAULT_SIZE}`;
+  /**
+   * Create the set this board edits. Under the semester cadence there is one for
+   * the whole course; per activity, one seeded from the roster for each.
+   */
+  const onCreateSet = async (activityId: string | null) => {
     await run(async () => {
-      const created = await createTeamSet({
-        courseId,
-        activityId,
-        name,
-        teamSize: DEFAULT_SIZE,
-      });
-      if (roster.length) await autoFormTeams(created.id, roster, DEFAULT_SIZE);
+      const created = await createTeamSet({ courseId, activityId, teamSize: TEAM_SIZE_DEFAULT });
+      if (roster.length) await autoFormTeams(created.id, roster, TEAM_SIZE_DEFAULT, mixBy);
       setSets(await listTeamSets(courseId));
-      setCreatingSet(false);
-      setNewSetActivity("");
       setSel(new Set());
       setActiveSetId(created.id);
       await reload(created.id);
-      // The parent tracks whether any team set exists (setup guide), so a
-      // created/deleted set has to be reported upward.
+      // The parent tracks whether any set exists (the setup stepper).
       await refresh();
     });
   };
 
-  const commitSize = async () => {
+  const onSize = async (next: number) => {
     if (!activeSet) return;
-    const n = clampSize(Number(sizeInput));
-    setSizeInput(String(n));
-    if (n === activeSetSize) return;
+    const n = clampSize(next);
+    if (n === size) return;
     const setIdNow = activeSet.id;
     setSets((prev) => prev.map((s) => (s.id === setIdNow ? { ...s, team_size: n } : s)));
     setSel(new Set());
     await run(async () => {
       await setTeamSetSize(setIdNow, n);
-      await autoFormTeams(setIdNow, roster, n);
+      await autoFormTeams(setIdNow, roster, n, mixBy);
       await reload(setIdNow);
       setSets(await listTeamSets(courseId));
     });
   };
 
-  const onAutoForm = async () => {
+  const onReroll = async () => {
     if (!activeSet) return;
     const setIdNow = activeSet.id;
     setSel(new Set());
     await run(async () => {
-      await autoFormTeams(setIdNow, roster, activeSetSize);
+      await autoFormTeams(setIdNow, roster, size, mixBy);
       await reload(setIdNow);
     });
   };
@@ -273,7 +306,19 @@ export function TeamsPillar(props: PillarProps) {
     if (!activeSet) return;
     const setIdNow = activeSet.id;
     await run(async () => {
-      await createTeam(setIdNow, "New team", teams.length);
+      await createTeam(setIdNow, teamName(teams.length), teams.length);
+      await reload(setIdNow);
+    });
+  };
+
+  const onToggleLock = async (teamId: string) => {
+    const t = teams.find((x) => x.id === teamId);
+    if (!t || !activeSetId) return;
+    const setIdNow = activeSetId;
+    const next = !t.locked;
+    setTeams((prev) => prev.map((x) => (x.id === teamId ? { ...x, locked: next } : x)));
+    await run(async () => {
+      await setTeamLocked(teamId, next);
       await reload(setIdNow);
     });
   };
@@ -315,15 +360,12 @@ export function TeamsPillar(props: PillarProps) {
     });
   };
 
-  /** Deleting a set takes its teams — and any team scores recorded against them. */
-  const onDeleteSet = async () => {
-    if (!activeSetId) return;
-    const doomed = activeSetId;
+  /** Removing a set takes its teams — and any scores recorded against them. */
+  const onRemoveSet = async (setId: string) => {
     await run(async () => {
-      await deleteTeamSet(doomed);
-      const remaining = sets.filter((s) => s.id !== doomed);
+      await deleteTeamSet(setId);
+      const remaining = sets.filter((s) => s.id !== setId);
       setSets(remaining);
-      setConfirmDeleteSet(false);
       setSel(new Set());
       const next = remaining[0]?.id ?? null;
       setActiveSetId(next);
@@ -334,33 +376,22 @@ export function TeamsPillar(props: PillarProps) {
   };
 
   // ---------- render ----------
-  const header = (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "baseline",
-        gap: 12,
-        flexWrap: "wrap",
-        marginBottom: 4,
-      }}
-    >
-      <h1 className="t-h1">Teams</h1>
-      <span className="t-sub">
-        Team sets belong to an activity — the same session can be teams of four for one activity and
-        pairs for another. Teams are assigned by faculty — self-selection is not offered.
-      </span>
+  const header = (title: string, sub: string) => (
+    <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap" }}>
+      <h1 className="t-h1">{title}</h1>
+      <span className="t-sub">{sub}</span>
     </div>
   );
 
   if (roster.length === 0) {
     return (
       <section>
-        {header}
+        {header("Teams", "Teams are built from the class roster.")}
         <ErrorBanner error={error} />
         <div style={{ marginTop: 14 }}>
           <EmptyState
             title="No students to form teams from"
-            body="Teams are built from the class roster. Add your students on the Roster screen above, then come back here to form and publish teams."
+            body="Add your students on the roster step first, then come back here to form and publish teams."
           />
         </div>
       </section>
@@ -370,485 +401,569 @@ export function TeamsPillar(props: PillarProps) {
   if (loadingSets) {
     return (
       <section>
-        {header}
+        {header("Teams", "Loading…")}
         <ErrorBanner error={error} />
         <div style={{ color: "var(--ink2)", padding: 20 }}>Loading teams…</div>
       </section>
     );
   }
 
-  const setPicker = (
-    <label
-      className="t-fld"
-      style={{ minWidth: 240, textAlign: "left", display: "grid", gap: 4 }}
-    >
-      Team set for
-      <select
-        className="t-in"
-        value={newSetActivity}
-        onChange={(e) => setNewSetActivity(e.target.value)}
-      >
-        <option value="">Whole session (not tied to an activity)</option>
-        {activities.map((a) => (
-          <option key={a.id} value={a.id}>
-            {weekLabel(a)} · {a.title}
-          </option>
-        ))}
-      </select>
-    </label>
+  // Activities that have no teams yet — the per-activity cadence needs one each.
+  const activitiesWithoutSet = activities.filter(
+    (a) => !sets.some((s) => s.activity_id === a.id),
   );
 
   if (sets.length === 0) {
+    const semester = cadence === "semester";
     return (
       <section>
-        {header}
+        {header(
+          "Teams",
+          semester
+            ? "One set of teams for the semester — every activity uses it."
+            : "Each activity gets its own teams.",
+        )}
         <div style={{ marginTop: 14 }}>
           <ErrorBanner error={error} />
         </div>
         <EmptyState
-          title="No team set yet"
-          body={`Create the first set and we'll form teams of ${DEFAULT_SIZE} from your ${roster.length} students. Pick the activity it belongs to, or keep it all-class. Teams are assigned by faculty — self-selection is not offered.`}
+          title={semester ? "Form the semester teams" : "Form the teams for an activity"}
+          body={
+            `We'll build teams of ${TEAM_SIZE_DEFAULT} from your ${roster.length} students, ` +
+            `mixed as evenly as the class allows. Drag anyone between teams afterwards.`
+          }
           action={
-            <div style={{ display: "flex", gap: 9, alignItems: "flex-end", flexWrap: "wrap" }}>
-              {setPicker}
-              <button className="t-btn primary" onClick={onCreateSet} disabled={busy}>
-                {busy ? "Creating…" : "Create team set"}
+            semester ? (
+              <button
+                className="t-btn primary"
+                onClick={() => void onCreateSet(null)}
+                disabled={busy}
+              >
+                {busy ? "Forming…" : "Form teams"}
               </button>
-            </div>
+            ) : activities.length ? (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {activities.map((a) => (
+                  <button
+                    key={a.id}
+                    className="t-btn line"
+                    onClick={() => void onCreateSet(a.id)}
+                    disabled={busy}
+                  >
+                    Form teams for {weekLabel(a)}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <span style={{ fontSize: 12.5, color: "var(--ink2)", maxWidth: "34ch" }}>
+                Create an activity first — with this cadence, teams belong to one.
+              </span>
+            )
           }
         />
       </section>
     );
   }
 
-  const activeActivity = activeSet
-    ? (activities.find((a) => a.id === activeSet.activity_id) ?? null)
-    : null;
   const selIds = Array.from(sel);
+  const placed = roster.length - unassigned.length;
+  const trayMatches = query.trim()
+    ? unassigned.filter((s) => s.name.toLowerCase().includes(query.trim().toLowerCase()))
+    : unassigned;
+
+  /** Tab label: real names only — "team set" never appears in the UI. */
+  const tabLabel = (s: TeamSet): { label: string; note: string } => {
+    const a = activities.find((x) => x.id === s.activity_id);
+    if (a) return { label: weekLabel(a), note: "own teams" };
+    return { label: "Semester teams", note: "every activity" };
+  };
 
   return (
     <section>
-      {header}
-
-      <ErrorBanner error={error} />
-
-      {/* team set selector — sets are per activity */}
-      <div
-        style={{
-          display: "flex",
-          gap: 8,
-          flexWrap: "wrap",
-          alignItems: "center",
-          margin: "12px 0",
-        }}
-      >
-        <span className="t-kicker">Team set</span>
-        {sets.map((s) => (
-          <button
-            key={s.id}
-            className={"t-pill" + (s.id === activeSetId ? " on" : "")}
-            onClick={() => {
-              setSel(new Set());
-              setActiveSetId(s.id);
-            }}
-          >
-            {labelForSet(s, activities)}
-          </button>
-        ))}
-        <button
-          className="t-pill"
-          onClick={() => setCreatingSet((v) => !v)}
-          title="Create another team set"
-        >
-          {creatingSet ? "Cancel" : "+ New set"}
-        </button>
-        <span className="t-spacer" />
-        <span style={{ fontSize: 11.5, color: "var(--ink2)" }}>
-          {activeActivity
-            ? `Used by ${weekLabel(activeActivity)} · ${activeActivity.title}`
-            : "Whole-session set — not tied to an activity"}
-        </span>
-      </div>
-
-      {creatingSet && (
-        <div
-          className="t-card"
-          style={{
-            display: "flex",
-            gap: 9,
-            alignItems: "flex-end",
-            flexWrap: "wrap",
-            marginBottom: 14,
-          }}
-        >
-          {setPicker}
-          <button className="t-btn primary" onClick={onCreateSet} disabled={busy}>
-            {busy ? "Creating…" : `Create set · teams of ${DEFAULT_SIZE}`}
-          </button>
-          <span style={{ fontSize: 11.5, color: "var(--ink3)" }}>
-            teams are formed from the roster right away — you can adjust them after
-          </span>
-        </div>
+      {header(
+        "Teams",
+        `${roster.length} students · ` +
+          (cadence === "semester"
+            ? "one set of teams for the semester"
+            : "teams change with each activity"),
       )}
 
-      {/* toolbar */}
-      <div
-        style={{
-          border: "1px solid var(--line)",
-          background: "var(--paper2)",
-          borderRadius: 10,
-          padding: 11,
-          display: "flex",
-          gap: 10,
-          flexWrap: "wrap",
-          alignItems: "center",
-          marginBottom: 14,
-        }}
-      >
-        <label
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            fontSize: 12,
-            color: "var(--ink2)",
-          }}
-        >
-          Team size
-          <input
-            type="number"
-            min={2}
-            max={8}
-            className="t-in t-num"
-            style={{ width: 56, padding: "4px 6px" }}
-            value={sizeInput}
-            disabled={busy}
-            onChange={(e) => setSizeInput(e.target.value)}
-            onBlur={commitSize}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") e.currentTarget.blur();
-            }}
-          />
-        </label>
-        <span style={{ fontSize: 11.5, color: "var(--ink3)" }}>
-          changing the size re-forms the teams for this set
-        </span>
-        <button className="t-btn line" onClick={onAutoForm} disabled={busy}>
-          Auto-form teams
-        </button>
-        <button className="t-btn line" onClick={onAddTeam} disabled={busy}>
-          + Add team
-        </button>
-        <button
-          className={activeSet?.locked ? "t-btn green" : "t-btn primary"}
-          onClick={onPublish}
-          disabled={busy}
-        >
-          {activeSet?.locked ? "✓ Published · Locked" : "Publish teams"}
-        </button>
-        {confirmDeleteSet ? (
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              flexWrap: "wrap",
-              border: "1px solid var(--amber)",
-              background: "var(--amberBg)",
-              borderRadius: 10,
-              padding: "4px 6px 4px 11px",
-            }}
-          >
-            <span style={{ fontSize: 11.5, color: "var(--amber)" }}>
-              Delete this set — its {teams.length} team{teams.length === 1 ? "" : "s"} and any team
-              scores recorded against them go too. Students stay on the roster.
-            </span>
-            <button className="t-btn amber" onClick={onDeleteSet} disabled={busy}>
-              {busy ? "Deleting…" : "Delete set"}
-            </button>
-            <button
-              className="t-btn ghost"
-              style={{ border: "1px solid var(--line)" }}
-              onClick={() => setConfirmDeleteSet(false)}
-              disabled={busy}
-            >
-              Cancel
-            </button>
-          </span>
-        ) : (
-          <button
-            className="t-btn ghost"
-            style={{ border: "1px solid var(--line)", color: "var(--amber)" }}
-            onClick={() => setConfirmDeleteSet(true)}
-            disabled={busy}
-          >
-            Delete set
-          </button>
-        )}
-        <span className="t-spacer" />
-        <span className="t-num" style={{ fontSize: 11.5, color: "var(--ink2)" }}>
-          {status}
-        </span>
+      <div style={{ marginTop: 12 }}>
+        <ErrorBanner error={error} />
       </div>
 
-      {/* bulk move bar */}
-      {selIds.length > 0 && (
-        <div className="t-movebar">
-          <span className="t-num" style={{ fontWeight: 600 }}>
-            {selIds.length} selected
-          </span>
-          <label
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 6,
-              fontSize: 12,
-              color: "var(--ink2)",
-            }}
+      {/* File-folder tabs: one per set, labelled with the thing it belongs to. */}
+      <div className="t-foldertabs">
+        {sets.map((s) => {
+          const { label, note } = tabLabel(s);
+          const on = s.id === activeSetId;
+          return (
+            <button
+              key={s.id}
+              className={"t-foldertab" + (on ? " on" : "")}
+              onClick={() => {
+                setSel(new Set());
+                setActiveSetId(s.id);
+              }}
+            >
+              <span>{label}</span>
+              <span className="note">{note}</span>
+            </button>
+          );
+        })}
+        {cadence === "activity" &&
+          activitiesWithoutSet.map((a) => (
+            <button
+              key={a.id}
+              className="t-foldertab add"
+              title={`Form teams for ${weekLabel(a)}`}
+              onClick={() => void onCreateSet(a.id)}
+              disabled={busy}
+            >
+              + {weekLabel(a)}
+            </button>
+          ))}
+      </div>
+
+      {/* Toolbar: exactly four forming controls, then status. Per-team actions
+          live on the team card; per-student actions live on the student. */}
+      <div className="t-boardbar">
+        <div className="t-stepper" title="Team size — changing it re-forms the unlocked teams">
+          <span className="lbl">Teams of</span>
+          <button
+            className="t-sq"
+            onClick={() => void onSize(size - 1)}
+            disabled={busy || size <= TEAM_SIZE_MIN}
+            aria-label="Smaller teams"
           >
-            Move to
+            −
+          </button>
+          <span className="t-num n">{size}</span>
+          <button
+            className="t-sq"
+            onClick={() => void onSize(size + 1)}
+            disabled={busy || size >= TEAM_SIZE_MAX}
+            aria-label="Bigger teams"
+          >
+            +
+          </button>
+        </div>
+
+        <label className="t-mixby">
+          Mix by
+          <select
+            className="t-in"
+            value={mixBy}
+            onChange={(e) => setMixBy(e.target.value)}
+            disabled={busy}
+          >
+            {attrs.map((a) => (
+              <option key={a} value={a}>
+                {a.replace(/\b\w/g, (c) => c.toUpperCase())}
+              </option>
+            ))}
+            <option value={MIX_BY_NONE}>Nothing — random</option>
+          </select>
+        </label>
+
+        <button className="t-btn line" onClick={() => void onReroll()} disabled={busy}>
+          <Icon name="shuffle" size={15} /> Re-roll unlocked
+        </button>
+        <button className="t-btn line" onClick={() => void onAddTeam()} disabled={busy}>
+          <Icon name="plus" size={15} /> Add team
+        </button>
+
+        <span className="t-spacer" />
+        <span
+          className="t-num"
+          style={{
+            fontSize: 11.5,
+            color: unassigned.length ? "var(--amber)" : "var(--ink2)",
+          }}
+        >
+          {unassigned.length
+            ? `${unassigned.length} still unassigned`
+            : `All ${roster.length} students placed`}
+        </span>
+        <button
+          className={activeSet?.locked ? "t-btn green" : "t-btn primary"}
+          onClick={() => void onPublish()}
+          disabled={busy}
+        >
+          {activeSet?.locked ? "✓ Published" : "Publish teams"}
+        </button>
+      </div>
+
+      {/* Board: unassigned tray + team cards. */}
+      <div className="t-board">
+        <div
+          className={"t-tray" + (dragOver === TRAY ? " over" : "")}
+          {...dropProps(TRAY)}
+        >
+          <div className="t-trayhead">
+            <span className="t-kicker">Unassigned</span>
+            <span className="t-num" style={{ fontSize: 11, color: "var(--ink3)" }}>
+              {unassigned.length}
+            </span>
+          </div>
+          <input
+            className="t-in"
+            style={{ width: "100%", fontSize: 12, padding: "5px 8px" }}
+            value={query}
+            placeholder="Search…"
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <div className="t-traydrop">
+            {trayMatches.length ? (
+              trayMatches.map((s) => (
+                <StudentRow
+                  key={s.id}
+                  student={s}
+                  mixBy={mixBy}
+                  selected={sel.has(s.id)}
+                  dragging={dragging.includes(s.id)}
+                  onToggle={() => toggleSel(s.id)}
+                  onDragStart={(e) => onDragStart(e, s.id)}
+                  onDragEnd={onDragEnd}
+                />
+              ))
+            ) : (
+              <div className="t-trayempty">
+                {unassigned.length
+                  ? "No match."
+                  : "Everyone is placed. Drag a student here to pull them out of a team."}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="t-teamgrid">
+          {loadingTeams && teams.length === 0 ? (
+            <div style={{ color: "var(--ink2)", padding: "10px 2px" }}>Loading teams…</div>
+          ) : teams.length === 0 ? (
+            <div className="t-teamsempty">
+              <div style={{ fontFamily: "var(--serif)", fontSize: 16, fontWeight: 700 }}>
+                No teams here yet
+              </div>
+              <div style={{ fontSize: 12.5, color: "var(--ink2)", marginTop: 4 }}>
+                Re-roll to build teams of {size} from the roster, or add an empty team and place
+                students yourself.
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 11, flexWrap: "wrap" }}>
+                <button className="t-btn primary" onClick={() => void onReroll()} disabled={busy}>
+                  Form teams of {size}
+                </button>
+                <button className="t-btn line" onClick={() => void onAddTeam()} disabled={busy}>
+                  Add team
+                </button>
+              </div>
+            </div>
+          ) : (
+            teams.map((t) => (
+              <TeamCard
+                key={t.id}
+                team={t}
+                size={size}
+                mixBy={mixBy}
+                sel={sel}
+                dragging={dragging}
+                over={dragOver === t.id}
+                busy={busy}
+                dropProps={dropProps(t.id)}
+                onToggleSel={toggleSel}
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
+                onNameChange={onTeamNameChange}
+                onNameCommit={commitTeamName}
+                onToggleLock={onToggleLock}
+                onDelete={onDeleteTeam}
+              />
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Selection bar: idle hint, or navy with a bulk move. */}
+      <div className={"t-selbar" + (selIds.length ? " on" : "")}>
+        {selIds.length ? (
+          <>
+            <span className="t-num" style={{ fontWeight: 600 }}>
+              {selIds.length} selected
+            </span>
+            <span>· drag them together, or</span>
             <select
               className="t-in"
-              style={{ padding: "5px 8px" }}
+              style={{ padding: "4px 8px", fontSize: 12 }}
               value=""
               disabled={busy}
               onChange={(e) => {
                 const v = e.target.value;
                 if (!v) return;
-                void move(selIds, v === UNASSIGNED ? null : v);
+                void move(selIds, v === TRAY ? null : v);
               }}
             >
-              <option value="">Choose…</option>
+              <option value="">Move to…</option>
               {teams.map((t) => (
                 <option key={t.id} value={t.id}>
                   {t.name}
                 </option>
               ))}
-              <option value={UNASSIGNED}>Unassigned</option>
+              <option value={TRAY}>Unassigned</option>
             </select>
-          </label>
-          <button
-            className="t-btn ghost"
-            style={{ border: "1px solid var(--line)" }}
-            onClick={() => setSel(new Set())}
-          >
-            Clear
-          </button>
-        </div>
-      )}
-
-      {/* team cards */}
-      {loadingTeams && teams.length === 0 ? (
-        <div style={{ color: "var(--ink2)", padding: "10px 2px" }}>Loading teams…</div>
-      ) : teams.length === 0 ? (
-        <div
-          style={{
-            border: "1px dashed var(--line)",
-            background: "var(--paper2)",
-            borderRadius: 10,
-            padding: 18,
-          }}
-        >
-          <div style={{ fontFamily: "var(--serif)", fontSize: 16, fontWeight: 700 }}>
-            No teams in this set yet
-          </div>
-          <div style={{ fontSize: 12.5, color: "var(--ink2)", marginTop: 4 }}>
-            Auto-form teams of {activeSetSize} from the {roster.length} students on the roster, or
-            add an empty team and place students yourself.
-          </div>
-          <div style={{ display: "flex", gap: 8, marginTop: 11, flexWrap: "wrap" }}>
-            <button className="t-btn primary" onClick={onAutoForm} disabled={busy}>
-              Auto-form teams
+            <button className="t-btn ghost sm" onClick={() => setSel(new Set())}>
+              Clear
             </button>
-            <button className="t-btn line" onClick={onAddTeam} disabled={busy}>
-              + Add team
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="t-grid t-cards2">
-          {teams.map((t) => {
-            const under = t.members.length < activeSetSize;
-            const q = queries[t.id] ?? "";
-            const matches = q.trim()
-              ? unassigned
-                  .filter((s) => s.name.toLowerCase().includes(q.trim().toLowerCase()))
-                  .slice(0, 4)
-              : [];
-            const warn = under
-              ? t.members.length === 0
-                ? "No students yet"
-                : `Fewer than ${activeSetSize} members`
-              : "";
-            return (
-              <div className={"t-teamcard" + (under ? " under" : "")} key={t.id}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <input
-                    className="t-in"
-                    style={{
-                      flex: 1,
-                      minWidth: 0,
-                      borderColor: "transparent",
-                      background: "transparent",
-                      fontSize: 13.5,
-                      fontWeight: 600,
-                      padding: "2px 4px",
-                    }}
-                    value={t.name}
-                    aria-label="Team name"
-                    onChange={(e) => onTeamNameChange(t.id, e.target.value)}
-                    onBlur={() => void commitTeamName(t.id)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") e.currentTarget.blur();
-                    }}
-                  />
-                  <span className={"t-chip" + (under ? " amber" : "")}>
-                    {t.members.length} / {activeSetSize}
-                  </span>
-                  <button
-                    className="t-x"
-                    title="Delete team"
-                    onClick={() => void onDeleteTeam(t.id)}
-                  >
-                    ✕
-                  </button>
-                </div>
-
-                <div
-                  style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 9 }}
-                >
-                  {t.members.map((m) => (
-                    <div
-                      className={"t-memberrow" + (sel.has(m.id) ? " sel" : "")}
-                      key={m.id}
-                    >
-                      <input
-                        type="checkbox"
-                        className="t-selbox"
-                        checked={sel.has(m.id)}
-                        aria-label={`Select ${m.name}`}
-                        onChange={(e) => toggleSel(m.id, e.target.checked)}
-                      />
-                      <Avatar name={m.name} tint={m.avatar_tint} size={20} />
-                      <span
-                        style={{
-                          fontSize: 12.5,
-                          flex: 1,
-                          minWidth: 0,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {m.name}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-
-                {warn && (
-                  <div className="t-warn">
-                    <span>⚑</span>
-                    <span>{warn}</span>
-                  </div>
-                )}
-
-                <div style={{ marginTop: 9 }}>
-                  <input
-                    className="t-in"
-                    style={{ width: "100%", padding: "4px 6px", fontSize: 12 }}
-                    value={q}
-                    placeholder="Add student…"
-                    onChange={(e) =>
-                      setQueries((prev) => ({ ...prev, [t.id]: e.target.value }))
-                    }
-                  />
-                </div>
-                <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 6 }}>
-                  {matches.map((s) => (
-                    <button
-                      key={s.id}
-                      className="t-btn ghost"
-                      style={{
-                        border: "1px dashed var(--line)",
-                        fontSize: 11.5,
-                        padding: "2px 7px",
-                        borderRadius: 12,
-                      }}
-                      disabled={busy}
-                      onClick={() => {
-                        setQueries((prev) => ({ ...prev, [t.id]: "" }));
-                        void move([s.id], t.id);
-                      }}
-                    >
-                      + {s.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* unassigned pool */}
-      <div
-        style={{
-          border: "1px solid var(--line)",
-          background: "var(--paper2)",
-          borderRadius: 10,
-          padding: 11,
-          marginTop: 16,
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            gap: 8,
-            alignItems: "baseline",
-            flexWrap: "wrap",
-            marginBottom: 8,
-          }}
-        >
-          <span className="t-kicker">Unassigned roster · select, then move to a team</span>
-          <span className="t-num" style={{ fontSize: 11.5, color: "var(--ink2)" }}>
-            {unassigned.length} of {roster.length}
+          </>
+        ) : (
+          <span>
+            Drag a student between teams — or click several and move them together.
+            {placed < roster.length ? ` ${placed} of ${roster.length} placed.` : ""}
           </span>
-        </div>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-          {unassigned.length ? (
-            unassigned.map((s) => (
-              <label
-                key={s.id}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                  border: `1px solid ${sel.has(s.id) ? "var(--blue)" : "var(--line)"}`,
-                  borderRadius: 14,
-                  padding: "2px 8px 2px 6px",
-                  background: "var(--paper)",
-                  cursor: "pointer",
-                }}
-              >
-                <input
-                  type="checkbox"
-                  className="t-selbox"
-                  checked={sel.has(s.id)}
-                  onChange={(e) => toggleSel(s.id, e.target.checked)}
-                />
-                <Avatar name={s.name} tint={s.avatar_tint} size={18} />
-                <span style={{ fontSize: 12 }}>{s.name}</span>
-              </label>
-            ))
-          ) : (
-            <span style={{ fontSize: 12, color: "var(--ink3)" }}>Every student is placed.</span>
-          )}
-        </div>
-        <div style={{ marginTop: 9, fontSize: 11.5, color: "var(--ink3)" }}>
-          Students are added or removed on the Roster screen — this pool follows the class list.
-        </div>
+        )}
       </div>
+
+      {/* Removing a set is rare and destructive, so it sits below the board. */}
+      {activeSet && (
+        <RemoveSetRow
+          label={tabLabel(activeSet).label}
+          teamCount={teams.length}
+          busy={busy}
+          onRemove={() => void onRemoveSet(activeSet.id)}
+        />
+      )}
     </section>
+  );
+}
+
+/** One draggable student, in a team card or the tray. */
+function StudentRow({
+  student,
+  mixBy,
+  selected,
+  dragging,
+  onToggle,
+  onDragStart,
+  onDragEnd,
+}: {
+  student: Student;
+  mixBy: MixBy;
+  selected: boolean;
+  dragging: boolean;
+  onToggle: () => void;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
+}) {
+  const tint = attrTint(student, mixBy);
+  return (
+    <div
+      className={"t-srow" + (selected ? " sel" : "") + (dragging ? " drag" : "")}
+      draggable
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onClick={onToggle}
+      role="button"
+      tabIndex={0}
+      aria-pressed={selected}
+      title={student.attrs?.[mixBy] ? `${student.name} · ${student.attrs[mixBy]}` : student.name}
+      onKeyDown={(e) => {
+        if (e.key === " " || e.key === "Enter") {
+          e.preventDefault();
+          onToggle();
+        }
+      }}
+    >
+      <Avatar name={student.name} tint={student.avatar_tint} size={20} />
+      <span className="nm">{student.name}</span>
+      {tint && <span className="dot" style={{ background: tint }} />}
+    </div>
+  );
+}
+
+/** One team card: header, mix bar, members, drop target. */
+function TeamCard({
+  team,
+  size,
+  mixBy,
+  sel,
+  dragging,
+  over,
+  busy,
+  dropProps,
+  onToggleSel,
+  onDragStart,
+  onDragEnd,
+  onNameChange,
+  onNameCommit,
+  onToggleLock,
+  onDelete,
+}: {
+  team: TeamWithMembers;
+  size: number;
+  mixBy: MixBy;
+  sel: Set<string>;
+  dragging: string[];
+  over: boolean;
+  busy: boolean;
+  dropProps: {
+    onDragOver: (e: React.DragEvent) => void;
+    onDragLeave: (e: React.DragEvent) => void;
+    onDrop: (e: React.DragEvent) => void;
+  };
+  onToggleSel: (id: string) => void;
+  onDragStart: (e: React.DragEvent, id: string) => void;
+  onDragEnd: () => void;
+  onNameChange: (id: string, v: string) => void;
+  onNameCommit: (id: string) => Promise<void>;
+  onToggleLock: (id: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+}) {
+  const overCapacity = team.members.length > size;
+
+  /** Mix bar: one segment per attribute value present in the team. */
+  const buckets = useMemo(() => {
+    if (mixBy === MIX_BY_NONE) return [];
+    const counts = new Map<string, number>();
+    team.members.forEach((m) => {
+      const v = (m.attrs?.[mixBy] ?? "").trim();
+      if (v) counts.set(v, (counts.get(v) ?? 0) + 1);
+    });
+    return [...counts.entries()].map(([value, n]) => ({ value, n }));
+  }, [team.members, mixBy]);
+
+  return (
+    <div
+      className={
+        "t-tcard" + (team.locked ? " locked" : "") + (over ? " over" : "")
+      }
+      {...dropProps}
+    >
+      <div className="t-tchead">
+        <input
+          className="t-tcname"
+          value={team.name}
+          aria-label="Team name"
+          onChange={(e) => onNameChange(team.id, e.target.value)}
+          onBlur={() => void onNameCommit(team.id)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+          }}
+        />
+        <span className={"t-count" + (overCapacity ? " over" : "")}>
+          {team.members.length}/{size}
+        </span>
+        <button
+          className={"t-lock" + (team.locked ? " on" : "")}
+          title={team.locked ? "Locked — a re-roll leaves this team alone" : "Lock this team"}
+          aria-pressed={team.locked}
+          onClick={() => void onToggleLock(team.id)}
+          disabled={busy}
+        >
+          <Icon name={team.locked ? "lock" : "lockopen"} size={14} />
+        </button>
+        <button
+          className="t-x"
+          title="Delete team — its members go back to unassigned"
+          onClick={() => void onDelete(team.id)}
+          disabled={busy}
+        >
+          ✕
+        </button>
+      </div>
+
+      {buckets.length > 1 && (
+        <div className="t-mixbar" title={buckets.map((b) => `${b.value} ${b.n}`).join(" · ")}>
+          {buckets.map((b) => (
+            <span
+              key={b.value}
+              style={{
+                flex: b.n,
+                background: attrTint({ attrs: { [mixBy]: b.value } }, mixBy) ?? undefined,
+              }}
+            />
+          ))}
+        </div>
+      )}
+
+      <div className="t-tcmembers">
+        {team.members.length ? (
+          team.members.map((m) => (
+            <StudentRow
+              key={m.id}
+              student={m}
+              mixBy={mixBy}
+              selected={sel.has(m.id)}
+              dragging={dragging.includes(m.id)}
+              onToggle={() => onToggleSel(m.id)}
+              onDragStart={(e) => onDragStart(e, m.id)}
+              onDragEnd={onDragEnd}
+            />
+          ))
+        ) : (
+          <div className="t-tcempty">Drop students here</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Two-step remove, because a set takes its teams and their scores with it. */
+function RemoveSetRow({
+  label,
+  teamCount,
+  busy,
+  onRemove,
+}: {
+  label: string;
+  teamCount: number;
+  busy: boolean;
+  onRemove: () => void;
+}) {
+  const [confirming, setConfirming] = useState(false);
+
+  if (!confirming) {
+    return (
+      <div style={{ marginTop: 14, display: "flex", justifyContent: "flex-end" }}>
+        <button
+          className="t-btn ghost sm"
+          style={{ color: "var(--ink3)" }}
+          onClick={() => setConfirming(true)}
+        >
+          Remove “{label}”
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      style={{
+        marginTop: 14,
+        display: "flex",
+        gap: 10,
+        alignItems: "center",
+        flexWrap: "wrap",
+        justifyContent: "flex-end",
+        border: "1px solid var(--amber)",
+        background: "var(--amberBg)",
+        borderRadius: 10,
+        padding: "8px 11px",
+      }}
+    >
+      <span style={{ fontSize: 11.5, color: "var(--amber)", flex: 1, minWidth: 240 }}>
+        Remove “{label}” — its {teamCount} team{teamCount === 1 ? "" : "s"} and any scores recorded
+        against them go too. Students stay on the roster.
+      </span>
+      <button className="t-btn amber" onClick={onRemove} disabled={busy}>
+        {busy ? "Removing…" : "Remove"}
+      </button>
+      <button
+        className="t-btn ghost"
+        style={{ border: "1px solid var(--line)" }}
+        onClick={() => setConfirming(false)}
+        disabled={busy}
+      >
+        Cancel
+      </button>
+    </div>
   );
 }

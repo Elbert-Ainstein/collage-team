@@ -11,8 +11,10 @@ import {
   listCheckIns,
   listTeamSets,
   removeStudent,
+  setCourseCadence,
 } from "./data";
-import type { Activity, Course, Student } from "./types";
+import { CADENCE_OPTIONS } from "./constants";
+import type { Activity, Course, Student, TeamCadence } from "./types";
 import { isSupportedRosterFile, parseRoster, type ParsedStudent } from "./rosterImport";
 import { Avatar, ErrorBanner } from "./ui";
 import { TeamsPillar } from "./TeamsPillar";
@@ -127,6 +129,23 @@ export function ClassCheckins() {
     setRosterStep("teams");
   };
 
+  /**
+   * "How often do teams change?" — stored on the course, and the only place the
+   * shared-vs-per-activity distinction is ever put to the user.
+   */
+  const setCadence = async (cadence: TeamCadence) => {
+    if (!courseId) return;
+    setCourses((prev) =>
+      prev.map((c) => (c.id === courseId ? { ...c, team_cadence: cadence } : c)),
+    );
+    try {
+      await setCourseCadence(courseId, cadence);
+    } catch (e) {
+      fail(e);
+      await loadCourses().catch(fail);
+    }
+  };
+
   /** Jump to a step, including which panel of the Roster & Teams sequence. */
   const goTo = ({ tab: t, sub }: StepTarget) => {
     setTab(t);
@@ -218,6 +237,12 @@ export function ClassCheckins() {
               onError={fail}
             />
             {roster.length > 0 && (
+              <CadencePanel
+                cadence={course.team_cadence}
+                onPick={(c) => void setCadence(c)}
+              />
+            )}
+            {roster.length > 0 && (
               <div
                 className="t-card"
                 style={{
@@ -254,7 +279,7 @@ export function ClassCheckins() {
             >
               ← Back to roster
             </button>
-            <TeamsPillar {...pillarProps} />
+            <TeamsPillar {...pillarProps} cadence={course.team_cadence} />
           </>
         ))}
       {tab === "activities" && <ActivitiesPillar {...pillarProps} />}
@@ -420,6 +445,47 @@ function SetupGuide({
           </Fragment>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * The cadence question. Asked once, here, in plain words — so "team set" never
+ * has to appear anywhere in the UI. Changing it later re-labels the team tabs;
+ * existing teams are left alone.
+ */
+function CadencePanel({
+  cadence,
+  onPick,
+}: {
+  cadence: TeamCadence;
+  onPick: (c: TeamCadence) => void;
+}) {
+  return (
+    <div className="t-card" style={{ marginTop: 20, padding: "16px 18px" }}>
+      <div className="t-kicker" style={{ marginBottom: 10 }}>
+        2 · How often do teams change?
+      </div>
+      <div className="t-cadence">
+        {CADENCE_OPTIONS.map((o) => (
+          <button
+            key={o.id}
+            className={"t-radiocard" + (o.id === cadence ? " on" : "")}
+            aria-pressed={o.id === cadence}
+            onClick={() => onPick(o.id)}
+          >
+            <span className="ind">
+              {o.id === cadence && <Icon name="check" size={11} />}
+            </span>
+            <span>
+              <span className="ttl">{o.label}</span>
+              <span className="bdy" style={{ display: "block" }}>
+                {o.body}
+              </span>
+            </span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

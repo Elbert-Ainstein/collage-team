@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { mixableAttrs } from "./attrs";
+import type { Student } from "./types";
 import { isSupportedRosterFile, parseRoster } from "./rosterImport";
 
 describe("parseRoster", () => {
@@ -66,6 +68,83 @@ describe("parseRoster", () => {
     const { students, warnings } = parseRoster("   \n\n");
     expect(students).toHaveLength(0);
     expect(warnings.join(" ")).toMatch(/empty/i);
+  });
+});
+
+describe("extra columns become mixable attributes", () => {
+  const csv = [
+    "Name,Email,Major,Skill tag",
+    "Ada Lovelace,ada@x.edu,CS,Data",
+    "Rosalind Franklin,ros@x.edu,Chemistry,Lab",
+    "Barbara McClintock,barb@x.edu,Biology,Lab",
+  ].join("\n");
+
+  it("keeps the extra columns, keyed by lower-cased header", () => {
+    const { students, attrKeys } = parseRoster(csv);
+    expect(attrKeys).toEqual(["major", "skill tag"]);
+    expect(students[0].attrs).toEqual({ major: "CS", "skill tag": "Data" });
+  });
+
+  it("says which attributes it kept", () => {
+    expect(parseRoster(csv).warnings.join(" ")).toMatch(/mixable attributes: major, skill tag/i);
+  });
+
+  it("does not treat the name or email columns as attributes", () => {
+    const { attrKeys } = parseRoster("Name,Email\nAda,ada@x.edu");
+    expect(attrKeys).toEqual([]);
+  });
+
+  it("reports no attributes when a file has none", () => {
+    const { students, attrKeys } = parseRoster("Name\nAda Lovelace\nRosalind Franklin");
+    expect(attrKeys).toEqual([]);
+    expect(students[0].attrs).toBeUndefined();
+  });
+
+  it("ignores blank cells rather than storing an empty attribute", () => {
+    const { students } = parseRoster("Name,Major\nAda,\nRosalind,Chemistry");
+    expect(students[0].attrs).toBeUndefined();
+    expect(students[1].attrs).toEqual({ major: "Chemistry" });
+  });
+
+  it("skips attributes with no header — there is nothing to call them", () => {
+    // No header row at all, so the extra column cannot be named.
+    const { attrKeys } = parseRoster("Ada Lovelace,CS\nRosalind Franklin,Chemistry");
+    expect(attrKeys).toEqual([]);
+  });
+});
+
+describe("mixableAttrs", () => {
+  const student = (name: string, attrs: Record<string, string>): Student => ({
+    id: name,
+    course_id: "c1",
+    name,
+    email: null,
+    avatar_tint: null,
+    attrs,
+    position: 0,
+    created_at: "2026-01-01T00:00:00Z",
+  });
+
+  it("offers an attribute that actually varies", () => {
+    expect(
+      mixableAttrs([student("A", { major: "CS" }), student("B", { major: "Biology" })]),
+    ).toEqual(["major"]);
+  });
+
+  it("drops an attribute everyone shares — it cannot mix anything", () => {
+    expect(
+      mixableAttrs([student("A", { major: "CS" }), student("B", { major: "CS" })]),
+    ).toEqual([]);
+  });
+
+  it("drops an attribute only one student carries", () => {
+    expect(mixableAttrs([student("A", { major: "CS" }), student("B", {})])).toEqual([]);
+  });
+
+  it("ignores identifying columns", () => {
+    expect(
+      mixableAttrs([student("A", { email: "a@x.edu" }), student("B", { email: "b@x.edu" })]),
+    ).toEqual([]);
   });
 });
 

@@ -1,5 +1,8 @@
 // Supabase data access for Class Check-ins (v1, no auth).
 import { requireSupabase } from "@/lib/supabaseClient";
+import { MIX_BY_NONE, teamName, type MixBy } from "./constants";
+import { formTeams } from "./teamForming";
+import type { ParsedStudent } from "./rosterImport";
 import type {
   Activity,
   CheckIn,
@@ -10,6 +13,7 @@ import type {
   ResultStatus,
   Student,
   Team,
+  TeamCadence,
   TeamSet,
   TeamWithMembers,
 } from "./types";
@@ -57,8 +61,15 @@ function unwrap<T>(res: { data: T | null; error: { message: string } | null }): 
 }
 
 // ---------------- courses ----------------
+/**
+ * Migration 0003 is applied by hand in the Supabase SQL editor, so a course row
+ * read from a database that has not had it yet carries no cadence. Default it
+ * here rather than let every screen guess — semester is the common case, and
+ * it is the one that keeps a single shared set of teams.
+ */
 export async function listCourses(): Promise<Course[]> {
-  return unwrap(await db().from("courses").select("*").order("created_at")) ?? [];
+  const rows = unwrap(await db().from("courses").select("*").order("created_at")) ?? [];
+  return rows.map((c) => ({ ...c, team_cadence: c.team_cadence ?? "semester" }));
 }
 export async function createCourse(input: {
   name: string; code?: string; term?: string;
@@ -68,6 +79,11 @@ export async function createCourse(input: {
       .insert({ name: input.name, code: input.code || null, term: input.term || null })
       .select().single(),
   );
+}
+/** The answer to "how often do teams change?", stored on the course. */
+export async function setCourseCadence(id: string, cadence: TeamCadence): Promise<void> {
+  const { error } = await db().from("courses").update({ team_cadence: cadence }).eq("id", id);
+  if (error) throw dbError(error);
 }
 export async function deleteCourse(id: string): Promise<void> {
   const { error } = await db().from("courses").delete().eq("id", id);
@@ -127,25 +143,32 @@ export async function ensureSessions(term = "Fall"): Promise<Course[]> {
 
 // ---------------- students ----------------
 export async function listStudents(courseId: string): Promise<Student[]> {
-  return unwrap(
+  const rows = unwrap(
     await db().from("students").select("*").eq("course_id", courseId)
       .order("position").order("created_at"),
   ) ?? [];
+  // `attrs` is absent until migration 0003 is applied (see listCourses).
+  return rows.map((s) => ({ ...s, attrs: s.attrs ?? {} }));
 }
-/** Accepts bare names (pasted) or {name, email} entries (imported from a file). */
+/**
+ * Accepts bare names (pasted) or {name, email, attrs} entries (imported from a
+ * file). `attrs` carries the file's extra columns, which become the attributes
+ * teams can be mixed by.
+ */
 export async function addStudents(
   courseId: string,
-  entries: (string | { name: string; email?: string })[],
+  entries: (string | ParsedStudent)[],
   startPos: number,
 ): Promise<Student[]> {
   const rows = entries.map((e, i) => {
-    const { name, email } = typeof e === "string" ? { name: e, email: undefined } : e;
+    const parsed: ParsedStudent = typeof e === "string" ? { name: e } : e;
     return {
       course_id: courseId,
-      name,
-      email: email ?? null,
+      name: parsed.name,
+      email: parsed.email ?? null,
+      attrs: parsed.attrs ?? {},
       position: startPos + i,
-      avatar_tint: tintFor(name),
+      avatar_tint: tintFor(parsed.name),
     };
   });
   return unwrap(await db().from("students").insert(rows).select()) ?? [];
@@ -237,6 +260,8 @@ export async function listTeams(teamSetId: string, roster: Student[]): Promise<T
   const byId = new Map(roster.map((s) => [s.id, s]));
   return teams.map((t) => ({
     ...t,
+    // `locked` is absent until migration 0003 is applied (see listCourses).
+    locked: t.locked ?? false,
     members: links
       .filter((l) => l.team_id === t.id)
       .map((l) => byId.get(l.student_id))
@@ -280,20 +305,35 @@ export async function moveStudents(
     if (error) throw dbError(error);
   }
 }
-/** Replace a set's teams with evenly-sized ones built from the roster. */
+export async function setTeamLocked(id: string, locked: boolean): Promise<void> {
+  const { error } = await db().from("teams").update({ locked }).eq("id", id);
+  if (error) throw dbError(error);
+}
+
+/**
+ * Re-form the unlocked teams of a set, mixed by `mixBy`.
+ *
+ * Locked teams and their members are preserved and excluded from the pool —
+ * that is the whole point of the lock. Everyone else is re-dealt into teams of
+ * `size`.
+ */
 export async function autoFormTeams(
-  teamSetId: string, roster: Student[], size: number,
+  teamSetId: string, roster: Student[], size: number, mixBy: MixBy = MIX_BY_NONE,
 ): Promise<void> {
-  await deleteTeamsOfSet(teamSetId);
-  const NAMES = [
-    "Team Helix", "Team Ribosome", "Team Vesicle", "Team Mitosis", "Team Cytosol",
-    "Team Axon", "Team Lysosome", "Team Codon", "Team Flagellum", "Team Nucleus",
-    "Team Golgi", "Team Plasmid",
-  ];
-  const chunks: Student[][] = [];
-  for (let i = 0; i < roster.length; i += size) chunks.push(roster.slice(i, i + size));
+  const existing = await listTeams(teamSetId, roster);
+  const locked = existing.filter((t) => t.locked);
+  const held = new Set(locked.flatMap((t) => t.members.map((m) => m.id)));
+
+  // Drop only the unlocked teams; the locked ones keep their ids so any results
+  // recorded against them survive a re-roll.
+  for (const t of existing) {
+    if (!t.locked) await deleteTeam(t.id);
+  }
+
+  const pool = roster.filter((s) => !held.has(s.id));
+  const chunks = formTeams(pool, size, mixBy);
   for (let i = 0; i < chunks.length; i++) {
-    const team = await createTeam(teamSetId, NAMES[i] ?? `Team ${i + 1}`, i);
+    const team = await createTeam(teamSetId, teamName(locked.length + i), locked.length + i);
     await moveStudents(chunks[i].map((s) => s.id), team.id, []);
   }
 }

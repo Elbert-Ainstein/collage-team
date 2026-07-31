@@ -5,15 +5,22 @@
 // parsed — .xlsx is a zip of XML and needs a library; the UI tells the user to
 // export as CSV instead.
 
+import { NON_MIXABLE_ATTRS } from "./constants";
+import type { StudentAttrs } from "./types";
+
 export interface ParsedStudent {
   name: string;
   email?: string;
+  /** Extra columns, keyed by header — these become mixable attributes. */
+  attrs?: StudentAttrs;
 }
 
 export interface ParseResult {
   students: ParsedStudent[];
   /** Non-fatal notes to show the user (skipped rows, detected columns, …). */
   warnings: string[];
+  /** Extra column headers found, in file order — the mix-by candidates. */
+  attrKeys: string[];
 }
 
 const EMAIL_RE = /^[^@\s,;]+@[^@\s,;]+\.[^@\s,;]+$/;
@@ -85,6 +92,21 @@ function findColumns(header: string[]) {
   };
 }
 
+/**
+ * Columns that are not the name/email are kept as attributes, so "major" or
+ * "skill tag" can be mixed by. Only named columns qualify — without a header
+ * there is nothing to call the attribute.
+ */
+function findAttrColumns(
+  header: string[],
+  cols: { name: number; first: number; last: number; email: number },
+): { index: number; key: string }[] {
+  const used = new Set([cols.name, cols.first, cols.last, cols.email]);
+  return header
+    .map((h, index) => ({ index, key: h.trim().toLowerCase() }))
+    .filter((c) => !used.has(c.index) && c.key.length > 0 && !NON_MIXABLE_ATTRS.has(c.key));
+}
+
 export function parseRoster(text: string): ParseResult {
   const warnings: string[] = [];
   const students: ParsedStudent[] = [];
@@ -94,21 +116,31 @@ export function parseRoster(text: string): ParseResult {
     .split(/\r\n|\r|\n/)
     .filter((l) => l.trim().length > 0);
 
-  if (!lines.length) return { students, warnings: ["The file was empty."] };
+  if (!lines.length) {
+    return { students, warnings: ["The file was empty."], attrKeys: [] };
+  }
 
   const delim = detectDelimiter(lines.slice(0, 10).join("\n"));
   const rows = lines.map((l) => splitLine(l, delim));
 
   let cols = { name: -1, first: -1, last: -1, email: -1 };
+  let attrCols: { index: number; key: string }[] = [];
   let start = 0;
   if (looksLikeHeader(rows[0])) {
     cols = findColumns(rows[0]);
+    attrCols = findAttrColumns(rows[0], cols);
     start = 1;
     const named: string[] = [];
     if (cols.name >= 0) named.push("name");
     if (cols.first >= 0 && cols.last >= 0) named.push("first + last");
     if (cols.email >= 0) named.push("email");
     if (named.length) warnings.push(`Detected column${named.length > 1 ? "s" : ""}: ${named.join(", ")}.`);
+    if (attrCols.length) {
+      warnings.push(
+        `Kept as mixable attribute${attrCols.length > 1 ? "s" : ""}: ` +
+          `${attrCols.map((c) => c.key).join(", ")}.`,
+      );
+    }
   }
 
   let skipped = 0;
@@ -137,7 +169,18 @@ export function parseRoster(text: string): ParseResult {
       skipped++;
       continue;
     }
-    students.push(email ? { name, email } : { name });
+
+    const attrs: StudentAttrs = {};
+    for (const c of attrCols) {
+      const v = (cells[c.index] ?? "").trim();
+      if (v) attrs[c.key] = v;
+    }
+
+    students.push({
+      name,
+      ...(email ? { email } : {}),
+      ...(Object.keys(attrs).length ? { attrs } : {}),
+    });
   }
 
   if (skipped) warnings.push(`Skipped ${skipped} row${skipped === 1 ? "" : "s"} with no name.`);
@@ -153,7 +196,12 @@ export function parseRoster(text: string): ParseResult {
   const dupes = students.length - unique.length;
   if (dupes) warnings.push(`Removed ${dupes} duplicate name${dupes === 1 ? "" : "s"} from the file.`);
 
-  return { students: unique, warnings };
+  // Only report attributes that actually carried a value for someone.
+  const attrKeys = attrCols
+    .map((c) => c.key)
+    .filter((key) => unique.some((s) => s.attrs?.[key]));
+
+  return { students: unique, warnings, attrKeys };
 }
 
 /** True for files we can actually read as text. */
