@@ -2,6 +2,8 @@
 
 export interface Course {
   id: string;
+  /** The account that owns this session; enforced by RLS. */
+  owner_id: string | null;
   name: string;
   code: string | null;
   term: string | null;

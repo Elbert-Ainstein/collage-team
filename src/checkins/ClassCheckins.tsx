@@ -36,7 +36,13 @@ const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "checkins", label: "Check-ins", icon: "table" },
 ];
 
-export function ClassCheckins() {
+export function ClassCheckins({
+  account,
+  onSignOut,
+}: {
+  account?: string;
+  onSignOut?: () => Promise<void>;
+} = {}) {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
@@ -312,6 +318,40 @@ export function ClassCheckins() {
           </div>
           <div className="t-spacer" />
           {themeBtn}
+          {account && (
+            <div
+              style={{
+                borderTop: "1px solid var(--line)",
+                marginTop: 8,
+                paddingTop: 10,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <span
+                style={{
+                  flex: 1,
+                  minWidth: 0,
+                  fontSize: 11.5,
+                  color: "var(--ink2)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+                title={account}
+              >
+                {account}
+              </span>
+              <button
+                className="t-btn ghost"
+                style={{ border: "1px solid var(--line)", fontSize: 11, padding: "2px 8px" }}
+                onClick={() => void onSignOut?.()}
+              >
+                Sign out
+              </button>
+            </div>
+          )}
         </aside>
       )}
       <main className="t-main">

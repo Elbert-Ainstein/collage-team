@@ -48,6 +48,9 @@ export function dbError(error: { message: string }): Error {
   if (/duplicate key|23505/i.test(m)) {
     return new Error("That already exists.");
   }
+  if (/row-level security|permission denied|JWT/i.test(m)) {
+    return new Error("You don't have access to that — try signing out and back in.");
+  }
   return new Error(m);
 }
 
@@ -107,15 +110,22 @@ let sessionsInFlight: Promise<Course[]> | null = null;
 export async function ensureSessions(term = "Fall"): Promise<Course[]> {
   if (sessionsInFlight) return sessionsInFlight;
   sessionsInFlight = (async () => {
+    const sb = db();
+    const { data: auth } = await sb.auth.getUser();
+    const ownerId = auth.user?.id;
+    if (!ownerId) throw new Error("Not signed in.");
+
+    // RLS already limits reads to this account; owner_id is set explicitly so
+    // the row passes the WITH CHECK on insert.
     const existing = await listCourses();
     const missing = SESSION_CODES.filter((code) => !existing.some((c) => c.code === code));
     if (!missing.length) return pickSessions(existing);
 
-    const { error } = await db()
+    const { error } = await sb
       .from("courses")
-      .insert(missing.map((code) => ({ name: COURSE_NAME, code, term })));
+      .insert(missing.map((code) => ({ name: COURSE_NAME, code, term, owner_id: ownerId })));
     // 23505 = unique_violation: another caller won the race, which is fine.
-    if (error && !/duplicate key|23505/i.test(error.message)) throw new Error(error.message);
+    if (error && !/duplicate key|23505/i.test(error.message)) throw dbError(error);
     return pickSessions(await listCourses());
   })();
   try {
