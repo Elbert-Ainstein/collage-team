@@ -40,6 +40,13 @@ export function ClassCheckins() {
   const [tab, setTab] = useState<Tab>("roster");
   const [hasTeams, setHasTeams] = useState(false);
   const [hasCheckIns, setHasCheckIns] = useState(false);
+  /**
+   * Team setup stays hidden until the roster is called done — building teams
+   * while students are still being added is premature. Kept per session in
+   * localStorage (a workflow preference, not course data); an existing team set
+   * implies it, so it is never asked twice on a set-up session.
+   */
+  const [rosterConfirmed, setRosterConfirmed] = useState(false);
   /** Only auto-pick the opening tab once per class, never after the user navigates. */
   const landedFor = useRef<string | null>(null);
   const [theme, setTheme] = useState<"light" | "dark" | null>(null);
@@ -100,6 +107,17 @@ export function ClassCheckins() {
   useEffect(() => {
     refresh().catch(fail);
   }, [refresh]);
+
+  useEffect(() => {
+    if (!courseId) return;
+    const stored = window.localStorage.getItem(`ck.rosterConfirmed.${courseId}`) === "1";
+    setRosterConfirmed(stored || hasTeams);
+  }, [courseId, hasTeams]);
+
+  const confirmRoster = () => {
+    if (courseId) window.localStorage.setItem(`ck.rosterConfirmed.${courseId}`, "1");
+    setRosterConfirmed(true);
+  };
 
   useEffect(() => {
     const onResize = () => setNarrow(window.innerWidth < 820);
@@ -184,9 +202,37 @@ export function ClassCheckins() {
             onChanged={() => void refresh().catch(fail)}
             onError={fail}
           />
-          <div style={{ marginTop: 26 }}>
-            <TeamsPillar {...pillarProps} />
-          </div>
+          {rosterConfirmed ? (
+            <div style={{ marginTop: 26 }}>
+              <TeamsPillar {...pillarProps} />
+            </div>
+          ) : roster.length > 0 ? (
+            <div
+              className="t-card"
+              style={{
+                marginTop: 22,
+                padding: "16px 18px",
+                display: "flex",
+                alignItems: "center",
+                gap: 14,
+                flexWrap: "wrap",
+                background: "var(--paper3)",
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 240 }}>
+                <div style={{ fontFamily: "var(--serif)", fontSize: 16, fontWeight: 700 }}>
+                  Roster complete?
+                </div>
+                <div style={{ fontSize: 12.5, color: "var(--ink2)", marginTop: 3 }}>
+                  {roster.length} student{roster.length === 1 ? "" : "s"} added. Confirm to start
+                  building teams — you can still add or remove students afterwards.
+                </div>
+              </div>
+              <button className="t-btn primary" onClick={confirmRoster}>
+                Confirm roster → build teams
+              </button>
+            </div>
+          ) : null}
         </>
       )}
       {tab === "activities" && <ActivitiesPillar {...pillarProps} />}
