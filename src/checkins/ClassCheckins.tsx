@@ -21,6 +21,12 @@ import { ActivitiesPillar } from "./ActivitiesPillar";
 import "./checkins.css";
 
 type Tab = "roster" | "activities" | "checkins";
+/** The Roster & Teams tab is a two-step sequence, one panel at a time. */
+type RosterStep = "roster" | "teams";
+interface StepTarget {
+  tab: Tab;
+  sub?: RosterStep;
+}
 
 // Three pages. Roster and Teams share one — you cannot form teams before there
 // are students, so they belong in sequence on the same page.
@@ -47,6 +53,7 @@ export function ClassCheckins() {
    * implies it, so it is never asked twice on a set-up session.
    */
   const [rosterConfirmed, setRosterConfirmed] = useState(false);
+  const [rosterStep, setRosterStep] = useState<RosterStep>("roster");
   /** Only auto-pick the opening tab once per class, never after the user navigates. */
   const landedFor = useRef<string | null>(null);
   const [theme, setTheme] = useState<"light" | "dark" | null>(null);
@@ -117,6 +124,13 @@ export function ClassCheckins() {
   const confirmRoster = () => {
     if (courseId) window.localStorage.setItem(`ck.rosterConfirmed.${courseId}`, "1");
     setRosterConfirmed(true);
+    setRosterStep("teams");
+  };
+
+  /** Jump to a step, including which panel of the Roster & Teams sequence. */
+  const goTo = ({ tab: t, sub }: StepTarget) => {
+    setTab(t);
+    if (t === "roster") setRosterStep(sub ?? (rosterConfirmed ? "teams" : "roster"));
   };
 
   useEffect(() => {
@@ -192,49 +206,57 @@ export function ClassCheckins() {
         activities={activities}
         hasTeams={hasTeams}
         hasCheckIns={hasCheckIns}
-        onGo={setTab}
+        onGo={goTo}
       />
-      {tab === "roster" && (
-        <>
-          <RosterEditor
-            course={course}
-            roster={roster}
-            onChanged={() => void refresh().catch(fail)}
-            onError={fail}
-          />
-          {rosterConfirmed ? (
-            <div style={{ marginTop: 26 }}>
-              <TeamsPillar {...pillarProps} />
-            </div>
-          ) : roster.length > 0 ? (
-            <div
-              className="t-card"
-              style={{
-                marginTop: 22,
-                padding: "16px 18px",
-                display: "flex",
-                alignItems: "center",
-                gap: 14,
-                flexWrap: "wrap",
-                background: "var(--paper3)",
-              }}
-            >
-              <div style={{ flex: 1, minWidth: 240 }}>
-                <div style={{ fontFamily: "var(--serif)", fontSize: 16, fontWeight: 700 }}>
-                  Roster complete?
+      {tab === "roster" &&
+        (rosterStep === "roster" ? (
+          <>
+            <RosterEditor
+              course={course}
+              roster={roster}
+              onChanged={() => void refresh().catch(fail)}
+              onError={fail}
+            />
+            {roster.length > 0 && (
+              <div
+                className="t-card"
+                style={{
+                  marginTop: 20,
+                  padding: "16px 18px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 14,
+                  flexWrap: "wrap",
+                  background: "var(--paper3)",
+                }}
+              >
+                <div style={{ flex: 1, minWidth: 240 }}>
+                  <div style={{ fontFamily: "var(--serif)", fontSize: 16, fontWeight: 700 }}>
+                    Roster complete?
+                  </div>
+                  <div style={{ fontSize: 12.5, color: "var(--ink2)", marginTop: 3 }}>
+                    {roster.length} student{roster.length === 1 ? "" : "s"} added. You can still
+                    come back and change this later.
+                  </div>
                 </div>
-                <div style={{ fontSize: 12.5, color: "var(--ink2)", marginTop: 3 }}>
-                  {roster.length} student{roster.length === 1 ? "" : "s"} added. Confirm to start
-                  building teams — you can still add or remove students afterwards.
-                </div>
+                <button className="t-btn primary" onClick={confirmRoster}>
+                  Continue to teams →
+                </button>
               </div>
-              <button className="t-btn primary" onClick={confirmRoster}>
-                Confirm roster → build teams
-              </button>
-            </div>
-          ) : null}
-        </>
-      )}
+            )}
+          </>
+        ) : (
+          <>
+            <button
+              className="t-btn ghost"
+              style={{ border: "1px solid var(--line)", marginBottom: 16 }}
+              onClick={() => setRosterStep("roster")}
+            >
+              ← Back to roster
+            </button>
+            <TeamsPillar {...pillarProps} />
+          </>
+        ))}
       {tab === "activities" && <ActivitiesPillar {...pillarProps} />}
       {tab === "checkins" && <GradebookPillar {...pillarProps} />}
     </>
@@ -245,7 +267,7 @@ export function ClassCheckins() {
       <button
         key={t.id}
         className={(bottom ? "t-bnbtn" : "t-navbtn") + (tab === t.id ? " on" : "")}
-        onClick={() => setTab(t.id)}
+        onClick={() => goTo({ tab: t.id })}
       >
         <Icon name={t.icon} size={bottom ? 19 : 18} />
         <span className={bottom ? undefined : "lbl"}>{t.label}</span>
@@ -344,23 +366,23 @@ function SetupGuide({
   activities: Activity[];
   hasTeams: boolean;
   hasCheckIns: boolean;
-  onGo: (t: Tab) => void;
+  onGo: (t: StepTarget) => void;
 }) {
-  const steps: { id: Tab; label: string; done: boolean; hint: string }[] = [
+  const steps: { target: StepTarget; label: string; done: boolean; hint: string }[] = [
     {
-      id: "roster",
+      target: { tab: "roster", sub: "roster" },
       label: "Upload the roster",
       done: roster.length > 0,
       hint: roster.length ? `${roster.length} students` : "Upload or paste the class list",
     },
     {
-      id: "roster",
+      target: { tab: "roster", sub: "teams" },
       label: "Form the teams",
       done: hasTeams,
       hint: hasTeams ? "Teams formed" : "Assign students to teams",
     },
     {
-      id: "activities",
+      target: { tab: "activities" },
       label: "Create the first week",
       done: activities.length > 0,
       hint: activities.length
@@ -368,7 +390,7 @@ function SetupGuide({
         : "An activity is one week of the loop",
     },
     {
-      id: "checkins",
+      target: { tab: "checkins" },
       label: "Add the check-ins",
       done: hasCheckIns,
       hint: hasCheckIns ? "Check-ins added" : "An individual iRAT and a team tRAT",
@@ -387,7 +409,7 @@ function SetupGuide({
             {i > 0 && <span className={"t-steprule" + (steps[i - 1].done ? " done" : "")} />}
             <button
               className={"t-step " + state}
-              onClick={() => onGo(s.id)}
+              onClick={() => onGo(s.target)}
               aria-current={state === "cur" ? "step" : undefined}
               title={`Step ${i + 1}: ${s.label}`}
             >
