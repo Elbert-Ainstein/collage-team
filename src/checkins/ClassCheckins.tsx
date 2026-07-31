@@ -26,7 +26,7 @@ type Tab = "roster" | "teams" | "activities" | "checkins";
 // who is in it → who works together → what they do each week → what it produced.
 const TABS: { id: Tab; label: string; icon: string }[] = [
   { id: "roster", label: "Roster", icon: "groups" },
-  { id: "teams", label: "Teams", icon: "table" },
+  { id: "teams", label: "Teams", icon: "teams" },
   { id: "activities", label: "Activities", icon: "clipboard" },
   { id: "checkins", label: "Check-ins", icon: "table" },
 ];

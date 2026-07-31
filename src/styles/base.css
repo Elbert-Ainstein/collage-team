@@ -1,0 +1,33 @@
+/* Global reset for Class Check-ins.
+   The app's own design system lives in src/checkins/checkins.css; this only
+   clears browser defaults. No webfonts — the UI uses system fonts and inline
+   SVG icons, so the page renders with no network requests. */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Respect a user's reduced-motion preference across the app. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

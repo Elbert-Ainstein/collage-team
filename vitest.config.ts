@@ -1,8 +1,8 @@
 import { defineConfig } from "vitest/config";
 import { fileURLToPath, URL } from "node:url";
 
-// Vitest runs the rule/store tests independently of Next (no JSX rendering in the
-// suite — pure services + store). Alias mirrors tsconfig paths.
+// Unit tests for the Class Check-ins app (pure logic — no JSX rendering).
+// Alias mirrors tsconfig paths.
 export default defineConfig({
   resolve: {
     alias: {
@@ -12,8 +12,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "jsdom",
-    setupFiles: ["./tests/setup.ts"],
-    include: ["tests/**/*.test.{ts,tsx}", "src/**/*.test.{ts,tsx}"],
-    exclude: ["tests/e2e/**", "node_modules/**", ".next/**"],
+    include: ["src/**/*.test.{ts,tsx}"],
+    exclude: ["node_modules/**", ".next/**"],
   },
 });

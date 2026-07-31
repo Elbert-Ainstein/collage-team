@@ -1,28 +1,22 @@
 import type { Metadata, Viewport } from "next";
-import "@/styles/app.css";
-import { AppShell } from "@/shell/AppShell";
+import "@/styles/base.css";
 
 export const metadata: Metadata = {
-  title: "Collage AI — Team Learning",
-  description: "Team-based learning activity engine for Collage AI.",
+  title: "Class Check-ins — Applied Physics 50",
+  description: "Weekly team-based learning check-ins for AP 50.",
 };
 
+// The gradebook scrolls horizontally inside its own container, so the page
+// itself is responsive rather than pinned to a desktop width.
 export const viewport: Viewport = {
-  width: 1280,
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <head>
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
-        />
-      </head>
-      <body>
-        <AppShell>{children}</AppShell>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

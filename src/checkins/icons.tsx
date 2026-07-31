@@ -4,6 +4,9 @@ const PATHS: Record<string, string> = {
     '<circle cx="9" cy="8" r="3.1"/><path d="M3.2 19c0-3 2.7-5 5.8-5s5.8 2 5.8 5"/><path d="M16 5.6a3 3 0 0 1 0 5.8"/><path d="M18.8 19c0-2-1-3.6-2.6-4.6"/>',
   table:
     '<rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M3 9.5h18M3 14.5h18M9 4.5v15"/>',
+  // Teams: two grouped pairs, distinct from the roster's single-person icon.
+  teams:
+    '<circle cx="7.5" cy="7.5" r="2.4"/><circle cx="16.5" cy="7.5" r="2.4"/><path d="M3.4 17c0-2.3 1.9-3.7 4.1-3.7s4.1 1.4 4.1 3.7"/><path d="M12.4 17c0-2.3 1.9-3.7 4.1-3.7s4.1 1.4 4.1 3.7"/>',
   clipboard:
     '<rect x="6" y="4.5" width="12" height="16" rx="2"/><path d="M9 4.5V3.5h6v1"/><path d="M8.5 9.5h7M8.5 13h7M8.5 16.5h4"/>',
   chevdown: '<path d="M6 9.5l6 6 6-6"/>',
