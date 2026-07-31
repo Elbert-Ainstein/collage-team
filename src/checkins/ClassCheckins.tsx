@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
 import { Icon } from "./icons";
 import {
@@ -20,13 +20,12 @@ import { GradebookPillar } from "./GradebookPillar";
 import { ActivitiesPillar } from "./ActivitiesPillar";
 import "./checkins.css";
 
-type Tab = "roster" | "teams" | "activities" | "checkins";
+type Tab = "roster" | "activities" | "checkins";
 
-// One page per setup step, in the order a course is actually built:
-// who is in it → who works together → what they do each week → what it produced.
+// Three pages. Roster and Teams share one — you cannot form teams before there
+// are students, so they belong in sequence on the same page.
 const TABS: { id: Tab; label: string; icon: string }[] = [
-  { id: "roster", label: "Roster", icon: "groups" },
-  { id: "teams", label: "Teams", icon: "teams" },
+  { id: "roster", label: "Roster & Teams", icon: "teams" },
   { id: "activities", label: "Activities", icon: "clipboard" },
   { id: "checkins", label: "Check-ins", icon: "table" },
 ];
@@ -85,7 +84,7 @@ export function ClassCheckins() {
       // Open on the first unfinished step; a fully set-up session opens on the
       // gradebook, which is also where the last step (adding check-ins) happens.
       setTab(
-        r.length === 0 ? "roster" : ts.length === 0 ? "teams" : a.length === 0 ? "activities" : "checkins",
+        r.length === 0 || ts.length === 0 ? "roster" : a.length === 0 ? "activities" : "checkins",
       );
     }
   }, [courseId]);
@@ -175,18 +174,21 @@ export function ClassCheckins() {
         activities={activities}
         hasTeams={hasTeams}
         hasCheckIns={hasCheckIns}
-        tab={tab}
         onGo={setTab}
       />
       {tab === "roster" && (
-        <RosterEditor
-          course={course}
-          roster={roster}
-          onChanged={() => void refresh().catch(fail)}
-          onError={fail}
-        />
+        <>
+          <RosterEditor
+            course={course}
+            roster={roster}
+            onChanged={() => void refresh().catch(fail)}
+            onError={fail}
+          />
+          <div style={{ marginTop: 26 }}>
+            <TeamsPillar {...pillarProps} />
+          </div>
+        </>
       )}
-      {tab === "teams" && <TeamsPillar {...pillarProps} />}
       {tab === "activities" && <ActivitiesPillar {...pillarProps} />}
       {tab === "checkins" && <GradebookPillar {...pillarProps} />}
     </>
@@ -290,14 +292,12 @@ function SetupGuide({
   activities,
   hasTeams,
   hasCheckIns,
-  tab,
   onGo,
 }: {
   roster: Student[];
   activities: Activity[];
   hasTeams: boolean;
   hasCheckIns: boolean;
-  tab: Tab;
   onGo: (t: Tab) => void;
 }) {
   const steps: { id: Tab; label: string; done: boolean; hint: string }[] = [
@@ -308,7 +308,7 @@ function SetupGuide({
       hint: roster.length ? `${roster.length} students` : "Upload or paste the class list",
     },
     {
-      id: "teams",
+      id: "roster",
       label: "Form the teams",
       done: hasTeams,
       hint: hasTeams ? "Teams formed" : "Assign students to teams",
@@ -333,68 +333,25 @@ function SetupGuide({
   const nextIdx = steps.findIndex((s) => !s.done);
 
   return (
-    <div
-      className="t-card"
-      style={{ padding: 14, marginBottom: 16, background: "var(--paper3)" }}
-    >
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
-        <span className="t-kicker">Getting started</span>
-        <span style={{ fontSize: 11.5, color: "var(--ink2)" }}>
-          four steps to set up the session
-        </span>
-      </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 10 }}>
-        {steps.map((s, i) => {
-          const isNext = i === nextIdx;
-          return (
-            <div
-              key={s.label}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                padding: "7px 9px",
-                borderRadius: 9,
-                border: "1px solid " + (isNext ? "var(--line)" : "transparent"),
-                background: isNext ? "var(--activeBg)" : "transparent",
-                opacity: s.done ? 0.62 : 1,
-              }}
+    <div className="t-steps">
+      {steps.map((s, i) => {
+        const state = s.done ? "done" : i === nextIdx ? "cur" : "todo";
+        return (
+          <Fragment key={s.label}>
+            {i > 0 && <span className={"t-steprule" + (steps[i - 1].done ? " done" : "")} />}
+            <button
+              className={"t-step " + state}
+              onClick={() => onGo(s.id)}
+              aria-current={state === "cur" ? "step" : undefined}
+              title={`Step ${i + 1}: ${s.label}`}
             >
-              <span
-                className="t-lnum"
-                style={
-                  s.done
-                    ? { background: "var(--greenBg)", color: "var(--green)" }
-                    : undefined
-                }
-              >
-                {s.done ? "✓" : i + 1}
-              </span>
-              <span
-                style={{
-                  fontSize: 13,
-                  fontWeight: isNext ? 600 : 400,
-                  textDecoration: s.done ? "line-through" : "none",
-                }}
-              >
-                {s.label}
-              </span>
-              <span style={{ fontSize: 11.5, color: "var(--ink2)" }}>{s.hint}</span>
-              <span className="t-spacer" />
-              {!s.done && (
-                <button
-                  className={isNext ? "t-btn primary sm" : "t-btn ghost sm"}
-                  style={isNext ? undefined : { border: "1px solid var(--line)" }}
-                  onClick={() => onGo(s.id)}
-                  disabled={tab === s.id && isNext}
-                >
-                  {tab === s.id && isNext ? "You're here" : "Go"}
-                </button>
-              )}
-            </div>
-          );
-        })}
-      </div>
+              <span className="dot">{s.done ? "\u2713" : i + 1}</span>
+              <span className="lab">{s.label}</span>
+              <span className="hint">{s.hint}</span>
+            </button>
+          </Fragment>
+        );
+      })}
     </div>
   );
 }
@@ -545,11 +502,7 @@ function RosterEditor({
 
 
       <div className="t-card" style={{ padding: 14 }}>
-        {roster.length === 0 ? (
-          <div style={{ fontSize: 13, color: "var(--ink3)", padding: "6px 2px 12px" }}>
-            No students yet. Paste your roster below — one name per line.
-          </div>
-        ) : (
+        {roster.length === 0 ? null : (
           <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 12 }}>
             {roster.map((s) => (
               <div className="t-memberrow" key={s.id}>
@@ -648,15 +601,7 @@ function RosterEditor({
           </div>
         ) : (
           <div
-            className="t-dz"
-            style={{
-              padding: "20px 16px",
-              // Concrete values in both states: mixing `border` (from .t-dz) with a
-              // conditional `borderColor` makes React warn about shorthand conflicts.
-              borderColor: dragOver ? "var(--blue)" : "var(--line)",
-              background: dragOver ? "var(--blueBg)" : "transparent",
-              cursor: "pointer",
-            }}
+            className={"t-dzbig" + (dragOver ? " over" : "")}
             onClick={() => fileRef.current?.click()}
             onDragOver={(e) => {
               e.preventDefault();
@@ -670,16 +615,17 @@ function RosterEditor({
               if (f) void takeFile(f);
             }}
           >
-            <div style={{ color: "var(--ink2)" }}>
-              <Icon name="upload" size={26} />
-            </div>
-            <div style={{ fontSize: 13.5, fontWeight: 600, marginTop: 7 }}>
-              Upload the class list
-            </div>
-            <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 2 }}>
-              Drop a .csv, .tsv or .txt here, or click to choose — a column of names, optionally
-              with emails. (In Excel: File → Save as → CSV.)
-            </div>
+            <span style={{ color: "var(--ink3)" }}>
+              <Icon name="upload" size={34} />
+            </span>
+            <span className="big">
+              {roster.length ? "Add more students" : "Upload the class list"}
+            </span>
+            <span className="sub">
+              Drop a <strong>.csv</strong>, <strong>.tsv</strong> or <strong>.txt</strong> here, or
+              click to choose. One column of names, optionally with emails — extra columns are
+              ignored. From Excel or Google Sheets: <em>File → Save as / Download → CSV</em>.
+            </span>
             <input
               ref={fileRef}
               type="file"
@@ -694,15 +640,8 @@ function RosterEditor({
           </div>
         )}
 
-        <div
-          style={{
-            display: "flex",
-            gap: 9,
-            flexWrap: "wrap",
-            alignItems: "flex-start",
-            marginTop: 12,
-          }}
-        >
+        <div className="t-orline">or paste them</div>
+        <div style={{ display: "flex", gap: 9, flexWrap: "wrap", alignItems: "flex-start" }}>
           <textarea
             className="t-in"
             style={{
