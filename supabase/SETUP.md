@@ -11,7 +11,11 @@ Once it's done and you've pasted two values into `.env.local`, I wire up everyth
 ## 2. Run the schema
 1. In the project, open **SQL Editor** → **New query**.
 2. Paste the entire contents of [`migrations/0001_init.sql`](migrations/0001_init.sql) and click **Run**.
-3. You should see "Success". (Check **Table Editor** — you'll see `courses`, `students`, `activities`, `teams`, `check_ins`, `check_in_results`, etc. All empty. That's correct — the AP50A placeholder is gone; real data comes from you.)
+3. Repeat for each later migration **in order** — they are not optional:
+   - [`0002_unique_session_code.sql`](migrations/0002_unique_session_code.sql) — stops duplicate sessions
+   - [`0003_auth_owner_scoped.sql`](migrations/0003_auth_owner_scoped.sql) — **replaces the open policy with per-account access**
+   - [`0004_check_secondary_refs.sql`](migrations/0004_check_secondary_refs.sql) — closes a cross-account write gap
+4. You should see "Success". (Check **Table Editor** — you'll see `courses`, `students`, `activities`, `teams`, `check_ins`, `check_in_results`, etc. All empty. That's correct — the AP50A placeholder is gone; real data comes from you.)
 
 ## 3. Grab the two keys I need
 In the project: **Project Settings → API**. Copy:
@@ -35,5 +39,7 @@ Paste the **Project URL** and **anon key** here (or just say "done" if you've fi
 
 ---
 
-### Security note (important, prototype-only)
-v1 has **no login**. The schema turns on row-level security but with a *permissive* policy so the frontend anon key can read and write. That means anyone who has your URL + anon key can change the data. That's fine for a single-faculty prototype you're testing — but before this goes near real students or real logins, those policies must be replaced with real per-user rules (that's the "Supabase Auth" step we deferred).
+### Security note
+`0001_init.sql` creates a deliberately **open** policy so the prototype works before accounts exist. `0003` and `0004` replace it with per-account rules: a signed-in user reaches only their own sessions, and the anon key that ships in the browser reaches nothing at all.
+
+**Run 0003 and 0004.** With only 0001 applied, anyone holding your project URL and anon key — both visible in the browser bundle — can read and modify every roster and grade.

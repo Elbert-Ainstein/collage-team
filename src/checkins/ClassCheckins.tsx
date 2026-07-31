@@ -106,6 +106,9 @@ export function ClassCheckins({
       setTab(
         r.length === 0 || ts.length === 0 ? "roster" : a.length === 0 ? "activities" : "checkins",
       );
+      // Also reset which panel of the Roster & Teams sequence is showing, or
+      // switching to an empty session lands on Teams with nothing in it.
+      setRosterStep(r.length > 0 && ts.length > 0 ? "teams" : "roster");
     }
   }, [courseId]);
 
@@ -280,6 +283,44 @@ export function ClassCheckins({
       </button>
     ));
 
+  // Rendered in the sidebar on desktop and in the top strip when narrow —
+  // otherwise there is no way to see or leave the account on a phone.
+  const accountRow = account ? (
+    <div
+      style={{
+        borderTop: narrow ? "none" : "1px solid var(--line)",
+        marginTop: narrow ? 0 : 8,
+        paddingTop: narrow ? 0 : 10,
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        minWidth: 0,
+      }}
+    >
+      <span
+        style={{
+          flex: narrow ? "0 1 auto" : 1,
+          minWidth: 0,
+          fontSize: 11.5,
+          color: "var(--ink2)",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+        title={account}
+      >
+        {account}
+      </span>
+      <button
+        className="t-btn ghost"
+        style={{ border: "1px solid var(--line)", fontSize: 11, padding: "2px 8px" }}
+        onClick={() => void onSignOut?.()}
+      >
+        Sign out
+      </button>
+    </div>
+  ) : null;
+
   const themeBtn = (
     <button className="t-themebtn" onClick={() => setTheme(dark ? "light" : "dark")}>
       <Icon name={dark ? "sun" : "moon"} size={17} />
@@ -318,40 +359,7 @@ export function ClassCheckins({
           </div>
           <div className="t-spacer" />
           {themeBtn}
-          {account && (
-            <div
-              style={{
-                borderTop: "1px solid var(--line)",
-                marginTop: 8,
-                paddingTop: 10,
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
-              <span
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  fontSize: 11.5,
-                  color: "var(--ink2)",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}
-                title={account}
-              >
-                {account}
-              </span>
-              <button
-                className="t-btn ghost"
-                style={{ border: "1px solid var(--line)", fontSize: 11, padding: "2px 8px" }}
-                onClick={() => void onSignOut?.()}
-              >
-                Sign out
-              </button>
-            </div>
-          )}
+          {accountRow}
         </aside>
       )}
       <main className="t-main">
@@ -380,6 +388,7 @@ export function ClassCheckins({
                 <Icon name={dark ? "sun" : "moon"} size={15} />
                 {dark ? "Light" : "Dark"}
               </button>
+              {accountRow}
             </div>
           )}
           {body}

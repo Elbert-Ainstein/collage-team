@@ -290,6 +290,24 @@ export async function moveStudents(
     if (error) throw dbError(error);
   }
 }
+/**
+ * How many recorded results are attached to this set's teams. Re-forming teams
+ * deletes the team rows, and check_in_results.team_id cascades — so this is what
+ * a re-form would destroy.
+ */
+export async function countTeamResults(teamSetId: string): Promise<number> {
+  const teams = unwrap(
+    await db().from("teams").select("id").eq("team_set_id", teamSetId),
+  ) as { id: string }[] ?? [];
+  if (!teams.length) return 0;
+  const rows = unwrap(
+    await db().from("check_in_results").select("id")
+      .in("team_id", teams.map((t) => t.id))
+      .neq("status", "none"),
+  ) as { id: string }[] ?? [];
+  return rows.length;
+}
+
 /** Replace a set's teams with evenly-sized ones built from the roster. */
 export async function autoFormTeams(
   teamSetId: string, roster: Student[], size: number,

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   autoFormTeams,
+  countTeamResults,
   createTeam,
   createTeamSet,
   deleteTeam,
@@ -52,6 +53,8 @@ export function TeamsPillar(props: PillarProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDeleteSet, setConfirmDeleteSet] = useState(false);
+  /** A pending re-form that would destroy recorded team scores. */
+  const [confirmReform, setConfirmReform] = useState<{ n: number; scores: number } | null>(null);
 
   /** Last name we know the DB holds for each team, so blur only writes real edits. */
   const savedNames = useRef<Record<string, string>>({});
@@ -243,30 +246,46 @@ export function TeamsPillar(props: PillarProps) {
     });
   };
 
-  const commitSize = async () => {
+  /** Re-forming deletes the teams, cascading away any scores recorded against
+   *  them — so ask first when there is something to lose. */
+  const reformOrConfirm = async (n: number) => {
     if (!activeSet) return;
-    const n = clampSize(Number(sizeInput));
-    setSizeInput(String(n));
-    if (n === activeSetSize) return;
+    const scores = await countTeamResults(activeSet.id).catch(() => 0);
+    if (scores > 0) {
+      setConfirmReform({ n, scores });
+      return;
+    }
+    await doReform(n);
+  };
+
+  const doReform = async (n: number) => {
+    if (!activeSet) return;
     const setIdNow = activeSet.id;
-    setSets((prev) => prev.map((s) => (s.id === setIdNow ? { ...s, team_size: n } : s)));
+    setConfirmReform(null);
     setSel(new Set());
     await run(async () => {
-      await setTeamSetSize(setIdNow, n);
+      if (n !== activeSetSize) {
+        setSets((prev) => prev.map((s) => (s.id === setIdNow ? { ...s, team_size: n } : s)));
+        await setTeamSetSize(setIdNow, n);
+      }
       await autoFormTeams(setIdNow, roster, n);
       await reload(setIdNow);
       setSets(await listTeamSets(courseId));
     });
   };
 
+  const commitSize = async () => {
+    if (!activeSet) return;
+    const n = clampSize(Number(sizeInput));
+    setSizeInput(String(n));
+    if (n === activeSetSize) return;
+    await reformOrConfirm(n);
+  };
+
+
   const onAutoForm = async () => {
     if (!activeSet) return;
-    const setIdNow = activeSet.id;
-    setSel(new Set());
-    await run(async () => {
-      await autoFormTeams(setIdNow, roster, activeSetSize);
-      await reload(setIdNow);
-    });
+    await reformOrConfirm(activeSetSize);
   };
 
   const onAddTeam = async () => {
@@ -546,7 +565,43 @@ export function TeamsPillar(props: PillarProps) {
         >
           {activeSet?.locked ? "✓ Published · Locked" : "Publish teams"}
         </button>
-        {confirmDeleteSet ? (
+        {confirmReform ? (
+          <span
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+              border: "1px solid var(--amber)",
+              background: "var(--amberBg)",
+              borderRadius: 10,
+              padding: "4px 6px 4px 11px",
+            }}
+          >
+            <span style={{ fontSize: 11.5, color: "var(--amber)" }}>
+              Re-forming teams deletes the current ones — {confirmReform.scores} recorded team
+              score{confirmReform.scores === 1 ? "" : "s"} would go with them.
+            </span>
+            <button
+              className="t-btn amber"
+              onClick={() => void doReform(confirmReform.n)}
+              disabled={busy}
+            >
+              Re-form anyway
+            </button>
+            <button
+              className="t-btn ghost"
+              style={{ border: "1px solid var(--line)" }}
+              onClick={() => {
+                setConfirmReform(null);
+                setSizeInput(String(activeSetSize));
+              }}
+              disabled={busy}
+            >
+              Cancel
+            </button>
+          </span>
+        ) : confirmDeleteSet ? (
           <span
             style={{
               display: "inline-flex",

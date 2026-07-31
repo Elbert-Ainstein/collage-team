@@ -7,21 +7,22 @@ This is how it gets a real URL you can open from any machine.
 
 ## ⚠️ Read this first
 
-**Do not put real student data in until authentication is done.**
+**Confirm migrations `0003` and `0004` are applied before real student data goes in.**
 
-The database currently has one security policy, and it says *anyone may read and
-write everything* (`using (true)` — see `supabase/migrations/0001_init.sql`).
-That is fine on your laptop with placeholder data. It is **not** fine on a public
-URL with a real AP 50 roster: anyone who found the address could read every
-student's name and grade, or change them.
+The app is behind a sign-in wall, and access is enforced by row-level security
+in the database — not by the app. Those rules arrive in
+`supabase/migrations/0003_auth_owner_scoped.sql` and `0004_check_secondary_refs.sql`.
+Until they are run, `0001` leaves a policy that says *anyone may read and write
+everything*, and both `NEXT_PUBLIC_*` values are visible in the browser bundle —
+so a public URL would expose every roster and grade regardless of the login screen.
 
-So there are two safe orders:
+Check it in 5 seconds: with the app signed out, run
 
-1. **Deploy now, with placeholder data only** — good for testing the pipeline
-   and showing people. Add auth before the real roster.
-2. **Do auth first, then deploy.** Safer if you might forget step 1.
+```bash
+curl "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/students?select=*" -H "apikey: $NEXT_PUBLIC_SUPABASE_ANON_KEY"
+```
 
-Either is fine. Just don't put the real roster on a public URL before auth.
+`[]` means the rules are live. Rows coming back means they are not.
 
 ---
 
@@ -136,5 +137,6 @@ students will see the URL.
 - [ ] Repo imported
 - [ ] Both `NEXT_PUBLIC_SUPABASE_*` variables added
 - [ ] First deploy succeeded and the URL opens
-- [ ] Migration `0002_unique_session_code.sql` run in Supabase
-- [ ] **Auth in place before any real student data**
+- [ ] Migrations `0002`, `0003` and `0004` run in Supabase
+- [ ] Signed-out `curl` of the REST API returns `[]`
+- [ ] Accounts created (a second one makes a placeholder-data sandbox)

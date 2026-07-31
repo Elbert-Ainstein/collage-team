@@ -10,7 +10,13 @@ export default function Page() {
   return (
     <AuthGate>
       {(session, signOut) => (
-        <ClassCheckins account={session.user.email ?? "signed in"} onSignOut={signOut} />
+        // Keyed by account: switching users must remount the app, or the
+        // previous account's roster and tab state would linger on screen.
+        <ClassCheckins
+          key={session.user.id}
+          account={session.user.email ?? "signed in"}
+          onSignOut={signOut}
+        />
       )}
     </AuthGate>
   );

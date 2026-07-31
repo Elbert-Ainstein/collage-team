@@ -73,8 +73,15 @@ function SignIn() {
       } else {
         const { data, error } = await sb.auth.signUp({ email, password });
         if (error) throw error;
-        // With email confirmation on, there is no session until the link is clicked.
-        if (!data.session) {
+        // With email-enumeration protection on (the default), signing up with an
+        // address that already exists returns no error and no session — the only
+        // signal is an empty identities array. Without this check the user is
+        // told to watch for a confirmation email that will never arrive.
+        if (data.user && (data.user.identities?.length ?? 0) === 0) {
+          setError("That email already has an account — sign in instead.");
+          setMode("in");
+        } else if (!data.session) {
+          // Genuine new signup, email confirmation required.
           setNotice("Account created. Check your email for the confirmation link, then sign in.");
           setMode("in");
         }
