@@ -28,8 +28,31 @@ export function initials(name: string): string {
 }
 
 const db = () => requireSupabase();
+
+/**
+ * Turns Postgres constraint errors into something a person can act on.
+ * The common one: the page holds students that have since been deleted (another
+ * tab, another person), so writing team membership trips the foreign key.
+ */
+export function dbError(error: { message: string }): Error {
+  const m = error.message;
+  if (/foreign key constraint/i.test(m)) {
+    if (/team_members_student_id/i.test(m)) {
+      return new Error(
+        "Some of these students are no longer on the roster — it changed somewhere else. " +
+          "Reload the page and try again.",
+      );
+    }
+    return new Error("That referred to something that no longer exists. Reload and try again.");
+  }
+  if (/duplicate key|23505/i.test(m)) {
+    return new Error("That already exists.");
+  }
+  return new Error(m);
+}
+
 function unwrap<T>(res: { data: T | null; error: { message: string } | null }): T {
-  if (res.error) throw new Error(res.error.message);
+  if (res.error) throw dbError(res.error);
   return res.data as T;
 }
 
@@ -48,7 +71,7 @@ export async function createCourse(input: {
 }
 export async function deleteCourse(id: string): Promise<void> {
   const { error } = await db().from("courses").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
 }
 
 /** The course this tool is built for. Its sessions are fixed, not user-created. */
@@ -129,7 +152,7 @@ export async function addStudents(
 }
 export async function removeStudent(id: string): Promise<void> {
   const { error } = await db().from("students").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
 }
 
 // ---------------- activities (one per week) ----------------
@@ -158,11 +181,11 @@ export async function createActivity(input: {
 }
 export async function updateActivity(id: string, patch: Partial<Activity>): Promise<void> {
   const { error } = await db().from("activities").update(patch).eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
 }
 export async function deleteActivity(id: string): Promise<void> {
   const { error } = await db().from("activities").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
 }
 
 // ---------------- team sets / teams / membership ----------------
@@ -189,16 +212,16 @@ export async function createTeamSet(input: {
  */
 export async function deleteTeamSet(id: string): Promise<void> {
   const { error } = await db().from("team_sets").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
 }
 
 export async function setTeamSetLocked(id: string, locked: boolean): Promise<void> {
   const { error } = await db().from("team_sets").update({ locked }).eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
 }
 export async function setTeamSetSize(id: string, teamSize: number): Promise<void> {
   const { error } = await db().from("team_sets").update({ team_size: teamSize }).eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
 }
 
 /** Teams of a set with their members resolved, ordered. */
@@ -230,15 +253,15 @@ export async function createTeam(
 }
 export async function renameTeam(id: string, name: string): Promise<void> {
   const { error } = await db().from("teams").update({ name }).eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
 }
 export async function deleteTeam(id: string): Promise<void> {
   const { error } = await db().from("teams").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
 }
 export async function deleteTeamsOfSet(teamSetId: string): Promise<void> {
   const { error } = await db().from("teams").delete().eq("team_set_id", teamSetId);
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
 }
 /** Move students into a team (or out to unassigned when teamId is null). */
 export async function moveStudents(
@@ -249,12 +272,12 @@ export async function moveStudents(
   if (teamIdsInSet.length) {
     const { error } = await sb.from("team_members").delete()
       .in("student_id", studentIds).in("team_id", teamIdsInSet);
-    if (error) throw new Error(error.message);
+    if (error) throw dbError(error);
   }
   if (teamId) {
     const { error } = await sb.from("team_members")
       .insert(studentIds.map((student_id) => ({ team_id: teamId, student_id })));
-    if (error) throw new Error(error.message);
+    if (error) throw dbError(error);
   }
 }
 /** Replace a set's teams with evenly-sized ones built from the roster. */
@@ -300,12 +323,12 @@ export async function createCheckIn(input: {
 }
 export async function deleteCheckIn(id: string): Promise<void> {
   const { error } = await db().from("check_ins").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
 }
 export async function setCheckInsPosted(ids: string[], posted: boolean): Promise<void> {
   if (!ids.length) return;
   const { error } = await db().from("check_ins").update({ posted }).in("id", ids);
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
 }
 
 // ---------------- results (gradebook cells) ----------------
@@ -372,5 +395,5 @@ export async function saveResult(input: {
 }
 export async function deleteResult(id: string): Promise<void> {
   const { error } = await db().from("check_in_results").delete().eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) throw dbError(error);
 }

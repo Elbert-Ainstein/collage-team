@@ -138,12 +138,13 @@ export function TeamsPillar(props: PillarProps) {
       await fn();
     } catch (e: unknown) {
       setError(msg(e));
-      if (activeSetId) {
-        try {
-          await reload(activeSetId);
-        } catch {
-          // keep the original failure on screen
-        }
+      // Re-read both the teams and the roster: the usual cause of a write
+      // failing here is that this page is out of date with the database.
+      try {
+        if (activeSetId) await reload(activeSetId);
+        await refresh();
+      } catch {
+        // keep the original failure on screen
       }
     } finally {
       setBusy(false);
