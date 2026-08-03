@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "./icons";
 import {
   createActivity,
-  createCheckIn,
+  ensureCadence,
   listCheckIns,
   listResults,
   listTeamSets,
@@ -13,10 +13,12 @@ import {
   setCheckInsPosted,
   updateActivity,
 } from "./data";
+import { RESUBMIT_MODE_OF, scopeOf } from "./types";
 import type {
   Activity,
   CheckIn,
   CheckInResult,
+  ResubmitMode,
   ResultStatus,
   Student,
   TeamSet,
@@ -24,16 +26,28 @@ import type {
 } from "./types";
 import { Avatar, EmptyState, ErrorBanner, weekLabel } from "./ui";
 import type { PillarProps } from "./ui";
+import { ActivityWeeks } from "./ActivityWeeks";
+import type { ActivityRowMeta } from "./ActivityWeeks";
+import { ActivityEditor } from "./ActivityEditor";
+import type { ActivityDraft } from "./ActivityEditor";
 
 /* ---------------- constants + tiny helpers ---------------- */
 
 const STAGES = ["Setup", "Individual", "Discuss", "Resubmit", "Closed"];
+/** The `.sv-badge` variant each stage wears in the activity list. */
+const STAGE_BADGE = ["outline", "sky", "warning", "sky", "success"];
 const IN_STATUSES: ResultStatus[] = ["submitted", "scored", "needs_review"];
 
 type ChipKind = "" | "blue" | "amber" | "green" | "purple";
 type Lens = "faculty" | "student";
 type FacultyTab = "source" | "submission" | "discussion" | "progress";
-type Mode = Activity["resubmit_mode"];
+type Mode = ResubmitMode;
+
+/** Which activity the tab is authoring: an existing one, or a new one in a week. */
+interface EditTarget {
+  id: string | null;
+  week: number;
+}
 
 function isIn(r: CheckInResult | null): boolean {
   return r != null && IN_STATUSES.indexOf(r.status) >= 0;
@@ -142,7 +156,8 @@ export function ActivitiesPillar({ courseId, roster, activities, refresh }: Pill
   const [teamSets, setTeamSets] = useState<TeamSet[]>([]);
   const [teamsBySet, setTeamsBySet] = useState<Record<string, TeamWithMembers[]>>({});
 
-  // navigation
+  // navigation — the tab shows the list, the editor, or one activity's workspace
+  const [editing, setEditing] = useState<EditTarget | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [lens, setLens] = useState<Lens>("faculty");
   const [tab, setTab] = useState<FacultyTab>("source");
@@ -150,15 +165,6 @@ export function ActivitiesPillar({ courseId, roster, activities, refresh }: Pill
   // optimistic overlays
   const [pendingStage, setPendingStage] = useState<Record<string, number>>({});
   const [pendingPosted, setPendingPosted] = useState<Record<string, boolean>>({});
-
-  // new-activity form
-  const [newOpen, setNewOpen] = useState(false);
-  const [fWeek, setFWeek] = useState("1");
-  const [fTitle, setFTitle] = useState("");
-  const [fTopic, setFTopic] = useState("");
-  const [fDates, setFDates] = useState("");
-  const [fMode, setFMode] = useState<Mode>("team");
-  const [fCadence, setFCadence] = useState(true);
 
   // source editor
   const [sourceDraft, setSourceDraft] = useState<string | null>(null);
@@ -266,19 +272,6 @@ export function ActivitiesPillar({ courseId, roster, activities, refresh }: Pill
   const r2DenomOf = (a: Activity): number =>
     a.resubmit_mode === "individual" ? roster.length : teamsFor(a).length;
 
-  const chipsFor = (a: Activity): { text: string; kind: ChipKind }[] => {
-    const out: { text: string; kind: ChipKind }[] = [];
-    if (a.dates_label) out.push({ text: a.dates_label, kind: "" });
-    const opens = fmtDate(a.opens_at);
-    if (opens) out.push({ text: `Opens ${opens}`, kind: "" });
-    const ind = fmtDate(a.individual_due_at);
-    if (ind) out.push({ text: `Individual due ${ind}`, kind: "amber" });
-    const team = fmtDate(a.team_due_at);
-    if (team) out.push({ text: `Team due ${team}`, kind: "" });
-    if (!out.length) out.push({ text: stageOf(a) === 0 ? "Not published" : "No dates set", kind: "" });
-    return out;
-  };
-
   const nextWeek = (): number => {
     const weeks = activities.map((a) => a.week ?? 0);
     return (weeks.length ? Math.max(...weeks) : 0) + 1;
@@ -311,6 +304,7 @@ export function ActivitiesPillar({ courseId, roster, activities, refresh }: Pill
   };
 
   const openWorkspace = (id: string) => {
+    setEditing(null);
     setOpenId(id);
     setLens("faculty");
     setTab("source");
@@ -322,76 +316,63 @@ export function ActivitiesPillar({ courseId, roster, activities, refresh }: Pill
     setFork(null);
   };
 
-  const startNew = () => {
-    setFWeek(String(nextWeek()));
-    setFTitle("");
-    setFTopic("");
-    setFDates("");
-    setFMode("team");
-    setFCadence(true);
-    setNewOpen(true);
+  /** Open the editor: an existing activity, or a new one in `week`. */
+  const openEditor = (target: EditTarget) => {
+    setOpenId(null);
+    setError(null);
+    setEditing(target);
   };
 
-  const submitNew = () =>
+  /** The week a "+ Activity" lands in: the newest one that already exists. */
+  const latestWeek = (): number => {
+    const weeks = activities.map((a) => a.week).filter((w): w is number => w != null);
+    return weeks.length ? Math.max(...weeks) : 1;
+  };
+
+  /**
+   * Save the editor and make the activity real for the class: it gets the
+   * check-in columns its scope needs, and leaves Setup if it was still there.
+   */
+  const assign = (target: EditTarget, draft: ActivityDraft) =>
     run(async () => {
-      const week = Number(fWeek);
-      const a = await createActivity({
-        courseId,
-        week: Number.isFinite(week) && week > 0 ? week : nextWeek(),
-        title: fTitle.trim(),
-        topic: fTopic.trim(),
-        datesLabel: fDates.trim(),
-        resubmitMode: fMode,
-      });
-      if (fCadence) {
-        await createCheckIn({
-          activityId: a.id,
-          label: "iRAT",
-          kind: "individual",
-          phase: "Readiness",
-          scale: "points",
-          maxPoints: 10,
-          position: 0,
+      const patch = {
+        week: draft.week,
+        title: draft.title,
+        type: draft.type,
+        scope: draft.scope,
+        resubmit_mode: RESUBMIT_MODE_OF[draft.scope],
+        source_text: draft.instructions ? draft.instructions : null,
+        files: draft.files,
+      };
+      let id = target.id;
+      if (id) {
+        const current = activities.find((a) => a.id === id);
+        await updateActivity(id, { ...patch, stage: Math.max(current?.stage ?? 0, 1) });
+      } else {
+        const created = await createActivity({
+          courseId,
+          week: draft.week,
+          title: draft.title,
+          type: draft.type,
+          scope: draft.scope,
+          stage: 1,
+          resubmitMode: RESUBMIT_MODE_OF[draft.scope],
+          sourceText: draft.instructions,
+          files: draft.files,
         });
-        await createCheckIn({
-          activityId: a.id,
-          label: "tRAT",
-          kind: "team",
-          phase: "Readiness",
-          scale: "points",
-          maxPoints: 15,
-          position: 1,
-        });
+        id = created.id;
       }
-      setNewOpen(false);
-      openWorkspace(a.id);
-      await refresh(); // the id list changes → the load effect re-runs on its own
+      await ensureCadence(id, draft.scope, checkInsOf(id));
+      setEditing(null);
+      await refresh();
+      // A new activity changes the id list, so the load effect re-runs on its
+      // own; an edited one does not, so the new check-ins need a read here.
+      if (target.id) await load();
     });
 
   const addCadence = (a: Activity) =>
     run(async () => {
-      if (!iColOf(a.id)) {
-        await createCheckIn({
-          activityId: a.id,
-          label: "iRAT",
-          kind: "individual",
-          phase: "Readiness",
-          scale: "points",
-          maxPoints: 10,
-          position: 0,
-        });
-      }
-      if (!tColOf(a.id)) {
-        await createCheckIn({
-          activityId: a.id,
-          label: "tRAT",
-          kind: "team",
-          phase: "Readiness",
-          scale: "points",
-          maxPoints: 15,
-          position: 1,
-        });
-      }
+      await ensureCadence(a.id, scopeOf(a), checkInsOf(a.id));
       await load();
     });
 
@@ -454,234 +435,92 @@ export function ActivitiesPillar({ courseId, roster, activities, refresh }: Pill
   const noCheckIns = (a: Activity, what: string) => (
     <div className="t-card" style={{ padding: 14 }}>
       <div style={{ fontSize: 12.5, color: "var(--ink2)", marginBottom: 10, maxWidth: "60ch" }}>
-        {what} This week has no check-in columns yet — the standard cadence is an individual iRAT
-        out of 10 and a team tRAT out of 15.
+        {what} This activity has no check-in columns yet — the standard cadence is an individual
+        iRAT out of 10 and a team tRAT out of 15, and it gets the ones its scope needs.
       </div>
       <button className="t-btn primary" disabled={busy} onClick={() => void addCadence(a)}>
-        Add iRAT + tRAT to {weekLabel(a)}
+        Add the check-ins for {weekLabel(a)}
       </button>
     </div>
   );
 
   /* ---------- render: activity list ---------- */
 
+  /** The live counts that stand in for a student's status-and-grade columns. */
+  function metaFor(a: Activity): ActivityRowMeta {
+    const stage = stageOf(a);
+    const scope = scopeOf(a);
+    const counts =
+      scope === "team"
+        ? `${r2CountOf(a)} / ${r2DenomOf(a)} in`
+        : `${r1CountOf(a)} / ${roster.length} in`;
+    return {
+      stage: postedOf(a) ? "Posted" : STAGES[stage] ?? STAGES[0],
+      stageBadge: postedOf(a) ? "success" : STAGE_BADGE[stage] ?? "outline",
+      counts,
+    };
+  }
+
+  /**
+   * Activities in the student's form. Wrapped in `.sv-tokens` so the student
+   * design system applies inside the faculty shell.
+   */
   function activityList() {
     return (
-      <section>
-        <div className="t-row">
-          <h1 className="t-h1">Activities</h1>
-          <span className="t-sub">
-            Each activity runs the loop once and owns its weekly check-in columns.
-          </span>
-          <span className="t-spacer" />
-          <button className="t-btn primary" onClick={startNew} disabled={newOpen}>
-            + New activity
-          </button>
-        </div>
-
+      <div className="sv-tokens" style={{ padding: 20 }}>
         {banner}
-        {newOpen && newActivityForm()}
-
         {loading ? (
-          <div style={{ color: "var(--ink2)", fontSize: 13, padding: "18px 2px" }}>
+          <div style={{ color: "var(--muted-foreground)", fontSize: "var(--text-sm)" }}>
             Loading activities…
           </div>
-        ) : activities.length === 0 ? (
-          !newOpen && (
-            <EmptyState
-              title="No activities yet"
-              body="An activity is one week of the loop: students attempt it alone, discuss it in their team, then resubmit. Start with week 1 — you can add its iRAT and tRAT columns at the same time."
-              action={
-                <button className="t-btn primary" onClick={startNew}>
-                  Create week 1
-                </button>
-              }
-            />
-          )
         ) : (
-          <div className="t-grid t-cards3">
-            {activities.map((a) => {
-              const set = setForActivity(a);
-              const teams = teamsFor(a);
-              const r1 = r1CountOf(a);
-              const r2 = r2CountOf(a);
-              const denom = r2DenomOf(a);
-              const counts2 =
-                a.resubmit_mode === "individual"
-                  ? `${r2}/${denom} individual resubmissions`
-                  : `${r2}/${denom} team answers in`;
-              return (
-                <div className="t-card" key={a.id}>
-                  <div style={{ display: "flex", gap: 2, marginBottom: 11 }}>
-                    <StageBar stage={stageOf(a)} busy={busy} onPick={(i) => setStage(a, i)} />
-                  </div>
-                  <button
-                    style={{
-                      border: 0,
-                      background: "transparent",
-                      padding: 0,
-                      textAlign: "left",
-                      fontFamily: "var(--serif)",
-                      fontSize: 19,
-                      fontWeight: 700,
-                      color: "var(--ink)",
-                      letterSpacing: "-.015em",
-                      cursor: "pointer",
-                    }}
-                    onClick={() => openWorkspace(a.id)}
-                  >
-                    {headline(a)}
-                  </button>
-                  {a.topic && (
-                    <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 3 }}>{a.topic}</div>
-                  )}
-                  <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 4 }}>
-                    {set
-                      ? `${set.name || "Team set"} · ${teams.length} team${teams.length === 1 ? "" : "s"}${set.locked ? " · locked" : ""}`
-                      : "No team set for this week yet"}
-                  </div>
-                  <div className="t-num" style={{ fontSize: 12.5, color: "var(--ink)", marginTop: 9 }}>
-                    {r1}/{roster.length} individual attempts in
-                  </div>
-                  <div className="t-num" style={{ fontSize: 12, color: "var(--ink2)", marginTop: 2 }}>
-                    {counts2}
-                  </div>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 11 }}>
-                    {chipsFor(a).map((c) => (
-                      <Chip key={c.text} text={c.text} kind={c.kind} />
-                    ))}
-                    {postedOf(a) && <Chip text="Posted" kind="green" />}
-                  </div>
-                  <div
-                    style={{ display: "flex", gap: 8, marginTop: 12, alignItems: "center", flexWrap: "wrap" }}
-                  >
-                    <button className="t-btn line" onClick={() => openWorkspace(a.id)}>
-                      Open workspace
-                    </button>
-                    <span style={{ fontSize: 11.5, color: "var(--ink3)" }}>
-                      Round 2 mode: {a.resubmit_mode}
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+          <ActivityWeeks
+            activities={activities}
+            metaFor={metaFor}
+            onOpen={(id) => openEditor({ id, week: latestWeek() })}
+            onNewWeek={() => openEditor({ id: null, week: nextWeek() })}
+            onNewActivity={() => openEditor({ id: null, week: latestWeek() })}
+          />
         )}
-      </section>
+      </div>
     );
   }
 
-  function newActivityForm() {
-    const modes: { id: Mode; label: string; note: string }[] = [
-      { id: "team", label: "team", note: "one shared answer per team" },
-      { id: "individual", label: "individual", note: "each student resubmits their own" },
-      { id: "choice", label: "choice", note: "each student picks team or own" },
+  function activityEditor(target: EditTarget) {
+    const current = target.id ? (activities.find((a) => a.id === target.id) ?? null) : null;
+    // A row that vanished (deleted elsewhere) must not silently become a new one.
+    if (target.id && !current) {
+      return (
+        <div className="sv-tokens" style={{ padding: 20 }}>
+          {banner}
+          <div className="sv-card" style={{ padding: "26px 20px", textAlign: "center" }}>
+            <div className="sv-h2">That activity is no longer there</div>
+            <p className="sv-sub" style={{ margin: "8px 0 16px" }}>
+              It may have been removed somewhere else. Go back to the list to pick another one.
+            </p>
+            <button className="sv-btn outline" onClick={() => setEditing(null)}>
+              All activities
+            </button>
+          </div>
+        </div>
+      );
+    }
+    const weeks = [
+      ...new Set(activities.map((a) => a.week).filter((w): w is number => w != null)),
     ];
-    const active = modes.find((m) => m.id === fMode);
     return (
-      <div className="t-card" style={{ padding: 15, marginBottom: 14, maxWidth: 720 }}>
-        <div className="t-kicker" style={{ marginBottom: 9 }}>
-          New activity · one week of the loop
-        </div>
-        <div style={{ display: "grid", gap: 10 }}>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <label className="t-fld" style={{ width: 96 }}>
-              Week
-              <input
-                className="t-in t-num"
-                type="number"
-                min={1}
-                value={fWeek}
-                onChange={(e) => setFWeek(e.target.value)}
-              />
-            </label>
-            <label className="t-fld" style={{ flex: 2, minWidth: 220 }}>
-              Title
-              <input
-                className="t-in"
-                autoFocus
-                value={fTitle}
-                placeholder="e.g. Membrane Transport — Case 4"
-                onChange={(e) => setFTitle(e.target.value)}
-              />
-            </label>
-          </div>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <label className="t-fld" style={{ flex: 1, minWidth: 180 }}>
-              Topic
-              <input
-                className="t-in"
-                value={fTopic}
-                placeholder="e.g. Membrane Transport"
-                onChange={(e) => setFTopic(e.target.value)}
-              />
-            </label>
-            <label className="t-fld" style={{ flex: 1, minWidth: 180 }}>
-              Dates label
-              <input
-                className="t-in"
-                value={fDates}
-                placeholder="e.g. Sep 2–6"
-                onChange={(e) => setFDates(e.target.value)}
-              />
-            </label>
-          </div>
-          <div>
-            <div className="t-kicker" style={{ marginBottom: 6 }}>
-              Round 2 mode
-            </div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
-              {modes.map((m) => (
-                <button
-                  key={m.id}
-                  className={"t-pill" + (fMode === m.id ? " on" : "")}
-                  onClick={() => setFMode(m.id)}
-                >
-                  {m.label}
-                </button>
-              ))}
-              <span style={{ fontSize: 11.5, color: "var(--ink3)" }}>{active ? active.note : ""}</span>
-            </div>
-          </div>
-          <label
-            style={{
-              display: "flex",
-              gap: 8,
-              alignItems: "flex-start",
-              fontSize: 12.5,
-              color: "var(--ink2)",
-              cursor: "pointer",
-            }}
-          >
-            <input
-              type="checkbox"
-              className="t-selbox"
-              style={{ marginTop: 2 }}
-              checked={fCadence}
-              onChange={(e) => setFCadence(e.target.checked)}
-            />
-            <span>
-              Also create this week&rsquo;s two check-ins — <strong>iRAT</strong> (individual, out of
-              10) and <strong>tRAT</strong> (team, out of 15). This is the standard cadence.
-            </span>
-          </label>
-          <div style={{ display: "flex", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
-            <button
-              className="t-btn primary"
-              disabled={!fTitle.trim() || busy}
-              onClick={() => void submitNew()}
-            >
-              Create activity
-            </button>
-            <button
-              className="t-btn ghost"
-              style={{ border: "1px solid var(--line)" }}
-              onClick={() => setNewOpen(false)}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
+      <div className="sv-tokens" style={{ padding: 20 }}>
+        {banner}
+        <ActivityEditor
+          key={target.id ?? `new-${target.week}`}
+          activity={current}
+          initialWeek={target.week}
+          weeks={weeks}
+          busy={busy}
+          onCancel={() => setEditing(null)}
+          onAssign={(draft) => void assign(target, draft)}
+          onOpenWorkspace={current ? () => openWorkspace(current.id) : null}
+        />
       </div>
     );
   }
@@ -705,9 +544,9 @@ export function ActivitiesPillar({ courseId, roster, activities, refresh }: Pill
             <button
               className="t-btn ghost"
               style={{ border: "1px solid var(--line)" }}
-              onClick={() => setOpenId(null)}
+              onClick={() => openEditor({ id: a.id, week: a.week ?? latestWeek() })}
             >
-              ← Activities
+              ← Edit activity
             </button>
             <h1
               style={{
@@ -1942,5 +1781,6 @@ export function ActivitiesPillar({ courseId, roster, activities, refresh }: Pill
     );
   }
 
+  if (editing) return activityEditor(editing);
   return activity ? workspace(activity) : activityList();
 }

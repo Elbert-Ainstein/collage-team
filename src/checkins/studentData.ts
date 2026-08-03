@@ -7,6 +7,7 @@
 
 import { requireSupabase } from "@/lib/supabaseClient";
 import { dbError } from "./data";
+import { scopeOf } from "./types";
 import type {
   Activity,
   CheckIn,
@@ -188,8 +189,10 @@ export async function listAssignments(enrolment: Enrolment): Promise<Assignment[
         (r) => r.check_in_id === teamCheckIn?.id && r.team_id === enrolment.team?.id,
       ) ?? null;
 
-    const lead = activity.type === "amplify" ? teamResult : myResult;
-    const leadCheckIn = activity.type === "amplify" ? teamCheckIn : indivCheckIn;
+    // A team-only activity has no individual row to lead with.
+    const teamOnly = scopeOf(activity) === "team";
+    const lead = teamOnly ? teamResult : myResult;
+    const leadCheckIn = teamOnly ? teamCheckIn : indivCheckIn;
 
     return {
       activity,

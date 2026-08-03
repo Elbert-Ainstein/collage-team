@@ -9,7 +9,7 @@ import {
   type Assignment,
   type Enrolment,
 } from "@/checkins/studentData";
-import { SCOPE_OF } from "@/checkins/types";
+import { scopeOf } from "@/checkins/types";
 import { SIcon } from "./icons";
 import { Assignments } from "./Assignments";
 import { MyWork } from "./MyWork";
@@ -66,7 +66,7 @@ export function StudentApp({
   const openAssignment = (id: string) => {
     const a = assignments.find((x) => x.activity.id === id);
     setSelId(id);
-    setTab(a && SCOPE_OF[a.activity.type] === "team" ? "team" : "indiv");
+    setTab(a && scopeOf(a.activity) === "team" ? "team" : "indiv");
     setScreen("detail");
   };
 

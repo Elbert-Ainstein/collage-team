@@ -113,3 +113,12 @@ export function EmptyState({
 export function weekLabel(a: Activity): string {
   return a.week != null ? `Week ${a.week}` : a.title;
 }
+
+/** A file's size for display next to its name ("214 KB"). */
+export function fileSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${Math.round(kb)} KB`;
+  return `${(kb / 1024).toFixed(1)} MB`;
+}

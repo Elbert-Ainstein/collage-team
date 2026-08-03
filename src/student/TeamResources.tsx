@@ -13,24 +13,8 @@
 
 import { useState } from "react";
 import { SIcon } from "./icons";
-import { TYPE_LABEL, type ActivityType } from "@/checkins/types";
+import { TYPE_ACCENT as ACCENT, TYPE_BADGE, TYPE_LABEL } from "@/checkins/types";
 import type { Assignment, Enrolment } from "@/checkins/studentData";
-
-/* ------------------------------------------------------------------ type map */
-
-const ACCENT: Record<ActivityType, string> = {
-  challenge: "var(--orange-500)",
-  combo: "var(--navy-700)",
-  skills: "var(--sky-700)",
-  amplify: "var(--lavender-600)",
-};
-
-const TYPE_BADGE: Record<ActivityType, string> = {
-  challenge: "orange",
-  combo: "sky",
-  skills: "sky",
-  amplify: "lavender",
-};
 
 /* ------------------------------------------------------ placeholder resources */
 

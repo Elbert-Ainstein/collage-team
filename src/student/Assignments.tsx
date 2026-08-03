@@ -4,8 +4,8 @@
 // docs/team-module/design-handoff-student-view/README.md.
 //
 // The modelling rule the whole screen hangs off: SCOPE, not type. The activity
-// type only picks a label and an accent colour; SCOPE_OF[type] decides whether
-// the detail shows Individual/Team tabs and which layout renders.
+// type only picks a label and an accent colour; scopeOf(activity) decides
+// whether the detail shows Individual/Team tabs and which layout renders.
 //
 // Real data arrives via props (activities, weeks, due dates, status, grade,
 // submissions, the team). The regions with no schema behind them yet — the
@@ -17,26 +17,17 @@ import { useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
 import type { Assignment, AssignmentStatus, Enrolment } from "@/checkins/studentData";
-import type { ActivityType, Scope, Student } from "@/checkins/types";
-import { SCOPE_LABEL, SCOPE_OF, TYPE_LABEL } from "@/checkins/types";
+import type { Scope, Student } from "@/checkins/types";
+import {
+  SCOPE_LABEL,
+  TYPE_ACCENT as ACCENT,
+  TYPE_BADGE,
+  TYPE_LABEL,
+  scopeOf,
+} from "@/checkins/types";
 import { SIcon } from "./icons";
 
 // ------------------------------------------------------------------ tokens
-
-/** Accent per type — the only thing type controls, besides its label. */
-const ACCENT: Record<ActivityType, string> = {
-  challenge: "var(--orange-500)",
-  combo: "var(--navy-700)",
-  skills: "var(--sky-700)",
-  amplify: "var(--lavender-600)",
-};
-
-const TYPE_BADGE: Record<ActivityType, string> = {
-  challenge: "orange",
-  combo: "sky",
-  skills: "sky",
-  amplify: "lavender",
-};
 
 const STATUS_BADGE: Record<AssignmentStatus, string> = {
   "Turned in": "sky",
@@ -95,7 +86,7 @@ function fmtWhen(iso: string | null | undefined): string | null {
 /** The due line under a row title, and the warning badge on the detail card. */
 function dueLine(a: Assignment): string {
   const act = a.activity;
-  const scope = SCOPE_OF[act.type];
+  const scope = scopeOf(act);
   const closed = act.stage >= 4;
   const verb = closed ? "Closed" : "Due";
   const indiv = fmtWhen(act.individual_due_at);
@@ -203,7 +194,7 @@ const CARD_BODY: CSSProperties = {
 
 function ActivityRow({ a, onSelect }: { a: Assignment; onSelect: (id: string) => void }) {
   const act = a.activity;
-  const scope = SCOPE_OF[act.type];
+  const scope = scopeOf(act);
   return (
     <button
       type="button"
@@ -739,7 +730,7 @@ function AssignmentDetail({
   showLiveGrading: boolean;
 }) {
   const act = a.activity;
-  const scope = SCOPE_OF[act.type];
+  const scope = scopeOf(act);
   // Tab state is ignored for single-scope activities, so it can never strand
   // the student on a tab that does not exist.
   const effective: "indiv" | "team" = scope === "both" ? tab : scope;

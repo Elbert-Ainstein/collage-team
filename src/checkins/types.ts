@@ -27,6 +27,11 @@ export interface Profile {
 export type ActivityType = "challenge" | "combo" | "skills" | "amplify";
 export type Scope = "indiv" | "team" | "both";
 
+/** Pickable order in the faculty editor. */
+export const ACTIVITY_TYPES: readonly ActivityType[] = ["challenge", "amplify", "skills", "combo"];
+export const SCOPES: readonly Scope[] = ["indiv", "team", "both"];
+
+/** The scope a type runs at unless faculty said otherwise. */
 export const SCOPE_OF: Record<ActivityType, Scope> = {
   challenge: "both",
   combo: "indiv",
@@ -47,6 +52,36 @@ export const SCOPE_LABEL: Record<Scope, string> = {
   team: "Team",
 };
 
+/** Accent per type — with its label, the only thing type controls. */
+export const TYPE_ACCENT: Record<ActivityType, string> = {
+  challenge: "var(--orange-500)",
+  combo: "var(--navy-700)",
+  skills: "var(--sky-700)",
+  amplify: "var(--lavender-600)",
+};
+
+/** The `.sv-badge` variant that carries each type's accent. */
+export const TYPE_BADGE: Record<ActivityType, string> = {
+  challenge: "orange",
+  combo: "sky",
+  skills: "sky",
+  amplify: "lavender",
+};
+
+/** Which check-in columns an activity of this scope needs work to land in. */
+export const CHECK_IN_KINDS_OF: Record<Scope, readonly CheckInKind[]> = {
+  indiv: ["individual"],
+  team: ["team"],
+  both: ["individual", "team"],
+};
+
+/** Round 2 follows the scope: an individual activity resubmits individually. */
+export const RESUBMIT_MODE_OF: Record<Scope, ResubmitMode> = {
+  indiv: "individual",
+  team: "team",
+  both: "team",
+};
+
 export interface Student {
   id: string;
   /** Set when a student account claims this roster row (matched on email). */
@@ -64,6 +99,8 @@ export interface FileRef {
   size?: string;
 }
 
+export type ResubmitMode = "team" | "individual" | "choice";
+
 export interface Activity {
   id: string;
   course_id: string;
@@ -72,8 +109,10 @@ export interface Activity {
   title: string;
   dates_label: string | null;
   type: ActivityType;
+  /** Faculty's explicit choice; null means "whatever the type implies". */
+  scope: Scope | null;
   stage: number; // 0 setup,1 individual,2 discuss,3 resubmit,4 closed
-  resubmit_mode: "team" | "individual" | "choice";
+  resubmit_mode: ResubmitMode;
   source_text: string | null;
   files: FileRef[];
   opens_at: string | null;
@@ -82,6 +121,14 @@ export interface Activity {
   posted: boolean;
   position: number;
   created_at: string;
+}
+
+/**
+ * The scope an activity actually runs at. Rows created before scope was a
+ * column carry null and keep the behaviour their type gave them.
+ */
+export function scopeOf(activity: Pick<Activity, "type" | "scope">): Scope {
+  return activity.scope ?? SCOPE_OF[activity.type];
 }
 
 export interface TeamSet {

@@ -1,14 +1,19 @@
 // Supabase data access for Class Check-ins. Every read and write is scoped to
 // the signed-in account by row-level security (see supabase/migrations/0003+).
 import { requireSupabase } from "@/lib/supabaseClient";
+import { CHECK_IN_KINDS_OF } from "./types";
 import type {
   Activity,
+  ActivityType,
   CheckIn,
   CheckInKind,
   CheckInResult,
   CheckInScale,
   Course,
+  FileRef,
+  ResubmitMode,
   ResultStatus,
+  Scope,
   Student,
   Team,
   TeamSet,
@@ -200,7 +205,8 @@ export async function listActivities(courseId: string): Promise<Activity[]> {
 }
 export async function createActivity(input: {
   courseId: string; week: number; title: string; topic?: string; datesLabel?: string;
-  resubmitMode?: "team" | "individual" | "choice"; sourceText?: string; position?: number;
+  type?: ActivityType; scope?: Scope; stage?: number;
+  resubmitMode?: ResubmitMode; sourceText?: string; files?: FileRef[]; position?: number;
 }): Promise<Activity> {
   return unwrap(
     await db().from("activities").insert({
@@ -209,8 +215,12 @@ export async function createActivity(input: {
       title: input.title,
       topic: input.topic || null,
       dates_label: input.datesLabel || null,
+      type: input.type || "challenge",
+      scope: input.scope ?? null,
+      stage: input.stage ?? 0,
       resubmit_mode: input.resubmitMode || "team",
       source_text: input.sourceText || null,
+      files: input.files ?? [],
       position: input.position ?? input.week,
     }).select().single(),
   );
@@ -375,6 +385,34 @@ export async function createCheckIn(input: {
     }).select().single(),
   );
 }
+/** The standard weekly cadence: an individual iRAT out of 10, a team tRAT out of 15. */
+export const CADENCE: Record<CheckInKind, { label: string; maxPoints: number; position: number }> = {
+  individual: { label: "iRAT", maxPoints: 10, position: 0 },
+  team: { label: "tRAT", maxPoints: 15, position: 1 },
+};
+
+/**
+ * Create the check-in columns this scope needs and does not already have, so an
+ * assigned activity always has somewhere for work to land. Idempotent.
+ */
+export async function ensureCadence(
+  activityId: string, scope: Scope, existing: CheckIn[],
+): Promise<void> {
+  for (const kind of CHECK_IN_KINDS_OF[scope]) {
+    if (existing.some((c) => c.kind === kind)) continue;
+    const spec = CADENCE[kind];
+    await createCheckIn({
+      activityId,
+      label: spec.label,
+      kind,
+      phase: "Readiness",
+      scale: "points",
+      maxPoints: spec.maxPoints,
+      position: spec.position,
+    });
+  }
+}
+
 export async function deleteCheckIn(id: string): Promise<void> {
   const { error } = await db().from("check_ins").delete().eq("id", id);
   if (error) throw dbError(error);

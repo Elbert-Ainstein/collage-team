@@ -2,7 +2,12 @@
    Tokens transcribed exactly from docs/team-module/design-handoff-student-view/README.md.
    Use the variables, never the literals. */
 
-.sv {
+/* The tokens and the shell are separate on purpose: `.sv` is the student app's
+   own full-page shell, `.sv-tokens` is the same design language dropped into
+   another surface — the faculty Activities tab, which shows activities in the
+   form students see them. */
+.sv,
+.sv-tokens {
   /* surfaces */
   --cream-100: rgb(255, 252, 242); /* cards */
   --cream-200: rgb(255, 250, 236); /* main panel */
@@ -62,13 +67,24 @@
   background: var(--cream-300);
   -webkit-font-smoothing: antialiased;
   text-wrap: pretty;
+}
+
+.sv {
   min-height: 100vh;
   display: flex;
 }
 
+/* Inset rather than full-page: it sits inside the faculty panel. */
+.sv-tokens {
+  border-radius: var(--radius-xl);
+}
+
 .sv *,
 .sv *::before,
-.sv *::after { box-sizing: border-box; }
+.sv *::after,
+.sv-tokens *,
+.sv-tokens *::before,
+.sv-tokens *::after { box-sizing: border-box; }
 
 /* ---------------------------------------------------------------- shell */
 .sv-sidebar {
@@ -182,6 +198,48 @@
   transition: background 140ms ease, color 140ms ease;
 }
 .sv-tab.on { background: var(--cream-100); color: var(--navy); font-weight: var(--weight-semibold); }
+
+/* Fields — the faculty activity editor is the only screen that authors data in
+   this design language, so the atoms live here beside the other ones. */
+.sv-in {
+  font: inherit; font-size: var(--text-sm); color: var(--navy);
+  background: var(--cream-100); border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-md); padding: 8px 11px; width: 100%;
+}
+.sv-in:focus-visible { outline: 2px solid var(--navy-700); outline-offset: -1px; }
+.sv-in::placeholder { color: var(--neutral-400); }
+.sv-in.title {
+  font-family: var(--font-serif); font-size: var(--text-xl);
+  font-weight: var(--weight-bold); letter-spacing: var(--tracking-tight);
+}
+
+/* A segmented picker for closed sets (scope, activity type). */
+.sv-seg {
+  display: inline-flex; flex-wrap: wrap; gap: 3px; padding: 3px;
+  border: 1px solid var(--neutral-200); background: var(--cream-300); border-radius: var(--radius-md);
+}
+.sv-segbtn {
+  border: 1px solid transparent; background: transparent; color: var(--muted-foreground);
+  font: inherit; font-size: var(--text-xs); padding: 6px 13px; border-radius: 6px; cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+.sv-segbtn:hover { color: var(--navy); }
+.sv-segbtn.on {
+  background: var(--cream-100); color: var(--navy);
+  font-weight: var(--weight-semibold); border-color: var(--neutral-200);
+}
+.sv-segbtn:disabled { cursor: default; }
+
+/* Drop target for the editor's file upload. */
+.sv-dz {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  width: 100%; padding: 20px 16px; cursor: pointer; text-align: center;
+  border: 1px dashed var(--neutral-300); background: var(--cream-300);
+  border-radius: var(--radius-lg); color: var(--muted-foreground);
+  font: inherit; font-size: var(--text-xs);
+  transition: border-color 140ms ease, background 140ms ease;
+}
+.sv-dz:hover, .sv-dz.over { border-color: var(--navy-700); background: var(--cream-200); }
 
 .sv-rule { height: 1px; background: var(--neutral-200); }
 .sv-ellip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

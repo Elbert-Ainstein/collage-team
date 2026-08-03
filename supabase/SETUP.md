@@ -15,6 +15,9 @@ Once it's done and you've pasted two values into `.env.local`, I wire up everyth
    - [`0002_unique_session_code.sql`](migrations/0002_unique_session_code.sql) — stops duplicate sessions
    - [`0003_auth_owner_scoped.sql`](migrations/0003_auth_owner_scoped.sql) — **replaces the open policy with per-account access**
    - [`0004_check_secondary_refs.sql`](migrations/0004_check_secondary_refs.sql) — closes a cross-account write gap
+   - [`0005_owner_default.sql`](migrations/0005_owner_default.sql) — fills `owner_id` in for you
+   - [`0006_roles_and_students.sql`](migrations/0006_roles_and_students.sql) — **student accounts**, and the activity type
+   - [`0007_activity_scope.sql`](migrations/0007_activity_scope.sql) — lets faculty pick who an activity is for
 4. You should see "Success". (Check **Table Editor** — you'll see `courses`, `students`, `activities`, `teams`, `check_ins`, `check_in_results`, etc. All empty. That's correct — the AP50A placeholder is gone; real data comes from you.)
 
 ## 3. Grab the two keys I need
