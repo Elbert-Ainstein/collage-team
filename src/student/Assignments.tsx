@@ -734,7 +734,7 @@ function AssignmentDetail({
   tab: "indiv" | "team";
   onBack: () => void;
   onTabChange: (t: "indiv" | "team") => void;
-  onOpenWork: (id: string) => void;
+  onOpenWork: (id: string, mode: "indiv" | "team") => void;
   onOpenResources: () => void;
   showLiveGrading: boolean;
 }) {
@@ -751,6 +751,14 @@ function AssignmentDetail({
   const names = teammateNames(enrolment);
   const presenter = names[0] ?? SEED_PRESENTERS[0];
   const gradingNames = names.length ? names : SEED_PRESENTERS;
+
+  const teamSavedLine = !enrolment.team
+    ? "You are not on a team yet"
+    : a.teamResult?.status === "scored"
+      ? `Graded · ${a.teamGrade}`
+      : a.teamResult?.text
+        ? `Submitted ${fmtWhen(a.teamResult.updated_at) ?? "recently"} by your team`
+        : "Your team has not submitted yet";
 
   const savedLine = a.myResult?.status === "draft"
     ? `Draft saved ${fmtWhen(a.myResult.updated_at) ?? "recently"}`
@@ -801,7 +809,7 @@ function AssignmentDetail({
             <div>
               <DescriptionCard a={a} />
               <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 14 }}>
-                <button type="button" className="sv-btn primary" onClick={() => onOpenWork(act.id)}>
+                <button type="button" className="sv-btn primary" onClick={() => onOpenWork(act.id, "indiv")}>
                   Open my work
                 </button>
                 <span className="sv-sub">{savedLine}</span>
@@ -822,6 +830,34 @@ function AssignmentDetail({
               </div>
 
               <AudioCard presenter={presenter} />
+
+              {a.teamCheckIn ? (
+                <div
+                  style={{
+                    display: "flex",
+                    gap: 12,
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    marginTop: 14,
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="sv-btn primary"
+                    onClick={() => onOpenWork(act.id, "team")}
+                    disabled={!enrolment.team}
+                    title={
+                      enrolment.team
+                        ? "Write and submit the answer your team agreed on"
+                        : "You are not on a team yet"
+                    }
+                  >
+                    Open team work
+                  </button>
+                  <span className="sv-sub">{teamSavedLine}</span>
+                </div>
+              ) : null}
+
               <ResourceStrip onOpenResources={onOpenResources} />
             </div>
           ) : null}
@@ -846,7 +882,7 @@ export function Assignments(props: {
   onSelect: (id: string) => void;
   onBack: () => void;
   onTabChange: (t: "indiv" | "team") => void;
-  onOpenWork: (id: string) => void;
+  onOpenWork: (id: string, mode: "indiv" | "team") => void;
   onOpenResources: () => void;
   showLiveGrading?: boolean;
 }) {

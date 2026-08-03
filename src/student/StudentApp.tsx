@@ -6,6 +6,7 @@ import {
   getEnrolment,
   listAssignments,
   submitMyWork,
+  submitTeamWork,
   type Assignment,
   type Enrolment,
 } from "@/checkins/studentData";
@@ -33,19 +34,27 @@ export function StudentApp({
   const [selId, setSelId] = useState<string | null>(null);
   const [trId, setTrId] = useState<string | null>(null);
   const [tab, setTab] = useState<"indiv" | "team">("indiv");
+  // Which half of a check-in the work screen is editing.
+  const [workMode, setWorkMode] = useState<"indiv" | "team">("indiv");
 
   const [enrolment, setEnrolment] = useState<Enrolment | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [claimError, setClaimError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     // Claim any roster rows carrying this address first — a student who signs
     // up before the instructor imports them would otherwise be stranded.
     try {
       await claimStudentRows();
-    } catch {
-      // Not fatal: an unclaimed account simply has no enrolment yet.
+      setClaimError(null);
+    } catch (err) {
+      // Not fatal on its own: an unclaimed account simply has no enrolment yet.
+      // But if the claim FAILED rather than matched nothing, that is the reason
+      // this student is stuck, and swallowing it leaves them reloading forever
+      // with nothing to tell their instructor.
+      setClaimError(String((err as Error)?.message ?? err));
     }
     const e = await getEnrolment();
     setEnrolment(e);
@@ -195,6 +204,20 @@ export function StudentApp({
           instructor to add that exact address to the roster — once they do, reload this page and
           your assignments will appear.
         </p>
+        {claimError ? (
+          <p
+            style={{
+              fontSize: "var(--text-sm)",
+              color: "var(--muted-foreground)",
+              lineHeight: 1.6,
+              marginTop: 12,
+              maxWidth: "62ch",
+            }}
+          >
+            Matching also reported an error, which your instructor may need:{" "}
+            <span style={{ color: "var(--navy)" }}>{claimError}</span>
+          </p>
+        ) : null}
         <button className="sv-btn outline" style={{ marginTop: 16 }} onClick={() => location.reload()}>
           Check again
         </button>
@@ -207,10 +230,18 @@ export function StudentApp({
       <MyWork
         assignment={selected}
         enrolment={enrolment}
+        mode={workMode}
         onBack={() => setScreen("detail")}
         onSubmit={async (text) => {
-          if (!selected.indivCheckIn) return;
-          await submitMyWork(selected.indivCheckIn.id, enrolment.student.id, text);
+          if (workMode === "team") {
+            // Guarded in MyWork too, but never write a submission we cannot
+            // attribute to a team.
+            if (!selected.teamCheckIn || !enrolment.team) return;
+            await submitTeamWork(selected.teamCheckIn.id, enrolment.team.id, text);
+          } else {
+            if (!selected.indivCheckIn) return;
+            await submitMyWork(selected.indivCheckIn.id, enrolment.student.id, text);
+          }
           await load();
         }}
       />,
@@ -248,8 +279,9 @@ export function StudentApp({
         setScreen("list");
       }}
       onTabChange={setTab}
-      onOpenWork={(id) => {
+      onOpenWork={(id, mode) => {
         setSelId(id);
+        setWorkMode(mode);
         setScreen("work");
       }}
       onOpenResources={() => {

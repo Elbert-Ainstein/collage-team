@@ -15,6 +15,7 @@ import {
 } from "./data";
 import type { Activity, Course, Student } from "./types";
 import { isSupportedRosterFile, parseRoster, type ParsedStudent } from "./rosterImport";
+import { reconcileRoster } from "./rosterReconcile";
 import { Avatar, ErrorBanner } from "./ui";
 import { TeamsPillar } from "./TeamsPillar";
 import { GradebookPillar } from "./GradebookPillar";
@@ -492,9 +493,28 @@ function RosterRow({
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(student.email ?? "");
   const [busy, setBusy] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
   const linked = Boolean(student.user_id);
 
+  // Rows are keyed by student id, so an import that back-fills addresses
+  // re-renders this same instance with new props. Without this the box still
+  // holds the empty string it mounted with, and saving deletes the address the
+  // import just added.
+  useEffect(() => {
+    setValue(student.email ?? "");
+    setConfirmClear(false);
+  }, [student.email]);
+
+  // Clearing an address unlinks the student from their sign-in, so it takes a
+  // second, deliberate click. (An inline confirm, not window.confirm — that is
+  // suppressed here and the click would simply do nothing.)
+  const clearing = !value.trim() && Boolean(student.email);
+
   const save = async () => {
+    if (clearing && !confirmClear) {
+      setConfirmClear(true);
+      return;
+    }
     setBusy(true);
     try {
       await onSaveEmail(value);
@@ -535,17 +555,31 @@ function RosterRow({
                 if (e.key === "Enter") void save();
                 if (e.key === "Escape") {
                   setValue(student.email ?? "");
+                  setConfirmClear(false);
                   setEditing(false);
                 }
               }}
             />
-            <button className="t-btn sm primary" onClick={() => void save()} disabled={busy}>
-              Save
+            <button
+              className="t-btn sm primary"
+              onClick={() => void save()}
+              disabled={busy}
+              title={
+                clearing
+                  ? `${student.name} will not be able to sign in until an address is added back`
+                  : undefined
+              }
+            >
+              {confirmClear ? "Remove address" : "Save"}
             </button>
           </span>
         ) : (
           <button
-            onClick={() => setEditing(true)}
+            onClick={() => {
+              setValue(student.email ?? "");
+              setConfirmClear(false);
+              setEditing(true);
+            }}
             title="Edit the address this student signs in with"
             style={{
               display: "block",
@@ -682,18 +716,13 @@ function RosterEditor({
   };
 
   /**
-   * A name already on the roster is not added twice — but if the file carries an
-   * email and that row has none, the address is filled in. That makes a
+   * A student already on the roster is not added twice — but if the file carries
+   * an email and that row has none, the address is filled in. That makes a
    * names-only roster fixable by re-uploading the same list with emails, rather
-   * than editing every row by hand.
+   * than editing every row by hand. See rosterReconcile for how identity is
+   * decided.
    */
-  const byName = new Map(roster.map((s) => [s.name.trim().toLowerCase(), s]));
-  const fresh = pending?.students.filter((s) => !byName.has(s.name.trim().toLowerCase())) ?? [];
-  const emailFills = (pending?.students ?? []).flatMap((p) => {
-    const match = byName.get(p.name.trim().toLowerCase());
-    return match && p.email && !match.email ? [{ student: match, email: p.email }] : [];
-  });
-  const unchanged = (pending?.students.length ?? 0) - fresh.length - emailFills.length;
+  const { fresh, emailFills, unchanged } = reconcileRoster(roster, pending?.students ?? []);
 
   const confirmImport = async () => {
     if (!pending || (!fresh.length && !emailFills.length)) return;

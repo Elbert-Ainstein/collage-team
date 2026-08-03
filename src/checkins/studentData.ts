@@ -68,8 +68,12 @@ export async function getEnrolment(): Promise<Enrolment | null> {
   const uid = auth.user?.id;
   if (!uid) return null;
 
+  // Ordered, because one account can sit on more than one roster (a student in
+  // both AP50A and AP50B). Which session they land in is arbitrary either way,
+  // but it must not change between reloads.
   const me = (unwrap(
-    await db().from("students").select("*").eq("user_id", uid).limit(1),
+    await db().from("students").select("*")
+      .eq("user_id", uid).order("created_at").limit(1),
   ) as Student[] ?? [])[0];
   if (!me) return null;
 
@@ -120,7 +124,10 @@ export interface Assignment {
   /** Their team's result on the team check-in. */
   teamResult: CheckInResult | null;
   status: AssignmentStatus;
+  /** The headline grade — the individual one, except for team-only work. */
   grade: string;
+  /** The team half's grade on its own, for activities that have both. */
+  teamGrade: string;
   submitted: string | null;
 }
 
@@ -199,9 +206,37 @@ export async function listAssignments(enrolment: Enrolment): Promise<Assignment[
       teamResult,
       status: statusOf(lead, activity.stage),
       grade: gradeOf(lead, leadCheckIn),
+      teamGrade: gradeOf(teamResult, teamCheckIn),
       submitted: lead?.updated_at ?? null,
     };
   });
+}
+
+/**
+ * Write a submission, creating the row the first time and updating it after.
+ *
+ * Find-then-write rather than upsert: the uniqueness that makes a result unique
+ * is expressed as two partial indexes (one per subject), and a partial index
+ * cannot be an ON CONFLICT arbiter.
+ */
+async function submit(
+  checkInId: string,
+  subject: { subject_type: "student"; student_id: string } | { subject_type: "team"; team_id: string },
+  text: string,
+): Promise<void> {
+  const column = subject.subject_type === "student" ? "student_id" : "team_id";
+  const id = subject.subject_type === "student" ? subject.student_id : subject.team_id;
+
+  const existing = unwrap(
+    await db().from("check_in_results").select("id")
+      .eq("check_in_id", checkInId).eq(column, id).limit(1),
+  ) as { id: string }[] ?? [];
+
+  const fields = { status: "submitted" as const, text, updated_at: new Date().toISOString() };
+  const { error } = existing.length
+    ? await db().from("check_in_results").update(fields).eq("id", existing[0].id)
+    : await db().from("check_in_results").insert({ check_in_id: checkInId, ...subject, ...fields });
+  if (error) throw dbError(error);
 }
 
 /** Submit (or re-submit) the student's own work for an activity. */
@@ -210,19 +245,18 @@ export async function submitMyWork(
   studentId: string,
   text: string,
 ): Promise<void> {
-  const existing = unwrap(
-    await db().from("check_in_results").select("id")
-      .eq("check_in_id", checkInId).eq("student_id", studentId).limit(1),
-  ) as { id: string }[] ?? [];
+  await submit(checkInId, { subject_type: "student", student_id: studentId }, text);
+}
 
-  const fields = { status: "submitted" as const, text, updated_at: new Date().toISOString() };
-  const { error } = existing.length
-    ? await db().from("check_in_results").update(fields).eq("id", existing[0].id)
-    : await db().from("check_in_results").insert({
-        check_in_id: checkInId,
-        subject_type: "student",
-        student_id: studentId,
-        ...fields,
-      });
-  if (error) throw dbError(error);
+/**
+ * Submit the team's work after the discussion — the second half of a check-in.
+ * Any member may write it, and it replaces whatever a teammate wrote before,
+ * which is what "the team's answer" means.
+ */
+export async function submitTeamWork(
+  checkInId: string,
+  teamId: string,
+  text: string,
+): Promise<void> {
+  await submit(checkInId, { subject_type: "team", team_id: teamId }, text);
 }

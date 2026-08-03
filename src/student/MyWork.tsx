@@ -76,12 +76,17 @@ function stamp(iso: string | null): string | null {
 export function MyWork(props: {
   assignment: Assignment;
   enrolment: Enrolment;
+  /** Which half of the check-in this is: the student's own, or the team's. */
+  mode: "indiv" | "team";
   onBack: () => void;
   onSubmit: (text: string) => Promise<void>;
 }) {
-  const { assignment, enrolment, onBack, onSubmit } = props;
+  const { assignment, enrolment, mode, onBack, onSubmit } = props;
+  const isTeam = mode === "team";
   const activityId = assignment.activity.id;
-  const seeded = assignment.myResult?.text ?? "";
+  const checkIn = isTeam ? assignment.teamCheckIn : assignment.indivCheckIn;
+  const result = isTeam ? assignment.teamResult : assignment.myResult;
+  const seeded = result?.text ?? "";
 
   const [text, setText] = useState(seeded);
   const [saved, setSaved] = useState(seeded);
@@ -95,7 +100,7 @@ export function MyWork(props: {
   useEffect(() => {
     setText(seeded);
     setSaved(seeded);
-  }, [activityId, seeded]);
+  }, [activityId, mode, seeded]);
 
   // Confirmation and errors belong to this activity only. Deliberately NOT
   // keyed on `seeded`: the parent refetches right after a successful submit,
@@ -103,28 +108,34 @@ export function MyWork(props: {
   useEffect(() => {
     setDone(false);
     setError(null);
-  }, [activityId]);
+  }, [activityId, mode]);
 
   const answered = QUESTIONS.filter((q) => q.state === "done").length;
   const dirty = text !== saved;
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
-  const submittedAt = stamp(assignment.submitted);
+  const submittedAt = stamp(result?.updated_at ?? null);
   const firstEmpty = QUESTIONS.find((q) => q.state === "empty");
 
-  const cannotSubmit = !assignment.indivCheckIn
-    ? "This activity has no individual check-in to submit to."
-    : !text.trim()
-      ? "Write your answer before submitting."
-      : busy
-        ? "Submitting…"
-        : null;
+  const cannotSubmit = !checkIn
+    ? isTeam
+      ? "This activity has no team check-in to submit to."
+      : "This activity has no individual check-in to submit to."
+    : isTeam && !enrolment.team
+      ? "You are not on a team yet, so there is nothing to submit together."
+      : result?.status === "scored"
+        ? "This has already been graded. Ask your instructor to reopen it."
+        : !text.trim()
+          ? "Write your answer before submitting."
+          : busy
+            ? "Submitting…"
+            : null;
 
   // The header state line. Nothing autosaves yet, so it says what is actually
   // true rather than the mock's "Autosaved · draft".
   const stateLine = busy
     ? "Submitting…"
     : done
-      ? "Submitted just now"
+      ? (isTeam ? "Submitted for the team just now" : "Submitted just now")
       : dirty
         ? "Unsaved draft · not submitted"
         : submittedAt
@@ -163,7 +174,7 @@ export function MyWork(props: {
           <SIcon name="chevronLeft" size={15} />
           {assignment.activity.title}
         </button>
-        <h1 className="sv-h2">My work</h1>
+        <h1 className="sv-h2">{isTeam ? "Team answer" : "My work"}</h1>
         <span className="sv-sub">{stateLine}</span>
         <span style={{ flex: 1 }} />
         <span className="sv-sub sv-num" title={SAMPLE}>
@@ -174,9 +185,14 @@ export function MyWork(props: {
           className="sv-btn primary"
           onClick={submit}
           disabled={cannotSubmit !== null}
-          title={cannotSubmit ?? `Submit your answer for ${assignment.activity.title}`}
+          title={
+            cannotSubmit ??
+            (isTeam
+              ? `Submit your team's answer for ${assignment.activity.title}`
+              : `Submit your answer for ${assignment.activity.title}`)
+          }
         >
-          {busy ? "Submitting…" : "Submit"}
+          {busy ? "Submitting…" : isTeam ? "Submit for team" : "Submit"}
         </button>
       </div>
 

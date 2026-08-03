@@ -25,7 +25,10 @@ export interface ParseResult {
   warnings: string[];
 }
 
-const EMAIL_RE = /[^\s,;<>()[\]"]+@[^\s,;<>()[\]"]+\.[A-Za-z]{2,}/;
+// Written as what an address IS, not as what it is not: an exclusion list let
+// `|`, `:` and a second `@` through, and produced logins nobody could sign in
+// with ("ada|ada@harvard.edu", "alan@@x.edu") out of pipe-delimited files.
+const EMAIL_RE = /[A-Za-z0-9!#$%&'*+/=?^_`{}~.-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)*\.[A-Za-z]{2,}/;
 const EMAIL_EXACT = new RegExp(`^${EMAIL_RE.source}$`);
 
 /** Suffixes that must not be mistaken for a given name when flipping "Last, First". */
@@ -36,7 +39,7 @@ const JUNK_ROW_RE =
   /^(showing|displaying|total|totals|count|page \d|generated|exported|end of report|\d+ (students?|records?|rows?)\b)/i;
 
 const HEADER_HINT_RE =
-  /^(name|full ?name|student|student ?name|students|display ?name|preferred ?name|first|first ?name|given ?name|last|last ?name|family ?name|surname|e-?mail|e-?mail ?address|login|username|user|id|sis ?.*|section|course|role|status)$/i;
+  /^(name|full ?name|student|student ?name|students|display ?name|preferred ?name|first|first ?name|given ?name|last|last ?name|family ?name|surname|e-?mail|e-?mail ?address|login|username|user|id|sis ?(user|login)? ?id|section|course|role|status)$/i;
 
 /** Split one delimited line, honouring "quoted, fields" and escaped "" quotes. */
 function splitLine(line: string, delim: string): string[] {
@@ -85,11 +88,16 @@ function detectDelimiter(lines: string[]): string {
   let best = ",";
   let bestScore = -1;
   for (const d of candidates) {
-    const counts = lines.slice(0, 25).map((l) => splitLine(l, d).length);
+    const sample = lines.slice(0, 25).map((l) => splitLine(l, d));
+    const counts = sample.map((r) => r.length);
     const max = Math.max(...counts, 1);
     if (max < 2) continue;
     const agree = counts.filter((c) => c === max).length / counts.length;
-    const score = agree * 10 + max * 0.1;
+    // A split that yields a column of clean addresses is the right split. Without
+    // this, `,` and `;` tie on "Lovelace, Ada;ada@harvard.edu" and comma wins by
+    // being first in the list — taking every given name with it.
+    const whole = sample.filter((r) => r.some((c) => EMAIL_EXACT.test(c))).length;
+    const score = agree * 10 + max * 0.1 + (whole / sample.length) * 3;
     if (score > bestScore) {
       bestScore = score;
       best = d;
@@ -125,6 +133,12 @@ function normalizeName(raw: string): string {
   s = s.replace(/<[^>]*>/g, "").trim();
   if (EMAIL_EXACT.test(s)) return "";
 
+  const parts = s.split(",").map((x) => x.trim()).filter(Boolean);
+  // "King, Martin Luther, Jr." → "Martin Luther King, Jr." — the suffix trails
+  // the whole name, it is not a middle name.
+  if (parts.length === 3 && SUFFIX_RE.test(parts[2])) {
+    return `${parts[1]} ${parts[0]}, ${parts[2]}`;
+  }
   const m = /^([^,]+),\s*(.+)$/.exec(s);
   if (m) {
     const left = m[1].trim();
@@ -134,6 +148,26 @@ function normalizeName(raw: string): string {
   }
   return s;
 }
+
+/** Cells that are class metadata rather than any part of a person's name. */
+const NON_NAME_RE =
+  /^(section|sec|group|team|lab|period|room|block|cohort|status|active|inactive|enrolled|dropped|waitlist(ed)?|yes|no|n\/?a|male|female|other|grade|year)\b/i;
+
+/** Lowercase particles that are part of a surname, not a given name. */
+const PARTICLE_RE = /^(van|von|der|den|de|del|della|di|da|dos|du|la|le|el|al|bin|ibn|ben|mac|mc|st\.?|ter|ten)$/i;
+
+/**
+ * Could this cell be the surname half of "Surname, Given"? One token, or a run
+ * of particles before one token ("van der Berg"). Crucially "Ada Lovelace" is
+ * NOT a surname, which is what separates a real inverted list from two people
+ * on one line.
+ */
+function looksLikeSurname(cell: string): boolean {
+  const t = cell.split(/\s+/).filter(Boolean);
+  return t.length > 0 && t.slice(0, -1).every((x) => PARTICLE_RE.test(x));
+}
+
+const tokenCount = (s: string) => s.split(/\s+/).filter(Boolean).length;
 
 /** Cells that are clearly identifiers rather than a person's name. */
 function isNameLike(s: string): boolean {
@@ -151,6 +185,11 @@ function emailIn(cells: string[]): string {
     if (m) return m[0];
   }
   return "";
+}
+
+/** "mailto:ada@x.edu" and stray punctuation would never match a real login. */
+function cleanEmail(raw: string): string {
+  return raw.replace(/^mailto:/i, "").replace(/[.,;]+$/, "").trim().toLowerCase();
 }
 
 export function parseRoster(text: string): ParseResult {
@@ -176,16 +215,34 @@ export function parseRoster(text: string): ParseResult {
   let rows = lines.map((l) => splitLine(l, delim));
 
   // "Lovelace, Ada" per line splits into two consistent columns and looks just
-  // like a 2-column CSV. Real two-column data carries a header, an address or an
-  // id; a bare list of inverted names carries none of those, so treat it as one
-  // column and let normalizeName do the flip.
-  if (delim === "," && rows.every((r) => r.length === 2)) {
+  // like a 2-column CSV. Telling the two apart takes positive evidence, because
+  // guessing wrong reverses every name in the class — and the absence of emails
+  // and digits is not evidence: a headerless "Ada,Lovelace" has none either, and
+  // neither does "Ada Lovelace, Grace Hopper", which is two people on one line.
+  //
+  // What an inverted list actually looks like: a surname before the comma, a
+  // space after it, and nothing that is class metadata on the right.
+  if (delim === ",") {
     const flat = lines.join(" ");
-    const looksLikeNamesOnly =
-      !EMAIL_RE.test(flat) && !/\d/.test(flat) && !looksLikeHeader(rows[0]);
-    if (looksLikeNamesOnly) {
+    const bare = !EMAIL_RE.test(flat) && !/\d/.test(flat) && !looksLikeHeader(rows[0]);
+    const multi = rows.map((r, i) => ({ r, line: lines[i].trim() })).filter((x) => x.r.length > 1);
+    const inverted =
+      multi.length > 0 &&
+      rows.every((r) => r.length <= 3) &&
+      multi.every(
+        ({ r, line }) =>
+          /,\s/.test(line) && // "Lovelace, Ada" — not "Ada,Lovelace"
+          !/,\S/.test(line) &&
+          looksLikeSurname(r[0]) && // "Ada Lovelace, ..." is not a surname
+          !NON_NAME_RE.test(r[1] ?? ""), // "Ada Lovelace, Section A" is not a name
+      );
+    if (bare && inverted) {
       delim = "\u0000"; // a delimiter no roster contains
-      rows = lines.map((l) => [clean(l)]);
+      // Re-join the PARSED cells rather than re-splitting the raw line: going
+      // back to the line threw away the quote-aware parse and turned
+      // '"Lovelace, Ada",Ada' into 'Ada",Ada "Lovelace'.
+      rows = rows.map((r) => [clean(r.join(", "))]);
+      warnings.push("Read as “Last, First”, so “Lovelace, Ada” is imported as “Ada Lovelace”.");
     }
   }
 
@@ -194,7 +251,7 @@ export function parseRoster(text: string): ParseResult {
   let cols = { name: -1, first: -1, last: -1, email: -1 };
   let start = 0;
   const detected: string[] = [];
-  for (let i = 0; i < Math.min(rows.length, 5); i++) {
+  for (let i = 0; i < Math.min(rows.length, 10); i++) {
     if (looksLikeHeader(rows[i])) {
       const found = findColumns(rows[i]);
       if (found.name >= 0 || (found.first >= 0 && found.last >= 0) || found.email >= 0) {
@@ -203,10 +260,17 @@ export function parseRoster(text: string): ParseResult {
         if (found.name >= 0) detected.push("name");
         if (found.first >= 0 && found.last >= 0) detected.push("first + last");
         if (i > 0) warnings.push(`Ignored ${i} line${i === 1 ? "" : "s"} above the header.`);
+        // Only a header we can actually use ends the search. A decorative row
+        // ("Course,Section") looks like one but names no column, and breaking
+        // on it turned the real header and everything above it into students.
+        break;
       }
-      break;
     }
   }
+
+  const noHeader = cols.name < 0 && cols.first < 0 && cols.last < 0;
+  let joinedColumns = false;
+  let ignoredColumns = false;
 
   let skipped = 0;
   for (let i = start; i < rows.length; i++) {
@@ -224,8 +288,22 @@ export function parseRoster(text: string): ParseResult {
       name = [cells[cols.first] ?? "", cells[cols.last] ?? ""].filter(Boolean).join(" ");
     }
     if (!name) {
-      // No usable header: the name is the first cell that reads like one.
-      name = cells.find((c) => isNameLike(c)) ?? "";
+      // No usable header: the name is the cell that reads like one, ignoring
+      // section/status columns that read like one but are not.
+      const nameLike = cells.filter((c) => isNameLike(c) && !NON_NAME_RE.test(c));
+      name = nameLike[0] ?? "";
+      if (noHeader && nameLike.length > 1) {
+        // A headerless "Ada,Lovelace" would otherwise import as "Ada". Join the
+        // parts only when together they read as ONE person; "Ada Lovelace,
+        // Grace Hopper" is four tokens and two people, so it is left alone
+        // rather than fused into a person who does not exist.
+        if (tokenCount(nameLike.join(" ")) <= 3 && !nameLike.some((c) => c.includes(","))) {
+          name = nameLike.join(" ");
+          joinedColumns = true;
+        } else {
+          ignoredColumns = true;
+        }
+      }
       // A single "Ada Lovelace <ada@x.edu>" cell still yields both.
       if (!name && cells.length === 1) name = cells[0];
     }
@@ -242,24 +320,70 @@ export function parseRoster(text: string): ParseResult {
       skipped++;
       continue;
     }
-    students.push(email ? { name, email: email.toLowerCase() } : { name });
+    students.push(email ? { name, email: cleanEmail(email) } : { name });
   }
 
   if (skipped) warnings.push(`Skipped ${skipped} row${skipped === 1 ? "" : "s"} with no name.`);
+  // The file had no header, so both of these are guesses. Say so — the preview
+  // shows the resulting names and the instructor can see at a glance if a guess
+  // was wrong.
+  if (joinedColumns) {
+    warnings.push("No header row — the first two columns were read as one name.");
+  }
+  if (ignoredColumns) {
+    warnings.push(
+      "No header row — the first column was read as the name and the rest ignored. " +
+        "Add a “Name,Email” header row if that is wrong.",
+    );
+  }
 
-  // De-duplicate within the file: by name, and by address where present.
-  const seenName = new Set<string>();
-  const seenEmail = new Set<string>();
-  const unique = students.filter((s) => {
+  // De-duplicate conservatively. Only a row that is genuinely the same person is
+  // dropped: same name AND a compatible address. Two students who share a name
+  // but have different addresses are two students, and two names sharing one
+  // address are probably siblings — dropping either loses a real person, which
+  // is far worse than importing a row the instructor can delete.
+  const kept: ParsedStudent[] = [];
+  let dupes = 0;
+  for (const s of students) {
     const n = s.name.toLowerCase();
-    const e = s.email?.toLowerCase();
-    if (seenName.has(n) || (e && seenEmail.has(e))) return false;
-    seenName.add(n);
-    if (e) seenEmail.add(e);
-    return true;
-  });
-  const dupes = students.length - unique.length;
+    const twin = kept.find(
+      (k) => k.name.toLowerCase() === n && (!k.email || !s.email || k.email === s.email),
+    );
+    if (twin) {
+      // Prefer the copy that carries an address.
+      if (!twin.email && s.email) twin.email = s.email;
+      dupes++;
+      continue;
+    }
+    kept.push({ ...s });
+  }
+  const unique = kept;
   if (dupes) warnings.push(`Removed ${dupes} duplicate${dupes === 1 ? "" : "s"} from the file.`);
+
+  // Two different people cannot share one address: a student signs in with it,
+  // and it would be ambiguous which roster row they are.
+  const byEmail = new Map<string, string[]>();
+  unique.forEach((s) => {
+    if (!s.email) return;
+    byEmail.set(s.email, [...(byEmail.get(s.email) ?? []), s.name]);
+  });
+  const shared = [...byEmail.entries()].filter(([, who]) => who.length > 1);
+  if (shared.length) {
+    warnings.push(
+      `${shared.length} address${shared.length === 1 ? " is" : "es are"} used by more than one ` +
+        `student (${shared[0][1].join(", ")}${shared.length > 1 ? ", …" : ""}). ` +
+        "They were all kept, but each student needs their own address to sign in.",
+    );
+  }
+
+  // Two students genuinely sharing a name is fine, but worth flagging so the
+  // instructor can tell them apart on the roster.
+  const nameCounts = new Map<string, number>();
+  unique.forEach((s) => nameCounts.set(s.name.toLowerCase(), (nameCounts.get(s.name.toLowerCase()) ?? 0) + 1));
+  const sameName = [...nameCounts.values()].filter((n) => n > 1).length;
+  if (sameName) {
+    warnings.push(`${sameName} name${sameName === 1 ? " is" : "s are"} shared by more than one student — both kept.`);
+  }
 
   const withEmail = unique.filter((s) => s.email).length;
   // Only claim an email column once it actually produced an address — an LMS
