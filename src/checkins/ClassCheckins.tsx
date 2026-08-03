@@ -640,23 +640,19 @@ function RosterEditor({
   } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const add = async () => {
-    // Same parser as the file import, so a pasted "Ada Lovelace, ada@harvard.edu"
-    // keeps the address — students sign in by matching it.
-    const { students: parsed } = parseRoster(names);
-    const existing = new Set(roster.map((s) => s.name.trim().toLowerCase()));
-    const list = parsed.filter((p) => !existing.has(p.name.trim().toLowerCase()));
-    if (!list.length) return;
-    setBusy(true);
-    try {
-      await addStudents(course.id, list, roster.length);
-      setNames("");
-      onChanged();
-    } catch (e) {
-      onError(e);
-    } finally {
-      setBusy(false);
+  /**
+   * Pasting goes through exactly the same preview and reconcile as a file, so a
+   * pasted list can add students AND fill in missing emails, and you always see
+   * what will happen before it happens.
+   */
+  const add = () => {
+    const { students, warnings } = parseRoster(names);
+    if (!students.length) {
+      onError(new Error("No student names found in what you pasted."));
+      return;
     }
+    setPending({ fileName: "Pasted list", students, warnings });
+    setNames("");
   };
 
   /** Read + parse a dropped/chosen roster file into the confirm step. */
