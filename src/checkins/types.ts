@@ -10,8 +10,47 @@ export interface Course {
   created_at: string;
 }
 
+/** Account kind. Faculty get the gradebook app; students get the student view. */
+export type Role = "faculty" | "student";
+
+export interface Profile {
+  id: string;
+  role: Role;
+  full_name: string | null;
+  created_at: string;
+}
+
+/**
+ * The design keys its layout off SCOPE, not type — type only picks a label and
+ * an accent colour. Getting this backwards is the easiest mistake to make here.
+ */
+export type ActivityType = "challenge" | "combo" | "skills" | "amplify";
+export type Scope = "indiv" | "team" | "both";
+
+export const SCOPE_OF: Record<ActivityType, Scope> = {
+  challenge: "both",
+  combo: "indiv",
+  skills: "indiv",
+  amplify: "team",
+};
+
+export const TYPE_LABEL: Record<ActivityType, string> = {
+  challenge: "Challenge",
+  combo: "Combo",
+  skills: "Skills",
+  amplify: "Amplify",
+};
+
+export const SCOPE_LABEL: Record<Scope, string> = {
+  both: "Individual + team",
+  indiv: "Individual",
+  team: "Team",
+};
+
 export interface Student {
   id: string;
+  /** Set when a student account claims this roster row (matched on email). */
+  user_id?: string | null;
   course_id: string;
   name: string;
   email: string | null;
@@ -32,6 +71,7 @@ export interface Activity {
   topic: string | null;
   title: string;
   dates_label: string | null;
+  type: ActivityType;
   stage: number; // 0 setup,1 individual,2 discuss,3 resubmit,4 closed
   resubmit_mode: "team" | "individual" | "choice";
   source_text: string | null;

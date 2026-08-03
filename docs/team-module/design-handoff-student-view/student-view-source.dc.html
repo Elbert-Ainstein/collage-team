@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+<template id="__bundler_thumbnail">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect width="100" height="100" fill="#fffcf2"/><rect x="30" y="30" width="40" height="40" rx="8" fill="#002341"/><text x="50" y="58" font-family="Georgia,serif" font-size="20" font-weight="700" fill="#fffcf2" text-anchor="middle">AP</text></svg>
+</template>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="_ds/collage-ai-design-system-32108736-2b8f-40e4-b83e-443ab12ed906/tokens/fonts.css">
+<link rel="stylesheet" href="_ds/collage-ai-design-system-32108736-2b8f-40e4-b83e-443ab12ed906/tokens/fig-tokens.css">
+<link rel="stylesheet" href="_ds/collage-ai-design-system-32108736-2b8f-40e4-b83e-443ab12ed906/tokens/typography.css">
+<link rel="stylesheet" href="_ds/collage-ai-design-system-32108736-2b8f-40e4-b83e-443ab12ed906/tokens/base.css">
+<link rel="stylesheet" href="_ds/collage-ai-design-system-32108736-2b8f-40e4-b83e-443ab12ed906/styles.css">
+<script src="_ds/collage-ai-design-system-32108736-2b8f-40e4-b83e-443ab12ed906/_ds_bundle.js"></script>
+<style>
+html,body{margin:0;padding:0;background:var(--cream-300)}
+*{box-sizing:border-box}
+a{color:var(--navy-700);text-decoration:none}
+a:hover{color:var(--navy)}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(120,140,160,.4);border-radius:9999px}
+</style>
+</helmet>
+
+<div style="display:flex;min-height:100vh;background:var(--cream-300);font-family:var(--font-sans);font-size:var(--text-sm);line-height:1.45;color:var(--navy);-webkit-font-smoothing:antialiased;text-wrap:pretty">
+
+  <aside style="width:238px;flex:0 0 238px;display:flex;flex-direction:column;padding:22px 14px 14px">
+    <div style="font-family:var(--font-serif);font-size:var(--text-xl);line-height:1.18;font-weight:var(--weight-bold);letter-spacing:var(--tracking-tight)">Applied Physics 50</div>
+    <div style="display:flex;align-items:center;gap:6px;margin-top:6px;font-size:var(--text-xs);color:var(--muted-foreground)">
+      <span>AP50A</span><span>· Fall</span>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:9px;margin-top:12px;padding:9px 10px;border:1px solid var(--neutral-200);background:var(--cream-300);border-radius:var(--radius-lg,10px)">
+      <x-import component-from-global-scope="CollageAIDesignSystem_321087.Avatar" initials="T3" size="{{ n28 }}" dc-props="{{ teamAvatarProps }}" hint-size="28px,28px"></x-import>
+      <div style="min-width:0;flex:1">
+        <div style="font-size:var(--text-xs);font-weight:var(--weight-semibold)">Team 3</div>
+        <div style="font-size:var(--text-2xs);color:var(--muted-foreground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Maya · Nikolai · Olivia · you</div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:4px;margin-top:18px">
+      <x-import component-from-global-scope="CollageAIDesignSystem_321087.Button" variant="ghost" full-width="{{ true }}" on-click="{{ goAssignments }}" dc-props="{{ navAssignProps }}" start-icon="{{ iconAssign }}" end-icon="{{ dueCount }}" hint-size="100%,38px">Assignments</x-import>
+      <x-import component-from-global-scope="CollageAIDesignSystem_321087.Button" variant="ghost" full-width="{{ true }}" on-click="{{ goTr }}" dc-props="{{ navTrProps }}" start-icon="{{ iconGroups }}" hint-size="100%,38px">Team resources</x-import>
+    </div>
+
+    <div style="flex:1"></div>
+    <div style="border-top:1px solid var(--neutral-200);padding-top:10px;display:flex;align-items:center;gap:8px;min-width:0">
+      <span style="flex:1;min-width:0;font-size:var(--text-xs);color:var(--muted-foreground);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">p.raman@college.harvard.edu</span>
+      <x-import component-from-global-scope="CollageAIDesignSystem_321087.Button" variant="outline" size="sm" dc-props="{{ tinyBtnProps }}" hint-size="auto,28px">Sign out</x-import>
+    </div>
+  </aside>
+
+  <main style="flex:1;min-width:0;max-width:100%;display:flex;padding:12px 12px 12px 0">
+    <div style="flex:1;min-width:0;border:1px solid var(--neutral-200);background:var(--cream-200);border-radius:var(--radius-xl,14px);box-shadow:0 1px 2px 0 rgba(0,0,0,.05);padding:26px 30px 34px">
+
+      <!-- ============ ASSIGNMENTS LIST ============ -->
+      <sc-if value="{{ isList }}" hint-placeholder-val="{{ true }}">
+        <section>
+          <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px">
+            <h1 style="margin:0;font-family:var(--font-serif);font-size:var(--text-2xl);font-weight:var(--weight-bold);letter-spacing:var(--tracking-tight)">Assignments</h1>
+            <span style="font-size:var(--text-xs);color:var(--muted-foreground)">Everything you owe, and everything your team owes together.</span>
+          </div>
+
+          <div style="margin:14px 0 18px">
+            <x-import component-from-global-scope="CollageAIDesignSystem_321087.Tabs" tabs="{{ filterTabs }}" value="{{ filter }}" on-change="{{ setFilter }}" hint-size="auto,38px"></x-import>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:22px">
+            <sc-for list="{{ weeks }}" as="w" hint-placeholder-count="2">
+              <div>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:9px">
+                  <span style="font-family:var(--font-serif);font-size:var(--text-base);font-weight:var(--weight-bold);letter-spacing:var(--tracking-tight)">{{ w.label }}</span>
+                  <span style="font-size:var(--text-xs);color:var(--muted-foreground)">{{ w.dates }}</span>
+                  <span style="flex:1;height:1px;background:var(--neutral-200)"></span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <sc-for list="{{ w.items }}" as="a" hint-placeholder-count="4">
+                    <button onClick="{{ a.open }}" style="{{ a.rowStyle }}">
+                      <span style="{{ a.typeStyle }}">{{ a.type }}</span>
+                      <span style="flex:1;min-width:0;text-align:left">
+                        <span style="display:flex;align-items:center;gap:9px;flex-wrap:wrap">
+                          <span style="font-family:var(--font-serif);font-size:var(--text-base);font-weight:var(--weight-bold);letter-spacing:var(--tracking-tight)">{{ a.title }}</span>
+                          <x-import component-from-global-scope="CollageAIDesignSystem_321087.Badge" variant="outline" dc-props="{{ smallBadgeProps }}" hint-size="auto,20px">{{ a.scope }}</x-import>
+                        </span>
+                        <span style="display:block;font-size:var(--text-xs);color:var(--muted-foreground);margin-top:3px">{{ a.due }}</span>
+                      </span>
+                      <x-import component-from-global-scope="CollageAIDesignSystem_321087.Badge" variant="{{ a.statusVariant }}" hint-size="auto,22px">{{ a.status }}</x-import>
+                      <span style="width:74px;flex:none;text-align:right;font-size:var(--text-xs);color:var(--navy);font-variant-numeric:tabular-nums">{{ a.grade }}</span>
+                      <span style="color:var(--muted-foreground);display:flex;align-items:center">
+                        <x-import component-from-global-scope="CollageAIDesignSystem_321087.Icon" name="IconChevronRightOutlined" size="18" hint-size="18px,18px"></x-import>
+                      </span>
+                    </button>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+      </sc-if>
+
+      <!-- ============ ASSIGNMENT DETAIL ============ -->
+      <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
+        <section>
+          <x-import component-from-global-scope="CollageAIDesignSystem_321087.Button" variant="link" size="sm" on-click="{{ goAssignments }}" start-icon="{{ iconBack }}" dc-props="{{ backBtnProps }}" hint-size="auto,28px">All assignments</x-import>
+
+          <div style="display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap;margin-top:10px">
+            <div style="flex:1;min-width:420px">
+              <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                <x-import component-from-global-scope="CollageAIDesignSystem_321087.Badge" variant="{{ selBadge }}" hint-size="auto,22px">{{ selType }}</x-import>
+                <h1 style="margin:0;font-family:var(--font-serif);font-size:var(--text-2xl);font-weight:var(--weight-bold);letter-spacing:var(--tracking-tight)">{{ selTitle }}</h1>
+              </div>
+              <div style="font-size:var(--text-xs);color:var(--muted-foreground);margin-top:5px">{{ selMeta }}</div>
+
+              <sc-if value="{{ hasTabs }}" hint-placeholder-val="{{ true }}">
+                <div style="margin:16px 0 0">
+                  <x-import component-from-global-scope="CollageAIDesignSystem_321087.Tabs" tabs="{{ detailTabs }}" value="{{ detailTab }}" on-change="{{ setDetailTab }}" hint-size="auto,38px"></x-import>
+                </div>
+              </sc-if>
+
+              <!-- individual side -->
+              <sc-if value="{{ onIndiv }}" hint-placeholder-val="{{ true }}">
+                <div>
+                  <x-import component-from-global-scope="CollageAIDesignSystem_321087.Card" dc-props="{{ cardProps }}" hint-size="100%,200px">
+                    <div style="font-size:var(--text-2xs);letter-spacing:var(--tracking-wide);text-transform:uppercase;color:var(--muted-foreground)">Description</div>
+                    <p style="margin:8px 0 0;font-size:var(--text-sm);line-height:1.6;color:var(--navy);max-width:68ch">{{ selDesc }}</p>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">
+                      <x-import component-from-global-scope="CollageAIDesignSystem_321087.Badge" variant="secondary" hint-size="auto,22px">{{ selCount }}</x-import>
+                      <x-import component-from-global-scope="CollageAIDesignSystem_321087.Badge" variant="warning" hint-size="auto,22px">{{ selDue }}</x-import>
+                    </div>
+                  </x-import>
+
+                  <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px">
+                    <x-import component-from-global-scope="CollageAIDesignSystem_321087.Button" variant="primary" on-click="{{ goWork }}" hint-size="auto,36px">Open my work</x-import>
+                    <span style="font-size:var(--text-xs);color:var(--muted-foreground)">Saved 4 minutes ago · 3 of 5 questions answered</span>
+                  </div>
+                </div>
+              </sc-if>
+
+              <!-- team side -->
+              <sc-if value="{{ onTeam }}" hint-placeholder-val="{{ false }}">
+                <div>
+                  <x-import component-from-global-scope="CollageAIDesignSystem_321087.Card" dc-props="{{ cardProps }}" hint-size="100%,140px">
+                    <div style="font-size:var(--text-2xs);letter-spacing:var(--tracking-wide);text-transform:uppercase;color:var(--muted-foreground)">Instructions</div>
+                    <p style="margin:8px 0 0;font-size:var(--text-sm);line-height:1.6;color:var(--navy);max-width:68ch">{{ selInstructions }}</p>
+                  </x-import>
+
+                  <x-import component-from-global-scope="CollageAIDesignSystem_321087.Card" dc-props="{{ cardTightProps }}" hint-size="100%,220px">
+                    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+                      <div style="font-size:var(--text-2xs);letter-spacing:var(--tracking-wide);text-transform:uppercase;color:var(--muted-foreground);flex:1">Audio</div>
+                      <x-import component-from-global-scope="CollageAIDesignSystem_321087.Badge" variant="warning" start-icon="{{ iconMic }}" hint-size="auto,22px">Recording · 12:41</x-import>
+                    </div>
+
+                    <div style="display:flex;gap:16px;align-items:center;margin-top:14px;flex-wrap:wrap">
+                      <div style="flex:1;min-width:280px">
+                        <div style="display:flex;align-items:flex-end;gap:2px;height:46px">
+                          <sc-for list="{{ wave }}" as="b" hint-placeholder-count="60">
+                            <span style="{{ b.style }}"></span>
+                          </sc-for>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;font-size:var(--text-2xs);color:var(--muted-foreground);margin-top:6px;font-variant-numeric:tabular-nums">
+                          <span>00:00</span><span>Trial 2 · Nikolai presenting</span><span>12:41</span>
+                        </div>
+                      </div>
+                      <div style="width:230px;flex:none;border-left:1px solid var(--neutral-200);padding-left:16px">
+                        <div style="font-size:var(--text-2xs);letter-spacing:var(--tracking-wide);text-transform:uppercase;color:var(--muted-foreground)">Feedback</div>
+                        <p style="margin:7px 0 0;font-size:var(--text-xs);line-height:1.55;color:var(--muted-foreground)">Your accounting of the 8% momentum loss stayed qualitative. Name the friction term explicitly and estimate it.</p>
+                        <div style="font-size:var(--text-2xs);color:var(--muted-foreground);margin-top:8px">Generated from the recording</div>
+                      </div>
+                    </div>
+
+                    <div style="display:flex;justify-content:flex-end;margin-top:14px">
+                      <x-import component-from-global-scope="CollageAIDesignSystem_321087.Button" variant="outline" size="sm" start-icon="{{ iconAdd }}" hint-size="auto,32px">Add to Team resources</x-import>
+                    </div>
+                  </x-import>
+
+                  <x-import component-from-global-scope="CollageAIDesignSystem_321087.Card" dc-props="{{ cardTightProps }}" hint-size="100%,180px">
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+                      <div style="font-size:var(--text-2xs);letter-spacing:var(--tracking-wide);text-transform:uppercase;color:var(--muted-foreground);flex:1">Team resources</div>
+                      <x-import component-from-global-scope="CollageAIDesignSystem_321087.Button" variant="link" size="sm" on-click="{{ goTrDetail }}" dc-props="{{ linkBtnProps }}" hint-size="auto,24px">Open all</x-import>
+                    </div>
+                    <div style="display:flex;gap:10px;flex-wrap:wrap">
+                      <sc-for list="{{ trStrip }}" as="r" hint-placeholder-count="3">
+                        <div style="width:150px;border:1px solid var(--neutral-200);background:var(--cream-300);border-radius:var(--radius-md,8px);overflow:hidden">
+                          <div style="{{ r.thumbStyle }}">
+                            <x-import component-from-global-scope="CollageAIDesignSystem_321087.Icon" name="{{ r.icon }}" size="20" hint-size="20px,20px"></x-import>
+                          </div>
+                          <div style="padding:8px 10px">
+                            <div style="font-size:var(--text-xs);font-weight:var(--weight-semibold);line-height:1.3">{{ r.title }}</div>
+                            <div style="font-size:var(--text-2xs);color:var(--muted-foreground);margin-top:2px">{{ r.meta }}</div>
+                          </div>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </x-import>
+                </div>
+              </sc-if>
+            </div>
+
+            <!-- right rail -->
+            <div style="width:270px;flex:none;display:flex;flex-direction:column;gap:12px">
+              <sc-if value="{{ onIndiv }}" hint-placeholder-val="{{ true }}">
+              <x-import component-from-global-scope="CollageAIDesignSystem_321087.Card" dc-props="{{ railCardProps }}" hint-size="100%,300px">
+                <div style="font-size:var(--text-2xs);letter-spacing:var(--tracking-wide);text-transform:uppercase;color:var(--muted-foreground)">Status</div>
+                <div style="margin-top:8px">
+                  <x-import component-from-global-scope="CollageAIDesignSystem_321087.Badge" variant="{{ selStatusVariant }}" hint-size="auto,22px">{{ selStatus }}</x-import>
+                </div>
+                <div style="font-size:var(--text-xs);color:var(--muted-foreground);margin-top:8px;font-variant-numeric:tabular-nums">{{ selStamp }}</div>
+
+                <div style="height:1px;background:var(--neutral-200);margin:14px 0"></div>
+
+                <div style="font-size:var(--text-2xs);letter-spacing:var(--tracking-wide);text-transform:uppercase;color:var(--muted-foreground)">Grade</div>
+                <div style="display:flex;align-items:baseline;gap:8px;margin-top:8px">
+                  <span style="font-family:var(--font-serif);font-size:var(--text-lg);font-weight:var(--weight-bold);color:var(--muted-foreground)">{{ selGrade }}</span>
+                </div>
+                <div style="font-size:var(--text-xs);color:var(--muted-foreground);margin-top:4px">{{ selGradeNote }}</div>
+
+                <div style="margin-top:16px">
+                  <x-import component-from-global-scope="CollageAIDesignSystem_321087.Button" variant="outline" full-width="{{ true }}" hint-size="100%,36px">Resubmit</x-import>
+                </div>
+                <div style="font-size:var(--text-2xs);color:var(--muted-foreground);margin-top:7px;text-align:center">{{ selResubmitNote }}</div>
+              </x-import>
+              </sc-if>
+
+              <sc-if value="{{ showTeamGrading }}" hint-placeholder-val="{{ true }}">
+                <div style="border-left:1px solid var(--neutral-200);padding:2px 0 2px 20px">
+                  <div style="display:flex;align-items:center;gap:8px">
+                    <div style="font-size:var(--text-2xs);letter-spacing:var(--tracking-wide);text-transform:uppercase;color:var(--muted-foreground);flex:1">Live grading</div>
+                    <span style="display:inline-block;width:7px;height:7px;border-radius:var(--radius-full,9999px);background:var(--emerald-500,#10b981)"></span>
+                  </div>
+                  <div style="font-size:var(--text-2xs);color:var(--muted-foreground);margin-top:5px">Marked by your instructor during the session</div>
+                  <div style="display:flex;flex-direction:column;gap:12px;margin-top:14px">
+                    <sc-for list="{{ presenters }}" as="p" hint-placeholder-count="2">
+                      <div style="border-top:1px solid var(--neutral-200);padding-top:11px">
+                        <div style="display:flex;align-items:baseline;gap:8px">
+                          <span style="font-size:var(--text-2xs);color:var(--muted-foreground);white-space:nowrap">{{ p.slot }}</span>
+                          <span style="font-size:var(--text-xs);font-weight:var(--weight-semibold)">{{ p.name }}</span>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:7px;margin-top:9px">
+                          <sc-for list="{{ p.scores }}" as="s" hint-placeholder-count="2">
+                            <div style="display:flex;align-items:center;gap:9px">
+                              <span style="width:78px;flex:none;font-size:var(--text-xs);color:var(--muted-foreground)">{{ s.label }}</span>
+                              <span style="flex:1;display:flex">
+                                <x-import component-from-global-scope="CollageAIDesignSystem_321087.Progress" value="{{ s.value }}" max="{{ n5 }}" height="{{ n6 }}" color="{{ s.color }}" hint-size="100%,6px"></x-import>
+                              </span>
+                              <span style="font-size:var(--text-xs);font-variant-numeric:tabular-nums;width:26px;text-align:right">{{ s.val }}</span>
+                            </div>
+                          </sc-for>
+                        </div>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+        </section>
+      </sc-if>
+
+      <!-- ============ WORK / QUESTIONS ============ -->
+      <sc-if value="{{ isWork }}" hint-placeholder-val="{{ false }}">
+        <section>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+            <x-import component-from-global-scope="CollageAIDesignSystem_321087.Button" variant="link" size="sm" on-click="{{ goDetail }}" start-icon="{{ iconBack }}" dc-props="{{ backBtnProps }}" hint-size="auto,28px">{{ selTitle }}</x-import>
+            <h1 style="margin:0;font-family:var(--font-serif);font-size:var(--text-xl);font-weight:var(--weight-bold);letter-spacing:var(--tracking-tight)">Assign questions and pages</h1>
+            <span style="flex:1"></span>
+            <span style="font-size:var(--text-xs);color:var(--muted-foreground)">{{ assignedSummary }}</span>
+            <x-import component-from-global-scope="CollageAIDesignSystem_321087.Button" variant="outline" size="sm" on-click="{{ assignSeq }}" hint-size="auto,32px">Assign sequentially</x-import>
+            <x-import component-from-global-scope="CollageAIDesignSystem_321087.Button" variant="primary" hint-size="auto,36px">Submit</x-import>
+          </div>
+          <div style="font-size:var(--text-xs);color:var(--muted-foreground);margin-top:5px">Pick a question, then click the pages where you answered it. A page can hold more than one question.</div>
+
+          <div style="display:flex;gap:22px;align-items:flex-start;margin-top:18px">
+            <div style="width:280px;flex:none">
+              <div style="display:flex;align-items:baseline;gap:8px;padding:0 2px 9px">
+                <span style="font-family:var(--font-serif);font-size:var(--text-base);font-weight:var(--weight-bold)">Question outline</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;padding:0 2px 8px;font-size:var(--text-2xs);letter-spacing:var(--tracking-wide);text-transform:uppercase;color:var(--muted-foreground)">
+                <span style="flex:1">Title</span>
+                <span>Points</span>
+              </div>
+              <div style="border:1px solid var(--neutral-200);background:var(--cream-100);border-radius:var(--radius-lg,10px);overflow:hidden">
+                <sc-for list="{{ outline }}" as="q" hint-placeholder-count="6">
+                  <div style="{{ q.rowStyle }}" onClick="{{ q.select }}">
+                    <span style="{{ q.railStyle }}"></span>
+                    <span style="flex:1;min-width:0">
+                      <span style="display:flex;align-items:center;gap:8px">
+                        <span style="{{ q.idStyle }}">{{ q.id }}</span>
+                        <span style="flex:1"></span>
+                        <span style="font-size:var(--text-xs);color:var(--muted-foreground);font-variant-numeric:tabular-nums">{{ q.pts }}</span>
+                      </span>
+                      <sc-if value="{{ q.hasPages }}" hint-placeholder-val="{{ true }}">
+                        <span style="display:flex;gap:5px;flex-wrap:wrap;margin-top:7px">
+                          <sc-for list="{{ q.tags }}" as="t" hint-placeholder-count="2">
+                            <span style="{{ t.style }}">{{ t.label }}<span style="color:rgba(255,255,255,.6);margin-left:5px">×</span></span>
+                          </sc-for>
+                        </span>
+                      </sc-if>
+                    </span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <div style="flex:1;min-width:0">
+              <div style="display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(196px,1fr))">
+                <sc-for list="{{ sheets }}" as="p" hint-placeholder-count="4">
+                  <div style="{{ p.wrapStyle }}" onClick="{{ p.toggle }}">
+                    <div style="{{ p.sheetStyle }}">
+                      <sc-for list="{{ p.lines }}" as="l" hint-placeholder-count="9">
+                        <span style="{{ l.style }}"></span>
+                      </sc-for>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:7px;padding:8px 9px;border-top:1px solid var(--neutral-200);background:var(--cream-100)">
+                      <span style="{{ p.numStyle }}">{{ p.n }}</span>
+                      <span style="display:flex;gap:5px;flex-wrap:wrap;flex:1;min-width:0">
+                        <sc-for list="{{ p.tags }}" as="t" hint-placeholder-count="1">
+                          <span style="{{ t.style }}">{{ t.label }}</span>
+                        </sc-for>
+                      </span>
+                      <span style="{{ p.checkStyle }}">
+                        <x-import component-from-global-scope="CollageAIDesignSystem_321087.Icon" name="IconCheckOutlined" size="13" hint-size="13px,13px"></x-import>
+                      </span>
+                    </div>
+                  </div>
+                </sc-for>
+                <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;min-height:260px;border:1px dashed var(--neutral-300);background:var(--cream-200);border-radius:var(--radius-lg,10px);color:var(--muted-foreground);cursor:pointer" style-hover="background:var(--cream-300)">
+                  <x-import component-from-global-scope="CollageAIDesignSystem_321087.Icon" name="IconAddPhotoAlternateOutlined" size="24" hint-size="24px,24px"></x-import>
+                  <span style="font-size:var(--text-xs)">Add a page</span>
+                </div>
+              </div>
+
+              <div style="display:flex;align-items:center;gap:12px;margin-top:16px;padding:13px 16px;border:1px solid var(--neutral-200);background:var(--cream-100);border-radius:var(--radius-lg,10px)">
+                <span style="font-size:var(--text-sm);flex:1">{{ assignPrompt }}</span>
+                <span style="font-size:var(--text-xs);color:var(--muted-foreground)">{{ assignedSummary }}</span>
+              </div>
+            </div>
+          </div>
+        </section>
+      </sc-if>
+
+      <!-- ============ TEAM RESOURCES INDEX ============ -->
+      <sc-if value="{{ isTr }}" hint-placeholder-val="{{ false }}">
+        <section>
+          <div style="display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px">
+            <h1 style="margin:0;font-family:var(--font-serif);font-size:var(--text-2xl);font-weight:var(--weight-bold);letter-spacing:var(--tracking-tight)">Team resources</h1>
+            <span style="font-size:var(--text-xs);color:var(--muted-foreground)">Everything Team 3 has made, filed under the activity it came from. Visible to your team only.</span>
+          </div>
+
+          <div style="display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(252px,1fr));margin-top:18px">
+            <sc-for list="{{ trActivities }}" as="a" hint-placeholder-count="3">
+              <div style="{{ a.cardStyle }}" onClick="{{ a.open }}">
+                <span style="display:flex;align-items:center;justify-content:center;flex:none;color:var(--muted-foreground);margin-top:1px">
+                  <x-import component-from-global-scope="CollageAIDesignSystem_321087.Icon" name="IconFolderOutlined" size="20" hint-size="20px,20px"></x-import>
+                </span>
+                <span style="flex:1;min-width:0;text-align:left">
+                  <span style="{{ a.typeStyle }}">{{ a.type }}</span>
+                  <span style="display:block;font-family:var(--font-serif);font-size:var(--text-base);font-weight:var(--weight-bold);letter-spacing:var(--tracking-tight);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ a.title }}</span>
+                  <span style="display:block;font-size:var(--text-xs);color:var(--muted-foreground);margin-top:2px">{{ a.week }} · {{ a.count }}</span>
+                </span>
+                <span style="display:flex;align-items:center;justify-content:center;width:24px;height:24px;flex:none;border-radius:999px;color:var(--neutral-400);transition:background 140ms ease,color 140ms ease" style-hover="background:var(--neutral-100);color:var(--navy)">
+                  <x-import component-from-global-scope="CollageAIDesignSystem_321087.Icon" name="IconMoreVertOutlined" size="18" hint-size="18px,18px"></x-import>
+                </span>
+              </div>
+            </sc-for>
+          </div>
+        </section>
+      </sc-if>
+
+      <!-- ============ TEAM RESOURCES DETAIL ============ -->
+      <sc-if value="{{ isTrDetail }}" hint-placeholder-val="{{ false }}">
+        <section>
+          <x-import component-from-global-scope="CollageAIDesignSystem_321087.Button" variant="link" size="sm" on-click="{{ goTr }}" start-icon="{{ iconBack }}" dc-props="{{ backBtnProps }}" hint-size="auto,28px">Team resources</x-import>
+
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:10px">
+            <x-import component-from-global-scope="CollageAIDesignSystem_321087.Badge" variant="orange" hint-size="auto,22px">Challenge</x-import>
+            <h1 style="margin:0;font-family:var(--font-serif);font-size:var(--text-2xl);font-weight:var(--weight-bold);letter-spacing:var(--tracking-tight)">Ballistic pendulum</h1>
+            <span style="flex:1"></span>
+            <span style="display:flex;align-items:center;gap:10px;flex:none">
+              <x-import component-from-global-scope="CollageAIDesignSystem_321087.Button" variant="outline" size="sm" on-click="{{ goDetail }}" hint-size="auto,32px">View assignment</x-import>
+              <x-import component-from-global-scope="CollageAIDesignSystem_321087.Button" size="sm" start-icon="{{ iconAdd }}" hint-size="auto,32px">Add resource</x-import>
+            </span>
+          </div>
+          <div style="font-size:var(--text-xs);color:var(--muted-foreground);margin-top:5px">Week 5 · 5 resources · your team only</div>
+
+          <div style="display:flex;gap:20px;align-items:flex-start;margin-top:18px">
+            <div style="{{ trListStyle }}">
+              <sc-for list="{{ sections }}" as="s" hint-placeholder-count="3">
+                <div style="{{ s.wrapStyle }}">
+                  <div style="display:flex;align-items:center;gap:8px;padding:0 4px 8px">
+                    <span style="font-size:var(--text-2xs);letter-spacing:var(--tracking-wide);text-transform:uppercase;color:var(--muted-foreground);flex:1">{{ s.label }}</span>
+                    <span style="font-size:var(--text-2xs);color:var(--muted-foreground);font-variant-numeric:tabular-nums">{{ s.count }}</span>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:2px">
+                    <sc-for list="{{ s.items }}" as="r" hint-placeholder-count="3">
+                      <div style="{{ r.rowStyle }}" onClick="{{ r.open }}">
+                        <span style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;flex:none;border-radius:var(--radius-md,8px);background:var(--neutral-100);color:var(--muted-foreground)">
+                          <x-import component-from-global-scope="CollageAIDesignSystem_321087.Icon" name="{{ r.icon }}" size="19" hint-size="19px,19px"></x-import>
+                        </span>
+                        <span style="flex:1;min-width:0;text-align:left">
+                          <span style="display:block;font-size:var(--text-sm);font-weight:var(--weight-semibold);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.title }}</span>
+                          <span style="display:block;font-size:var(--text-xs);color:var(--muted-foreground);margin-top:2px">{{ r.meta }}</span>
+                        </span>
+                      </div>
+                    </sc-for>
+                    <sc-if value="{{ s.canAdd }}" hint-placeholder-val="{{ true }}">
+                      <div style="{{ s.addStyle }}" style-hover="background:var(--cream-400)">
+                        <span style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;flex:none;border-radius:var(--radius-md,8px);border:1px dashed var(--neutral-300);color:var(--muted-foreground)">
+                          <x-import component-from-global-scope="CollageAIDesignSystem_321087.Icon" name="{{ s.addIcon }}" size="18" hint-size="18px,18px"></x-import>
+                        </span>
+                        <span style="flex:1;min-width:0;text-align:left">
+                          <span style="display:block;font-size:var(--text-sm);font-weight:var(--weight-semibold);color:var(--navy)">{{ s.addLabel }}</span>
+                          <span style="display:block;font-size:var(--text-xs);color:var(--muted-foreground);margin-top:2px">{{ s.addHint }}</span>
+                        </span>
+                      </div>
+                    </sc-if>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+
+            <sc-if value="{{ pdfOpen }}" hint-placeholder-val="{{ true }}">
+              <div style="flex:1;min-width:0;align-self:stretch;display:flex;flex-direction:column;background:#ffffff;border:1px solid var(--neutral-200);border-radius:14px;overflow:hidden;box-shadow:0 10px 15px -3px rgba(0,0,0,.06)">
+                <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--neutral-200)">
+                  <span style="display:flex;gap:2px;padding:2px;border:1px solid var(--neutral-200);border-radius:999px">
+                    <span style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:999px;background:var(--neutral-100);color:var(--navy)">
+                      <x-import component-from-global-scope="CollageAIDesignSystem_321087.Icon" name="IconVisibilityOutlined" size="16" hint-size="16px,16px"></x-import>
+                    </span>
+                    <span style="display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:999px;color:var(--neutral-400)">
+                      <x-import component-from-global-scope="CollageAIDesignSystem_321087.Icon" name="IconDownloadOutlined" size="16" hint-size="16px,16px"></x-import>
+                    </span>
+                  </span>
+                  <span style="flex:1;min-width:0;font-size:var(--text-sm);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Challenge 5 feedback <span style="color:var(--muted-foreground)">· PDF</span></span>
+                  <span style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:999px;color:var(--neutral-400);cursor:pointer" style-hover="background:var(--neutral-100);color:var(--navy)">
+                    <x-import component-from-global-scope="CollageAIDesignSystem_321087.Icon" name="IconOpenInNewOutlined" size="16" hint-size="16px,16px"></x-import>
+                  </span>
+                  <span style="display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:999px;color:var(--neutral-400);cursor:pointer" style-hover="background:var(--neutral-100);color:var(--navy)" onClick="{{ closePdf }}">
+                    <x-import component-from-global-scope="CollageAIDesignSystem_321087.Icon" name="IconCloseOutlined" size="17" hint-size="17px,17px"></x-import>
+                  </span>
+                </div>
+
+                <div style="flex:1;overflow:auto;padding:34px 44px 44px;font-family:var(--font-serif);color:var(--navy)">
+                  <div style="font-size:var(--text-2xs);letter-spacing:var(--tracking-wide);text-transform:uppercase;color:var(--muted-foreground);font-family:var(--font-sans)">AP50A · Week 5</div>
+                  <h2 style="margin:8px 0 0;font-size:26px;font-weight:var(--weight-bold);letter-spacing:var(--tracking-tight)">Challenge 5 — Ballistic pendulum</h2>
+                  <div style="font-size:var(--text-sm);color:var(--muted-foreground);margin-top:4px;font-family:var(--font-sans)">Team 3 · marked Thu 2:41pm</div>
+
+                  <p style="margin:22px 0 0;font-size:17px;line-height:1.65;max-width:62ch">Your momentum accounting held up across all three trials, and the group caught the 8% discrepancy without prompting. That was the point of the exercise.</p>
+                  <p style="margin:16px 0 0;font-size:17px;line-height:1.65;max-width:62ch">Where it stalled was the explanation. Friction was named but never quantified, so the discrepancy stayed a label rather than a number. Estimate the friction term next time, even roughly, and the argument closes.</p>
+
+                  <h3 style="margin:26px 0 0;font-size:19px;font-weight:var(--weight-bold);letter-spacing:var(--tracking-tight)">Marks</h3>
+                  <div style="margin-top:12px;font-family:var(--font-sans)">
+                    <sc-for list="{{ marks }}" as="m" hint-placeholder-count="3">
+                      <div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-top:1px solid var(--neutral-200)">
+                        <span style="flex:1;font-size:var(--text-sm)">{{ m.label }}</span>
+                        <span style="font-size:var(--text-sm);font-weight:var(--weight-semibold);font-variant-numeric:tabular-nums">{{ m.val }}</span>
+                      </div>
+                    </sc-for>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
+          </div>
+        </section>
+      </sc-if>
+
+    </div>
+  </main>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showLiveGrading&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Behavior&quot;}}">
+// Type only sets the label and accent. What actually changes the screen is scope.
+const TYPES = {
+  Challenge: { color: "var(--orange-500, #ff6713)", badge: "orange", kind: "both" },
+  Combo:     { color: "var(--navy-700, #1f66a3)",   badge: "sky", kind: "indiv" },
+  Amplify:   { color: "var(--lavender-600, #9405e6)", badge: "lavender", kind: "team" },
+  Skills:    { color: "var(--sky-700, #0e7490)",    badge: "sky", kind: "indiv" },
+};
+const SCOPE_LABEL = { both: "Individual + team", indiv: "Individual", team: "Team" };
+
+const STATUS_VARIANT = {
+  "Turned in": "sky",
+  "Late": "warning",
+  "Not started": "outline",
+  "Graded": "success",
+  "Discussing": "warning",
+  "Excused": "secondary",
+};
+
+class Component extends DCLogic {
+  state = { screen: "list", tab: "indiv", filter: "all", pdf: true };
+
+  ico(name, size) {
+    const NS = window.CollageAIDesignSystem_321087;
+    if (!NS || !NS.Icon) return null;
+    return React.createElement(NS.Icon, { name, size });
+  }
+
+  navStyle(active) {
+    return {
+      justifyContent: "flex-start",
+      height: 38,
+      padding: "0 11px",
+      fontSize: "var(--text-sm)",
+      background: active ? "var(--cream-400)" : "transparent",
+      color: active ? "var(--navy)" : "var(--muted-foreground)",
+      fontWeight: active ? "var(--weight-semibold)" : "var(--weight-regular)",
+      border: active ? "1px solid var(--neutral-200)" : "1px solid transparent",
+    };
+  }
+
+  renderVals() {
+    const s = this.state.screen;
+    const showGrading = this.props.showLiveGrading ?? true;
+
+    const mkItem = (o) => ({
+      id: o.id, type: o.type, title: o.title, due: o.due, status: o.status, grade: o.grade,
+      desc: o.desc, instructions: o.instructions, submitted: o.submitted, count: o.count,
+      kind: TYPES[o.type].kind,
+      scope: SCOPE_LABEL[TYPES[o.type].kind],
+      statusVariant: STATUS_VARIANT[o.status] || "outline",
+      open: () => this.setState({
+        screen: "detail", selId: o.id,
+        tab: TYPES[o.type].kind === "team" ? "team" : "indiv",
+      }),
+      rowStyle: {
+        display: "flex", alignItems: "center", gap: 16, width: "100%",
+        padding: "13px 16px",
+        border: "1px solid var(--neutral-200)",
+        borderLeft: `3px solid ${TYPES[o.type].color}`,
+        background: "var(--cream-100)",
+        borderRadius: "var(--radius-lg, 10px)",
+        cursor: "pointer", fontFamily: "var(--font-sans)", textAlign: "left",
+        boxShadow: "0 1px 2px 0 rgba(0,0,0,.05)",
+      },
+      typeStyle: {
+        flex: "none", width: 82,
+        fontSize: "var(--text-2xs)", letterSpacing: "var(--tracking-wide)",
+        textTransform: "uppercase", fontWeight: "var(--weight-semibold)",
+        color: TYPES[o.type].color,
+      },
+    });
+
+    const weeks = [
+      { label: "This week", wk: "Week 5", dates: "Week 5 · Mar 3–7", items: [
+        mkItem({ id: "ch5", type: "Challenge", title: "Ballistic pendulum", due: "Due Thu 9:00am · discussion Thu 2:00pm",
+          status: "Not started", grade: "—", count: "5 questions",
+          desc: "Work the pendulum problem set on your own, then bring your answers to the Thursday discussion.",
+          instructions: "Record the discussion. Rotate who presents each problem." }),
+        mkItem({ id: "sk5", type: "Skills", title: "Vector decomposition", due: "Closed Tue 4:00pm",
+          status: "Late", grade: "7 / 10", count: "8 questions",
+          desc: "Timed quiz on resolving forces into components." }),
+        mkItem({ id: "am5", type: "Amplify", title: "Peer explanation set", due: "Marked at the Tue check-in",
+          status: "Graded", grade: "Complete", count: "3 prompts",
+          instructions: "Explain each prompt to the team. Record the session." }),
+        mkItem({ id: "co5", type: "Combo", title: "Momentum & collisions", due: "Closed Sun 11:59pm",
+          status: "Turned in", grade: "—", submitted: "Sun 11:47pm", count: "10 questions",
+          desc: "Five tutorial questions and five challenge questions." }),
+      ] },
+      { label: "Last week", wk: "Week 4", dates: "Week 4 · Feb 24–28", items: [
+        mkItem({ id: "ch4", type: "Challenge", title: "Rolling without slipping", due: "Closed Feb 28",
+          status: "Graded", grade: "Complete", submitted: "Thu 8:52am", count: "4 questions",
+          desc: "Rolling motion problem set.", instructions: "Discussed in the Thursday session." }),
+        mkItem({ id: "co4", type: "Combo", title: "Energy bookkeeping", due: "Closed Feb 23",
+          status: "Graded", grade: "18 / 20", submitted: "Sun 10:12pm", count: "10 questions",
+          desc: "Five tutorial questions and five challenge questions." }),
+      ] },
+    ];
+
+    const flat = {};
+    weeks.forEach((w) => w.items.forEach((it) => { flat[it.id] = Object.assign({ wk: w.wk }, it); }));
+    const sel = flat[this.state.selId] || flat.ch5;
+    const tab = sel.kind === "both" ? this.state.tab : sel.kind;
+    const onIndiv = tab === "indiv";
+    const onTeam = tab === "team";
+    const stamp = sel.submitted ? `Submitted ${sel.submitted}`
+      : sel.status === "Late" ? "Submitted late"
+      : sel.status === "Graded" ? "Marked in session"
+      : "Nothing submitted yet";
+    const gradeNote = sel.kind === "team" ? "Team mark"
+      : sel.kind === "both" ? "Your mark, plus the team discussion"
+      : "Released after grading";
+
+    const wave = Array.from({ length: 64 }, (_, i) => {
+      const h = 8 + Math.abs(Math.sin(i * 0.7) * 26) + (i % 5) * 2;
+      const played = i < 38;
+      return { style: { flex: 1, minWidth: 2, height: Math.round(h), borderRadius: 2, background: played ? "var(--navy)" : "var(--neutral-300, #d4d4d4)" } };
+    });
+
+    const presenters = [
+      { slot: "Presenter 1", name: "Ellie", scores: [["Accuracy", 5], ["Collaboration", 4]] },
+      { slot: "Presenter 2", name: "Caleb", scores: [["Accuracy", 4], ["Collaboration", 5]] },
+    ].map((p) => ({
+      slot: p.slot, name: p.name,
+      scores: p.scores.map(([label, v]) => ({
+        label, val: `${v}/5`, value: v,
+        color: v === 5 ? "var(--emerald-600, #059669)" : "var(--navy-700, #1f66a3)",
+      })),
+    }));
+
+    const thumbBox = (bg) => ({
+      display: "flex", alignItems: "center", justifyContent: "center",
+      height: 62, background: bg, color: "var(--muted-foreground)",
+    });
+
+    const trStrip = [
+      { icon: "IconImageOutlined", title: "Final board", meta: "Thu 2:14pm", thumbStyle: thumbBox("var(--neutral-100)") },
+      { icon: "IconMicOutlined", title: "Thursday session", meta: "12:41", thumbStyle: thumbBox("var(--sky-100, #e3f6fd)") },
+      { icon: "IconAssignmentOutlined", title: "Trials 1–3", meta: "Generated", thumbStyle: thumbBox("var(--cream-400)") },
+    ];
+
+    // Gradescope-style assignment: pick a question, then click the pages it lives on.
+    const QUESTIONS = [
+      { id: "1", pts: "3.0 pts", sub: false },
+      { id: "2", pts: "3.0 pts", sub: false },
+      { id: "3", pts: "3.0 pts", sub: false },
+      { id: "4", pts: "4.0 pts", sub: false, group: true },
+      { id: "4.1", pts: "2.0 pts", sub: true },
+      { id: "4.2", pts: "2.0 pts", sub: true },
+    ];
+    const assign = this.state.assign || { "1": [1], "4.1": [2] };
+    const activeQ = this.state.activeQ || "2";
+
+    const tagPill = (label, solid) => ({
+      label,
+      style: {
+        display: "inline-flex", alignItems: "center",
+        fontSize: "var(--text-2xs)", fontWeight: "var(--weight-semibold)",
+        padding: "2px 7px", borderRadius: "4px",
+        background: solid ? "var(--navy)" : "var(--neutral-100)",
+        color: solid ? "var(--cream-100)" : "var(--muted-foreground)",
+      },
+    });
+
+    const outline = QUESTIONS.map((q) => {
+      const active = q.id === activeQ;
+      const pages = assign[q.id] || [];
+      return {
+        id: q.id, pts: q.pts, hasPages: pages.length > 0,
+        tags: pages.map((p) => tagPill(`P${p}`, true)),
+        select: () => this.setState({ activeQ: q.id }),
+        rowStyle: {
+          display: "flex", gap: 10, padding: q.sub ? "10px 12px 10px 26px" : "10px 12px",
+          borderBottom: "1px solid var(--neutral-200)",
+          background: active ? "var(--cream-400)" : "transparent",
+          cursor: "pointer",
+        },
+        railStyle: {
+          width: 3, flex: "none", borderRadius: 2, alignSelf: "stretch",
+          background: active ? "var(--navy)" : "transparent",
+        },
+        idStyle: {
+          fontSize: q.sub ? "var(--text-sm)" : "var(--text-base)",
+          fontWeight: "var(--weight-bold)",
+          color: q.group ? "var(--muted-foreground)" : "var(--navy)",
+          fontVariantNumeric: "tabular-nums",
+        },
+      };
+    });
+
+    const sheets = [1, 2, 3, 4].map((n) => {
+      const qs = Object.keys(assign).filter((k) => (assign[k] || []).includes(n));
+      const on = qs.includes(activeQ);
+      return {
+        n, tags: qs.map((q) => tagPill(`Q${q}`, false)),
+        toggle: () => {
+          const cur = assign[activeQ] || [];
+          const next = cur.includes(n) ? cur.filter((x) => x !== n) : cur.concat(n).sort();
+          this.setState({ assign: Object.assign({}, assign, { [activeQ]: next }) });
+        },
+        wrapStyle: {
+          border: `1px solid ${on ? "var(--navy)" : "var(--neutral-200)"}`,
+          boxShadow: on ? "0 0 0 2px var(--navy)" : "0 1px 2px 0 rgba(0,0,0,.05)",
+          borderRadius: "var(--radius-lg, 10px)", overflow: "hidden",
+          cursor: "pointer", background: "var(--cream-100)",
+        },
+        sheetStyle: {
+          display: "flex", flexDirection: "column", gap: 9,
+          padding: "18px 16px", minHeight: 224, background: "#ffffff",
+        },
+        numStyle: {
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          minWidth: 22, height: 22, flex: "none", borderRadius: "4px",
+          background: "var(--navy)", color: "var(--cream-100)",
+          fontSize: "var(--text-2xs)", fontWeight: "var(--weight-bold)",
+          fontVariantNumeric: "tabular-nums",
+        },
+        checkStyle: {
+          display: "flex", alignItems: "center", justifyContent: "center",
+          width: 20, height: 20, flex: "none", borderRadius: "var(--radius-full, 9999px)",
+          background: on ? "var(--navy)" : "transparent",
+          color: on ? "var(--cream-100)" : "var(--neutral-300)",
+          border: on ? "none" : "1px solid var(--neutral-300)",
+        },
+        lines: Array.from({ length: 9 }, (_, i) => ({
+          style: {
+            height: 5, borderRadius: 3,
+            width: `${[86, 62, 74, 40, 80, 55, 68, 46, 30][i]}%`,
+            background: i < 4 ? "var(--neutral-200)" : "var(--neutral-100)",
+          },
+        })),
+      };
+    });
+
+    const assignedCount = QUESTIONS.filter((q) => !q.group && (assign[q.id] || []).length).length;
+    const totalQ = QUESTIONS.filter((q) => !q.group).length;
+
+    const pages = [
+      ["P1", "Q1a", "Photo of worked solution", "Attached", "success", "IconImageOutlined", "Replace"],
+      ["P2", "Q1a, Q1b", "Photo of worked solution", "Attached", "success", "IconImageOutlined", "Replace"],
+      ["P3", "Q2", "Typed answer · 180 words", "Attached", "success", "IconAssignmentOutlined", "Edit"],
+      ["P4", "Q3a, Q3b", "Nothing attached yet", "Draft", "sky", "IconAddPhotoAlternateOutlined", "Attach"],
+    ].map(([label, tag, bodyText, state, stateVariant, icon, action]) => ({
+      label, tag, bodyText, state, stateVariant, icon, action,
+      cardStyle: {
+        border: `1px solid ${state === "Draft" ? "var(--cream-500)" : "var(--neutral-200)"}`,
+        background: "var(--cream-100)",
+        borderRadius: "var(--radius-lg, 10px)",
+        overflow: "hidden",
+      },
+      bodyStyle: {
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+        gap: 8, minHeight: 132, padding: 18, textAlign: "center",
+        color: "var(--muted-foreground)",
+        background: state === "Draft" ? "var(--cream-300)" : "var(--neutral-100)",
+      },
+    }));
+
+    const trActivities = [
+      ["Challenge", "Ballistic pendulum", "Week 5", "5 resources", ["IconImageOutlined", "IconImageOutlined", "IconMicOutlined"], "Challenge 5"],
+      ["Amplify", "Peer explanation set", "Week 5", "2 resources", ["IconMicOutlined", "IconAssignmentOutlined"], "Amplify 5"],
+      ["Challenge", "Rolling without slipping", "Week 4", "3 resources", ["IconImageOutlined", "IconAssignmentOutlined"], "Challenge 4"],
+    ].map(([type, title, week, count, thumbs, linkTitle]) => ({
+      type, title, week, count, linkTitle,
+      open: () => this.setState({ screen: "trDetail" }),
+      cardStyle: {
+        display: "flex", alignItems: "flex-start", gap: 11, width: "100%",
+        padding: "11px 12px",
+        border: "1px solid var(--neutral-200)",
+        borderLeft: `3px solid ${TYPES[type].color}`,
+        background: "var(--cream-100)",
+        borderRadius: "var(--radius-lg, 10px)",
+        cursor: "pointer", fontFamily: "var(--font-sans)", textAlign: "left",
+        boxShadow: "0 1px 2px 0 rgba(0,0,0,.05)",
+      },
+      typeStyle: {
+        display: "block",
+        fontSize: "var(--text-2xs)", letterSpacing: "var(--tracking-wide)",
+        textTransform: "uppercase", fontWeight: "var(--weight-semibold)",
+        color: TYPES[type].color,
+      },
+      thumbs: thumbs.map((icon) => ({
+        icon,
+        style: {
+          display: "flex", alignItems: "center", justifyContent: "center",
+          width: 52, height: 40, borderRadius: "var(--radius-md, 8px)",
+          border: "1px solid var(--neutral-200)",
+          background: "var(--neutral-100)", color: "var(--muted-foreground)",
+        },
+      })),
+    }));
+
+    const pdfOpen = this.state.pdf !== false;
+    const mkRes = (icon, title, meta, isPdf) => ({
+      icon, title, meta,
+      open: isPdf ? () => this.setState({ pdf: true }) : () => {},
+      rowStyle: {
+        display: "flex", alignItems: "center", gap: 13, padding: "11px 12px",
+        borderRadius: "var(--radius-md, 8px)", cursor: "pointer",
+        background: isPdf && pdfOpen ? "var(--cream-400)" : "transparent",
+      },
+    });
+
+    const sections = [
+      { label: "Whiteboard photos", count: 3,
+        canAdd: true, addIcon: "IconAddPhotoAlternateOutlined", addLabel: "Add a whiteboard photo",
+        addHint: "Take a photo or drop an image",
+        items: [
+        mkRes("IconImageOutlined", "Trial 1 setup", "Thu 1:52pm"),
+        mkRes("IconImageOutlined", "Momentum table", "Thu 2:14pm"),
+        mkRes("IconImageOutlined", "Loss estimate", "Thu 2:31pm"),
+      ] },
+      { label: "Audio", count: 1,
+        canAdd: true, addIcon: "IconMicOutlined", addLabel: "Record the discussion",
+        addHint: "Or upload an existing recording",
+        items: [
+        mkRes("IconMicOutlined", "Thursday session", "12:41 · transcript attached"),
+      ] },
+      { label: "Notes & files", count: 0,
+        canAdd: true, addIcon: "IconAttachFileOutlined", addLabel: "Add a note or file",
+        addHint: "Working notes, data, a written summary",
+        items: [] },
+      { label: "Feedback", count: 1, canAdd: false, items: [
+        mkRes("IconAssignmentOutlined", "Challenge 5 feedback", "PDF · marked Thu 2:41pm", true),
+      ] },
+    ].map((s, i) => Object.assign(s, {
+      count: s.items.length,
+      wrapStyle: {
+        padding: i === 0 ? "0 0 14px" : "14px 0",
+        borderTop: i === 0 ? "none" : "1px solid var(--neutral-200)",
+      },
+      addStyle: {
+        display: "flex", alignItems: "center", gap: 13, padding: "11px 12px",
+        borderRadius: "var(--radius-md, 8px)", cursor: "pointer",
+        background: "transparent", transition: "background 140ms ease",
+      },
+    }));
+
+    const marks = [
+      { label: "Participation", val: "Complete" },
+      { label: "Accuracy", val: "4 / 5" },
+      { label: "Collaboration", val: "5 / 5" },
+    ];
+
+    const boards = [
+      ["1", "Trial 1 setup · Thu 1:52pm"],
+      ["2", "Momentum table · Thu 2:14pm"],
+      ["3", "Loss estimate · Thu 2:31pm"],
+    ].map(([n, meta], i) => ({
+      n, meta,
+      wrapStyle: {
+        border: `1px solid ${i === 1 ? "var(--navy)" : "var(--neutral-200)"}`,
+        borderRadius: "var(--radius-md, 8px)", overflow: "hidden",
+        background: "var(--cream-300)", cursor: "pointer",
+      },
+      thumbStyle: {
+        display: "flex", alignItems: "center", justifyContent: "center",
+        height: 56, background: "var(--neutral-100)",
+        color: "var(--muted-foreground)", fontSize: "var(--text-xs)",
+        fontWeight: "var(--weight-semibold)",
+      },
+    }));
+
+    const cardBase = {
+      background: "var(--cream-100)",
+      border: "1px solid var(--neutral-200)",
+      borderRadius: "var(--radius-lg, 10px)",
+      padding: "18px 20px",
+      boxShadow: "0 1px 2px 0 rgba(0,0,0,.05)",
+    };
+
+    return {
+      isList: s === "list", isDetail: s === "detail", isWork: s === "work",
+      isTr: s === "tr", isTrDetail: s === "trDetail",
+      navAssignProps: { style: this.navStyle(s === "list" || s === "detail" || s === "work") },
+      navTrProps: { style: this.navStyle(s === "tr" || s === "trDetail") },
+      goAssignments: () => this.setState({ screen: "list" }),
+      goTr: () => this.setState({ screen: "tr" }),
+      goTrDetail: () => this.setState({ screen: "trDetail" }),
+      goDetail: () => this.setState({ screen: "detail" }),
+      goWork: () => this.setState({ screen: "work" }),
+
+      detailTabs: [{ value: "indiv", label: "Individual" }, { value: "team", label: "Team" }],
+      detailTab: tab,
+      setDetailTab: (v) => this.setState({ tab: v }),
+      onIndiv, onTeam,
+      hasTabs: sel.kind === "both",
+      showTeamGrading: showGrading && onTeam,
+
+      selType: sel.type, selBadge: TYPES[sel.type].badge, selTitle: sel.title,
+      selMeta: `${sel.wk} · ${sel.scope}`,
+      selDesc: sel.desc || "", selInstructions: sel.instructions || "",
+      selCount: sel.count, selDue: sel.due,
+      selStatus: sel.status, selStatusVariant: sel.statusVariant,
+      selStamp: stamp,
+      selGrade: sel.grade === "—" ? "Pending" : sel.grade,
+      selGradeNote: gradeNote,
+      selResubmitNote: sel.submitted ? `Replaces your ${sel.submitted} submission` : "You have not submitted yet",
+
+      filterTabs: [
+        { value: "all", label: "All" },
+        { value: "todo", label: "To do · 2" },
+        { value: "submitted", label: "Submitted · 3" },
+        { value: "graded", label: "Graded · 4" },
+      ],
+      filter: this.state.filter,
+      setFilter: (v) => this.setState({ filter: v }),
+
+      iconAssign: this.ico("IconAssignmentOutlined", 18),
+      iconGroups: this.ico("IconGroupsOutlined", 18),
+      iconBack: this.ico("IconChevronLeftOutlined", 15),
+      iconMic: this.ico("IconMicOutlined", 13),
+      iconAdd: this.ico("IconAddOutlined", 15),
+      iconCheck: this.ico("IconCheckOutlined", 13),
+      iconPlay: this.ico("IconPlayArrowOutlined", 16),
+      iconLink: this.ico("IconFolderOutlined", 13),
+      dueCount: React.createElement("span", { style: { fontSize: "var(--text-2xs)", color: "var(--amber-700, #b45309)", fontVariantNumeric: "tabular-nums" } }, "2 due"),
+
+      n5: 5, n6: 6, n28: 28,
+      teamAvatarProps: { style: { background: "var(--lavender-300)", color: "var(--navy)", fontWeight: "var(--weight-bold)" } },
+      tinyBtnProps: { style: { height: 26, padding: "0 10px", fontSize: "var(--text-2xs)" } },
+      backBtnProps: { style: { color: "var(--muted-foreground)", fontSize: "var(--text-xs)", textDecoration: "none" } },
+      linkBtnProps: { style: { color: "var(--navy-700, #1f66a3)", fontSize: "var(--text-xs)", textDecoration: "none" } },
+      playBtnProps: { style: { borderRadius: "var(--radius-full, 9999px)" } },
+      smallBadgeProps: { style: { height: 20, fontSize: "var(--text-2xs)", color: "var(--muted-foreground)" } },
+      cardProps: { style: Object.assign({}, cardBase, { marginTop: 14 }) },
+      cardTightProps: { style: Object.assign({}, cardBase, { marginTop: 12 }) },
+      railCardProps: { style: Object.assign({}, cardBase, { padding: "16px 18px" }) },
+      trCardProps: { style: Object.assign({}, cardBase, { padding: 14 }) },
+      questionsCardProps: { style: Object.assign({}, cardBase, { width: 204, flex: "none", padding: 12 }) },
+      previewCardProps: { style: {
+        flex: 1, minWidth: 340, alignSelf: "stretch",
+        display: "flex", flexDirection: "column",
+        background: "var(--cream-100)",
+        border: "1px solid var(--neutral-200)",
+        borderRadius: "var(--radius-lg, 10px)",
+        overflow: "hidden", padding: 0,
+        boxShadow: "0 1px 2px 0 rgba(0,0,0,.05)",
+      } },
+
+      pdfOpen, sections, marks,
+      closePdf: () => this.setState({ pdf: false }),
+      trListStyle: {
+        width: pdfOpen ? 320 : "100%", flex: "none",
+        display: "flex", flexDirection: "column", gap: 2,
+        background: "var(--cream-100)",
+        border: "1px solid var(--neutral-200)",
+        borderRadius: "var(--radius-lg, 10px)",
+        padding: 8,
+        boxShadow: "0 1px 2px 0 rgba(0,0,0,.05)",
+      },
+      outline, sheets,
+      assignPrompt: `Select the pages that answer question ${activeQ}.`,
+      assignedSummary: `${assignedCount} of ${totalQ} questions assigned`,
+      assignSeq: () => this.setState({ assign: { "1": [1], "2": [1], "3": [2], "4.1": [3], "4.2": [4] } }),
+      showGrading, weeks, wave, presenters, trStrip, pages, trActivities, boards,
+    };
+  }
+}
+
+</script>
+</body>
+</html>

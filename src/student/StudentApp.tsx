@@ -1,0 +1,261 @@
+"use client";
+
+import { useCallback, useEffect, useState } from "react";
+import {
+  claimStudentRows,
+  getEnrolment,
+  listAssignments,
+  submitMyWork,
+  type Assignment,
+  type Enrolment,
+} from "@/checkins/studentData";
+import { SCOPE_OF } from "@/checkins/types";
+import { SIcon } from "./icons";
+import { Assignments } from "./Assignments";
+import { MyWork } from "./MyWork";
+import { TeamResources } from "./TeamResources";
+import "./student.css";
+
+type Screen = "list" | "detail" | "work" | "tr" | "trDetail";
+
+/**
+ * The student half of the app. The shell is persistent; a single `screen` value
+ * drives which panel shows, exactly as the handoff specifies.
+ */
+export function StudentApp({
+  account,
+  onSignOut,
+}: {
+  account: string;
+  onSignOut: () => Promise<void>;
+}) {
+  const [screen, setScreen] = useState<Screen>("list");
+  const [selId, setSelId] = useState<string | null>(null);
+  const [trId, setTrId] = useState<string | null>(null);
+  const [tab, setTab] = useState<"indiv" | "team">("indiv");
+
+  const [enrolment, setEnrolment] = useState<Enrolment | null>(null);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    // Claim any roster rows carrying this address first — a student who signs
+    // up before the instructor imports them would otherwise be stranded.
+    try {
+      await claimStudentRows();
+    } catch {
+      // Not fatal: an unclaimed account simply has no enrolment yet.
+    }
+    const e = await getEnrolment();
+    setEnrolment(e);
+    setAssignments(e ? await listAssignments(e) : []);
+  }, []);
+
+  useEffect(() => {
+    load()
+      .catch((err: unknown) => setError(String((err as Error)?.message ?? err)))
+      .finally(() => setReady(true));
+  }, [load]);
+
+  const selected = assignments.find((a) => a.activity.id === selId) ?? null;
+  const dueCount = assignments.filter(
+    (a) => a.status === "Not started" || a.status === "Late",
+  ).length;
+
+  const openAssignment = (id: string) => {
+    const a = assignments.find((x) => x.activity.id === id);
+    setSelId(id);
+    setTab(a && SCOPE_OF[a.activity.type] === "team" ? "team" : "indiv");
+    setScreen("detail");
+  };
+
+  const shell = (body: React.ReactNode) => (
+    <div className="sv">
+      <aside className="sv-sidebar">
+        <div className="sv-title">{enrolment?.course.name ?? "Applied Physics 50"}</div>
+        <div className="sv-meta">
+          {enrolment?.course.code && <span>{enrolment.course.code}</span>}
+          {enrolment?.course.term && <span>· {enrolment.course.term}</span>}
+        </div>
+
+        {enrolment?.team && (
+          <div className="sv-teamchip">
+            <span className="sv-avatar" style={{ width: 28, height: 28, fontSize: 11 }}>
+              {enrolment.team.name.replace(/[^0-9A-Za-z]/g, "").slice(0, 2).toUpperCase()}
+            </span>
+            <span style={{ minWidth: 0 }}>
+              <span
+                style={{ display: "block", fontSize: "var(--text-xs)", fontWeight: 600 }}
+              >
+                {enrolment.team.name}
+              </span>
+              <span
+                className="sv-ellip"
+                style={{
+                  display: "block",
+                  fontSize: "var(--text-2xs)",
+                  color: "var(--muted-foreground)",
+                  maxWidth: 150,
+                }}
+              >
+                {enrolment.teammates
+                  .map((t) => (t.id === enrolment.student.id ? "you" : t.name.split(" ")[0]))
+                  .join(" · ")}
+              </span>
+            </span>
+          </div>
+        )}
+
+        <nav className="sv-nav">
+          <button
+            className={"sv-navbtn" + (screen === "tr" || screen === "trDetail" ? "" : " on")}
+            onClick={() => {
+              setScreen("list");
+              setSelId(null);
+            }}
+          >
+            <SIcon name="assignment" size={18} />
+            <span className="lbl">Assignments</span>
+            {dueCount > 0 && (
+              <span
+                className="sv-num"
+                style={{ fontSize: "var(--text-2xs)", color: "var(--amber-700)" }}
+              >
+                {dueCount} due
+              </span>
+            )}
+          </button>
+          <button
+            className={"sv-navbtn" + (screen === "tr" || screen === "trDetail" ? " on" : "")}
+            onClick={() => {
+              setScreen("tr");
+              setTrId(null);
+            }}
+          >
+            <SIcon name="groups" size={18} />
+            <span className="lbl">Team resources</span>
+          </button>
+        </nav>
+
+        <div className="sv-spacer" />
+        <div className="sv-foot">
+          <span
+            className="sv-ellip"
+            style={{ flex: 1, minWidth: 0, fontSize: "var(--text-xs)", color: "var(--muted-foreground)" }}
+            title={account}
+          >
+            {account}
+          </span>
+          <button
+            className="sv-btn outline sm"
+            style={{ height: 26, padding: "0 10px", fontSize: "var(--text-2xs)" }}
+            onClick={() => void onSignOut()}
+          >
+            Sign out
+          </button>
+        </div>
+      </aside>
+
+      <main className="sv-main">
+        <div className="sv-panel">{body}</div>
+      </main>
+    </div>
+  );
+
+  if (!ready) return shell(<div style={{ color: "var(--muted-foreground)" }}>Loading…</div>);
+
+  if (error) {
+    return shell(
+      <div className="sv-card" style={{ maxWidth: 560 }}>
+        <div className="sv-h2">Something went wrong</div>
+        <p style={{ fontSize: "var(--text-sm)", color: "var(--muted-foreground)" }}>{error}</p>
+      </div>,
+    );
+  }
+
+  // Signed in, but no roster row carries this address.
+  if (!enrolment) {
+    return shell(
+      <div className="sv-card" style={{ maxWidth: 620 }}>
+        <div className="sv-h1" style={{ fontSize: "var(--text-xl)" }}>
+          You&rsquo;re not on a roster yet
+        </div>
+        <p
+          style={{
+            fontSize: "var(--text-sm)",
+            color: "var(--muted-foreground)",
+            lineHeight: 1.6,
+            marginTop: 8,
+            maxWidth: "62ch",
+          }}
+        >
+          We matched your account to the class list by email, and{" "}
+          <strong style={{ color: "var(--navy)" }}>{account}</strong> isn&rsquo;t on it. Ask your
+          instructor to add that exact address to the roster — once they do, reload this page and
+          your assignments will appear.
+        </p>
+        <button className="sv-btn outline" style={{ marginTop: 16 }} onClick={() => location.reload()}>
+          Check again
+        </button>
+      </div>,
+    );
+  }
+
+  if (screen === "work" && selected) {
+    return shell(
+      <MyWork
+        assignment={selected}
+        enrolment={enrolment}
+        onBack={() => setScreen("detail")}
+        onSubmit={async (text) => {
+          if (!selected.indivCheckIn) return;
+          await submitMyWork(selected.indivCheckIn.id, enrolment.student.id, text);
+          await load();
+        }}
+      />,
+    );
+  }
+
+  if (screen === "tr" || screen === "trDetail") {
+    return shell(
+      <TeamResources
+        enrolment={enrolment}
+        assignments={assignments}
+        openId={screen === "trDetail" ? trId : null}
+        onOpen={(id) => {
+          setTrId(id);
+          setScreen("trDetail");
+        }}
+        onBack={() => {
+          setTrId(null);
+          setScreen("tr");
+        }}
+        onViewAssignment={(id) => openAssignment(id)}
+      />,
+    );
+  }
+
+  return shell(
+    <Assignments
+      enrolment={enrolment}
+      assignments={assignments}
+      selId={screen === "detail" ? selId : null}
+      tab={tab}
+      onSelect={openAssignment}
+      onBack={() => {
+        setSelId(null);
+        setScreen("list");
+      }}
+      onTabChange={setTab}
+      onOpenWork={(id) => {
+        setSelId(id);
+        setScreen("work");
+      }}
+      onOpenResources={() => {
+        setTrId(selId);
+        setScreen("trDetail");
+      }}
+    />,
+  );
+}

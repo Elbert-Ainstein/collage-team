@@ -51,9 +51,11 @@ function Shell({ children }: { children: React.ReactNode }) {
 }
 
 type Mode = "in" | "up";
+type Role = "faculty" | "student";
 
 function SignIn() {
   const [mode, setMode] = useState<Mode>("in");
+  const [role, setRole] = useState<Role>("faculty");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -71,7 +73,13 @@ function SignIn() {
         const { error } = await sb.auth.signInWithPassword({ email, password });
         if (error) throw error;
       } else {
-        const { data, error } = await sb.auth.signUp({ email, password });
+        // The role travels in user metadata; a database trigger turns it into a
+        // profiles row (see migration 0006).
+        const { data, error } = await sb.auth.signUp({
+          email,
+          password,
+          options: { data: { role } },
+        });
         if (error) throw error;
         // With email-enumeration protection on (the default), signing up with an
         // address that already exists returns no error and no session — the only
@@ -124,6 +132,32 @@ function SignIn() {
         </div>
 
         <div style={{ display: "grid", gap: 10 }}>
+          {mode === "up" && (
+            <div className="t-fld">
+              I am
+              <div className="t-seg2" style={{ marginTop: 0 }}>
+                <button
+                  type="button"
+                  className={"t-segbtn" + (role === "faculty" ? " on" : "")}
+                  onClick={() => setRole("faculty")}
+                >
+                  Faculty
+                </button>
+                <button
+                  type="button"
+                  className={"t-segbtn" + (role === "student" ? " on" : "")}
+                  onClick={() => setRole("student")}
+                >
+                  Student
+                </button>
+              </div>
+              <span style={{ fontSize: 11.5, color: "var(--ink3)", marginTop: 4 }}>
+                {role === "faculty"
+                  ? "You run the sessions: rosters, teams, weeks and grading."
+                  : "Use the email address your instructor has on the roster, so we can find you."}
+              </span>
+            </div>
+          )}
           <label className="t-fld">
             Email
             <input
