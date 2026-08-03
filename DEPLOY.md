@@ -16,13 +16,19 @@ Until they are run, `0001` leaves a policy that says *anyone may read and write
 everything*, and both `NEXT_PUBLIC_*` values are visible in the browser bundle —
 so a public URL would expose every roster and grade regardless of the login screen.
 
-Check it in 5 seconds: with the app signed out, run
+Check it in 5 seconds. Run this from the repo root — the first line loads the
+keys out of `.env.local`, which your shell does not read on its own:
 
 ```bash
-curl "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/students?select=*" -H "apikey: $NEXT_PUBLIC_SUPABASE_ANON_KEY"
+set -a; . ./.env.local; set +a; curl -s "$NEXT_PUBLIC_SUPABASE_URL/rest/v1/students?select=*" -H "apikey: $NEXT_PUBLIC_SUPABASE_ANON_KEY"
 ```
 
-`[]` means the rules are live. Rows coming back means they are not.
+`[]` means the rules are live — the browser key, with no one signed in, can see
+nothing. Rows coming back means they are not, and the migrations above still
+need running.
+
+(Once deployed, point it at the same values from Vercel's environment variables
+to check production the same way.)
 
 ---
 
