@@ -1,4 +1,5 @@
-// Supabase data access for Class Check-ins (v1, no auth).
+// Supabase data access for Class Check-ins. Every read and write is scoped to
+// the signed-in account by row-level security (see supabase/migrations/0003+).
 import { requireSupabase } from "@/lib/supabaseClient";
 import type {
   Activity,
@@ -47,6 +48,13 @@ export function dbError(error: { message: string }): Error {
   }
   if (/duplicate key|23505/i.test(m)) {
     return new Error("That already exists.");
+  }
+  if (/row-level security policy for table "courses"/i.test(m)) {
+    return new Error(
+      "Couldn't create your AP 50 sessions. This usually means the page is an " +
+        "older build that predates accounts, or the sign-in has lapsed — reload, " +
+        "and sign out and back in if it persists.",
+    );
   }
   if (/row-level security|permission denied|JWT/i.test(m)) {
     return new Error("You don't have access to that — try signing out and back in.");
@@ -126,7 +134,16 @@ export async function ensureSessions(term = "Fall"): Promise<Course[]> {
       .insert(missing.map((code) => ({ name: COURSE_NAME, code, term, owner_id: ownerId })));
     // 23505 = unique_violation: another caller won the race, which is fine.
     if (error && !/duplicate key|23505/i.test(error.message)) throw dbError(error);
-    return pickSessions(await listCourses());
+    // A silent no-op (RLS filtering the insert away) would otherwise show as an
+    // empty workspace rather than a problem.
+    const after = pickSessions(await listCourses());
+    if (!after.length) {
+      throw new Error(
+        "Signed in, but no AP 50 sessions came back. The database rejected them — " +
+          "check that migrations 0003–0005 have been run in Supabase.",
+      );
+    }
+    return after;
   })();
   try {
     return await sessionsInFlight;
