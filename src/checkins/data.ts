@@ -177,6 +177,15 @@ export async function addStudents(
   });
   return unwrap(await db().from("students").insert(rows).select()) ?? [];
 }
+/** Set or clear a student's email — the address their account links against. */
+export async function setStudentEmail(id: string, email: string | null): Promise<void> {
+  const { error } = await db()
+    .from("students")
+    .update({ email: email && email.trim() ? email.trim() : null })
+    .eq("id", id);
+  if (error) throw dbError(error);
+}
+
 export async function removeStudent(id: string): Promise<void> {
   const { error } = await db().from("students").delete().eq("id", id);
   if (error) throw dbError(error);

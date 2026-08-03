@@ -11,6 +11,7 @@ import {
   listCheckIns,
   listTeamSets,
   removeStudent,
+  setStudentEmail,
 } from "./data";
 import type { Activity, Course, Student } from "./types";
 import { isSupportedRosterFile, parseRoster, type ParsedStudent } from "./rosterImport";
@@ -473,6 +474,112 @@ function SetupGuide({
   );
 }
 
+/**
+ * One roster row. The email is editable in place because it is the only thing
+ * that lets a student account find this row — a name alone strands them.
+ */
+function RosterRow({
+  student,
+  onRemove,
+  onSaveEmail,
+  onError,
+}: {
+  student: Student;
+  onRemove: () => void;
+  onSaveEmail: (email: string) => Promise<void>;
+  onError: (e: unknown) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(student.email ?? "");
+  const [busy, setBusy] = useState(false);
+  const linked = Boolean(student.user_id);
+
+  const save = async () => {
+    setBusy(true);
+    try {
+      await onSaveEmail(value);
+      setEditing(false);
+    } catch (e) {
+      onError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="t-memberrow">
+      <Avatar name={student.name} tint={student.avatar_tint} />
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span
+          style={{
+            display: "block",
+            fontSize: 12.5,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {student.name}
+        </span>
+        {editing ? (
+          <span style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 3 }}>
+            <input
+              className="t-in"
+              style={{ padding: "3px 7px", fontSize: 11.5, flex: 1, minWidth: 0 }}
+              type="email"
+              autoFocus
+              value={value}
+              placeholder="student@harvard.edu"
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") void save();
+                if (e.key === "Escape") {
+                  setValue(student.email ?? "");
+                  setEditing(false);
+                }
+              }}
+            />
+            <button className="t-btn sm primary" onClick={() => void save()} disabled={busy}>
+              Save
+            </button>
+          </span>
+        ) : (
+          <button
+            onClick={() => setEditing(true)}
+            title="Edit the address this student signs in with"
+            style={{
+              display: "block",
+              marginTop: 1,
+              padding: 0,
+              border: 0,
+              background: "transparent",
+              font: "inherit",
+              fontSize: 11,
+              color: student.email ? "var(--ink3)" : "var(--amber)",
+              cursor: "pointer",
+              textAlign: "left",
+              maxWidth: "100%",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap",
+            }}
+          >
+            {student.email || "+ Add email"}
+          </button>
+        )}
+      </span>
+      {linked && (
+        <span className="t-chip green" title="This student has signed in and claimed their place">
+          signed in
+        </span>
+      )}
+      <button className="t-x" title="Remove from roster" onClick={onRemove}>
+        ✕
+      </button>
+    </div>
+  );
+}
+
 /** Minimal chrome for the pre-class / unconfigured states. */
 function Frame({
   children,
@@ -534,10 +641,11 @@ function RosterEditor({
   const fileRef = useRef<HTMLInputElement>(null);
 
   const add = async () => {
-    const list = names
-      .split(/[\n,]/)
-      .map((s) => s.trim())
-      .filter(Boolean);
+    // Same parser as the file import, so a pasted "Ada Lovelace, ada@harvard.edu"
+    // keeps the address — students sign in by matching it.
+    const { students: parsed } = parseRoster(names);
+    const existing = new Set(roster.map((s) => s.name.trim().toLowerCase()));
+    const list = parsed.filter((p) => !existing.has(p.name.trim().toLowerCase()));
     if (!list.length) return;
     setBusy(true);
     try {
@@ -619,27 +727,42 @@ function RosterEditor({
 
 
       <div className="t-card" style={{ padding: 14 }}>
+        {roster.length > 0 && (
+          <div
+            style={{
+              fontSize: 11.5,
+              color: "var(--ink2)",
+              marginBottom: 10,
+              display: "flex",
+              gap: 6,
+              alignItems: "baseline",
+              flexWrap: "wrap",
+            }}
+          >
+            <span>
+              A student signs in with the email address listed here — without one they cannot
+              reach the course.
+            </span>
+            {roster.some((s) => !s.email) && (
+              <span className="t-chip amber">
+                {roster.filter((s) => !s.email).length} missing an email
+              </span>
+            )}
+          </div>
+        )}
         {roster.length === 0 ? null : (
           <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 12 }}>
             {roster.map((s) => (
-              <div className="t-memberrow" key={s.id}>
-                <Avatar name={s.name} tint={s.avatar_tint} />
-                <span
-                  style={{
-                    fontSize: 12.5,
-                    flex: 1,
-                    minWidth: 0,
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
-                  }}
-                >
-                  {s.name}
-                </span>
-                <button className="t-x" title="Remove from roster" onClick={() => void remove(s.id)}>
-                  ✕
-                </button>
-              </div>
+              <RosterRow
+                key={s.id}
+                student={s}
+                onRemove={() => void remove(s.id)}
+                onSaveEmail={async (email) => {
+                  await setStudentEmail(s.id, email);
+                  onChanged();
+                }}
+                onError={onError}
+              />
             ))}
           </div>
         )}
@@ -769,7 +892,7 @@ function RosterEditor({
               padding: "7px 10px",
             }}
             value={names}
-            placeholder="…or paste names — one per line"
+            placeholder={"…or paste one per line\nAda Lovelace, ada@harvard.edu"}
             onChange={(e) => setNames(e.target.value)}
           />
           <button className="t-btn primary" onClick={() => void add()} disabled={!names.trim() || busy}>
