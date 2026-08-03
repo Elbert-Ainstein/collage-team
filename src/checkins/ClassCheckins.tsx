@@ -685,16 +685,26 @@ function RosterEditor({
     }
   };
 
-  /** Names already on the roster are skipped rather than duplicated. */
-  const existing = new Set(roster.map((s) => s.name.trim().toLowerCase()));
-  const fresh = pending?.students.filter((s) => !existing.has(s.name.trim().toLowerCase())) ?? [];
-  const dupeCount = (pending?.students.length ?? 0) - fresh.length;
+  /**
+   * A name already on the roster is not added twice — but if the file carries an
+   * email and that row has none, the address is filled in. That makes a
+   * names-only roster fixable by re-uploading the same list with emails, rather
+   * than editing every row by hand.
+   */
+  const byName = new Map(roster.map((s) => [s.name.trim().toLowerCase(), s]));
+  const fresh = pending?.students.filter((s) => !byName.has(s.name.trim().toLowerCase())) ?? [];
+  const emailFills = (pending?.students ?? []).flatMap((p) => {
+    const match = byName.get(p.name.trim().toLowerCase());
+    return match && p.email && !match.email ? [{ student: match, email: p.email }] : [];
+  });
+  const unchanged = (pending?.students.length ?? 0) - fresh.length - emailFills.length;
 
   const confirmImport = async () => {
-    if (!pending || !fresh.length) return;
+    if (!pending || (!fresh.length && !emailFills.length)) return;
     setBusy(true);
     try {
-      await addStudents(course.id, fresh, roster.length);
+      if (fresh.length) await addStudents(course.id, fresh, roster.length);
+      for (const f of emailFills) await setStudentEmail(f.student.id, f.email);
       setPending(null);
       onChanged();
     } catch (e) {
@@ -778,12 +788,18 @@ function RosterEditor({
           >
             <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
               <span style={{ fontWeight: 600, fontSize: 13 }}>
-                {pending.fileName} — {fresh.length} student{fresh.length === 1 ? "" : "s"} to import
+                {pending.fileName} —{" "}
+                {fresh.length > 0
+                  ? `${fresh.length} student${fresh.length === 1 ? "" : "s"} to import`
+                  : "no new students"}
               </span>
-              {dupeCount > 0 && (
-                <span className="t-chip amber">
-                  {dupeCount} already on the roster · skipped
+              {emailFills.length > 0 && (
+                <span className="t-chip green">
+                  + {emailFills.length} email{emailFills.length === 1 ? "" : "s"} filled in
                 </span>
+              )}
+              {unchanged > 0 && (
+                <span className="t-chip amber">{unchanged} already on the roster · unchanged</span>
               )}
             </div>
             {pending.warnings.map((w) => (
@@ -825,9 +841,15 @@ function RosterEditor({
               <button
                 className="t-btn primary"
                 onClick={() => void confirmImport()}
-                disabled={busy || !fresh.length}
+                disabled={busy || (!fresh.length && !emailFills.length)}
               >
-                {busy ? "Importing…" : `Import ${fresh.length} student${fresh.length === 1 ? "" : "s"}`}
+                {busy
+                  ? "Importing…"
+                  : fresh.length && emailFills.length
+                    ? `Import ${fresh.length} + fill ${emailFills.length} email${emailFills.length === 1 ? "" : "s"}`
+                    : fresh.length
+                      ? `Import ${fresh.length} student${fresh.length === 1 ? "" : "s"}`
+                      : `Fill in ${emailFills.length} email${emailFills.length === 1 ? "" : "s"}`}
               </button>
               <button
                 className="t-btn ghost"
