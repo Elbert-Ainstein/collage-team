@@ -140,7 +140,8 @@ export function ActivitiesScreen(props: {
   onView: (v: "rows" | "columns") => void;
   /** `fresh` means it was just created, so the detail screen opens its editor. */
   onOpen: (activityId: string, opts?: { fresh?: boolean }) => void;
-  onChanged: () => void;
+  /** Awaitable: a caller that navigates needs the new row to be in `data` first. */
+  onChanged: () => void | Promise<void>;
   onError: (e: unknown) => void;
 }): JSX.Element {
   const { data, view, onView, onOpen, onChanged, onError } = props;
@@ -202,8 +203,11 @@ export function ActivitiesScreen(props: {
     if (busy) return;
     setBusy(true);
     try {
+      // The job may have refreshed and navigated already (creating an activity
+      // has to, so the detail screen finds it). Awaiting here rather than
+      // firing and forgetting keeps a second refresh from racing the first.
       await job();
-      onChanged();
+      await onChanged();
     } catch (e) {
       onError(e);
     } finally {
@@ -275,6 +279,11 @@ export function ActivitiesScreen(props: {
       if (scope !== "team") await ensureCheckIn(withShape, "individual", data.checkIns);
       if (scope !== "indiv") await ensureCheckIn(withShape, "team", data.checkIns);
 
+      // Refresh BEFORE navigating, so the activity is in `data` by the time the
+      // detail screen looks for it. Without this the screen opened against a
+      // snapshot taken before the insert, found nothing, and bounced straight
+      // back to the list — which read as the button doing nothing at all.
+      await onChanged();
       onOpen(created.id, { fresh: true });
     });
 

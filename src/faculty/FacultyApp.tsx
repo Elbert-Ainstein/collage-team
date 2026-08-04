@@ -228,9 +228,16 @@ export function FacultyApp({
 
   // The activity vanished (deleted elsewhere) — do not strand the user on a
   // full-screen view with nothing behind it.
+  //
+  // NOT for one we just created. `data` is a snapshot taken before the insert,
+  // so a brand-new activity is legitimately missing from it for one refresh —
+  // and bouncing on that threw the instructor straight back to the list, which
+  // looked exactly like "Activity" having done nothing at all. We know that one
+  // exists; we are the ones who made it.
   useEffect(() => {
+    if (fresh && fresh === selId) return;
     if (FULL_SCREEN.includes(screen) && data && !selected) setScreen("activities");
-  }, [screen, data, selected]);
+  }, [screen, data, selected, fresh, selId]);
 
   const toGrade = useMemo(() => {
     if (!data) return 0;
@@ -277,12 +284,20 @@ export function FacultyApp({
     }
     switch (screen) {
       case "teams":
-        return <TeamsScreen data={data} onChanged={() => void refresh().catch(fail)} onError={fail} />;
+        return <TeamsScreen data={data} onChanged={() => refresh().catch(fail)} onError={fail} />;
       case "tfs":
         return data.can.manageTFs ? (
-          <TFsScreen data={data} onChanged={() => void refresh().catch(fail)} onError={fail} />
+          <TFsScreen data={data} onChanged={() => refresh().catch(fail)} onError={fail} />
         ) : null;
       case "detail":
+        // A just-created activity is not in `data` until the refresh lands.
+        if (!selected && fresh && fresh === selId) {
+          return (
+            <div className="fv-panel">
+              <div className="fv-sub">Opening the new activity…</div>
+            </div>
+          );
+        }
         return selected ? (
           <ActivityDetail
             data={data}
@@ -291,7 +306,7 @@ export function FacultyApp({
             fresh={fresh === selected.id}
             onCriteria={() => setScreen("criteria")}
             onGrade={() => setScreen("grade")}
-            onChanged={() => void refresh().catch(fail)}
+            onChanged={() => refresh().catch(fail)}
             onError={fail}
           />
         ) : null;
@@ -310,7 +325,7 @@ export function FacultyApp({
             data={data}
             activity={selected}
             onBack={() => setScreen("detail")}
-            onChanged={() => void refresh().catch(fail)}
+            onChanged={() => refresh().catch(fail)}
             onError={fail}
           />
         ) : null;
@@ -321,7 +336,7 @@ export function FacultyApp({
             view={view}
             onView={setView}
             onOpen={openActivity}
-            onChanged={() => void refresh().catch(fail)}
+            onChanged={() => refresh().catch(fail)}
             onError={fail}
           />
         );
