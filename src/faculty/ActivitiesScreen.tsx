@@ -8,6 +8,7 @@
 
 import { Fragment, type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import { createActivity, deleteActivity, updateActivity } from "@/checkins/data";
+import { deleteActivityRecordings } from "@/checkins/audio";
 import { isOpenToStudents } from "@/checkins/studentData";
 import { ConfirmDialog } from "./ConfirmDialog";
 import {
@@ -740,6 +741,9 @@ function RowView({
                       busy={busy}
                       onDelete={() =>
                         void run(async () => {
+                          // See ActivityDetail: the recordings' files must go
+                          // before the rows naming them cascade away.
+                          await deleteActivityRecordings(a.id);
                           await deleteActivity(a.id);
                         })
                       }

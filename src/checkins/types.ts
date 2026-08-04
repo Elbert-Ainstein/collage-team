@@ -193,6 +193,23 @@ export interface CheckInResult {
   updated_at: string;
 }
 
+/**
+ * One audio artefact of a discussion, attached to a check-in result.
+ *
+ * `path` is an object path inside the private `recordings` bucket, not a URL:
+ * the only URL that plays it is a signed one that expires, so storing a URL
+ * would leave rows that stop working (see src/checkins/audio.ts).
+ */
+export interface Recording {
+  id: string;
+  result_id: string;
+  path: string;
+  /** Null when the browser could not tell us how long the take ran. */
+  duration_ms: number | null;
+  created_by: string | null;
+  created_at: string;
+}
+
 // ---------------------------------------------- the faculty Activities design
 
 export interface CourseWeek {

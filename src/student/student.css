@@ -172,6 +172,61 @@
   font-weight: var(--weight-bold);
 }
 
+/* ------------------------------------------------------ teammates stack */
+/* A rail across the top of the panel. The negative top margin borrows from the
+   panel's own padding so the stack sits beside the page heading, not above it. */
+.sv-panelbar {
+  display: flex; align-items: center; justify-content: flex-end;
+  gap: 10px; min-height: 30px; margin: -8px 0 4px;
+}
+.sv-stackwrap { position: relative; }
+.sv-teamnote { font-size: var(--text-xs); color: var(--muted-foreground); }
+
+.sv-stackbtn {
+  /* The ring colour tracks whatever is behind the faces, so they keep reading
+     as separate circles when the button lights up. */
+  --stack-ring: var(--cream-200);
+  display: inline-flex; align-items: center; gap: 9px;
+  font: inherit; color: var(--navy); cursor: pointer;
+  background: transparent; border: 1px solid transparent; border-radius: 999px;
+  padding: 3px 11px 3px 4px;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.sv-stackbtn:hover,
+.sv-stackbtn[aria-expanded="true"] {
+  --stack-ring: var(--cream-300);
+  background: var(--cream-300); border-color: var(--neutral-200);
+}
+.sv-stackbtn:focus-visible { outline: 2px solid var(--navy-700); outline-offset: 2px; }
+.sv-stack { display: inline-flex; align-items: center; }
+.sv-stack > * + * { margin-left: -9px; }
+.sv-stackcount { font-size: var(--text-xs); font-weight: var(--weight-semibold); }
+
+/* Outside the button — in the names list — the ring falls back to the card. */
+.sv-stack-av {
+  position: relative; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 999px;
+  font-size: var(--text-2xs); font-weight: var(--weight-bold);
+  box-shadow: 0 0 0 2px var(--stack-ring, var(--cream-100));
+}
+.sv-stack-av.me {
+  box-shadow: 0 0 0 2px var(--stack-ring, var(--cream-100)), 0 0 0 3px var(--navy);
+}
+
+.sv-stackpop {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 30;
+  min-width: 216px; max-width: 280px; text-align: left;
+  padding: 10px 12px 9px;
+  background: var(--cream-100); border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-lg); box-shadow: 0 8px 24px rgba(0, 35, 65, 0.12);
+}
+.sv-stacklist { list-style: none; margin: 7px 0 0; padding: 0; }
+.sv-stacklist li {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 0; font-size: var(--text-xs);
+}
+
 .sv-tabs {
   display: inline-flex; gap: 3px; padding: 3px;
   border: 1px solid var(--neutral-200); background: var(--cream-300); border-radius: var(--radius-md);

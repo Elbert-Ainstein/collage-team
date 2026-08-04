@@ -13,3 +13,6 @@ dist
 # local env (Supabase keys)
 .env.local
 .env*.local
+
+# TypeScript incremental build cache — a build artifact, and it conflicts on every merge
+tsconfig.tsbuildinfo

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   claimStudentRows,
   getEnrolment,
@@ -10,7 +10,8 @@ import {
   type Assignment,
   type Enrolment,
 } from "@/checkins/studentData";
-import { SCOPE_OF } from "@/checkins/types";
+import { initials, tintFor } from "@/checkins/data";
+import { SCOPE_OF, type Student } from "@/checkins/types";
 import { SIcon } from "./icons";
 import { Assignments } from "./Assignments";
 import { MyWork } from "./MyWork";
@@ -18,6 +19,138 @@ import { TeamResources } from "./TeamResources";
 import "./student.css";
 
 type Screen = "list" | "detail" | "work" | "tr" | "trDetail";
+
+/** How many faces the stack shows before the count carries the remainder. */
+const STACK_CAP = 4;
+
+function StackAvatar({
+  student,
+  isMe,
+  depth = 0,
+}: {
+  student: Student;
+  isMe: boolean;
+  /** Higher sits on top; the stack counts down so earlier faces stay whole. */
+  depth?: number;
+}) {
+  const tint = student.avatar_tint || tintFor(student.name);
+  return (
+    <span
+      className={"sv-stack-av" + (isMe ? " me" : "")}
+      style={{ background: tint + "22", color: tint, zIndex: depth }}
+    >
+      {initials(student.name)}
+    </span>
+  );
+}
+
+/**
+ * The team, top right of the panel, the way Slack shows a channel's members.
+ * The faces are decoration — the button's label carries the whole meaning, so a
+ * screen reader never lands on a bare number.
+ */
+function TeamStack({ enrolment }: { enrolment: Enrolment }) {
+  const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement | null>(null);
+  const button = useRef<HTMLButtonElement | null>(null);
+  const popId = useId();
+
+  const { student, team, teammates } = enrolment;
+  const members = useMemo(() => {
+    const others = teammates.filter((t) => t.id !== student.id);
+    // Me first, then roster order (the data layer sorts by position). Two
+    // reasons: the order must not shuffle between loads, and putting myself
+    // first keeps the marked face inside the cap on a large team.
+    return [student, ...others];
+  }, [student, teammates]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (!wrap.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setOpen(false);
+      button.current?.focus();
+    };
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  if (!team) {
+    return <span className="sv-teamnote">You&rsquo;re not on a team yet</span>;
+  }
+  if (members.length < 2) {
+    return (
+      <span className="sv-teamnote">
+        {team.name} &middot; just you so far
+      </span>
+    );
+  }
+
+  const shown = members.slice(0, STACK_CAP);
+  return (
+    <div
+      className="sv-stackwrap"
+      ref={wrap}
+      onBlur={(e) => {
+        // Tabbing out of the names closes them; clicking inside does not.
+        if (!e.currentTarget.contains(e.relatedTarget)) setOpen(false);
+      }}
+    >
+      <button
+        type="button"
+        ref={button}
+        className="sv-stackbtn"
+        aria-expanded={open}
+        aria-controls={popId}
+        aria-label={`${team.name}: ${members.length} members including you. Show names.`}
+        onClick={() => setOpen((v) => !v)}
+        onFocus={(e) => {
+          // Reaching it by keyboard reveals the names without a second press.
+          // A mouse click is not focus-visible, so it still toggles normally.
+          if (e.currentTarget.matches(":focus-visible")) setOpen(true);
+        }}
+      >
+        <span className="sv-stack" aria-hidden="true">
+          {shown.map((m, i) => (
+            <StackAvatar
+              key={m.id}
+              student={m}
+              isMe={m.id === student.id}
+              depth={shown.length - i}
+            />
+          ))}
+        </span>
+        <span className="sv-stackcount sv-num" aria-hidden="true">
+          {members.length}
+        </span>
+      </button>
+
+      {open && (
+        <div className="sv-stackpop" id={popId} role="group" aria-label={`${team.name} members`}>
+          <div className="sv-eyebrow">{team.name}</div>
+          <ul className="sv-stacklist">
+            {members.map((m) => (
+              <li key={m.id}>
+                <StackAvatar student={m} isMe={m.id === student.id} />
+                <span className="sv-ellip" style={{ minWidth: 0 }}>
+                  {m.name}
+                </span>
+                {m.id === student.id && <span className="sv-badge secondary">you</span>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
 
 /**
  * The student half of the app. The shell is persistent; a single `screen` value
@@ -122,25 +255,8 @@ export function StudentApp({
             <span className="sv-avatar" style={{ width: 28, height: 28, fontSize: 11 }}>
               {enrolment.team.name.replace(/[^0-9A-Za-z]/g, "").slice(0, 2).toUpperCase()}
             </span>
-            <span style={{ minWidth: 0 }}>
-              <span
-                style={{ display: "block", fontSize: "var(--text-xs)", fontWeight: 600 }}
-              >
-                {enrolment.team.name}
-              </span>
-              <span
-                className="sv-ellip"
-                style={{
-                  display: "block",
-                  fontSize: "var(--text-2xs)",
-                  color: "var(--muted-foreground)",
-                  maxWidth: 150,
-                }}
-              >
-                {enrolment.teammates
-                  .map((t) => (t.id === enrolment.student.id ? "you" : t.name.split(" ")[0]))
-                  .join(" · ")}
-              </span>
+            <span className="sv-ellip" style={{ minWidth: 0, fontSize: "var(--text-xs)", fontWeight: 600 }}>
+              {enrolment.team.name}
             </span>
           </div>
         )}
@@ -196,7 +312,14 @@ export function StudentApp({
       </aside>
 
       <main className="sv-main">
-        <div className="sv-panel">{body}</div>
+        <div className="sv-panel">
+          {enrolment && (
+            <div className="sv-panelbar">
+              <TeamStack enrolment={enrolment} />
+            </div>
+          )}
+          {body}
+        </div>
       </main>
     </div>
   );
