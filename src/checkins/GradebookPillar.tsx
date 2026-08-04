@@ -369,7 +369,6 @@ export function GradebookPillar(props: PillarProps) {
       cell: OpenCell,
       patch: { status: ResultStatus; score: number | null; isCi: boolean; flagged: boolean },
     ) => {
-      const prev = resultMap.get(rkey(cell.checkInId, cell.subjectKind, cell.subjectId));
       const subject =
         cell.subjectKind === "student"
           ? ({ type: "student", id: cell.subjectId } as const)
@@ -383,9 +382,12 @@ export function GradebookPillar(props: PillarProps) {
           status: patch.status,
           score: patch.score,
           isCi: patch.isCi,
-          text: prev?.text ?? null,
-          transcription: prev?.transcription ?? null,
-          transcriptionState: prev?.transcription_state ?? "none",
+          // `text` and the transcription fields are deliberately NOT sent.
+          // They were being echoed back from whatever this page last read, so
+          // marking a cell during a live session overwrote any answer handed in
+          // since the page loaded — the student's work replaced by a stale copy
+          // of itself. saveResult now treats an update as a patch, so omitting
+          // them leaves the stored values alone.
           flagged: patch.flagged,
         });
         // optimistic merge, then reconcile with the server

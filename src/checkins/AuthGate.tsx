@@ -178,7 +178,12 @@ function SignIn({ linkError }: { linkError: string | null }) {
   // What the person says they are. A teaching fellow becomes a faculty account
   // — the TF roster is what actually grants them anything — so this is three
   // buttons over two roles.
-  const [pick, setPick] = useState<"faculty" | "tf" | "student">("faculty");
+  // Defaults to Student. In a sixteen-person course the students outnumber
+  // everyone else, and getting this wrong used to be unrecoverable: a student
+  // who left it on Faculty was routed into the faculty app, which provisions
+  // AP50A/AP50B owned by THEM, and the routing self-heal only fires for an
+  // account that owns no course — so from the second sign-in it never could.
+  const [pick, setPick] = useState<"faculty" | "tf" | "student">("student");
   const role: Role = pick === "student" ? "student" : "faculty";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

@@ -468,8 +468,7 @@ export function GradingScreen({
                 margin: "6px 0 10px",
               }}
             >
-              Pick one — the deduction comes off this question&rsquo;s {pts(per)}. Use the pencil to
-              edit a line.
+              Pick one — the deduction comes off this question&rsquo;s {pts(per)}. {data.can.author ? " Use the pencil to edit a line." : ""}
             </p>
 
             {ladder == null ? (
@@ -488,7 +487,8 @@ export function GradingScreen({
                     key={item.id}
                     item={item}
                     selected={pickedId === item.id}
-                    editing={editIdx === i}
+                    editing={data.can.author && editIdx === i}
+                    canEdit={data.can.author}
                     onPick={() => void pick(item)}
                     onToggleEdit={() => setEditIdx(editIdx === i ? null : i)}
                     onCommit={(patch) => void commitLine(item, patch)}
@@ -502,7 +502,12 @@ export function GradingScreen({
               className="fv-btn outline sm full"
               style={{ marginTop: 10 }}
               onClick={() => void addLine()}
-              disabled={!ladder}
+              disabled={!ladder || !data.can.author}
+              title={
+                data.can.author
+                  ? undefined
+                  : "Only the instructor who owns this course can change the grading criteria."
+              }
             >
               <FIcon name="add" size={14} />
               Add rubric item
@@ -629,6 +634,7 @@ function RubricRow({
   item,
   selected,
   editing,
+  canEdit,
   onPick,
   onToggleEdit,
   onCommit,
@@ -636,6 +642,8 @@ function RubricRow({
   item: RubricItem;
   selected: boolean;
   editing: boolean;
+  /** Writing rubric_items is owner-only, so a TF must not see the pencil. */
+  canEdit: boolean;
   onPick: () => void;
   onToggleEdit: () => void;
   onCommit: (patch: { description?: string; deduction?: number }) => void;
@@ -739,15 +747,17 @@ function RubricRow({
           {item.description}
         </span>
       </button>
-      <button
-        type="button"
-        className="fv-iconbtn"
-        style={{ width: 22, height: 22, flex: "none" }}
-        onClick={onToggleEdit}
-        aria-label={editing ? "Stop editing this line" : "Edit this line"}
-      >
-        <FIcon name="edit" size={13} />
-      </button>
+      {canEdit ? (
+        <button
+          type="button"
+          className="fv-iconbtn"
+          style={{ width: 22, height: 22, flex: "none" }}
+          onClick={onToggleEdit}
+          aria-label={editing ? "Stop editing this line" : "Edit this line"}
+        >
+          <FIcon name="edit" size={13} />
+        </button>
+      ) : null}
     </div>
   );
 }

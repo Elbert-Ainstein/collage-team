@@ -7,11 +7,13 @@
 // came out of statFor, which is the only place they are worked out.
 
 import { Fragment, type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
-import { createActivity, updateActivity } from "@/checkins/data";
+import { createActivity, deleteActivity, updateActivity } from "@/checkins/data";
 import { isOpenToStudents } from "@/checkins/studentData";
 import { fmtInstant, fromLocalInput, toLocalInput } from "./ActivityDetail";
 import {
   addWeek,
+  countWorkForActivity,
+  deleteWeek,
   backfillWeeks,
   ensureCheckIn,
   setLiveWeek,
@@ -495,6 +497,12 @@ export function ActivitiesScreen(props: {
             onAddTo={openForm}
             onDates={saveDates}
             onLive={makeLive}
+            run={run}
+            onDropWeek={(g) =>
+              void run(async () => {
+                if (g.id) await deleteWeek(g.id);
+              })
+            }
           />
         ) : (
           <ColumnView
@@ -550,6 +558,7 @@ function WeekHead({
   busy,
   onDates,
   onLive,
+  trailing,
 }: {
   group: WeekGroup;
   canEdit: boolean;
@@ -559,6 +568,8 @@ function WeekHead({
   busy: boolean;
   onDates: (id: string, label: string | null) => void;
   onLive: (week: number | null) => void;
+  /** Slot at the end of the heading — the delete control, when there is one. */
+  trailing?: React.ReactNode;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -679,6 +690,7 @@ function WeekHead({
       ) : null}
 
       <span className="fv-weeksum">{toGradeLabel(group.waiting)}</span>
+      {trailing}
     </div>
   );
 }
@@ -692,6 +704,8 @@ function RowView({
   onAddTo,
   onDates,
   onLive,
+  run,
+  onDropWeek,
 }: {
   groups: WeekGroup[];
   data: FacultyData;
@@ -702,7 +716,10 @@ function RowView({
   onAddTo: (week: number) => void;
   onDates: (id: string, label: string | null) => void;
   onLive: (week: number | null) => void;
+  run: (job: () => Promise<void>) => Promise<void>;
+  onDropWeek: (g: WeekGroup) => void;
 }) {
+  const canAuthor = data.can.author;
   const flash = useCallback(
     (el: HTMLElement | null) => {
       if (el && highlight != null) el.scrollIntoView({ block: "center", behavior: "smooth" });
@@ -726,6 +743,11 @@ function RowView({
               busy={busy}
               onDates={onDates}
               onLive={onLive}
+              trailing={
+                canAuthor ? (
+                  <WeekDelete group={g} busy={busy} onDelete={() => onDropWeek(g)} />
+                ) : null
+              }
             />
             {/* A heading with nothing under it reads as another kind of broken,
                 so an empty week says it is empty and offers the way out of it. */}
@@ -766,11 +788,18 @@ function RowView({
                 const pct = (n: number) =>
                   stat && stat.total > 0 ? `${(n / stat.total) * 100}%` : "0%";
                 return (
-                  <button
+                  // A row is a flex WRAPPER, not a button: the delete control
+                  // has to be a sibling of the open control, because a button
+                  // inside a button is invalid and browsers do unhelpful things
+                  // with the inner click.
+                  <div
                     key={a.id}
-                    type="button"
                     className="fv-row"
-                    style={{ borderLeftColor: accent }}
+                    style={{ borderLeftColor: accent, padding: 0 }}
+                  >
+                  <button
+                    type="button"
+                    className="fv-rowmain"
                     onClick={() => onOpen(a.id)}
                   >
                     <span className="fv-type" style={{ color: accent }}>
@@ -798,6 +827,18 @@ function RowView({
                       <FIcon name="chevronRight" size={18} />
                     </span>
                   </button>
+                  {canAuthor ? (
+                    <RowDelete
+                      activity={a}
+                      busy={busy}
+                      onDelete={() =>
+                        void run(async () => {
+                          await deleteActivity(a.id);
+                        })
+                      }
+                    />
+                  ) : null}
+                  </div>
                 );
               })}
             </div>
@@ -1109,5 +1150,118 @@ function StudentRow({
         {percent == null ? "—" : `${percent}%`}
       </td>
     </tr>
+  );
+}
+
+/**
+ * Delete an activity, from the list rather than three screens in.
+ *
+ * Arms first and counts what goes with it: an activity cascades its check-ins,
+ * every submission against them and every mark. window.confirm is suppressed
+ * here, so the second click IS the confirmation and the label has to carry the
+ * cost.
+ */
+function RowDelete({
+  activity,
+  busy,
+  onDelete,
+}: {
+  activity: Activity;
+  busy: boolean;
+  onDelete: () => void;
+}) {
+  const [armed, setArmed] = useState(false);
+  const [cost, setCost] = useState<string | null>(null);
+
+  if (!armed) {
+    return (
+      <button
+        type="button"
+        className="fv-iconbtn"
+        style={{ width: 26, height: 26, flex: "none", marginRight: 10 }}
+        aria-label={`Delete ${activity.title}`}
+        disabled={busy}
+        onClick={() => {
+          setArmed(true);
+          setCost(null);
+          void countWorkForActivity(activity.id)
+            .then(({ submissions, graded }) =>
+              setCost(
+                submissions === 0
+                  ? "Delete? Nothing has been handed in."
+                  : `Delete and lose ${submissions} submission${submissions === 1 ? "" : "s"}` +
+                    (graded ? ` (${graded} graded)` : "") +
+                    "?",
+              ),
+            )
+            .catch(() => setCost("Delete? (could not check what would go)"));
+        }}
+      >
+        <FIcon name="close" size={15} />
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      className="fv-btn sm"
+      style={{
+        flex: "none",
+        marginRight: 10,
+        color: "var(--fv-destructive)",
+        whiteSpace: "nowrap",
+      }}
+      disabled={busy}
+      onBlur={() => {
+        setArmed(false);
+        setCost(null);
+      }}
+      onClick={() => {
+        setArmed(false);
+        setCost(null);
+        onDelete();
+      }}
+    >
+      {cost ?? "Delete?"}
+    </button>
+  );
+}
+
+/**
+ * Delete an empty week.
+ *
+ * Only when it holds nothing. A week with activities in it would still render
+ * from their week number after the row went, just without its dates and with no
+ * way to restore them — so the control is simply absent rather than armed and
+ * refused, which would be a button that exists to say no.
+ */
+function WeekDelete({ group, busy, onDelete }: { group: WeekGroup; busy: boolean; onDelete: () => void }) {
+  const [armed, setArmed] = useState(false);
+  if (group.id == null || group.activities.length > 0) return null;
+
+  return (
+    <button
+      type="button"
+      className={armed ? "fv-btn sm" : "fv-iconbtn"}
+      style={
+        armed
+          ? { flex: "none", color: "var(--fv-destructive)", whiteSpace: "nowrap" }
+          : { width: 22, height: 22, flex: "none" }
+      }
+      aria-label={`Delete ${group.label}`}
+      disabled={busy}
+      onBlur={() => setArmed(false)}
+      onClick={() => {
+        if (!armed) {
+          setArmed(true);
+          return;
+        }
+        setArmed(false);
+        onDelete();
+      }}
+    >
+      {armed ? `Delete ${group.label}?` : <FIcon name="close" size={13} />}
+    </button>
   );
 }

@@ -97,6 +97,20 @@ export async function backfillWeeks(courseId: string): Promise<number> {
   return missing.length;
 }
 
+/**
+ * Remove a week.
+ *
+ * Only the heading row goes: course_weeks has no cascade, and activities carry
+ * their week as a plain number. So deleting a week that still has activities in
+ * it would leave them rendering under a bare "Week 3" with no dates and no way
+ * to get the row back — the caller refuses that case rather than this function
+ * silently allowing it.
+ */
+export async function deleteWeek(id: string): Promise<void> {
+  const { error } = await db().from("course_weeks").delete().eq("id", id);
+  if (error) throw dbError(error);
+}
+
 export async function setWeekDates(id: string, datesLabel: string | null): Promise<void> {
   const { error } = await db().from("course_weeks").update({ dates_label: datesLabel }).eq("id", id);
   if (error) throw dbError(error);
@@ -210,8 +224,19 @@ export async function updateRubricItem(
   id: string,
   patch: { description?: string; deduction?: number },
 ): Promise<void> {
-  const { error } = await db().from("rubric_items").update(patch).eq("id", id);
+  // .select() so an RLS-filtered write is DETECTABLE. Writing rubric_items is
+  // owner-only; without this a teaching fellow's edit came back with no error
+  // and no rows, the screen kept the new number, and they went on to grade
+  // against a deduction the database had refused — releasing a mark that was
+  // not the one in front of them.
+  const { data, error } = await db().from("rubric_items").update(patch).eq("id", id).select("id");
   if (error) throw dbError(error);
+  if (!data || data.length === 0) {
+    throw new Error(
+      "That criterion was not saved — only the instructor who owns this course can change the " +
+        "grading criteria.",
+    );
+  }
 }
 
 export async function addRubricItem(

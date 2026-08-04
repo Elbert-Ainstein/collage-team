@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { AuthGate } from "@/checkins/AuthGate";
-import { listCourses } from "@/checkins/data";
 import { ClassCheckins } from "@/checkins/ClassCheckins";
 import { FacultyApp } from "@/faculty/FacultyApp";
 import { StudentApp } from "@/student/StudentApp";
@@ -85,13 +84,22 @@ function RoleRouter({
       // normal thing to do — would otherwise be thrown into the student app and
       // locked out of their own gradebook, with the same no-way-back problem
       // this is meant to solve. Owning a course is the stronger signal.
+      // Ask about the roster FIRST, and unconditionally.
+      //
+      // This used to be gated on "owns no course", which was a trap: a student
+      // who left the picker on Faculty was sent to the faculty app, which
+      // provisions AP50A/AP50B owned by them — so from their second sign-in
+      // they owned courses, the gate was false forever, and there was no way
+      // back from inside the app.
+      //
+      // Being on somebody ELSE's roster is the signal. An instructor who put
+      // their own address on their own roster — a normal thing to do, to see
+      // what students see — is enrolled only on a course they own, so they
+      // stay in the faculty app.
       try {
-        const owned = (await listCourses()).filter((c) => c.owner_id === uid);
-        if (!owned.length) {
-          await claimStudentRows();
-          const enrolment = await getEnrolment();
-          if (enrolment) return "student" as Kind;
-        }
+        await claimStudentRows();
+        const enrolment = await getEnrolment();
+        if (enrolment && enrolment.course.owner_id !== uid) return "student" as Kind;
       } catch {
         // No roster row, or the lookup failed — carry on as faculty.
       }

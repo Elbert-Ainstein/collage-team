@@ -169,6 +169,8 @@ export function MyWork(props: {
   const [draftError, setDraftError] = useState<string | null>(null);
   /** The key whose draft restore has finished; see the persist effect below. */
   const restoredFor = useRef<string | null>(null);
+  /** A draft was found but not restored — so it must not be deleted either. */
+  const declined = useRef(false);
   const [conflict, setConflict] = useState<Conflict | null>(null);
   const [selected, setSelected] = useState(3); // §4: active row is index 3
   const [busy, setBusy] = useState(false);
@@ -189,6 +191,7 @@ export function MyWork(props: {
     setConflict(null);
     setRestoredAt(null);
     setDraftError(null);
+    declined.current = false;
     if (!key) return;
     try {
       const d = loadDraft(key);
@@ -204,7 +207,16 @@ export function MyWork(props: {
         window.localStorage.removeItem(key);
         return;
       }
-      if (typedAt !== null && storedAt !== null && typedAt <= storedAt) return;
+      if (typedAt !== null && storedAt !== null && typedAt <= storedAt) {
+        // Declined, NOT spent. The stored row's updated_at moves on a teammate's
+        // submit and on every rubric mark the instructor places, so this fires
+        // in ordinary use — and leaving the box clean makes the persist effect
+        // below take the !dirty branch and remove the draft. Deleting typing
+        // the student never submitted, because somebody else saved something,
+        // is the loss this whole feature exists to stop.
+        declined.current = true;
+        return;
+      }
       setBox({ text: d.text, saved: seeded });
       setRestoredAt(d.at);
     } catch (e) {
@@ -225,8 +237,20 @@ export function MyWork(props: {
     setBox((b) => (b.text === b.saved ? { text: seeded, saved: seeded } : { ...b, saved: seeded }));
   }, [seeded]);
 
+  // Adopt the new version stamp ONLY when nothing is unsaved in the box.
+  //
+  // The list refetches on focus and on a timer, so a teammate submitting while
+  // this student is mid-sentence brings a fresh stamp in. Taking it would make
+  // the next Submit match the teammate's row and overwrite it — silently, with
+  // no conflict shown, which is precisely what the stamp exists to prevent.
+  // Holding the old one means the write is refused and the student is offered
+  // both versions. The sibling effect above already guards this way; this one
+  // did not, and the background refresh I added is what made it reachable.
   useEffect(() => {
-    setExpected(serverStamp);
+    setBox((b) => {
+      if (b.text === b.saved) setExpected(serverStamp);
+      return b;
+    });
   }, [serverStamp]);
 
   const answered = QUESTIONS.filter((q) => q.state === "done").length;
@@ -255,6 +279,9 @@ export function MyWork(props: {
     };
 
     if (!dirty) {
+      // Never remove on a path that did not restore. A declined restore leaves
+      // the box clean while a real draft is still on disk.
+      if (declined.current) return;
       // A failure to CLEAR is not worth telling a student about — there is
       // nothing they can do with it, and it would paint a red line on an
       // untouched answer box in any browser with storage blocked.

@@ -466,6 +466,27 @@
 .fv-row:hover {
   border-color: var(--fv-neutral-300);
 }
+/* The row is a wrapper so a delete control can sit beside the open control —
+   a button inside a button is invalid. The main area keeps the row's padding. */
+.fv-rowmain {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  min-width: 0;
+  padding: 13px 16px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.fv-rowmain:focus-visible {
+  outline: 2px solid var(--fv-navy-700);
+  outline-offset: -2px;
+  border-radius: var(--fv-r-lg);
+}
 .fv-type {
   flex: none;
   width: 82px;
