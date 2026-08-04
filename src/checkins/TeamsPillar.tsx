@@ -367,10 +367,6 @@ export function TeamsPillar(props: PillarProps) {
       }}
     >
       <h1 className="t-h1">Teams</h1>
-      <span className="t-sub">
-        Team sets belong to an activity — the same session can be teams of four for one activity and
-        pairs for another. Teams are assigned by faculty — self-selection is not offered.
-      </span>
     </div>
   );
 
@@ -733,13 +729,13 @@ export function TeamsPillar(props: PillarProps) {
                   .filter((s) => s.name.toLowerCase().includes(q.trim().toLowerCase()))
                   .slice(0, 4)
               : [];
-            const warn = under
-              ? t.members.length === 0
-                ? "No students yet"
-                : `Fewer than ${activeSetSize} members`
-              : "";
+            // A team below the target size is not a problem to be flagged — a
+            // set of two students makes teams of one, and an amber card on
+            // every one of them says nothing anyone can act on. An EMPTY team
+            // still gets a line, because that one is unfinished work.
+            const warn = t.members.length === 0 ? "No students yet" : "";
             return (
-              <div className={"t-teamcard" + (under ? " under" : "")} key={t.id}>
+              <div className="t-teamcard" key={t.id}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <input
                     className="t-in"
