@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AuthGate } from "@/checkins/AuthGate";
 import { ClassCheckins } from "@/checkins/ClassCheckins";
+import { FacultyApp } from "@/faculty/FacultyApp";
 import { StudentApp } from "@/student/StudentApp";
 import { getRole } from "@/checkins/studentData";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
@@ -56,9 +57,18 @@ function RoleRouter({
     );
   }
 
-  return role === "student" ? (
-    <StudentApp account={account} onSignOut={onSignOut} />
-  ) : (
+  if (role === "student") return <StudentApp account={account} onSignOut={onSignOut} />;
+
+  // The redesigned faculty app is the default. The previous one stays reachable
+  // at /ck?classic=1 until 0007 has been run everywhere — it is the only way
+  // back if the new screens hit a schema that has not caught up yet.
+  const classic =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("classic") === "1";
+
+  return classic ? (
     <ClassCheckins account={account} onSignOut={onSignOut} />
+  ) : (
+    <FacultyApp account={account} onSignOut={onSignOut} />
   );
 }

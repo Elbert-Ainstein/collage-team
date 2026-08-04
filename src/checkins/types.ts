@@ -7,6 +7,11 @@ export interface Course {
   name: string;
   code: string | null;
   term: string | null;
+  /** The week whose team discussions are running right now, if any. */
+  live_week: number | null;
+  /** Course-wide, not per person — every TF on the course gets the same. */
+  tf_can_grade: boolean;
+  tf_can_checkin: boolean;
   created_at: string;
 }
 
@@ -72,6 +77,14 @@ export interface Activity {
   title: string;
   dates_label: string | null;
   type: ActivityType;
+  /**
+   * How the activity is worked and marked. The total is the PRODUCT of these
+   * two — there is deliberately no points_total column for it to drift from.
+   */
+  question_count: number;
+  points_per_question: number;
+  /** One instant, replacing the older per-scope due columns below. */
+  due_at: string | null;
   stage: number; // 0 setup,1 individual,2 discuss,3 resubmit,4 closed
   resubmit_mode: "team" | "individual" | "choice";
   source_text: string | null;
@@ -146,5 +159,83 @@ export interface CheckInResult {
   transcription: string | null;
   transcription_state: "none" | "auto" | "confirmed";
   flagged: boolean;
+  /** When the student handed it in. updated_at is bumped by grading too. */
+  submitted_at: string | null;
+  /** The instructor's note back. `text` is the student's own work. */
+  feedback: string | null;
   updated_at: string;
 }
+
+// ---------------------------------------------- the faculty Activities design
+
+export interface CourseWeek {
+  id: string;
+  course_id: string;
+  week: number;
+  dates_label: string | null;
+  created_at: string;
+}
+
+/** One line of an activity's deduction ladder. */
+export interface RubricItem {
+  id: string;
+  activity_id: string;
+  row_index: number;
+  description: string;
+  deduction: number;
+  /** Base ladder rows cannot be deleted; faculty-added ones can. */
+  is_custom: boolean;
+  created_at: string;
+}
+
+/**
+ * Which ladder ROW was picked for one question of one submission.
+ *
+ * The row, not its point value: two rows may carry the same deduction, and
+ * storing the value would make them indistinguishable and un-selectable.
+ */
+export interface SubmissionMark {
+  id: string;
+  result_id: string;
+  question_index: number;
+  rubric_item_id: string;
+  created_at: string;
+}
+
+export interface CourseTF {
+  id: string;
+  course_id: string;
+  name: string;
+  email: string | null;
+  avatar_tint: string | null;
+  /** Set once the TF signs up with the address they were added under. */
+  user_id: string | null;
+  position: number;
+  created_at: string;
+}
+
+/**
+ * Per-type defaults: questions x points-per-question. The total is always the
+ * product — never stored beside them, or the two drift.
+ */
+export const QUESTION_SHAPE: Record<ActivityType, { count: number; per: number }> = {
+  challenge: { count: 5, per: 1 },
+  combo: { count: 10, per: 5 },
+  amplify: { count: 3, per: 1 },
+  skills: { count: 5, per: 2 },
+};
+
+/** Challenge and Amplify are marked complete/incomplete; the others carry points. */
+export const IS_COMPLETION: Record<ActivityType, boolean> = {
+  challenge: true,
+  combo: false,
+  amplify: true,
+  skills: false,
+};
+
+export const TYPE_ACCENT: Record<ActivityType, string> = {
+  challenge: "var(--fv-orange)",
+  combo: "var(--fv-navy-700)",
+  amplify: "var(--fv-lavender)",
+  skills: "var(--fv-sky)",
+};

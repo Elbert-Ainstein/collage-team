@@ -1,0 +1,592 @@
+"use client";
+
+// Roster & teams.
+//
+// The handoff draws only the roster card. Three things it leaves out are kept
+// here because the rest of the app depends on them: the email address (the only
+// join key between a roster row and a login), file/paste import (nobody types
+// sixteen names twice), and a route to the team builder (team-scope activities,
+// the gradebook and the student view all read teams).
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import { TeamsPillar } from "@/checkins/TeamsPillar";
+import { addStudents, removeStudent, setStudentEmail } from "@/checkins/data";
+import {
+  isSupportedRosterFile,
+  parseRoster,
+  type ParsedStudent,
+} from "@/checkins/rosterImport";
+import { reconcileRoster } from "@/checkins/rosterReconcile";
+import type { Student } from "@/checkins/types";
+import { FAvatar, FIcon } from "./icons";
+import { FacultyError, type FacultyData } from "./FacultyApp";
+import "@/checkins/checkins.css";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+/** What an import would do, shown before anything is written. */
+interface Preview {
+  /** Named in the summary so the user knows which input this came from. */
+  source: string;
+  fresh: ParsedStudent[];
+  emailFills: { student: Student; email: string }[];
+  unchanged: number;
+  warnings: string[];
+}
+
+function plural(n: number, one: string, many: string): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+export function TeamsScreen(props: {
+  data: FacultyData;
+  onChanged: () => void;
+  onError: (e: unknown) => void;
+}): JSX.Element {
+  const { data, onChanged, onError } = props;
+  const { course, roster, activities, teams } = data;
+
+  const [error, setError] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [over, setOver] = useState(false);
+  const [paste, setPaste] = useState("");
+  const [pending, setPending] = useState<Preview | null>(null);
+  const [builder, setBuilder] = useState(false);
+  /** window.confirm is suppressed here, so removals take two clicks. */
+  const [armedRemove, setArmedRemove] = useState<string | null>(null);
+  const [armedClear, setArmedClear] = useState<string | null>(null);
+  /** Only addresses being edited right now. Everything else reads the props,
+   *  so a saved — or deleted — address is never shadowed by a stale draft. */
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const file = useRef<HTMLInputElement | null>(null);
+
+  const fail = (e: unknown) => {
+    setError(String((e as Error)?.message ?? e));
+    onError(e);
+  };
+
+  const teamOf = useMemo(() => {
+    const m = new Map<string, string>();
+    teams.forEach((t) => t.members.forEach((mem) => m.set(mem.id, t.name)));
+    return m;
+  }, [teams]);
+
+  const nextPosition = useMemo(
+    () => roster.reduce((n, s) => Math.max(n, s.position), -1) + 1,
+    [roster],
+  );
+
+  // The builder is the original app's component and follows the OS colour
+  // scheme; the faculty view is always the cream one. Pin light while it is on
+  // screen so the two surfaces do not disagree mid-page.
+  useEffect(() => {
+    if (!builder) return;
+    const root = document.documentElement;
+    const prev = root.getAttribute("data-theme");
+    root.setAttribute("data-theme", "light");
+    return () => {
+      if (prev) root.setAttribute("data-theme", prev);
+      else root.removeAttribute("data-theme");
+    };
+  }, [builder]);
+
+  // ---------------- email ----------------
+
+  const draftFor = (s: Student) => drafts[s.id] ?? s.email ?? "";
+  const dirty = (s: Student) => draftFor(s).trim() !== (s.email ?? "");
+
+  const editEmail = (id: string, value: string) =>
+    setDrafts((prev) => ({ ...prev, [id]: value }));
+
+  const dropDraft = (id: string) =>
+    setDrafts((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+
+  async function commitEmail(s: Student) {
+    const next = draftFor(s).trim();
+    if (next === (s.email ?? "")) return;
+
+    if (!next) {
+      // Clearing an address revokes the student's route into the course, so it
+      // is armed first and only cleared on the second click.
+      if (armedClear !== s.id) {
+        setArmedClear(s.id);
+        return;
+      }
+    } else if (!EMAIL_RE.test(next)) {
+      setNote(
+        `"${next}" is not an email address — a student signs in with it, so it has to be exact.`,
+      );
+      return;
+    } else {
+      // Two rows on one address means whoever signs in claims an arbitrary one.
+      const taken = roster.find(
+        (o) => o.id !== s.id && (o.email ?? "").toLowerCase() === next.toLowerCase(),
+      );
+      if (taken) {
+        setNote(`${next} is already on ${taken.name}'s row.`);
+        return;
+      }
+    }
+
+    setBusy(true);
+    setError(null);
+    try {
+      await setStudentEmail(s.id, next || null);
+      setArmedClear(null);
+      dropDraft(s.id);
+      setNote(next ? `${s.name} signs in as ${next}.` : `Cleared ${s.name}'s address.`);
+      onChanged();
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function drop(s: Student) {
+    setArmedRemove(null);
+    setBusy(true);
+    setError(null);
+    try {
+      await removeStudent(s.id);
+      setNote(`Removed ${s.name}.`);
+      onChanged();
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // ---------------- import ----------------
+
+  function propose(text: string, source: string) {
+    const parsed = parseRoster(text);
+    const rec = reconcileRoster<Student>(roster, parsed.students);
+    if (!rec.fresh.length && !rec.emailFills.length) {
+      setPending(null);
+      setNote(
+        [
+          parsed.students.length
+            ? `Nothing to add — all ${plural(parsed.students.length, "name", "names")} are already on the roster.`
+            : `No names found in ${source}.`,
+          ...parsed.warnings,
+        ].join(" "),
+      );
+      return;
+    }
+    setNote(null);
+    setPending({
+      source,
+      fresh: rec.fresh,
+      emailFills: rec.emailFills,
+      unchanged: rec.unchanged,
+      warnings: parsed.warnings,
+    });
+  }
+
+  async function takeFile(f: File | null | undefined) {
+    if (!f) return;
+    if (!isSupportedRosterFile(f.name)) {
+      setNote(`${f.name} is not a text roster — export it as .csv and try again.`);
+      return;
+    }
+    try {
+      propose(await f.text(), f.name);
+    } catch (e) {
+      fail(e);
+    }
+  }
+
+  async function applyImport() {
+    const p = pending;
+    if (!p) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (p.fresh.length) {
+        await addStudents(
+          course.id,
+          p.fresh.map((s) => ({ name: s.name, email: s.email })),
+          nextPosition,
+        );
+      }
+      for (const fillIn of p.emailFills) {
+        await setStudentEmail(fillIn.student.id, fillIn.email);
+      }
+      setNote(
+        [
+          p.fresh.length ? `Added ${plural(p.fresh.length, "student", "students")}.` : "",
+          p.emailFills.length
+            ? `Filled in ${plural(p.emailFills.length, "address", "addresses")}.`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" "),
+      );
+      setPending(null);
+      setPaste("");
+      onChanged();
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // ---------------- team builder ----------------
+
+  if (builder) {
+    return (
+      <div className="fv-panel">
+        <div className="fv-topbar">
+          <button
+            type="button"
+            className="fv-back"
+            aria-label="Back to roster & teams"
+            onClick={() => setBuilder(false)}
+          >
+            <FIcon name="chevronLeft" size={18} />
+          </button>
+          <span className="fv-sub">
+            Roster &amp; teams · forming teams from {plural(roster.length, "student", "students")}
+          </span>
+        </div>
+        <div className="fv-scroll">
+          <TeamsPillar
+            courseId={course.id}
+            roster={roster}
+            activities={activities}
+            refresh={async () => {
+              onChanged();
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // ---------------- roster ----------------
+
+  const withoutEmail = roster.filter((s) => !s.email).length;
+
+  return (
+    <div className="fv-panel">
+      <div className="fv-head">
+        <h1 className="fv-h1">Roster &amp; teams</h1>
+        <span className="fv-sub">
+          {course.code ?? course.name} · {plural(roster.length, "student", "students")} — teams are
+          assigned by faculty; self-selection is not offered.
+        </span>
+        <span style={{ flex: 1 }} />
+        <div className="fv-headbtns">
+          <button
+            type="button"
+            className="fv-btn outline sm"
+            onClick={() => setBuilder(true)}
+            disabled={roster.length === 0}
+            title={
+              roster.length === 0
+                ? "Add students first — teams are formed from the roster."
+                : undefined
+            }
+          >
+            <FIcon name="groups" size={15} />
+            Form teams
+          </button>
+        </div>
+      </div>
+
+      <FacultyError error={error} onClear={() => setError(null)} />
+
+      <div className="fv-scroll">
+        <div className="fv-card" style={{ padding: 16 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 14 }}>
+            {roster.map((s) => {
+              const changed = dirty(s);
+              const cleared = !draftFor(s).trim();
+              return (
+                <div
+                  key={s.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "5px 4px",
+                    borderBottom: "1px solid var(--fv-neutral-200)",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <FAvatar name={s.name} tint={s.avatar_tint} size={22} />
+                  <span
+                    style={{
+                      flex: "1 1 140px",
+                      minWidth: 0,
+                      fontSize: "var(--fv-xs)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {s.name}
+                  </span>
+
+                  <input
+                    className="fv-in"
+                    style={{
+                      width: 208,
+                      flex: "none",
+                      height: 26,
+                      padding: "0 8px",
+                      fontSize: "var(--fv-2xs)",
+                    }}
+                    type="email"
+                    placeholder="no address — cannot sign in"
+                    aria-label={`Email for ${s.name}`}
+                    value={draftFor(s)}
+                    disabled={busy}
+                    onChange={(e) => {
+                      if (armedClear === s.id) setArmedClear(null);
+                      editEmail(s.id, e.target.value);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") void commitEmail(s);
+                      if (e.key === "Escape") {
+                        setArmedClear(null);
+                        dropDraft(s.id);
+                      }
+                    }}
+                  />
+                  {changed ? (
+                    <button
+                      type="button"
+                      className="fv-btn sm"
+                      style={{
+                        height: 22,
+                        padding: "0 8px",
+                        flex: "none",
+                        color: cleared ? "var(--fv-destructive)" : "var(--fv-navy-700)",
+                      }}
+                      disabled={busy}
+                      onClick={() => void commitEmail(s)}
+                    >
+                      {armedClear === s.id ? "Clear it?" : cleared ? "Clear" : "Save"}
+                    </button>
+                  ) : null}
+
+                  {/* The account only exists once the student signs up under
+                      that address, so the row has to say which state it is in. */}
+                  {s.user_id ? (
+                    <span
+                      className="fv-badge"
+                      style={{ flex: "none", color: "var(--fv-emerald)" }}
+                      title="This student has signed in and claimed their row."
+                    >
+                      signed in
+                    </span>
+                  ) : null}
+
+                  <span
+                    style={{
+                      fontSize: "var(--fv-2xs)",
+                      color: "var(--fv-muted)",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {teamOf.get(s.id) ?? "no team"}
+                  </span>
+
+                  {armedRemove === s.id ? (
+                    <button
+                      type="button"
+                      className="fv-btn sm"
+                      style={{
+                        height: 22,
+                        padding: "0 8px",
+                        flex: "none",
+                        color: "var(--fv-destructive)",
+                      }}
+                      disabled={busy}
+                      onClick={() => void drop(s)}
+                      onBlur={() => setArmedRemove(null)}
+                    >
+                      Remove?
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="fv-iconbtn"
+                      style={{ width: 22, height: 22, flex: "none" }}
+                      aria-label={`Remove ${s.name}`}
+                      disabled={busy}
+                      onClick={() => setArmedRemove(s.id)}
+                    >
+                      <FIcon name="close" size={15} />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+            {roster.length === 0 ? (
+              <div className="fv-sub" style={{ padding: "10px 4px" }}>
+                No students yet — drop a class list below.
+              </div>
+            ) : null}
+          </div>
+
+          {withoutEmail > 0 ? (
+            <div className="fv-sub" style={{ margin: "0 4px 12px", lineHeight: 1.5 }}>
+              {plural(withoutEmail, "student has", "students have")} no address yet. A student can
+              only reach the course once their address is on their row.
+            </div>
+          ) : null}
+
+          <input
+            ref={file}
+            type="file"
+            accept=".csv,.tsv,.txt"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              void takeFile(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            className={`fv-dz${over ? " over" : ""}`}
+            style={{ width: "100%", font: "inherit", color: "inherit", gap: 9 }}
+            disabled={busy}
+            onClick={() => file.current?.click()}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setOver(true);
+            }}
+            onDragLeave={() => setOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setOver(false);
+              void takeFile(e.dataTransfer.files?.[0]);
+            }}
+          >
+            <span style={{ color: "var(--fv-muted)" }}>
+              <FIcon name="fileUpload" size={30} />
+            </span>
+            <span
+              style={{
+                fontFamily: "var(--fv-serif)",
+                fontSize: "var(--fv-lg)",
+                fontWeight: 700,
+                color: "var(--fv-navy)",
+              }}
+            >
+              Add more students
+            </span>
+            <span
+              style={{
+                fontSize: "var(--fv-xs)",
+                color: "var(--fv-muted)",
+                maxWidth: "46ch",
+                lineHeight: 1.5,
+              }}
+            >
+              Drop a <strong>.csv</strong>, <strong>.tsv</strong> or <strong>.txt</strong> here, or
+              click to choose. One column of names, optionally with emails — extra columns are
+              ignored.
+            </span>
+          </button>
+
+          <div className="fv-divider" style={{ margin: "16px 0 12px" }}>
+            <span style={{ flex: 1, height: 1, background: "var(--fv-neutral-200)" }} />
+            <span className="fv-eyebrow">or paste them</span>
+            <span style={{ flex: 1, height: 1, background: "var(--fv-neutral-200)" }} />
+          </div>
+
+          <div style={{ display: "flex", gap: 10, alignItems: "flex-start", flexWrap: "wrap" }}>
+            <span style={{ flex: 1, minWidth: 240 }}>
+              <textarea
+                className="fv-ta"
+                rows={2}
+                placeholder="…or paste names — one per line"
+                aria-label="Paste students"
+                value={paste}
+                disabled={busy}
+                onChange={(e) => setPaste(e.target.value)}
+              />
+            </span>
+            <button
+              type="button"
+              className="fv-btn primary sm"
+              disabled={busy || !paste.trim()}
+              onClick={() => propose(paste, "what you pasted")}
+            >
+              Add to roster
+            </button>
+          </div>
+
+          {pending ? (
+            <div
+              style={{
+                marginTop: 12,
+                padding: "11px 12px",
+                border: "1px solid var(--fv-neutral-200)",
+                borderRadius: "var(--fv-r-md)",
+                background: "var(--fv-cream-300)",
+              }}
+            >
+              <div className="fv-eyebrow">From {pending.source}</div>
+              <div style={{ fontSize: "var(--fv-xs)", marginTop: 6, lineHeight: 1.6 }}>
+                {plural(pending.fresh.length, "new student", "new students")} ·{" "}
+                {plural(pending.emailFills.length, "row gains", "rows gain")} an email ·{" "}
+                {pending.unchanged} already correct
+              </div>
+              {pending.warnings.length ? (
+                <ul
+                  style={{
+                    margin: "6px 0 0",
+                    paddingLeft: 18,
+                    fontSize: "var(--fv-2xs)",
+                    color: "var(--fv-muted)",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  {pending.warnings.map((w, i) => (
+                    <li key={`${i}-${w}`}>{w}</li>
+                  ))}
+                </ul>
+              ) : null}
+              <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="fv-btn primary sm"
+                  disabled={busy}
+                  onClick={() => void applyImport()}
+                >
+                  {busy ? "Adding…" : "Add to roster"}
+                </button>
+                <button
+                  type="button"
+                  className="fv-btn outline sm"
+                  disabled={busy}
+                  onClick={() => setPending(null)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {note ? (
+            <div className="fv-sub" style={{ marginTop: 10, lineHeight: 1.5 }}>
+              {note}
+            </div>
+          ) : null}
+        </div>
+      </div>
+    </div>
+  );
+}
