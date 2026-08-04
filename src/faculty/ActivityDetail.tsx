@@ -7,7 +7,7 @@
 // counts out of the number of teams — type only picks the label and the accent.
 
 import { useMemo, useState } from "react";
-import { deleteActivity, tintFor, updateActivity } from "@/checkins/data";
+import { deleteActivity, setCheckInsPosted, tintFor, updateActivity } from "@/checkins/data";
 import {
   IS_COMPLETION,
   SCOPE_LABEL,
@@ -200,6 +200,7 @@ export function ActivityDetail(props: {
   const [per, setPer] = useState(String(shape.per));
   const [kind, setKind] = useState<ActivityType>(activity.type);
   const [armedDelete, setArmedDelete] = useState(false);
+  const [posting, setPosting] = useState(false);
   // Deleting an activity cascades its check-ins, every submission against them,
   // and every mark. Count it before the second click rather than after.
   const [deleteCost, setDeleteCost] = useState<string | null>(null);
@@ -221,6 +222,24 @@ export function ActivityDetail(props: {
   const nextCount = Math.max(1, Math.round(Number(count) || 0));
   const nextPer = Math.max(0, Math.round(Number(per) || 0));
   const nextTotal = pointsTotal({ question_count: nextCount, points_per_question: nextPer });
+
+  const togglePosted = async () => {
+    setPosting(true);
+    try {
+      const next = !activity.posted;
+      // The activity and its check-ins are posted together — the student app
+      // needs a check-in to submit against, so a posted activity with unposted
+      // check-ins is a row students can see and cannot answer.
+      await updateActivity(activity.id, { posted: next });
+      const ids = data.checkIns.filter((c) => c.activity_id === activity.id).map((c) => c.id);
+      if (ids.length) await setCheckInsPosted(ids, next);
+      onChanged();
+    } catch (e) {
+      onError(e);
+    } finally {
+      setPosting(false);
+    }
+  };
 
   const save = async () => {
     setSaving(true);
@@ -318,6 +337,30 @@ export function ActivityDetail(props: {
             <button type="button" className="fv-btn outline sm" onClick={onCriteria}>
               Grading criteria
             </button>
+
+            {/* Posting is what the "Check-in" TF permission grants. Until this
+                control existed the permission was enforceable in the database
+                and exercised by nothing, so the switch on the TFs tab implied a
+                capability no screen offered. */}
+            {data.can.runCheckIns ? (
+              <button
+                type="button"
+                className="fv-btn outline sm"
+                disabled={posting}
+                title={
+                  activity.posted
+                    ? "Students can see this. Unposting hides it; their work is kept."
+                    : "Students cannot see this yet."
+                }
+                onClick={() => void togglePosted()}
+              >
+                {posting
+                  ? "Saving…"
+                  : activity.posted
+                    ? "Posted to students"
+                    : "Post to students"}
+              </button>
+            ) : null}
           </div>
 
           {editing ? (

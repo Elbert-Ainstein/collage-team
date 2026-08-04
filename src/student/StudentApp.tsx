@@ -232,17 +232,39 @@ export function StudentApp({
         enrolment={enrolment}
         mode={workMode}
         onBack={() => setScreen("detail")}
-        onSubmit={async (text) => {
+        onSubmit={async (text, expectedUpdatedAt) => {
+          // expectedUpdatedAt has to be threaded through, not defaulted: it is
+          // the stamp the screen read, and it is what makes a teammate's
+          // concurrent submit detectable rather than silently overwritten.
+          // Passing null instead would send every re-submit down the INSERT
+          // branch, hit the unique index, and read as a permanent conflict.
           if (workMode === "team") {
             // Guarded in MyWork too, but never write a submission we cannot
             // attribute to a team.
             if (!selected.teamCheckIn || !enrolment.team) return;
-            await submitTeamWork(selected.teamCheckIn.id, enrolment.team.id, text);
+            await submitTeamWork(
+              selected.teamCheckIn.id,
+              enrolment.team.id,
+              text,
+              expectedUpdatedAt,
+            );
           } else {
             if (!selected.indivCheckIn) return;
-            await submitMyWork(selected.indivCheckIn.id, enrolment.student.id, text);
+            await submitMyWork(
+              selected.indivCheckIn.id,
+              enrolment.student.id,
+              text,
+              expectedUpdatedAt,
+            );
           }
-          await load();
+          // A refetch failure must not be reported as a failed submit — the
+          // write already landed, and telling the student otherwise makes them
+          // press Submit again against a stale stamp.
+          try {
+            await load();
+          } catch (e) {
+            setError(String((e as Error)?.message ?? e));
+          }
         }}
       />,
     );

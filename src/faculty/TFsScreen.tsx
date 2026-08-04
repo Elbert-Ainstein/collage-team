@@ -431,7 +431,7 @@ export function TFsScreen(props: {
             )}
             {permRow(
               "Check-in",
-              "Can run team check-ins and mark them live.",
+              "Can post and unpost check-ins to students, and set which week is live. Not grading — that is the switch above.",
               checkin,
               () => void setPerm("tf_can_checkin", !checkin),
               false,

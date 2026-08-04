@@ -58,6 +58,8 @@ export interface Capabilities {
   author: boolean;
   /** Put marks on submissions. */
   grade: boolean;
+  /** Post and unpost check-ins to students, and set which week is live. */
+  runCheckIns: boolean;
   /** Add, remove and email students; form teams. */
   manageRoster: boolean;
   /** See and change the TF roster and its permissions. */
@@ -69,9 +71,27 @@ export function capabilitiesFor(course: Course, isOwner: boolean): Capabilities 
     isOwner,
     author: isOwner,
     grade: isOwner || course.tf_can_grade,
+    runCheckIns: isOwner || course.tf_can_checkin,
     manageRoster: isOwner,
     manageTFs: isOwner,
   };
+}
+
+/**
+ * What a teaching fellow is told they may do here.
+ *
+ * Named after the two course-wide permissions, so the sentence changes the
+ * moment the instructor moves either switch. Saying "read-only" while check-ins
+ * are granted is the same lie the switch itself used to tell.
+ */
+function tfNote(can: Capabilities): string {
+  const rest = "the instructor edits activities and the roster.";
+  if (can.grade && can.runCheckIns) {
+    return `You can grade submissions, post check-ins and set the live week; ${rest}`;
+  }
+  if (can.grade) return `You can grade submissions; ${rest}`;
+  if (can.runCheckIns) return `You can post check-ins and set the live week, but not grade; ${rest}`;
+  return "Grading and check-ins are both turned off for TFs on this course, so this view is read-only.";
 }
 
 /** Everything the screens read. Loaded once here, refreshed on any write. */
@@ -367,10 +387,7 @@ export function FacultyApp({
                 lineHeight: 1.5,
               }}
             >
-              You are a teaching fellow on this course.{" "}
-              {data.can.grade
-                ? "You can grade submissions; the instructor edits activities and the roster."
-                : "Grading is turned off for TFs on this course, so this view is read-only."}
+              You are a teaching fellow on this course. {tfNote(data.can)}
             </div>
           ) : null}
 

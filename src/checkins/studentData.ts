@@ -213,7 +213,53 @@ export async function listAssignments(enrolment: Enrolment): Promise<Assignment[
 }
 
 /**
+ * Raised when a write was refused because the stored row moved on after the
+ * caller read it — the usual cause being a teammate submitting the team answer
+ * from their own laptop mid-discussion.
+ *
+ * It carries the row as it now stands so the caller can put both versions in
+ * front of the student. Throwing without it would only move the data loss from
+ * "silent" to "unavoidable".
+ */
+export class SubmissionConflictError extends Error {
+  readonly current: CheckInResult | null;
+
+  constructor(current: CheckInResult | null) {
+    super(
+      current
+        ? "Someone else saved this after you opened it."
+        : "This submission was removed after you opened it.",
+    );
+    this.name = "SubmissionConflictError";
+    this.current = current;
+  }
+}
+
+export function isSubmissionConflict(e: unknown): e is SubmissionConflictError {
+  return e instanceof SubmissionConflictError;
+}
+
+/** The stored row for one subject, or null. One row at most — unique index. */
+async function readResult(
+  checkInId: string,
+  column: "student_id" | "team_id",
+  id: string,
+): Promise<CheckInResult | null> {
+  const rows = unwrap(
+    await db().from("check_in_results").select("*")
+      .eq("check_in_id", checkInId).eq(column, id).limit(1),
+  ) as CheckInResult[] ?? [];
+  return rows[0] ?? null;
+}
+
+/**
  * Write a submission, creating the row the first time and updating it after.
+ *
+ * `expectedUpdatedAt` is the version the caller was editing — the row's
+ * `updated_at` as they last read it, or null if they read no row at all. The
+ * write only lands on that exact version, so two people who both opened the
+ * team answer cannot overwrite each other unseen; the loser gets a
+ * SubmissionConflictError holding what is actually stored.
  *
  * Find-then-write rather than upsert: the uniqueness that makes a result unique
  * is expressed as two partial indexes (one per subject), and a partial index
@@ -223,40 +269,70 @@ async function submit(
   checkInId: string,
   subject: { subject_type: "student"; student_id: string } | { subject_type: "team"; team_id: string },
   text: string,
+  expectedUpdatedAt: string | null,
 ): Promise<void> {
   const column = subject.subject_type === "student" ? "student_id" : "team_id";
   const id = subject.subject_type === "student" ? subject.student_id : subject.team_id;
+  const fields = () => ({ status: "submitted" as const, text, updated_at: new Date().toISOString() });
 
-  const existing = unwrap(
-    await db().from("check_in_results").select("id")
-      .eq("check_in_id", checkInId).eq(column, id).limit(1),
-  ) as { id: string }[] ?? [];
+  if (expectedUpdatedAt === null) {
+    // The caller saw no row, so this should be the first submission. If someone
+    // got there first the partial unique index rejects the insert, and that
+    // rejection is the conflict.
+    const { error } = await db().from("check_in_results")
+      .insert({ check_in_id: checkInId, ...subject, ...fields() });
+    if (!error) return;
+    if (!/duplicate key|23505/i.test(error.message)) throw dbError(error);
+    throw new SubmissionConflictError(await readResult(checkInId, column, id));
+  }
 
-  const fields = { status: "submitted" as const, text, updated_at: new Date().toISOString() };
-  const { error } = existing.length
-    ? await db().from("check_in_results").update(fields).eq("id", existing[0].id)
-    : await db().from("check_in_results").insert({ check_in_id: checkInId, ...subject, ...fields });
-  if (error) throw dbError(error);
+  // .select() is what makes a lost race visible: without a returned row, an
+  // UPDATE that matched nothing is indistinguishable from one that succeeded.
+  const write = async (expected: string): Promise<boolean> => {
+    const rows = unwrap(
+      await db().from("check_in_results").update(fields())
+        .eq("check_in_id", checkInId).eq(column, id).eq("updated_at", expected)
+        .select("id"),
+    ) as { id: string }[] ?? [];
+    return rows.length > 0;
+  };
+
+  if (await write(expectedUpdatedAt)) return;
+
+  const current = await readResult(checkInId, column, id);
+  // Whoever moved the row stored the very text we were about to store, so there
+  // is nothing to reconcile and nothing anyone can lose by claiming it. This is
+  // the ordinary shape of "a mark was placed on the row" (grading bumps
+  // updated_at) and of two people submitting the same agreed sentence.
+  if (current && current.text === text && (await write(current.updated_at))) return;
+
+  throw new SubmissionConflictError(current);
 }
 
-/** Submit (or re-submit) the student's own work for an activity. */
+/**
+ * Submit (or re-submit) the student's own work for an activity. Version-checked
+ * like the team half: one student with two tabs open loses work the same way.
+ */
 export async function submitMyWork(
   checkInId: string,
   studentId: string,
   text: string,
+  expectedUpdatedAt: string | null,
 ): Promise<void> {
-  await submit(checkInId, { subject_type: "student", student_id: studentId }, text);
+  await submit(checkInId, { subject_type: "student", student_id: studentId }, text, expectedUpdatedAt);
 }
 
 /**
  * Submit the team's work after the discussion — the second half of a check-in.
- * Any member may write it, and it replaces whatever a teammate wrote before,
- * which is what "the team's answer" means.
+ * Any member may write it, but only over the version they were looking at: a
+ * blind replace is how the discussion's answer disappears when the second
+ * member presses Submit on a page they opened ten minutes earlier.
  */
 export async function submitTeamWork(
   checkInId: string,
   teamId: string,
   text: string,
+  expectedUpdatedAt: string | null,
 ): Promise<void> {
-  await submit(checkInId, { subject_type: "team", team_id: teamId }, text);
+  await submit(checkInId, { subject_type: "team", team_id: teamId }, text, expectedUpdatedAt);
 }

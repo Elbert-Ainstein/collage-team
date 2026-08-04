@@ -67,6 +67,125 @@ function unwrap<T>(res: { data: T | null; error: { message: string } | null }): 
   return res.data as T;
 }
 
+// ---------------- paging ----------------
+//
+// PostgREST answers any select with at most 1000 rows and says NOTHING when it
+// truncates: no error, no flag, just a short array that looks like the whole
+// table. That ceiling is not theoretical for this app. check_in_results grows as
+// students x check-ins: 16 students x 2 check-ins per activity x 4 activities a
+// week x 12 weeks = 1536 rows for ONE session, and every account is provisioned
+// two sessions (AP50A and AP50B), so ~3072. A gradebook built on an unbounded
+// read would quietly lose a third of the term partway through the first course,
+// and the "this will delete N submissions" confirms would undercount — which
+// makes a safety prompt lie about what it is about to destroy.
+
+/** The server's per-request row ceiling; a response this long may be truncated. */
+const PAGE_SIZE = 1000;
+
+/**
+ * Longest id list allowed in one `.in(...)`. The filter travels in the URL and a
+ * uuid costs ~39 bytes there, so 100 keeps a request near 4 KB — well inside the
+ * 8 KB request-line limit that proxies in front of PostgREST commonly enforce.
+ */
+const IN_CHUNK = 100;
+
+type PagedRead<Row> = PromiseLike<{
+  data: Row[] | null;
+  error: { message: string } | null;
+}>;
+
+type CountRead = PromiseLike<{
+  count: number | null;
+  error: { message: string } | null;
+}>;
+
+/**
+ * Reads every row of a select, a window at a time, until a short page proves the
+ * end.
+ *
+ * The caller supplies a factory rather than a query because a PostgREST builder
+ * can only be awaited once — each page needs a fresh one.
+ *
+ * Every paged query must end in a totally-ordered sort. Rows tied on the sort
+ * key can land on either side of a page boundary and so be fetched twice or
+ * skipped, which is why each call site finishes its `.order()` chain with `id`.
+ */
+export async function selectAll<Row>(
+  page: (from: number, to: number) => PagedRead<Row>,
+): Promise<Row[]> {
+  const out: Row[] = [];
+  for (;;) {
+    const res = await page(out.length, out.length + PAGE_SIZE - 1);
+    if (res.error) throw dbError(res.error);
+    const rows = res.data ?? [];
+    out.push(...rows);
+    // Stop on an EMPTY page, not a short one. Supabase's per-project "Max rows"
+    // is not pinned in this repo, and if it is ever set below PAGE_SIZE the
+    // very first page comes back short — a short-page test would then return
+    // early and silently truncate again, which is the bug this exists to kill.
+    if (rows.length === 0) return out;
+    // A server that ignores the range entirely would loop forever; it cannot
+    // return more than it was asked for, so this only fires on a broken server.
+    if (rows.length > PAGE_SIZE) return out;
+  }
+}
+
+/**
+ * Splits an id list into `.in(...)` filters short enough to survive the URL.
+ *
+ * De-duplicated first: a single `.in(...)` is duplicate-safe, but chunking is
+ * not — the same id in two chunks returns its rows twice and counts them twice,
+ * and these counts gate destructive confirms, so a wrong number lies to the
+ * person about what they are about to delete.
+ */
+function chunkIds(ids: string[]): string[][] {
+  const unique = Array.from(new Set(ids));
+  const out: string[][] = [];
+  for (let i = 0; i < unique.length; i += IN_CHUNK) out.push(unique.slice(i, i + IN_CHUNK));
+  return out;
+}
+
+/** `selectAll` over a chunked `.in(...)` list; each chunk is paged in full. */
+export async function selectAllIn<Row>(
+  ids: string[],
+  page: (chunk: string[], from: number, to: number) => PagedRead<Row>,
+): Promise<Row[]> {
+  const out: Row[] = [];
+  for (const chunk of chunkIds(ids)) {
+    out.push(...(await selectAll<Row>((from, to) => page(chunk, from, to))));
+  }
+  return out;
+}
+
+/**
+ * An exact row count from the server. Counts gate destructive confirms, so they
+ * are asked for with head+count rather than fetched and measured with `.length`:
+ * one round trip, and nothing that can be truncated on the way back.
+ */
+export async function countAll(query: CountRead): Promise<number> {
+  const res = await query;
+  if (res.error) throw dbError(res.error);
+  if (res.count === null) {
+    // Reporting a missing count as 0 would tell someone "this deletes nothing".
+    throw new Error("The database didn't return a count for that. Reload and try again.");
+  }
+  return res.count;
+}
+
+/**
+ * `countAll` over a chunked `.in(...)` list. Summing is exact because the chunks
+ * partition the id list and each row matches on a single id, so no row is
+ * counted twice.
+ */
+export async function countAllIn(
+  ids: string[],
+  query: (chunk: string[]) => CountRead,
+): Promise<number> {
+  let total = 0;
+  for (const chunk of chunkIds(ids)) total += await countAll(query(chunk));
+  return total;
+}
+
 // ---------------- courses ----------------
 export async function listCourses(): Promise<Course[]> {
   return unwrap(await db().from("courses").select("*").order("created_at")) ?? [];
@@ -154,10 +273,11 @@ export async function ensureSessions(term = "Fall"): Promise<Course[]> {
 
 // ---------------- students ----------------
 export async function listStudents(courseId: string): Promise<Student[]> {
-  return unwrap(
-    await db().from("students").select("*").eq("course_id", courseId)
-      .order("position").order("created_at"),
-  ) ?? [];
+  return selectAll<Student>((from, to) =>
+    db().from("students").select("*").eq("course_id", courseId)
+      .order("position").order("created_at").order("id")
+      .range(from, to),
+  );
 }
 /** Accepts bare names (pasted) or {name, email} entries (imported from a file). */
 export async function addStudents(
@@ -193,10 +313,11 @@ export async function removeStudent(id: string): Promise<void> {
 
 // ---------------- activities (one per week) ----------------
 export async function listActivities(courseId: string): Promise<Activity[]> {
-  return unwrap(
-    await db().from("activities").select("*").eq("course_id", courseId)
-      .order("week", { nullsFirst: false }).order("position"),
-  ) ?? [];
+  return selectAll<Activity>((from, to) =>
+    db().from("activities").select("*").eq("course_id", courseId)
+      .order("week", { nullsFirst: false }).order("position").order("id")
+      .range(from, to),
+  );
 }
 export async function createActivity(input: {
   courseId: string; week: number; title: string; topic?: string; datesLabel?: string;
@@ -226,9 +347,11 @@ export async function deleteActivity(id: string): Promise<void> {
 
 // ---------------- team sets / teams / membership ----------------
 export async function listTeamSets(courseId: string): Promise<TeamSet[]> {
-  return unwrap(
-    await db().from("team_sets").select("*").eq("course_id", courseId).order("created_at"),
-  ) ?? [];
+  return selectAll<TeamSet>((from, to) =>
+    db().from("team_sets").select("*").eq("course_id", courseId)
+      .order("created_at").order("id")
+      .range(from, to),
+  );
 }
 export async function createTeamSet(input: {
   courseId: string; activityId?: string | null; name?: string; teamSize?: number | null;
@@ -262,14 +385,19 @@ export async function setTeamSetSize(id: string, teamSize: number): Promise<void
 
 /** Teams of a set with their members resolved, ordered. */
 export async function listTeams(teamSetId: string, roster: Student[]): Promise<TeamWithMembers[]> {
-  const teams = unwrap(
-    await db().from("teams").select("*").eq("team_set_id", teamSetId).order("position"),
-  ) as Team[] ?? [];
+  const teams = await selectAll<Team>((from, to) =>
+    db().from("teams").select("*").eq("team_set_id", teamSetId)
+      .order("position").order("id")
+      .range(from, to),
+  );
   if (!teams.length) return [];
-  const links = unwrap(
-    await db().from("team_members").select("team_id,student_id")
-      .in("team_id", teams.map((t) => t.id)),
-  ) as { team_id: string; student_id: string }[] ?? [];
+  const links = await selectAllIn<{ team_id: string; student_id: string }>(
+    teams.map((t) => t.id),
+    (chunk, from, to) =>
+      db().from("team_members").select("team_id,student_id")
+        .in("team_id", chunk).order("team_id").order("student_id")
+        .range(from, to),
+  );
   const byId = new Map(roster.map((s) => [s.id, s]));
   return teams.map((t) => ({
     ...t,
@@ -323,24 +451,21 @@ export async function moveStudents(
  */
 /** Recorded results for ONE team — what a per-team delete would cascade away. */
 export async function countOneTeamResults(teamId: string): Promise<number> {
-  const rows =
-    (unwrap(
-      await db().from("check_in_results").select("id").eq("team_id", teamId).neq("status", "none"),
-    ) as { id: string }[] | null) ?? [];
-  return rows.length;
+  return countAll(
+    db().from("check_in_results").select("id", { count: "exact", head: true })
+      .eq("team_id", teamId).neq("status", "none"),
+  );
 }
 
 export async function countTeamResults(teamSetId: string): Promise<number> {
-  const teams = unwrap(
-    await db().from("teams").select("id").eq("team_set_id", teamSetId),
-  ) as { id: string }[] ?? [];
+  const teams = await selectAll<{ id: string }>((from, to) =>
+    db().from("teams").select("id").eq("team_set_id", teamSetId).order("id").range(from, to),
+  );
   if (!teams.length) return 0;
-  const rows = unwrap(
-    await db().from("check_in_results").select("id")
-      .in("team_id", teams.map((t) => t.id))
-      .neq("status", "none"),
-  ) as { id: string }[] ?? [];
-  return rows.length;
+  return countAllIn(teams.map((t) => t.id), (chunk) =>
+    db().from("check_in_results").select("id", { count: "exact", head: true })
+      .in("team_id", chunk).neq("status", "none"),
+  );
 }
 
 /** Replace a set's teams with evenly-sized ones built from the roster. */
@@ -364,9 +489,14 @@ export async function autoFormTeams(
 // ---------------- check-ins ----------------
 export async function listCheckIns(activityIds: string[]): Promise<CheckIn[]> {
   if (!activityIds.length) return [];
-  return unwrap(
-    await db().from("check_ins").select("*").in("activity_id", activityIds).order("position"),
-  ) ?? [];
+  const rows = await selectAllIn<CheckIn>(activityIds, (chunk, from, to) =>
+    db().from("check_ins").select("*").in("activity_id", chunk)
+      .order("position").order("id")
+      .range(from, to),
+  );
+  // Chunking the id list splits the query, so the server's ordering only holds
+  // within a chunk. Callers were handed one list ordered by position; keep that.
+  return rows.sort((a, b) => a.position - b.position || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
 }
 export async function createCheckIn(input: {
   activityId: string; label: string; kind: CheckInKind; phase?: string;
@@ -397,9 +527,11 @@ export async function setCheckInsPosted(ids: string[], posted: boolean): Promise
 // ---------------- results (gradebook cells) ----------------
 export async function listResults(checkInIds: string[]): Promise<CheckInResult[]> {
   if (!checkInIds.length) return [];
-  return unwrap(
-    await db().from("check_in_results").select("*").in("check_in_id", checkInIds),
-  ) ?? [];
+  return selectAllIn<CheckInResult>(checkInIds, (chunk, from, to) =>
+    db().from("check_in_results").select("*").in("check_in_id", chunk)
+      .order("id")
+      .range(from, to),
+  );
 }
 /**
  * Save one cell, keyed by (check_in, subject).

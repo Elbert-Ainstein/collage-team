@@ -7,7 +7,7 @@
 // two things in step.
 
 import { requireSupabase } from "@/lib/supabaseClient";
-import { dbError, tintFor } from "@/checkins/data";
+import { countAll, countAllIn, dbError, selectAll, selectAllIn, tintFor } from "@/checkins/data";
 import {
   QUESTION_SHAPE,
   type Activity,
@@ -31,10 +31,10 @@ function unwrap<T>(res: { data: T | null; error: { message: string } | null }): 
 // -------------------------------------------------------------------- weeks
 
 export async function listWeeks(courseId: string): Promise<CourseWeek[]> {
-  return (
-    (unwrap(
-      await db().from("course_weeks").select("*").eq("course_id", courseId).order("week"),
-    ) as CourseWeek[]) ?? []
+  return selectAll<CourseWeek>((from, to) =>
+    db().from("course_weeks").select("*").eq("course_id", courseId)
+      .order("week").order("id")
+      .range(from, to),
   );
 }
 
@@ -126,10 +126,10 @@ export function defaultLadder(pointsPerQuestion: number): { description: string;
 }
 
 export async function listRubric(activityId: string): Promise<RubricItem[]> {
-  return (
-    (unwrap(
-      await db().from("rubric_items").select("*").eq("activity_id", activityId).order("row_index"),
-    ) as RubricItem[]) ?? []
+  return selectAll<RubricItem>((from, to) =>
+    db().from("rubric_items").select("*").eq("activity_id", activityId)
+      .order("row_index").order("id")
+      .range(from, to),
   );
 }
 
@@ -197,42 +197,43 @@ export async function addRubricItem(
  * being told how many people it moves.
  */
 export async function countMarksForRubricItem(id: string): Promise<number> {
-  const rows =
-    (unwrap(await db().from("submission_marks").select("id").eq("rubric_item_id", id)) as
-      | { id: string }[]
-      | null) ?? [];
-  return rows.length;
+  return countAll(
+    db().from("submission_marks").select("id", { count: "exact", head: true })
+      .eq("rubric_item_id", id),
+  );
 }
 
 /** Work that would be destroyed with an activity: submissions, and how many are graded. */
 export async function countWorkForActivity(
   activityId: string,
 ): Promise<{ submissions: number; graded: number }> {
-  const cis =
-    (unwrap(await db().from("check_ins").select("id").eq("activity_id", activityId)) as
-      | { id: string }[]
-      | null) ?? [];
+  const cis = await selectAll<{ id: string }>((from, to) =>
+    db().from("check_ins").select("id").eq("activity_id", activityId).order("id").range(from, to),
+  );
   if (!cis.length) return { submissions: 0, graded: 0 };
 
-  const rows =
-    (unwrap(
-      await db()
-        .from("check_in_results")
-        .select("id,status")
-        .in("check_in_id", cis.map((c) => c.id)),
-    ) as { id: string; status: string }[] | null) ?? [];
-
-  const real = rows.filter((r) => r.status !== "none");
-  return { submissions: real.length, graded: real.filter((r) => r.status === "scored").length };
+  // Two server-side counts rather than one fetch-and-filter: the status split is
+  // a filter the database can apply, and no number here can be a truncated one.
+  const ids = cis.map((c) => c.id);
+  const [submissions, graded] = await Promise.all([
+    countAllIn(ids, (chunk) =>
+      db().from("check_in_results").select("id", { count: "exact", head: true })
+        .in("check_in_id", chunk).neq("status", "none"),
+    ),
+    countAllIn(ids, (chunk) =>
+      db().from("check_in_results").select("id", { count: "exact", head: true })
+        .in("check_in_id", chunk).eq("status", "scored"),
+    ),
+  ]);
+  return { submissions, graded };
 }
 
 /** Work that would be destroyed with a student. */
 export async function countWorkForStudent(studentId: string): Promise<number> {
-  const rows =
-    (unwrap(
-      await db().from("check_in_results").select("id,status").eq("student_id", studentId),
-    ) as { id: string; status: string }[] | null) ?? [];
-  return rows.filter((r) => r.status !== "none").length;
+  return countAll(
+    db().from("check_in_results").select("id", { count: "exact", head: true })
+      .eq("student_id", studentId).neq("status", "none"),
+  );
 }
 
 /** Only faculty-added rows can go; the base ladder is fixed. */
@@ -245,10 +246,10 @@ export async function deleteRubricItem(id: string): Promise<void> {
 
 export async function listMarks(resultIds: string[]): Promise<SubmissionMark[]> {
   if (!resultIds.length) return [];
-  return (
-    (unwrap(
-      await db().from("submission_marks").select("*").in("result_id", resultIds),
-    ) as SubmissionMark[]) ?? []
+  return selectAllIn<SubmissionMark>(resultIds, (chunk, from, to) =>
+    db().from("submission_marks").select("*").in("result_id", chunk)
+      .order("id")
+      .range(from, to),
   );
 }
 
@@ -317,10 +318,10 @@ export async function releaseMark(resultId: string, completion: boolean): Promis
 // ---------------------------------------------------------------------- TFs
 
 export async function listTFs(courseId: string): Promise<CourseTF[]> {
-  return (
-    (unwrap(
-      await db().from("course_tfs").select("*").eq("course_id", courseId).order("position"),
-    ) as CourseTF[]) ?? []
+  return selectAll<CourseTF>((from, to) =>
+    db().from("course_tfs").select("*").eq("course_id", courseId)
+      .order("position").order("id")
+      .range(from, to),
   );
 }
 
