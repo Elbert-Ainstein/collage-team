@@ -9,7 +9,7 @@
 import { Fragment, type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import { createActivity, deleteActivity, updateActivity } from "@/checkins/data";
 import { isOpenToStudents } from "@/checkins/studentData";
-import { fmtInstant } from "./ActivityDetail";
+import { ConfirmDialog } from "./ConfirmDialog";
 import {
   addWeek,
   countWorkForActivity,
@@ -22,6 +22,7 @@ import {
   shapeFor,
 } from "./facultyData";
 import {
+  HIDDEN_INSTANT,
   SCOPE_LABEL,
   SCOPE_OF,
   TYPE_ACCENT,
@@ -100,16 +101,14 @@ function glyphFor(cell: Cell): string {
 }
 
 /**
- * How this activity reads to the class right now, for the markers both views
- * carry: null when students can already see it, otherwise the instant it opens.
+ * Whether the class can see this activity right now — the same rule the student
+ * app applies, so nothing here can drift from what is actually on their lists.
  *
- * The same rule the student app applies, so nothing here can drift from what is
- * actually on their lists. The empty string covers an opens_at that will not
- * format — still hidden, just with no date to print.
+ * There is no date to print alongside it any more: visibility is a switch on
+ * the activity page, so a row either says "Hidden" or says nothing.
  */
-function hiddenUntil(a: Activity): string | null {
-  if (isOpenToStudents(a)) return null;
-  return (a.opens_at ? fmtInstant(a.opens_at) : null) ?? "";
+function isHidden(a: Activity): boolean {
+  return !isOpenToStudents(a);
 }
 
 /**
@@ -255,12 +254,13 @@ export function ActivitiesScreen(props: {
       if (week == null) return;
 
       const type: ActivityType = "combo";
-      const hiddenUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
       const created = await createActivity({
         courseId: data.course.id,
         week,
         title: "Untitled activity",
-        opensAt: hiddenUntil,
+        // Off, not "off until a week on Tuesday". The activity page has one
+        // switch for this and it is the instructor who decides when to flip it.
+        opensAt: HIDDEN_INSTANT,
       });
       await updateActivity(created.id, { type });
 
@@ -691,7 +691,7 @@ function RowView({
               {g.activities.map((a) => {
                 const stat = data.stats.get(a.id);
                 const accent = TYPE_ACCENT[a.type];
-                const until = hiddenUntil(a);
+                const hidden = isHidden(a);
                 const pct = (n: number) =>
                   stat && stat.total > 0 ? `${(n / stat.total) * 100}%` : "0%";
                 return (
@@ -716,11 +716,11 @@ function RowView({
                     <span className="fv-badge">{SCOPE_LABEL[SCOPE_OF[a.type]]}</span>
                     {/* Without this the list looks the same whether the class
                         can see the work or not. Quiet, but on the row itself. */}
-                    {until == null ? null : (
+                    {hidden ? (
                       <span className="fv-badge" style={{ color: "var(--fv-amber)" }}>
-                        {until ? `Hidden until ${until}` : "Hidden"}
+                        Hidden
                       </span>
-                    )}
+                    ) : null}
                     {stat ? (
                       <span className="fv-prog">
                         <span className="fv-track">
@@ -879,20 +879,14 @@ function ColumnView({
                     : scope === "both"
                       ? "Ind + team"
                       : `Ind · ${pointsLabel(a)}`;
-                // The header is ~116px wide, so the date goes in the tooltip and
-                // only the word stays on screen.
-                const until = hiddenUntil(a);
+                const hidden = isHidden(a);
                 return (
                   <th
                     key={a.id}
                     className="act"
                     scope="col"
                     style={{ borderTopColor: TYPE_ACCENT[a.type] }}
-                    title={
-                      until == null
-                        ? a.title
-                        : `${a.title} — hidden from students${until ? ` until ${until}` : ""}`
-                    }
+                    title={hidden ? `${a.title} — hidden from students` : a.title}
                   >
                     <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <span
@@ -923,7 +917,7 @@ function ColumnView({
                     >
                       {stat ? `${stat.graded}/${stat.total} ${stat.verb}` : ""}
                     </span>
-                    {until == null ? null : (
+                    {hidden ? (
                       <span
                         style={{
                           display: "block",
@@ -935,7 +929,7 @@ function ColumnView({
                       >
                         Hidden
                       </span>
-                    )}
+                    ) : null}
                   </th>
                 );
               })}
@@ -1063,10 +1057,9 @@ function StudentRow({
 /**
  * Delete an activity, from the list rather than three screens in.
  *
- * Arms first and counts what goes with it: an activity cascades its check-ins,
- * every submission against them and every mark. window.confirm is suppressed
- * here, so the second click IS the confirmation and the label has to carry the
- * cost.
+ * The ✕ asks; it does not delete. An activity cascades its check-ins, every
+ * submission against them and every mark, so the question carries the count —
+ * fetched while the dialog is already up, so pressing ✕ is never a wait.
  */
 function RowDelete({
   activity,
@@ -1077,11 +1070,11 @@ function RowDelete({
   busy: boolean;
   onDelete: () => void;
 }) {
-  const [armed, setArmed] = useState(false);
+  const [asking, setAsking] = useState(false);
   const [cost, setCost] = useState<string | null>(null);
 
-  if (!armed) {
-    return (
+  return (
+    <>
       <button
         type="button"
         className="fv-iconbtn"
@@ -1089,49 +1082,50 @@ function RowDelete({
         aria-label={`Delete ${activity.title}`}
         disabled={busy}
         onClick={() => {
-          setArmed(true);
+          setAsking(true);
           setCost(null);
           void countWorkForActivity(activity.id)
             .then(({ submissions, graded }) =>
               setCost(
                 submissions === 0
-                  ? "Delete? Nothing has been handed in."
-                  : `Delete and lose ${submissions} submission${submissions === 1 ? "" : "s"}` +
-                    (graded ? ` (${graded} graded)` : "") +
-                    "?",
+                  ? "Nothing has been handed in for this yet."
+                  : `${submissions} submission${submissions === 1 ? "" : "s"}` +
+                    (graded ? `, ${graded} of them graded,` : "") +
+                    " will be deleted with it.",
               ),
             )
-            .catch(() => setCost("Delete? (could not check what would go)"));
+            .catch(() => setCost("Could not check what would be deleted."));
         }}
       >
         <FIcon name="close" size={15} />
       </button>
-    );
-  }
 
-  return (
-    <button
-      type="button"
-      className="fv-btn sm"
-      style={{
-        flex: "none",
-        marginRight: 10,
-        color: "var(--fv-destructive)",
-        whiteSpace: "nowrap",
-      }}
-      disabled={busy}
-      onBlur={() => {
-        setArmed(false);
-        setCost(null);
-      }}
-      onClick={() => {
-        setArmed(false);
-        setCost(null);
-        onDelete();
-      }}
-    >
-      {cost ?? "Delete?"}
-    </button>
+      {asking ? (
+        <ConfirmDialog
+          title="Are you sure you'd like to delete this activity?"
+          body={
+            <>
+              <div style={{ color: "var(--fv-navy)", fontWeight: 600 }}>{activity.title}</div>
+              <div style={{ marginTop: 6 }}>
+                {cost ?? "Checking what would be deleted with it…"} Its check-ins and everything
+                recorded against them go too. This cannot be undone.
+              </div>
+            </>
+          }
+          confirmLabel="Delete activity"
+          busy={busy}
+          onCancel={() => {
+            setAsking(false);
+            setCost(null);
+          }}
+          onConfirm={() => {
+            setAsking(false);
+            setCost(null);
+            onDelete();
+          }}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -1140,35 +1134,44 @@ function RowDelete({
  *
  * Only when it holds nothing. A week with activities in it would still render
  * from their week number after the row went, just without its dates and with no
- * way to restore them — so the control is simply absent rather than armed and
+ * way to restore them — so the control is simply absent rather than offered and
  * refused, which would be a button that exists to say no.
  */
 function WeekDelete({ group, busy, onDelete }: { group: WeekGroup; busy: boolean; onDelete: () => void }) {
-  const [armed, setArmed] = useState(false);
+  const [asking, setAsking] = useState(false);
   if (group.id == null || group.activities.length > 0) return null;
 
   return (
-    <button
-      type="button"
-      className={armed ? "fv-btn sm" : "fv-iconbtn"}
-      style={
-        armed
-          ? { flex: "none", color: "var(--fv-destructive)", whiteSpace: "nowrap" }
-          : { width: 22, height: 22, flex: "none" }
-      }
-      aria-label={`Delete ${group.label}`}
-      disabled={busy}
-      onBlur={() => setArmed(false)}
-      onClick={() => {
-        if (!armed) {
-          setArmed(true);
-          return;
-        }
-        setArmed(false);
-        onDelete();
-      }}
-    >
-      {armed ? `Delete ${group.label}?` : <FIcon name="close" size={13} />}
-    </button>
+    <>
+      <button
+        type="button"
+        className="fv-iconbtn"
+        style={{ width: 22, height: 22, flex: "none" }}
+        aria-label={`Delete ${group.label}`}
+        disabled={busy}
+        onClick={() => setAsking(true)}
+      >
+        <FIcon name="close" size={13} />
+      </button>
+
+      {asking ? (
+        <ConfirmDialog
+          title={`Are you sure you'd like to delete ${group.label}?`}
+          body={
+            <>
+              It has no activities in it. Its dates{group.dates ? ` (${group.dates})` : ""} go with
+              it, and anything you file under {group.label} later starts without them.
+            </>
+          }
+          confirmLabel="Delete week"
+          busy={busy}
+          onCancel={() => setAsking(false)}
+          onConfirm={() => {
+            setAsking(false);
+            onDelete();
+          }}
+        />
+      ) : null}
+    </>
   );
 }

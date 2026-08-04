@@ -36,11 +36,19 @@ import { ActivitiesScreen } from "./ActivitiesScreen";
 import { ActivityDetail } from "./ActivityDetail";
 import { CriteriaEditor } from "./CriteriaEditor";
 import { GradingScreen } from "./GradingScreen";
+import { RubricBuilder } from "./RubricBuilder";
 import { TeamsScreen } from "./TeamsScreen";
 import { TFsScreen } from "./TFsScreen";
 import "./faculty.css";
 
-export type Screen = "activities" | "teams" | "tfs" | "detail" | "criteria" | "grade";
+export type Screen =
+  | "activities"
+  | "teams"
+  | "tfs"
+  | "detail"
+  | "criteria"
+  | "rubric"
+  | "grade";
 
 /**
  * What this account may do on this course.
@@ -110,7 +118,7 @@ export interface FacultyData {
   can: Capabilities;
 }
 
-const FULL_SCREEN: Screen[] = ["detail", "criteria", "grade"];
+const FULL_SCREEN: Screen[] = ["detail", "criteria", "rubric", "grade"];
 
 export function FacultyApp({
   account,
@@ -305,6 +313,7 @@ export function FacultyApp({
             onBack={() => setScreen("activities")}
             fresh={fresh === selected.id}
             onCriteria={() => setScreen("criteria")}
+            onRubric={() => setScreen("rubric")}
             onGrade={() => setScreen("grade")}
             onChanged={() => refresh().catch(fail)}
             onError={fail}
@@ -316,6 +325,16 @@ export function FacultyApp({
             activity={selected}
             canEdit={data.can.author}
             onDone={() => setScreen("detail")}
+            onError={fail}
+          />
+        ) : null;
+      case "rubric":
+        return selected ? (
+          <RubricBuilder
+            activity={selected}
+            canEdit={data.can.author}
+            onDone={() => setScreen("detail")}
+            onChanged={() => refresh().catch(fail)}
             onError={fail}
           />
         ) : null;

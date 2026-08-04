@@ -6,10 +6,11 @@
 // Everything on the right is keyed off SCOPE, so a team activity lists teams and
 // counts out of the number of teams — type only picks the label and the accent.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteActivity, tintFor, updateActivity } from "@/checkins/data";
 import { isOpenToStudents } from "@/checkins/studentData";
 import {
+  HIDDEN_INSTANT,
   IS_COMPLETION,
   SCOPE_LABEL,
   SCOPE_OF,
@@ -21,6 +22,7 @@ import {
 } from "@/checkins/types";
 import { countWorkForActivity, ensureCheckIn, setQuestionShape } from "./facultyData";
 import { pointsLabel, pointsTotal, questionShape, statFor } from "./model";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { FAvatar, FIcon } from "./icons";
 import type { FacultyData } from "./FacultyApp";
 
@@ -119,24 +121,18 @@ export function fromLocalInput(v: string): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
-/** The datetime-local value for an instant `days` from now, for seeding a field. */
-function localInputIn(days: number): string {
-  return toLocalInput(new Date(Date.now() + days * 86_400_000).toISOString());
-}
-
 /**
  * The one sentence saying what the class can see, read off the same rule the
  * student app applies.
  *
- * A null opens_at is an activity authored before scheduling existed: visible,
- * with no date to name. That is why it does not say "since".
+ * Visibility is a switch, not a schedule: it is either on a student's list or it
+ * is not. The column still holds an instant — that is what RLS compares — but
+ * nothing here asks anyone to pick one.
  */
 function visibilityOf(a: Activity): { text: string; open: boolean } {
-  const at = a.opens_at ? fmtInstant(a.opens_at) : null;
-  if (!isOpenToStudents(a)) {
-    return { text: at ? `Hidden until ${at}` : "Hidden from students", open: false };
-  }
-  return { text: at ? `Visible to students since ${at}` : "Visible to students", open: true };
+  return isOpenToStudents(a)
+    ? { text: "Visible to students", open: true }
+    : { text: "Not visible to students", open: false };
 }
 
 /**
@@ -171,11 +167,23 @@ export function ActivityDetail(props: {
   fresh?: boolean;
   onBack: () => void;
   onCriteria: () => void;
+  /** The document-and-criteria builder. */
+  onRubric: () => void;
   onGrade: () => void;
   onChanged: () => void;
   onError: (e: unknown) => void;
 }): JSX.Element {
-  const { data, activity, fresh = false, onBack, onCriteria, onGrade, onChanged, onError } = props;
+  const {
+    data,
+    activity,
+    fresh = false,
+    onBack,
+    onCriteria,
+    onRubric,
+    onGrade,
+    onChanged,
+    onError,
+  } = props;
 
   const accent = TYPE_ACCENT[activity.type];
   const scope = SCOPE_OF[activity.type];
@@ -245,28 +253,19 @@ export function ActivityDetail(props: {
   const [title, setTitle] = useState(activity.title);
   const [desc, setDesc] = useState(activity.source_text ?? "");
   const [due, setDue] = useState(() => toLocalInput(dueAt));
-  const [opens, setOpens] = useState(() => toLocalInput(activity.opens_at));
-
-  // Adopt an opens_at changed by the Hide / Make-visible control above. Both are
-  // on screen at once and this screen re-renders rather than remounting, so
-  // without this the editor kept its pre-hide value and "Save changes" — which
-  // also writes opens_at — put the draft straight back in front of the class.
-  useEffect(() => {
-    setOpens(toLocalInput(activity.opens_at));
-  }, [activity.opens_at]);
   const [count, setCount] = useState(String(shape.count));
   const [per, setPer] = useState(String(shape.per));
   const [kind, setKind] = useState<ActivityType>(activity.type);
-  const [armedDelete, setArmedDelete] = useState(false);
   const [visBusy, setVisBusy] = useState(false);
-  // Hiding takes work off every student's list, so it names the instant it will
-  // come back rather than disappearing indefinitely — opens_at holds one date,
-  // and there is no value in it that means "hidden, ask me later".
-  const [hideArmed, setHideArmed] = useState(false);
-  const [hideAt, setHideAt] = useState("");
   // Deleting an activity cascades its check-ins, every submission against them,
-  // and every mark. Count it before the second click rather than after.
+  // and every mark. Counted while the question is on screen, not after it.
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleteCost, setDeleteCost] = useState<string | null>(null);
+
+  // The title is the heading, so the caret goes there rather than into the
+  // first field of a form — there is no form.
+  const titleRef = useRef<HTMLInputElement | null>(null);
+  const descRef = useRef<HTMLTextAreaElement | null>(null);
 
   const openEditor = (opts?: { blankTitle?: boolean }) => {
     setKind(activity.type);
@@ -280,7 +279,6 @@ export function ActivityDetail(props: {
     setTitle(opts?.blankTitle ? "" : activity.title);
     setDesc(activity.source_text ?? "");
     setDue(toLocalInput(dueOf(activity)));
-    setOpens(toLocalInput(activity.opens_at));
     setCount(String(shape.count));
     setPer(String(shape.per));
     setEditing(true);
@@ -292,11 +290,32 @@ export function ActivityDetail(props: {
   // from one click and landing them here.
   useEffect(() => {
     if (!fresh) return;
-    // The title field carries autoFocus for the same reason — a setTimeout
-    // focus does not survive the re-render the editor opening causes.
     openEditor({ blankTitle: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fresh, activity.id]);
+
+  // Focus follows the editor opening, however it was opened. autoFocus fires
+  // once per mount and this screen re-renders rather than remounting, so
+  // pressing "Edit activity" a second time would otherwise leave the caret
+  // wherever it was.
+  useEffect(() => {
+    if (!editing) return;
+    const el = titleRef.current;
+    if (!el) return;
+    el.focus();
+    const end = el.value.length;
+    el.setSelectionRange(end, end);
+  }, [editing]);
+
+  // A description with no box needs its height to follow its content, or the
+  // seam shows: a fixed three rows either clips what is written or leaves a
+  // hole under a one-line blurb.
+  useEffect(() => {
+    const el = descRef.current;
+    if (!editing || !el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [editing, desc]);
 
   // Clamped to what 0007's check constraint allows (count > 0, per >= 0), so a
   // typo comes back as a corrected number rather than a database error.
@@ -304,12 +323,11 @@ export function ActivityDetail(props: {
   const nextPer = Math.max(0, Math.round(Number(per) || 0));
   const nextTotal = pointsTotal({ question_count: nextCount, points_per_question: nextPer });
 
-  /** Every visibility control writes the same one column and nothing else. */
+  /** The visibility switch writes this one column and nothing else. */
   const setOpensAt = async (next: string | null) => {
     setVisBusy(true);
     try {
       await updateActivity(activity.id, { opens_at: next });
-      setHideArmed(false);
       onChanged();
     } catch (e) {
       onError(e);
@@ -317,11 +335,6 @@ export function ActivityDetail(props: {
       setVisBusy(false);
     }
   };
-
-  // Local wall-clock -> the instant to compare against now. Held here so the
-  // confirm can be refused before it writes a date that would change nothing.
-  const hideIso = fromLocalInput(hideAt);
-  const hideIsFuture = hideIso != null && Date.parse(hideIso) > Date.now();
 
   const save = async () => {
     setSaving(true);
@@ -336,13 +349,10 @@ export function ActivityDetail(props: {
       if (kind !== activity.type) {
         patch.type = kind;
       }
-      // Only when it actually moved. Writing it on every save meant editing a
-      // title re-sent whatever the field happened to hold, which is how a hide
-      // made from the control above could be silently undone.
-      const nextOpens = fromLocalInput(opens);
-      if (canSchedule && nextOpens !== (activity.opens_at ?? null)) {
-        patch.opens_at = nextOpens;
-      }
+      // opens_at is deliberately NOT in this patch. Visibility is its own
+      // switch, written the moment it is flipped; including it here is how a
+      // save of an unrelated field used to put a hidden draft back in front of
+      // the class.
       await updateActivity(activity.id, patch);
 
       // Type picks scope, and scope decides which check-ins have to exist. A
@@ -394,20 +404,49 @@ export function ActivityDetail(props: {
             <span className="fv-badge">{SCOPE_LABEL[scope]}</span>
           </div>
 
-          {/* Editing REPLACES the view rather than appending to it. The editor
-              used to render as a card below the finished page, so a freshly
-              created activity showed "Untitled activity" and its description
-              with a form stapled underneath — you were reading the thing you
-              were still writing. */}
+          {/* The title IS the field. Editing does not swap the page for a form
+              and does not put a box around the heading — you type where the
+              words already are, and everything that is not being written stays
+              exactly where it was. */}
           {editing ? (
-            <h1 className="fv-display" style={{ fontSize: 32, lineHeight: 1.14, marginTop: 8 }}>
-              {fresh ? "New activity" : "Edit activity"}
-            </h1>
+            <>
+              <input
+                id="fv-ed-title"
+                ref={titleRef}
+                className="fv-display fv-titlein"
+                style={{ fontSize: 32, lineHeight: 1.14, marginTop: 8 }}
+                value={title}
+                aria-label="Activity title"
+                placeholder="What are they working on?"
+                onChange={(e) => setTitle(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    void save();
+                  }
+                }}
+              />
+              <div className="fv-sub" style={{ marginTop: 8 }}>
+                {fresh ? "New activity" : "Editing"} · {weekLine}
+              </div>
+            </>
           ) : (
             <>
-              <h1 className="fv-display" style={{ fontSize: 32, lineHeight: 1.14, marginTop: 8 }}>
-                {activity.title}
-              </h1>
+              {data.can.author ? (
+                <button
+                  type="button"
+                  className="fv-display fv-titlebtn"
+                  style={{ fontSize: 32, lineHeight: 1.14, marginTop: 8 }}
+                  title="Click to edit"
+                  onClick={() => openEditor()}
+                >
+                  {activity.title}
+                </button>
+              ) : (
+                <h1 className="fv-display" style={{ fontSize: 32, lineHeight: 1.14, marginTop: 8 }}>
+                  {activity.title}
+                </h1>
+              )}
 
               <div className="fv-sub" style={{ marginTop: 8 }}>
                 {dueLine ? `Due ${dueLine}` : "No due date set"}
@@ -415,110 +454,72 @@ export function ActivityDetail(props: {
             </>
           )}
 
-          {/* The state line, not a switch: it reads the same opens_at the
-              student app reads, so what it says is what the class can see.
-              The button that used to sit further down toggled `posted`, which
-              governs no student visibility at all. */}
+          {/* One switch, two states. It reads and writes the same opens_at the
+              student app reads, so what it says is what the class can see —
+              there is no separate "posted" flag behind it, and no date to pick:
+              work is either on their list now or it is not. */}
           <div
             style={{
               display: "flex",
               alignItems: "center",
               flexWrap: "wrap",
               gap: 8,
-              marginTop: 6,
+              marginTop: 8,
             }}
           >
-            <span
-              className="fv-dot"
-              style={{
-                flex: "none",
-                background: visibility.open ? "var(--fv-emerald)" : "var(--fv-amber)",
-              }}
-              aria-hidden="true"
-            />
+            {canSchedule ? (
+              <button
+                type="button"
+                className={`fv-switch${visibility.open ? " on" : ""}`}
+                role="switch"
+                aria-checked={visibility.open}
+                aria-label="Visible to students"
+                disabled={visBusy}
+                onClick={() =>
+                  // NULL for visible, never now(): RLS compares opens_at against
+                  // the DATABASE clock, so a laptop a minute fast would store an
+                  // instant it reads back as visible while every student's
+                  // policy still hid it. Hidden is an instant that never
+                  // arrives, which is the same column saying "not yet".
+                  void setOpensAt(visibility.open ? HIDDEN_INSTANT : null)
+                }
+              />
+            ) : (
+              <span
+                className="fv-dot"
+                style={{
+                  flex: "none",
+                  background: visibility.open ? "var(--fv-emerald)" : "var(--fv-amber)",
+                }}
+                aria-hidden="true"
+              />
+            )}
             <span
               className="fv-sub"
               style={{ color: visibility.open ? "var(--fv-muted)" : "var(--fv-amber)" }}
             >
-              {visibility.text}
+              {visBusy ? "Saving…" : visibility.text}
             </span>
-            {canSchedule && !hideArmed ? (
-              <button
-                type="button"
-                className="fv-btn ghost sm"
-                style={{ height: 22, padding: "0 8px", flex: "none", fontSize: "var(--fv-2xs)" }}
-                disabled={visBusy}
-                onClick={() => {
-                  if (visibility.open) {
-                    setHideAt(localInputIn(7));
-                    setHideArmed(true);
-                    return;
-                  }
-                  // NULL, not now(). RLS compares opens_at against the
-                  // DATABASE clock, so writing the browser's would let a laptop
-                  // a minute fast store a future instant and then read it back
-                  // as "visible" while every student's policy still hid it.
-                  // NULL is unambiguous, and it is what the editor's empty
-                  // field writes — one representation of visible, not two.
-                  void setOpensAt(null);
-                }}
-              >
-                {visBusy ? "Saving…" : visibility.open ? "Hide" : "Make visible now"}
-              </button>
-            ) : null}
           </div>
 
-          {hideArmed ? (
-            <div
-              className="fv-card"
-              style={{ marginTop: 8, padding: "10px 12px", maxWidth: "48ch" }}
-            >
-              <label className="fv-eyebrow" htmlFor="fv-hide-at" style={{ display: "block" }}>
-                Hide until
-              </label>
-              <input
-                id="fv-hide-at"
-                type="datetime-local"
-                className="fv-in"
-                style={{ marginTop: 4 }}
-                value={hideAt}
-                autoFocus
-                onChange={(e) => setHideAt(e.target.value)}
-              />
-              <div
-                style={{
-                  marginTop: 6,
-                  fontSize: "var(--fv-2xs)",
-                  color: hideIsFuture ? "var(--fv-muted)" : "var(--fv-amber)",
-                  lineHeight: 1.5,
-                }}
-              >
-                {hideIsFuture
-                  ? "It leaves every student's assignment list until then. Anything already handed in is kept."
-                  : "Pick a time in the future — an instant that has passed leaves it visible."}
-              </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <button
-                  type="button"
-                  className="fv-btn primary sm"
-                  disabled={visBusy || !hideIsFuture}
-                  onClick={() => void setOpensAt(hideIso)}
-                >
-                  {visBusy ? "Saving…" : "Hide it"}
-                </button>
-                <button
-                  type="button"
-                  className="fv-btn ghost sm"
-                  disabled={visBusy}
-                  onClick={() => setHideArmed(false)}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : null}
-
-          {editing ? null : (
+          {/* The description is the same paragraph in both states — same size,
+              same measure, same place on the page. Editing just puts a caret
+              in it. */}
+          {editing ? (
+            <textarea
+              id="fv-ed-desc"
+              ref={descRef}
+              className="fv-descin"
+              style={{ marginTop: 20, maxWidth: "64ch" }}
+              rows={2}
+              aria-label="Description"
+              // Not the generated blurb as a ghost: it is built from the title,
+              // so on a new activity it would read "…on untitled activity".
+              placeholder="Describe what they do — or leave it empty for the standard description for this type."
+              value={desc}
+              onChange={(e) => setDesc(e.target.value)}
+            />
+          ) : (
             <p style={{ margin: "20px 0 0", fontSize: 16, lineHeight: 1.65, maxWidth: "64ch" }}>
               {blurb}
             </p>
@@ -545,6 +546,10 @@ export function ActivityDetail(props: {
                     Edit activity
                   </button>
                 ) : null}
+                <button type="button" className="fv-btn outline sm" onClick={onRubric}>
+                  <FIcon name="assignment" size={15} />
+                  Rubric
+                </button>
                 <button type="button" className="fv-btn outline sm" onClick={onCriteria}>
                   Grading criteria
                 </button>
@@ -552,33 +557,87 @@ export function ActivityDetail(props: {
             </>
           )}
 
+          {/* What is left has no prose to live in — a type, a date, two
+              numbers. They sit under a hairline as quiet fields rather than in
+              a card: the page is still the activity, not a form about it. */}
           {editing ? (
-            <div className="fv-card" style={{ marginTop: 16, padding: "14px 16px", maxWidth: "64ch" }}>
-              {/* Type is what picks scope, and scope decides which check-ins
-                  exist — so getting it wrong at creation used to be permanent.
-                  Changing it here adds whichever half is now needed and leaves
-                  the other in place, since dropping a check-in would cascade
-                  away everything already submitted against it. */}
-              <label className="fv-eyebrow" htmlFor="fv-ed-type" style={{ display: "block" }}>
-                Type
-              </label>
-              <select
-                id="fv-ed-type"
-                className="fv-in"
-                style={{ marginTop: 4 }}
-                value={kind}
-                onChange={(e) => setKind(e.target.value as ActivityType)}
-              >
-                {(Object.keys(TYPE_LABEL) as ActivityType[]).map((t) => (
-                  <option key={t} value={t}>
-                    {TYPE_LABEL[t]} · {SCOPE_LABEL[SCOPE_OF[t]]}
-                  </option>
-                ))}
-              </select>
+            <div style={{ maxWidth: "64ch" }}>
+              <div className="fv-fields">
+                <div className="fv-field" style={{ minWidth: 210 }}>
+                  {/* Type is what picks scope, and scope decides which check-ins
+                      exist — so getting it wrong at creation used to be
+                      permanent. Changing it here adds whichever half is now
+                      needed and leaves the other in place, since dropping a
+                      check-in would cascade away everything submitted. */}
+                  <label className="fv-eyebrow" htmlFor="fv-ed-type">
+                    Type
+                  </label>
+                  <select
+                    id="fv-ed-type"
+                    className="fv-in quiet"
+                    value={kind}
+                    onChange={(e) => setKind(e.target.value as ActivityType)}
+                  >
+                    {(Object.keys(TYPE_LABEL) as ActivityType[]).map((t) => (
+                      <option key={t} value={t}>
+                        {TYPE_LABEL[t]} · {SCOPE_LABEL[SCOPE_OF[t]]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="fv-field" style={{ minWidth: 210 }}>
+                  <label className="fv-eyebrow" htmlFor="fv-ed-due">
+                    Due
+                  </label>
+                  <input
+                    id="fv-ed-due"
+                    type="datetime-local"
+                    className="fv-in quiet"
+                    value={due}
+                    onChange={(e) => setDue(e.target.value)}
+                  />
+                </div>
+
+                <div className="fv-field" style={{ width: 84 }}>
+                  <label className="fv-eyebrow" htmlFor="fv-ed-count">
+                    Questions
+                  </label>
+                  <input
+                    id="fv-ed-count"
+                    className="fv-in quiet fv-num"
+                    inputMode="numeric"
+                    value={count}
+                    onChange={(e) => setCount(e.target.value)}
+                  />
+                </div>
+                <span className="fv-sub" style={{ paddingBottom: 8 }}>
+                  ×
+                </span>
+                <div className="fv-field" style={{ width: 84 }}>
+                  <label className="fv-eyebrow" htmlFor="fv-ed-per">
+                    Pts each
+                  </label>
+                  <input
+                    id="fv-ed-per"
+                    className="fv-in quiet fv-num"
+                    inputMode="numeric"
+                    value={per}
+                    onChange={(e) => setPer(e.target.value)}
+                  />
+                </div>
+                {/* The total is shown, never stored — this is the only place the
+                    two numbers are visibly multiplied, which is the point. */}
+                <span className="fv-sub fv-num" style={{ paddingBottom: 8 }} aria-live="polite">
+                  = {nextTotal} pts
+                  {IS_COMPLETION[activity.type] ? " (marked for completion)" : ""}
+                </span>
+              </div>
+
               {kind !== activity.type ? (
                 <div
                   style={{
-                    marginTop: 6,
+                    marginTop: 8,
                     fontSize: "var(--fv-2xs)",
                     color: "var(--fv-amber)",
                     lineHeight: 1.5,
@@ -590,118 +649,7 @@ export function ActivityDetail(props: {
                 </div>
               ) : null}
 
-              <label
-                className="fv-eyebrow"
-                htmlFor="fv-ed-title"
-                style={{ display: "block", marginTop: 12 }}
-              >
-                Title
-              </label>
-              <input
-                id="fv-ed-title"
-                className="fv-in"
-                style={{ marginTop: 4 }}
-                value={title}
-                autoFocus={fresh}
-                placeholder="What are they working on?"
-                onChange={(e) => setTitle(e.target.value)}
-              />
-
-              <label className="fv-eyebrow" htmlFor="fv-ed-desc" style={{ display: "block", marginTop: 12 }}>
-                Description
-              </label>
-              <textarea
-                id="fv-ed-desc"
-                className="fv-ta"
-                rows={3}
-                style={{ marginTop: 4 }}
-                placeholder="Leave empty to use the standard description for this type."
-                value={desc}
-                onChange={(e) => setDesc(e.target.value)}
-              />
-
-              <label className="fv-eyebrow" htmlFor="fv-ed-due" style={{ display: "block", marginTop: 12 }}>
-                Due
-              </label>
-              <input
-                id="fv-ed-due"
-                type="datetime-local"
-                className="fv-in"
-                style={{ marginTop: 4 }}
-                value={due}
-                onChange={(e) => setDue(e.target.value)}
-              />
-
-              {canSchedule ? (
-                <>
-                  <label
-                    className="fv-eyebrow"
-                    htmlFor="fv-ed-opens"
-                    style={{ display: "block", marginTop: 12 }}
-                  >
-                    Visible to students from
-                  </label>
-                  <input
-                    id="fv-ed-opens"
-                    type="datetime-local"
-                    className="fv-in"
-                    style={{ marginTop: 4 }}
-                    value={opens}
-                    onChange={(e) => setOpens(e.target.value)}
-                  />
-                  <div
-                    style={{
-                      marginTop: 6,
-                      fontSize: "var(--fv-2xs)",
-                      color: "var(--fv-muted)",
-                      lineHeight: 1.5,
-                    }}
-                  >
-                    Until then it is not on any student&rsquo;s list. Leave it empty to keep it
-                    visible with no opening date.
-                  </div>
-                </>
-              ) : null}
-
-              <div style={{ display: "flex", alignItems: "flex-end", gap: 10, marginTop: 12 }}>
-                <div style={{ width: 92 }}>
-                  <label className="fv-eyebrow" htmlFor="fv-ed-count" style={{ display: "block" }}>
-                    Questions
-                  </label>
-                  <input
-                    id="fv-ed-count"
-                    className="fv-in fv-num"
-                    style={{ marginTop: 4 }}
-                    inputMode="numeric"
-                    value={count}
-                    onChange={(e) => setCount(e.target.value)}
-                  />
-                </div>
-                <span className="fv-sub" style={{ paddingBottom: 9 }}>
-                  ×
-                </span>
-                <div style={{ width: 92 }}>
-                  <label className="fv-eyebrow" htmlFor="fv-ed-per" style={{ display: "block" }}>
-                    Pts each
-                  </label>
-                  <input
-                    id="fv-ed-per"
-                    className="fv-in fv-num"
-                    style={{ marginTop: 4 }}
-                    inputMode="numeric"
-                    value={per}
-                    onChange={(e) => setPer(e.target.value)}
-                  />
-                </div>
-                {/* The total is shown, never stored — this is the only place the
-                    two numbers are visibly multiplied, which is the point. */}
-                <span className="fv-sub fv-num" style={{ paddingBottom: 9 }} aria-live="polite">
-                  = {nextTotal} pts
-                  {IS_COMPLETION[activity.type] ? " (marked for completion)" : ""}
-                </span>
-              </div>
-
-              <div style={{ display: "flex", gap: 10, marginTop: 14 }}>
+              <div className="fv-editbar">
                 <button
                   type="button"
                   className="fv-btn primary sm"
@@ -723,71 +671,56 @@ export function ActivityDetail(props: {
                 >
                   {fresh ? "Not now" : "Cancel"}
                 </button>
+                {/* Saves first: the rubric is written against this activity's
+                    question count, and walking away from an unsaved shape would
+                    build the ladder for the wrong number of questions. */}
+                <button
+                  type="button"
+                  className="fv-btn outline sm"
+                  disabled={saving}
+                  title="Save this, then write the grading criteria against the assignment"
+                  onClick={() => void save().then(onRubric)}
+                >
+                  <FIcon name="assignment" size={15} />
+                  Add rubric
+                </button>
 
                 <span style={{ flex: 1 }} />
 
-                {/* Nothing could be deleted before, so a mistyped activity sat
-                    in the gradebook forever. Two steps, and the second says what
-                    goes with it — window.confirm is suppressed in this app. */}
                 <button
                   type="button"
                   className="fv-btn ghost sm"
                   style={{ color: "var(--fv-destructive)" }}
                   disabled={saving}
                   onClick={() => {
-                    if (!armedDelete) {
-                      setArmedDelete(true);
-                      void countWorkForActivity(activity.id)
-                        .then(({ submissions, graded }) =>
-                          setDeleteCost(
-                            submissions === 0
-                              ? "Nothing has been handed in for this yet."
-                              : `${submissions} submission${submissions === 1 ? "" : "s"}` +
-                                (graded ? `, ${graded} of them graded,` : "") +
-                                " will be deleted with it. This cannot be undone.",
-                          ),
-                        )
-                        .catch(() => setDeleteCost("Could not check what would be deleted."));
-                      return;
-                    }
-                    void (async () => {
-                      setSaving(true);
-                      try {
-                        await deleteActivity(activity.id);
-                        onChanged();
-                        onBack();
-                      } catch (e) {
-                        onError(e);
-                        setArmedDelete(false);
-                        setDeleteCost(null);
-                      } finally {
-                        setSaving(false);
-                      }
-                    })();
+                    setConfirmDelete(true);
+                    setDeleteCost(null);
+                    void countWorkForActivity(activity.id)
+                      .then(({ submissions, graded }) =>
+                        setDeleteCost(
+                          submissions === 0
+                            ? "Nothing has been handed in for this yet."
+                            : `${submissions} submission${submissions === 1 ? "" : "s"}` +
+                              (graded ? `, ${graded} of them graded,` : "") +
+                              " will be deleted with it.",
+                        ),
+                      )
+                      .catch(() => setDeleteCost("Could not check what would be deleted."));
                   }}
-                  onBlur={() => setArmedDelete(false)}
-                  title={deleteCost ?? undefined}
                 >
-                  {armedDelete ? "Delete it and every mark?" : "Delete activity"}
+                  Delete activity
                 </button>
-                {armedDelete && deleteCost ? (
-                  <span
-                    style={{
-                      fontSize: "var(--fv-2xs)",
-                      color: "var(--fv-destructive)",
-                      alignSelf: "center",
-                      maxWidth: "34ch",
-                      lineHeight: 1.4,
-                    }}
-                  >
-                    {deleteCost}
-                  </span>
-                ) : null}
               </div>
             </div>
           ) : null}
         </div>
 
+        {/* Who has handed it in is not part of writing it. While the editor is
+            open — and it opens by itself on a brand-new activity — the right
+            column would report "0 of 1 submitted" and offer to grade something
+            that does not exist yet. It comes back the moment the activity is
+            saved and you are looking at it rather than writing it. */}
+        {editing ? null : (
         <div className="fv-right13">
           <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
@@ -940,7 +873,45 @@ export function ActivityDetail(props: {
             </div>
           </div>
         </div>
+        )}
       </div>
+
+      {confirmDelete ? (
+        <ConfirmDialog
+          title="Are you sure you'd like to delete this activity?"
+          body={
+            <>
+              <div style={{ color: "var(--fv-navy)", fontWeight: 600 }}>{activity.title}</div>
+              <div style={{ marginTop: 6 }}>
+                {deleteCost ?? "Checking what would be deleted with it…"} Its check-ins and
+                everything recorded against them go too. This cannot be undone.
+              </div>
+            </>
+          }
+          confirmLabel="Delete activity"
+          busy={saving}
+          onCancel={() => {
+            setConfirmDelete(false);
+            setDeleteCost(null);
+          }}
+          onConfirm={() =>
+            void (async () => {
+              setSaving(true);
+              try {
+                await deleteActivity(activity.id);
+                onChanged();
+                onBack();
+              } catch (e) {
+                onError(e);
+                setConfirmDelete(false);
+                setDeleteCost(null);
+              } finally {
+                setSaving(false);
+              }
+            })()
+          }
+        />
+      ) : null}
     </div>
   );
 }

@@ -67,6 +67,33 @@ export interface Student {
 export interface FileRef {
   name: string;
   size?: string;
+  /**
+   * Where the bytes are, in the `activity-files` bucket: `<activity_id>/<file>`.
+   * Absent on rows written before 0012, which recorded a file NAME and nothing
+   * else — those cannot be opened, only listed.
+   */
+  path?: string;
+  /** MIME type as the browser reported it, so a viewer knows what it has. */
+  mime?: string;
+}
+
+/**
+ * What `opens_at` is set to when faculty simply switch an activity off.
+ *
+ * Visibility is one column and the rule is `opens_at <= now()`, so "not
+ * visible, no date in mind" needs an instant that will never arrive rather than
+ * a second column that could disagree with the first. Anything at or past this
+ * reads as off; the UI never prints it as a date.
+ */
+export const HIDDEN_INSTANT = "9999-12-31T00:00:00.000Z";
+
+/** Whether this instant is the "switched off" sentinel rather than a schedule. */
+export function isHiddenInstant(iso: string | null | undefined): boolean {
+  if (!iso) return false;
+  const at = Date.parse(iso);
+  // A generous threshold rather than string equality: the column round-trips
+  // through Postgres, which may hand back a different but equal rendering.
+  return !Number.isNaN(at) && at >= Date.parse("9000-01-01T00:00:00.000Z");
 }
 
 export interface Activity {
@@ -185,6 +212,12 @@ export interface RubricItem {
   deduction: number;
   /** Base ladder rows cannot be deleted; faculty-added ones can. */
   is_custom: boolean;
+  /**
+   * Which question or sub-question this criterion belongs to — "1", "2b".
+   * NULL is the shared ladder written before 0012: it applies to every
+   * question, and the builder shows it as such rather than hiding it.
+   */
+  question_label: string | null;
   created_at: string;
 }
 

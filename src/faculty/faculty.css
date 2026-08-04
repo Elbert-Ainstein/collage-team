@@ -974,6 +974,289 @@
   margin: 14px 0;
 }
 
+/* ------------------------------------------------------------ confirmation */
+
+.fv-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 35, 65, 0.34);
+  animation: fvFade 120ms ease;
+}
+.fv-dialog {
+  width: 100%;
+  max-width: 420px;
+  padding: 20px 22px 18px;
+  border: 1px solid var(--fv-neutral-200);
+  border-radius: var(--fv-r-xl);
+  background: var(--fv-cream-100);
+  box-shadow: 0 20px 48px rgba(0, 35, 65, 0.22);
+  animation: fvRise 140ms ease;
+}
+.fv-dialogtitle {
+  margin: 0;
+  font-family: var(--fv-serif);
+  font-size: var(--fv-xl);
+  font-weight: 700;
+  letter-spacing: var(--fv-tight);
+  line-height: 1.25;
+}
+.fv-dialogbody {
+  margin-top: 8px;
+  font-size: var(--fv-xs);
+  line-height: 1.6;
+  color: var(--fv-muted);
+}
+.fv-dialogbtns {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+.fv-btn.danger {
+  background: var(--fv-destructive);
+  color: #fff;
+}
+.fv-btn.danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+@keyframes fvFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes fvRise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fv-overlay,
+  .fv-dialog {
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------- editing without a form
+   The activity page edits in place: the title IS the input, the description IS
+   the paragraph. Only the fields that have no prose to sit in keep a box, and
+   even those stay quiet until they are pointed at. */
+
+.fv-titlein {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font-family: var(--fv-serif);
+  font-weight: 700;
+  letter-spacing: var(--fv-tight);
+  color: var(--fv-navy);
+}
+.fv-titlein::placeholder {
+  color: var(--fv-neutral-300);
+}
+.fv-titlein:focus {
+  outline: none;
+}
+/* The heading when it is NOT being edited: looks like a heading, behaves like
+   the field it becomes. */
+.fv-titlebtn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: text;
+}
+.fv-titlebtn:focus-visible {
+  outline: 2px solid var(--fv-navy-700);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.fv-descin {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  resize: none;
+  overflow: hidden;
+  font: inherit;
+  font-size: var(--fv-base);
+  line-height: 1.65;
+  color: var(--fv-navy);
+}
+.fv-descin::placeholder {
+  color: var(--fv-neutral-400);
+}
+.fv-descin:focus {
+  outline: none;
+}
+.fv-in.quiet,
+.fv-ta.quiet {
+  background: transparent;
+  border-color: transparent;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+.fv-in.quiet:hover,
+.fv-ta.quiet:hover {
+  border-color: var(--fv-neutral-200);
+  background: var(--fv-cream-100);
+}
+.fv-in.quiet:focus,
+.fv-ta.quiet:focus {
+  border-color: var(--fv-navy-700);
+  background: var(--fv-cream-100);
+}
+.fv-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 16px 24px;
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--fv-neutral-200);
+}
+.fv-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.fv-editbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--fv-neutral-200);
+}
+
+/* --------------------------------------------------------- rubric builder */
+
+.fv-rubric {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  border: 1px solid var(--fv-neutral-200);
+  border-radius: var(--fv-r-lg);
+  overflow: hidden;
+  background: var(--fv-cream-100);
+}
+.fv-rubricdoc {
+  flex: 3;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--fv-neutral-100);
+  border-right: 1px solid var(--fv-neutral-200);
+}
+.fv-rubricside {
+  flex: 2;
+  min-width: 340px;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.fv-panehead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--fv-neutral-200);
+  background: var(--fv-cream-300);
+}
+.fv-panebody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+.fv-embed {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: var(--fv-neutral-100);
+}
+.fv-qblock {
+  border-bottom: 1px solid var(--fv-neutral-200);
+}
+.fv-qhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  background: var(--fv-cream-300);
+}
+.fv-qhead.sub {
+  background: transparent;
+  padding-left: 26px;
+}
+.fv-qname {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fv-sm);
+  font-weight: 600;
+  border: 0;
+  background: transparent;
+  padding: 2px 4px;
+  border-radius: 5px;
+  font-family: inherit;
+  color: var(--fv-navy);
+}
+.fv-qname:hover {
+  background: var(--fv-cream-100);
+}
+.fv-qname:focus {
+  outline: none;
+  background: var(--fv-cream-100);
+  box-shadow: inset 0 0 0 1px var(--fv-navy-700);
+}
+.fv-crit {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 12px 7px 26px;
+  border-top: 1px solid var(--fv-neutral-100);
+}
+.fv-crit:hover {
+  background: var(--fv-cream-300);
+}
+.fv-critpts {
+  width: 62px;
+  flex: none;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.fv-critdesc {
+  flex: 1;
+  min-width: 0;
+}
+.fv-qfoot {
+  padding: 7px 12px 10px 26px;
+}
+
 /* Narrow screens: the sidebar becomes a strip rather than disappearing. */
 @media (max-width: 900px) {
   .fv-sidebar {
@@ -1002,5 +1285,18 @@
   }
   .fv-gradeside {
     min-width: 0;
+  }
+  /* The rubric builder stacks: the document first, its criteria under it. */
+  .fv-rubric {
+    flex-direction: column;
+  }
+  .fv-rubricdoc {
+    border-right: 0;
+    border-bottom: 1px solid var(--fv-neutral-200);
+    min-height: 320px;
+  }
+  .fv-rubricside {
+    min-width: 0;
+    max-width: none;
   }
 }

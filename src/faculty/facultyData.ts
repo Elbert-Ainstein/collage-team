@@ -16,6 +16,7 @@ import {
   type CheckIn,
   type CourseTF,
   type CourseWeek,
+  type FileRef,
   type RubricItem,
   type SubmissionMark,
 } from "@/checkins/types";
@@ -242,6 +243,11 @@ export async function updateRubricItem(
 export async function addRubricItem(
   activityId: string,
   afterRows: RubricItem[],
+  /**
+   * Which question the new line belongs to. Omitted — or null — keeps the
+   * pre-0012 behaviour: a line on the shared ladder, applying to every question.
+   */
+  questionLabel: string | null = null,
 ): Promise<RubricItem> {
   const next = afterRows.reduce((n, r) => Math.max(n, r.row_index), -1) + 1;
   const rows = unwrap(
@@ -253,6 +259,7 @@ export async function addRubricItem(
         description: "New criterion",
         deduction: 1,
         is_custom: true,
+        question_label: questionLabel,
       })
       .select(),
   ) as RubricItem[];
@@ -311,6 +318,115 @@ export async function countWorkForStudent(studentId: string): Promise<number> {
 export async function deleteRubricItem(id: string): Promise<void> {
   const { error } = await db().from("rubric_items").delete().eq("id", id).eq("is_custom", true);
   if (error) throw dbError(error);
+}
+
+/** Move a criterion onto a question, or off every question with null. */
+export async function setRubricQuestion(id: string, questionLabel: string | null): Promise<void> {
+  const { data, error } = await db()
+    .from("rubric_items")
+    .update({ question_label: questionLabel })
+    .eq("id", id)
+    .select("id");
+  if (error) throw dbError(error);
+  if (!data || data.length === 0) {
+    throw new Error(
+      "That criterion was not moved — only the instructor who owns this course can change the " +
+        "grading criteria.",
+    );
+  }
+}
+
+// ------------------------------------------------------- the activity's file
+//
+// 0012's `activity-files` bucket. Objects are named `<activity_id>/<file>` and
+// every policy on the bucket reads that first segment, so the path is not a
+// convenience here — an object stored under any other shape is reachable by
+// nobody.
+
+const BUCKET = "activity-files";
+
+/** Bytes -> "1.4 MB", for the FileRef that goes on the activity row. */
+function humanSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  const kb = bytes / 1024;
+  if (kb < 1024) return `${Math.round(kb)} KB`;
+  return `${(kb / 1024).toFixed(1)} MB`;
+}
+
+/**
+ * Strip a filename down to what can safely be a storage key.
+ *
+ * Supabase rejects a number of characters outright, and a name that survives
+ * upload but not URL-encoding produces a signed URL for an object that is not
+ * there — which reads as a corrupt file rather than a bad name.
+ */
+function safeName(name: string): string {
+  const cleaned = name.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+  return cleaned || "document.pdf";
+}
+
+/**
+ * Put a file in the bucket and record it on the activity.
+ *
+ * One document per activity in this version: the new file REPLACES whatever was
+ * listed, and the old object is removed after the row is updated. That order
+ * matters — a failed delete leaves an orphan object, while a failed update
+ * would leave the row pointing at bytes that are gone.
+ */
+export async function uploadActivityFile(activity: Activity, file: File): Promise<FileRef> {
+  const path = `${activity.id}/${Date.now()}-${safeName(file.name)}`;
+  const { error } = await db().storage.from(BUCKET).upload(path, file, {
+    contentType: file.type || "application/octet-stream",
+    upsert: false,
+  });
+  if (error) {
+    throw new Error(
+      `That file was not uploaded: ${error.message}. If this says the bucket is missing, run ` +
+        "supabase/migrations/0012_rubric_questions_and_files.sql.",
+    );
+  }
+
+  const ref: FileRef = {
+    name: file.name,
+    size: humanSize(file.size),
+    path,
+    mime: file.type || undefined,
+  };
+  const { error: e2 } = await db()
+    .from("activities")
+    .update({ files: [ref] })
+    .eq("id", activity.id);
+  if (e2) {
+    // The row is the record; an object nothing points at is litter, not data.
+    await db().storage.from(BUCKET).remove([path]);
+    throw dbError(e2);
+  }
+
+  const stale = (activity.files ?? []).map((f) => f.path).filter((p): p is string => Boolean(p));
+  if (stale.length) await db().storage.from(BUCKET).remove(stale);
+  return ref;
+}
+
+/** Take the file off the activity, then off the bucket. */
+export async function removeActivityFile(activity: Activity): Promise<void> {
+  const { error } = await db().from("activities").update({ files: [] }).eq("id", activity.id);
+  if (error) throw dbError(error);
+  const paths = (activity.files ?? []).map((f) => f.path).filter((p): p is string => Boolean(p));
+  if (paths.length) await db().storage.from(BUCKET).remove(paths);
+}
+
+/**
+ * A URL the browser can render the document from.
+ *
+ * Signed and short-lived, because the bucket is private: the policies decide
+ * who may mint one, and the link itself expires rather than becoming a way
+ * around them. Null when the row predates 0012 and carries only a file NAME.
+ */
+export async function activityFileUrl(ref: FileRef | null | undefined): Promise<string | null> {
+  if (!ref?.path) return null;
+  const { data, error } = await db().storage.from(BUCKET).createSignedUrl(ref.path, 60 * 60);
+  if (error) throw new Error(`That file could not be opened: ${error.message}`);
+  return data?.signedUrl ?? null;
 }
 
 // -------------------------------------------------------------------- marks
