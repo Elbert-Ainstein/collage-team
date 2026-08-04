@@ -131,6 +131,8 @@ export function FacultyApp({
   const [screen, setScreen] = useState<Screen>("activities");
   const [view, setView] = useState<"rows" | "columns">("rows");
   const [selId, setSelId] = useState<string | null>(null);
+  /** The activity that was just created, so its page can open ready to edit. */
+  const [fresh, setFresh] = useState<string | null>(null);
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [courseId, setCourseId] = useState<string | null>(null);
@@ -254,8 +256,13 @@ export function FacultyApp({
     );
   }
 
-  const openActivity = (id: string) => {
+  const openActivity = (id: string, opts?: { fresh?: boolean }) => {
     setSelId(id);
+    // A just-created activity is a title and nothing else, so the page it lands
+    // on opens its editor rather than showing an empty shell and waiting to be
+    // asked. It is also created hidden, so nothing half-written is on a
+    // student's list while it is being filled in.
+    setFresh(opts?.fresh ? id : null);
     setScreen("detail");
   };
 
@@ -281,6 +288,7 @@ export function FacultyApp({
             data={data}
             activity={selected}
             onBack={() => setScreen("activities")}
+            fresh={fresh === selected.id}
             onCriteria={() => setScreen("criteria")}
             onGrade={() => setScreen("grade")}
             onChanged={() => void refresh().catch(fail)}

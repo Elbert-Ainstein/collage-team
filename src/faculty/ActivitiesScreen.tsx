@@ -9,7 +9,7 @@
 import { Fragment, type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import { createActivity, deleteActivity, updateActivity } from "@/checkins/data";
 import { isOpenToStudents } from "@/checkins/studentData";
-import { fmtInstant, fromLocalInput, toLocalInput } from "./ActivityDetail";
+import { fmtInstant } from "./ActivityDetail";
 import {
   addWeek,
   countWorkForActivity,
@@ -48,7 +48,6 @@ import {
 import { FAvatar, FIcon } from "./icons";
 import type { FacultyData } from "./FacultyApp";
 
-const TYPES: ActivityType[] = ["challenge", "combo", "amplify", "skills"];
 
 const GLYPH: Record<CellState, string> = {
   graded: "",
@@ -134,42 +133,21 @@ function membersIn(
   ).length;
 }
 
-/**
- * The opens_at to store for a chosen "visible from".
- *
- * A time that is not in the future stores as NULL — the unambiguous "visible",
- * and the same value "Make visible now" writes. Storing the browser's own clock
- * instead meant a laptop a minute fast created an activity the faculty screen
- * called visible while RLS, which compares the DATABASE clock, still hid it
- * from all sixteen students. A minute of skew on a date genuinely in the future
- * does not matter; a minute of skew on "now" is the whole bug.
- */
-function scheduledOpen(localValue: string): string | null {
-  const iso = fromLocalInput(localValue);
-  if (!iso) return null;
-  const at = Date.parse(iso);
-  if (Number.isNaN(at) || at <= Date.now()) return null;
-  return iso;
-}
 
 export function ActivitiesScreen(props: {
   data: FacultyData;
   view: "rows" | "columns";
   onView: (v: "rows" | "columns") => void;
-  onOpen: (activityId: string) => void;
+  /** `fresh` means it was just created, so the detail screen opens its editor. */
+  onOpen: (activityId: string, opts?: { fresh?: boolean }) => void;
   onChanged: () => void;
   onError: (e: unknown) => void;
 }): JSX.Element {
   const { data, view, onView, onOpen, onChanged, onError } = props;
 
-  const [creating, setCreating] = useState(false);
-  const [title, setTitle] = useState("");
-  const [type, setType] = useState<ActivityType>("combo");
-  const [week, setWeek] = useState<number | null>(null);
   // Defaulted to now on every open, so creating an activity says out loud when
   // the class gets it instead of publishing one by omission. Pushing it forward
   // is what schedules it.
-  const [opens, setOpens] = useState("");
   const [busy, setBusy] = useState(false);
   // The week the last "New week" press created, so the press has something to
   // point at. Cleared once that week holds anything, or on dismiss.
@@ -233,24 +211,7 @@ export function ActivitiesScreen(props: {
     }
   };
 
-  // Scheduling follows the check-in permission rather than authoring, the same
-  // way posting check-ins and setting the live week do.
-  const canSchedule = data.can.runCheckIns;
-
-  // Only worth a line when the instructor has actually pushed the field forward
-  // — the ordinary case is "now", and saying so would be noise.
-  const opensIso = fromLocalInput(opens);
-  const scheduledFor =
-    opensIso != null && Date.parse(opensIso) > Date.now() ? fmtInstant(opensIso) : null;
-
   // `at` is the week the instructor asked to fill; without one, the newest.
-  const openForm = (at?: number) => {
-    setWeek(at ?? weekNumbers[0] ?? null);
-    // now -> local wall clock, reseeded per open so a form left closed for an
-    // hour does not come back offering an opening time in the past.
-    setOpens(toLocalInput(new Date().toISOString()));
-    setCreating(true);
-  };
 
   const saveDates = (id: string, label: string | null) =>
     void run(async () => {
@@ -272,25 +233,31 @@ export function ActivitiesScreen(props: {
     return g && g.activities.length === 0 ? newWeek : null;
   }, [newWeek, groups]);
 
-  const submitNew = () =>
+  /**
+   * Create an activity and go straight into it.
+   *
+   * The old inline strip asked for title, type, week and visibility in a row of
+   * cramped controls before you could see the thing you were making. The
+   * activity page has room to ask properly, so this makes the row and hands you
+   * over — the same shape as uploading a video and then filling in its details.
+   *
+   * It is created HIDDEN. A draft that nobody has titled yet must not be on
+   * sixteen students' assignment lists while it is being written, and the page
+   * you land on is where you choose when it opens.
+   */
+  const startNewActivity = (atWeek?: number) =>
     void run(async () => {
-      const name = title.trim();
-      if (!name || week == null) return;
+      const week = atWeek ?? weekNumbers[0];
+      if (week == null) return;
 
-      // opens_at goes on the INSERT, not a follow-up patch. The column default
-      // is NULL and NULL means visible, so an activity created without it sits
-      // in front of the whole class for the length of a round trip — and stays
-      // there for good if that second write fails. Local wall clock -> instant.
+      const type: ActivityType = "combo";
+      const hiddenUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
       const created = await createActivity({
         courseId: data.course.id,
         week,
-        title: name,
-        opensAt: scheduledOpen(opens),
+        title: "Untitled activity",
+        opensAt: hiddenUntil,
       });
-      // `type` still needs a second write — it picks the accent, the scope and
-      // therefore the question shape, and createActivity does not carry it. That
-      // one is safe to follow up: a wrong type is visible and fixable, whereas a
-      // wrongly-visible draft is not recallable.
       await updateActivity(created.id, { type });
 
       const shape = shapeFor(type);
@@ -308,8 +275,7 @@ export function ActivitiesScreen(props: {
       if (scope !== "team") await ensureCheckIn(withShape, "individual", data.checkIns);
       if (scope !== "indiv") await ensureCheckIn(withShape, "team", data.checkIns);
 
-      setCreating(false);
-      setTitle("");
+      onOpen(created.id, { fresh: true });
     });
 
   return (
@@ -350,9 +316,13 @@ export function ActivitiesScreen(props: {
               <button
                 type="button"
                 className="fv-btn primary sm"
-                disabled={busy}
-                onClick={() => (creating ? setCreating(false) : openForm())}
-                aria-expanded={creating}
+                disabled={busy || weekNumbers.length === 0}
+                title={
+                  weekNumbers.length === 0
+                    ? "Add a week first — every activity belongs to one."
+                    : "Create an activity and open it"
+                }
+                onClick={() => startNewActivity()}
               >
                 <FIcon name="add" size={15} />
                 Activity
@@ -388,7 +358,7 @@ export function ActivitiesScreen(props: {
               type="button"
               className="fv-btn sm"
               style={{ height: 24, padding: "0 10px", flex: "none" }}
-              onClick={() => openForm(announced)}
+              onClick={() => startNewActivity(announced)}
             >
               Add the first activity
             </button>
@@ -406,96 +376,6 @@ export function ActivitiesScreen(props: {
       ) : null}
 
       <div className="fv-scroll">
-        {creating ? (
-          <form
-            className="fv-card"
-            style={{ padding: 14, marginBottom: 18, display: "flex", flexWrap: "wrap", gap: 10 }}
-            onSubmit={(e) => {
-              e.preventDefault();
-              submitNew();
-            }}
-          >
-            <label style={{ flex: "2 1 220px", minWidth: 0 }}>
-              <span className="fv-eyebrow">Title</span>
-              <input
-                className="fv-in"
-                style={{ marginTop: 4 }}
-                value={title}
-                autoFocus
-                placeholder="What are they working on?"
-                onChange={(e) => setTitle(e.target.value)}
-              />
-            </label>
-            <label style={{ flex: "1 1 140px", minWidth: 0 }}>
-              <span className="fv-eyebrow">Type</span>
-              <select
-                className="fv-in"
-                style={{ marginTop: 4 }}
-                value={type}
-                onChange={(e) => setType(e.target.value as ActivityType)}
-              >
-                {TYPES.map((t) => (
-                  <option key={t} value={t}>
-                    {TYPE_LABEL[t]} · {SCOPE_LABEL[SCOPE_OF[t]]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label style={{ flex: "0 1 120px", minWidth: 0 }}>
-              <span className="fv-eyebrow">Week</span>
-              <select
-                className="fv-in"
-                style={{ marginTop: 4 }}
-                value={week ?? ""}
-                onChange={(e) => setWeek(e.target.value === "" ? null : Number(e.target.value))}
-              >
-                {weekNumbers.map((n) => (
-                  <option key={n} value={n}>
-                    Week {n}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {canSchedule ? (
-              <label style={{ flex: "1 1 190px", minWidth: 0 }}>
-                <span className="fv-eyebrow">Visible to students from</span>
-                <input
-                  type="datetime-local"
-                  className="fv-in"
-                  style={{ marginTop: 4 }}
-                  value={opens}
-                  onChange={(e) => setOpens(e.target.value)}
-                />
-              </label>
-            ) : null}
-            <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flex: "none" }}>
-              <button
-                type="submit"
-                className="fv-btn primary sm"
-                disabled={busy || !title.trim() || week == null}
-              >
-                Create
-              </button>
-              <button type="button" className="fv-btn ghost sm" onClick={() => setCreating(false)}>
-                Cancel
-              </button>
-            </div>
-            {scheduledFor ? (
-              <div
-                className="fv-sub"
-                style={{ flexBasis: "100%", color: "var(--fv-amber)" }}
-                role="status"
-              >
-                Hidden from students until {scheduledFor}. You can change that afterwards.
-              </div>
-            ) : null}
-            {weekNumbers.length === 0 ? (
-              <div className="fv-sub" style={{ flexBasis: "100%" }}>
-                Add a week first — every activity belongs to one.
-              </div>
-            ) : null}
-          </form>
-        ) : null}
 
         {/* Weeks, not activities: a course with weeks and nothing in them has
             something to show, and used to show this line instead. */}
@@ -512,7 +392,7 @@ export function ActivitiesScreen(props: {
             busy={busy}
             highlight={announced}
             onOpen={onOpen}
-            onAddTo={openForm}
+            onAddTo={(w) => startNewActivity(w)}
             onDates={saveDates}
             onLive={makeLive}
             run={run}

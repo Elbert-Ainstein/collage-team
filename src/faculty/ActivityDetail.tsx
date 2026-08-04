@@ -167,13 +167,15 @@ const isIn = (r: CheckInResult) =>
 export function ActivityDetail(props: {
   data: FacultyData;
   activity: Activity;
+  /** Just created — open the editor and put the caret in the title. */
+  fresh?: boolean;
   onBack: () => void;
   onCriteria: () => void;
   onGrade: () => void;
   onChanged: () => void;
   onError: (e: unknown) => void;
 }): JSX.Element {
-  const { data, activity, onBack, onCriteria, onGrade, onChanged, onError } = props;
+  const { data, activity, fresh = false, onBack, onCriteria, onGrade, onChanged, onError } = props;
 
   const accent = TYPE_ACCENT[activity.type];
   const scope = SCOPE_OF[activity.type];
@@ -278,6 +280,18 @@ export function ActivityDetail(props: {
     setPer(String(shape.per));
     setEditing(true);
   };
+
+  // A freshly created activity is a placeholder title and nothing else. Opening
+  // the editor here — rather than making the instructor find "Edit activity" on
+  // a page that says "Untitled activity" — is the whole point of creating it
+  // from one click and landing them here.
+  useEffect(() => {
+    if (!fresh) return;
+    openEditor();
+    // The title is what they came to write.
+    window.setTimeout(() => document.getElementById("fv-ed-title")?.focus(), 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fresh, activity.id]);
 
   // Clamped to what 0007's check constraint allows (count > 0, per >= 0), so a
   // typo comes back as a corrected number rather than a database error.
