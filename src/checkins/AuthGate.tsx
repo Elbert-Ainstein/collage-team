@@ -55,7 +55,11 @@ type Role = "faculty" | "student";
 
 function SignIn() {
   const [mode, setMode] = useState<Mode>("in");
-  const [role, setRole] = useState<Role>("faculty");
+  // What the person says they are. A teaching fellow becomes a faculty account
+  // — the TF roster is what actually grants them anything — so this is three
+  // buttons over two roles.
+  const [pick, setPick] = useState<"faculty" | "tf" | "student">("faculty");
+  const role: Role = pick === "student" ? "student" : "faculty";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -138,23 +142,37 @@ function SignIn() {
               <div className="t-seg2" style={{ marginTop: 0 }}>
                 <button
                   type="button"
-                  className={"t-segbtn" + (role === "faculty" ? " on" : "")}
-                  onClick={() => setRole("faculty")}
+                  className={"t-segbtn" + (pick === "faculty" ? " on" : "")}
+                  onClick={() => setPick("faculty")}
                 >
                   Faculty
                 </button>
+                {/* A teaching fellow is a faculty ACCOUNT — what makes them a TF
+                    is being on the instructor's list, not this button. But
+                    nothing told them that, and the Faculty copy ("you run the
+                    sessions") reads like the wrong answer, so they need a button
+                    of their own. */}
                 <button
                   type="button"
-                  className={"t-segbtn" + (role === "student" ? " on" : "")}
-                  onClick={() => setRole("student")}
+                  className={"t-segbtn" + (pick === "tf" ? " on" : "")}
+                  onClick={() => setPick("tf")}
+                >
+                  Teaching fellow
+                </button>
+                <button
+                  type="button"
+                  className={"t-segbtn" + (pick === "student" ? " on" : "")}
+                  onClick={() => setPick("student")}
                 >
                   Student
                 </button>
               </div>
               <span style={{ fontSize: 11.5, color: "var(--ink3)", marginTop: 4 }}>
-                {role === "faculty"
+                {pick === "faculty"
                   ? "You run the sessions: rosters, teams, weeks and grading."
-                  : "Use the email address your instructor has on the roster, so we can find you."}
+                  : pick === "tf"
+                    ? "Use the address your instructor added you under — that is what links you to their course."
+                    : "Use the email address your instructor has on the roster, so we can find you."}
               </span>
             </div>
           )}

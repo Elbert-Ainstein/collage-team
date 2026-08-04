@@ -5,9 +5,13 @@ import { AuthGate } from "@/checkins/AuthGate";
 import { ClassCheckins } from "@/checkins/ClassCheckins";
 import { FacultyApp } from "@/faculty/FacultyApp";
 import { StudentApp } from "@/student/StudentApp";
-import { getRole } from "@/checkins/studentData";
+import { claimStudentRows, getEnrolment, getRole } from "@/checkins/studentData";
+import { claimTFRows, myTFCourses } from "@/faculty/facultyData";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
 import type { Role } from "@/checkins/types";
+
+/** Which app this account gets. A TF is a faculty account on someone else's course. */
+type Kind = "faculty" | "tf" | "student";
 
 // Class Check-ins, behind a sign-in wall. The account's role decides which app
 // it is: faculty run the sessions, students see their own work.
@@ -18,6 +22,7 @@ export default function Page() {
       {(session, signOut) => (
         <RoleRouter
           key={session.user.id}
+          uid={session.user.id}
           account={session.user.email ?? "signed in"}
           onSignOut={signOut}
         />
@@ -27,27 +32,71 @@ export default function Page() {
 }
 
 function RoleRouter({
+  uid,
   account,
   onSignOut,
 }: {
+  uid: string;
   account: string;
   onSignOut: () => Promise<void>;
 }) {
-  const [role, setRole] = useState<Role | null>(null);
+  const [kind, setKind] = useState<Kind | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     let alive = true;
-    getRole()
-      .then((r) => alive && setRole(r))
-      // A missing profile shouldn't lock anyone out; fall back to faculty,
-      // which is what every pre-roles account already was.
-      .catch(() => alive && setRole("faculty"))
+
+    (async () => {
+      let role: Role;
+      try {
+        role = (await getRole()) ?? "faculty";
+      } catch {
+        // A missing profile shouldn't lock anyone out; fall back to faculty,
+        // which is what every pre-roles account already was.
+        role = "faculty";
+      }
+      if (role === "student") return "student" as Kind;
+
+      // A teaching fellow signs up as Faculty — there is no TF button, because
+      // being a TF is a fact about the instructor's roster, not a choice the
+      // person makes. Claim by email, then ask whether they are on anyone's
+      // list. This has to happen BEFORE ensureSessions: that call reads courses
+      // through RLS, and a TF can see the instructor's, so it would conclude
+      // nothing was missing and hand them the authoring UI for a course they
+      // cannot write to.
+      try {
+        await claimTFRows();
+        const tfCourses = await myTFCourses();
+        if (tfCourses.length && !tfCourses.some((c) => c.owner_id === uid)) {
+          return "tf" as Kind;
+        }
+      } catch {
+        // Not fatal: an account that is not a TF simply carries on as faculty.
+      }
+
+      // Self-heal a wrong pick. "Faculty" is the default button, so a student
+      // who signs up without noticing it would otherwise be stranded in an empty
+      // gradebook forever — the role is write-once by design, so there is no way
+      // back from inside the app. Being on a roster is the stronger evidence of
+      // what someone is, so it wins.
+      try {
+        await claimStudentRows();
+        const enrolment = await getEnrolment();
+        if (enrolment) return "student" as Kind;
+      } catch {
+        // No roster row, or the claim failed — carry on as faculty.
+      }
+
+      return "faculty" as Kind;
+    })()
+      .then((k) => alive && setKind(k))
+      .catch(() => alive && setKind("faculty"))
       .finally(() => alive && setReady(true));
+
     return () => {
       alive = false;
     };
-  }, []);
+  }, [uid]);
 
   if (!ready) {
     return (
@@ -57,7 +106,7 @@ function RoleRouter({
     );
   }
 
-  if (role === "student") return <StudentApp account={account} onSignOut={onSignOut} />;
+  if (kind === "student") return <StudentApp account={account} onSignOut={onSignOut} />;
 
   // The redesigned faculty app is the default. The previous one stays reachable
   // at /ck?classic=1 until 0007 has been run everywhere — it is the only way
@@ -69,6 +118,6 @@ function RoleRouter({
   return classic ? (
     <ClassCheckins account={account} onSignOut={onSignOut} />
   ) : (
-    <FacultyApp account={account} onSignOut={onSignOut} />
+    <FacultyApp account={account} onSignOut={onSignOut} mode={kind === "tf" ? "tf" : "owner"} />
   );
 }

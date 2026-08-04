@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  IS_COMPLETION,
   SCOPE_OF,
   type Activity,
   type CheckInResult,
@@ -116,7 +117,7 @@ export function GradingScreen({
 
   useEffect(() => {
     let live = true;
-    ensureRubric(activity)
+    ensureRubric(activity, data.can.author)
       .then((rows) => live && setLadder(rows))
       .catch(onError);
     return () => {
@@ -125,7 +126,7 @@ export function GradingScreen({
     // The ladder belongs to the activity; re-fetching on every prop change would
     // fight the inline editing below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activity.id]);
+  }, [activity.id, data.can.author]);
 
   const loadMarks = useCallback(async () => {
     const ids = subjects.map((s) => s.result.id);
@@ -228,7 +229,7 @@ export function GradingScreen({
     if (!subject) return;
     setReleasing(true);
     try {
-      await releaseMark(subject.result.id);
+      await releaseMark(subject.result.id, IS_COMPLETION[activity.type]);
       onChanged();
     } catch (e) {
       onError(e);
@@ -274,6 +275,26 @@ export function GradingScreen({
       <span className="fv-sub">{weekLine}</span>
     </div>
   );
+
+  // Grading is a course-wide permission. RLS and the guard trigger reject the
+  // write anyway, but letting someone mark a whole submission and only then
+  // discover they may not is the wrong way to find out.
+  if (!data.can.grade) {
+    return (
+      <div className="fv-panel">
+        {header}
+        <div className="fv-card" style={{ padding: 26, maxWidth: 520 }}>
+          <div style={{ fontFamily: "var(--fv-serif)", fontSize: "var(--fv-lg)", fontWeight: 700 }}>
+            Grading is turned off for teaching fellows
+          </div>
+          <p className="fv-sub" style={{ marginTop: 8, lineHeight: 1.6, maxWidth: "56ch" }}>
+            The instructor controls this on the TFs tab, for every fellow on the course at once.
+            Ask them to turn on <strong>Grading</strong> and reload.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   if (!subject) {
     return (
@@ -424,6 +445,13 @@ export function GradingScreen({
 
             {ladder == null ? (
               <div className="fv-sub">Loading the ladder…</div>
+            ) : ladder.length === 0 ? (
+              // Only the instructor can create a ladder, so say that rather than
+              // showing an empty list that looks broken.
+              <div className="fv-sub" style={{ lineHeight: 1.6 }}>
+                No grading criteria have been set for this activity yet. Ask the instructor to
+                open <strong>Grading criteria</strong> on the activity, then reload.
+              </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 2, margin: "0 -4px" }}>
                 {ladder.map((item, i) => (

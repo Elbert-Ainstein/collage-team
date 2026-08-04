@@ -7,7 +7,7 @@
 // counts out of the number of teams — type only picks the label and the accent.
 
 import { useMemo, useState } from "react";
-import { tintFor, updateActivity } from "@/checkins/data";
+import { deleteActivity, tintFor, updateActivity } from "@/checkins/data";
 import {
   IS_COMPLETION,
   SCOPE_LABEL,
@@ -15,9 +15,10 @@ import {
   TYPE_ACCENT,
   TYPE_LABEL,
   type Activity,
+  type ActivityType,
   type CheckInResult,
 } from "@/checkins/types";
-import { setQuestionShape } from "./facultyData";
+import { ensureCheckIn, setQuestionShape } from "./facultyData";
 import { pointsLabel, pointsTotal, questionShape, statFor } from "./model";
 import { FAvatar, FIcon } from "./icons";
 import type { FacultyData } from "./FacultyApp";
@@ -197,8 +198,11 @@ export function ActivityDetail(props: {
   const [due, setDue] = useState(() => toLocalInput(dueAt));
   const [count, setCount] = useState(String(shape.count));
   const [per, setPer] = useState(String(shape.per));
+  const [kind, setKind] = useState<ActivityType>(activity.type);
+  const [armedDelete, setArmedDelete] = useState(false);
 
   const openEditor = () => {
+    setKind(activity.type);
     // Seed from the activity every time rather than once, so a refresh that
     // happened while the editor was closed is not overwritten by stale fields.
     setTitle(activity.title);
@@ -223,7 +227,21 @@ export function ActivityDetail(props: {
         source_text: desc.trim() ? desc.trim() : null,
         due_at: fromLocalInput(due),
       };
+      if (kind !== activity.type) {
+        patch.type = kind;
+      }
       await updateActivity(activity.id, patch);
+
+      // Type picks scope, and scope decides which check-ins have to exist. A
+      // widened scope needs its new half created; a narrowed one keeps the old
+      // check-in rather than dropping it, because deleting it would cascade
+      // away every submission and mark already recorded against it.
+      if (kind !== activity.type) {
+        const scope = SCOPE_OF[kind];
+        const withKind = { ...activity, ...patch, type: kind } as Activity;
+        if (scope !== "team") await ensureCheckIn(withKind, "individual", data.checkIns);
+        if (scope !== "indiv") await ensureCheckIn(withKind, "team", data.checkIns);
+      }
       // The shape goes through facultyData rather than the same patch: it also
       // rewrites check_ins.max_points, which the student view renders directly.
       if (nextCount !== shape.count || nextPer !== shape.per) {
@@ -283,15 +301,17 @@ export function ActivityDetail(props: {
           </div>
 
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 24 }}>
-            <button
-              type="button"
-              className="fv-btn outline sm"
-              aria-expanded={editing}
-              onClick={() => (editing ? setEditing(false) : openEditor())}
-            >
-              <FIcon name="edit" size={15} />
-              Edit activity
-            </button>
+            {data.can.author ? (
+              <button
+                type="button"
+                className="fv-btn outline sm"
+                aria-expanded={editing}
+                onClick={() => (editing ? setEditing(false) : openEditor())}
+              >
+                <FIcon name="edit" size={15} />
+                Edit activity
+              </button>
+            ) : null}
             <button type="button" className="fv-btn outline sm" onClick={onCriteria}>
               Grading criteria
             </button>
@@ -299,7 +319,47 @@ export function ActivityDetail(props: {
 
           {editing ? (
             <div className="fv-card" style={{ marginTop: 16, padding: "14px 16px", maxWidth: "64ch" }}>
-              <label className="fv-eyebrow" htmlFor="fv-ed-title" style={{ display: "block" }}>
+              {/* Type is what picks scope, and scope decides which check-ins
+                  exist — so getting it wrong at creation used to be permanent.
+                  Changing it here adds whichever half is now needed and leaves
+                  the other in place, since dropping a check-in would cascade
+                  away everything already submitted against it. */}
+              <label className="fv-eyebrow" htmlFor="fv-ed-type" style={{ display: "block" }}>
+                Type
+              </label>
+              <select
+                id="fv-ed-type"
+                className="fv-in"
+                style={{ marginTop: 4 }}
+                value={kind}
+                onChange={(e) => setKind(e.target.value as ActivityType)}
+              >
+                {(Object.keys(TYPE_LABEL) as ActivityType[]).map((t) => (
+                  <option key={t} value={t}>
+                    {TYPE_LABEL[t]} · {SCOPE_LABEL[SCOPE_OF[t]]}
+                  </option>
+                ))}
+              </select>
+              {kind !== activity.type ? (
+                <div
+                  style={{
+                    marginTop: 6,
+                    fontSize: "var(--fv-2xs)",
+                    color: "var(--fv-amber)",
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Changing to {TYPE_LABEL[kind]} makes this{" "}
+                  {SCOPE_LABEL[SCOPE_OF[kind]].toLowerCase()}. Work already submitted stays where
+                  it is.
+                </div>
+              ) : null}
+
+              <label
+                className="fv-eyebrow"
+                htmlFor="fv-ed-title"
+                style={{ display: "block", marginTop: 12 }}
+              >
                 Title
               </label>
               <input
@@ -389,6 +449,40 @@ export function ActivityDetail(props: {
                   onClick={() => setEditing(false)}
                 >
                   Cancel
+                </button>
+
+                <span style={{ flex: 1 }} />
+
+                {/* Nothing could be deleted before, so a mistyped activity sat
+                    in the gradebook forever. Two steps, and the second says what
+                    goes with it — window.confirm is suppressed in this app. */}
+                <button
+                  type="button"
+                  className="fv-btn ghost sm"
+                  style={{ color: "var(--fv-destructive)" }}
+                  disabled={saving}
+                  onClick={() => {
+                    if (!armedDelete) {
+                      setArmedDelete(true);
+                      return;
+                    }
+                    void (async () => {
+                      setSaving(true);
+                      try {
+                        await deleteActivity(activity.id);
+                        onChanged();
+                        onBack();
+                      } catch (e) {
+                        onError(e);
+                        setArmedDelete(false);
+                      } finally {
+                        setSaving(false);
+                      }
+                    })();
+                  }}
+                  onBlur={() => setArmedDelete(false)}
+                >
+                  {armedDelete ? "Delete it and every mark?" : "Delete activity"}
                 </button>
               </div>
             </div>
@@ -525,8 +619,14 @@ export function ActivityDetail(props: {
               className="fv-btn primary full"
               style={{ height: 40 }}
               onClick={onGrade}
+              disabled={!data.can.grade}
+              title={
+                data.can.grade
+                  ? undefined
+                  : "Grading is turned off for teaching fellows on this course."
+              }
             >
-              Grade now
+              {data.can.grade ? "Grade now" : "Grading not permitted"}
             </button>
             <div
               className="fv-num"

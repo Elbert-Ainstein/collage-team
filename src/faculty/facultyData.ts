@@ -11,6 +11,7 @@ import { dbError, tintFor } from "@/checkins/data";
 import {
   QUESTION_SHAPE,
   type Activity,
+  type Course,
   type ActivityType,
   type CheckIn,
   type CourseTF,
@@ -137,10 +138,16 @@ export async function listRubric(activityId: string): Promise<RubricItem[]> {
  *
  * Seeding on read rather than on activity creation means activities that
  * predate this migration get a ladder the moment someone grades them.
+ *
+ * `canSeed` matters: writing rubric_items is owner-only, so a teaching fellow
+ * opening an activity nobody has set criteria for would have the insert
+ * rejected. Returning empty lets the caller say so; attempting it left the
+ * grading screen on "Loading the ladder…" with no way forward.
  */
-export async function ensureRubric(activity: Activity): Promise<RubricItem[]> {
+export async function ensureRubric(activity: Activity, canSeed = true): Promise<RubricItem[]> {
   const existing = await listRubric(activity.id);
   if (existing.length) return existing;
+  if (!canSeed) return [];
 
   const rows = defaultLadder(activity.points_per_question).map((r, i) => ({
     activity_id: activity.id,
@@ -243,11 +250,19 @@ export async function setFeedback(resultId: string, feedback: string): Promise<v
   if (error) throw dbError(error);
 }
 
-/** Mark a submission finished, so it leaves the "waiting" count. */
-export async function releaseMark(resultId: string): Promise<void> {
+/**
+ * Mark a submission finished, so it leaves the "waiting" count.
+ *
+ * `is_ci` has to be set here rather than left false: Challenge and Amplify are
+ * described to the instructor as completion-marked everywhere in the UI, and
+ * the gradebook only renders a ✓ (and the student only reads "Complete") when
+ * the row says so. Without it those two types were labelled "Completion" and
+ * then reported as a raw point score.
+ */
+export async function releaseMark(resultId: string, completion: boolean): Promise<void> {
   const { error } = await db()
     .from("check_in_results")
-    .update({ status: "scored", updated_at: new Date().toISOString() })
+    .update({ status: "scored", is_ci: completion, updated_at: new Date().toISOString() })
     .eq("id", resultId);
   if (error) throw dbError(error);
 }
@@ -311,6 +326,30 @@ export async function setTFPermissions(
 ): Promise<void> {
   const { error } = await db().from("courses").update(perms).eq("id", courseId);
   if (error) throw dbError(error);
+}
+
+/**
+ * The courses this account is a teaching fellow on.
+ *
+ * How the app knows someone is a TF at all: there is no 'tf' role, because
+ * profiles.role is chosen by the person signing up and so cannot be a boundary.
+ * Being a TF is a fact about the course's roster of fellows, not about them.
+ */
+export async function myTFCourses(): Promise<Course[]> {
+  const { data: auth } = await db().auth.getUser();
+  const uid = auth.user?.id;
+  if (!uid) return [];
+
+  const rows =
+    (unwrap(await db().from("course_tfs").select("course_id").eq("user_id", uid)) as
+      | { course_id: string }[]
+      | null) ?? [];
+  if (!rows.length) return [];
+
+  const ids = Array.from(new Set(rows.map((r) => r.course_id)));
+  return (
+    (unwrap(await db().from("courses").select("*").in("id", ids).order("code")) as Course[]) ?? []
+  );
 }
 
 /** Attach this account to any TF rows carrying its address. */

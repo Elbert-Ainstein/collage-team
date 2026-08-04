@@ -217,29 +217,35 @@ export function ActivitiesScreen(props: {
         </div>
         <div style={{ flex: 1 }} />
         <div className="fv-headbtns">
-          <button
-            type="button"
-            className="fv-btn outline sm"
-            disabled={busy}
-            onClick={() =>
-              void run(async () => {
-                await addWeek(data.course.id);
-              })
-            }
-          >
-            <FIcon name="add" size={15} />
-            New week
-          </button>
-          <button
-            type="button"
-            className="fv-btn primary sm"
-            disabled={busy}
-            onClick={() => (creating ? setCreating(false) : openForm())}
-            aria-expanded={creating}
-          >
-            <FIcon name="add" size={15} />
-            Activity
-          </button>
+          {/* Authoring is the instructor's. A teaching fellow sees the same
+              lists but no way to change what is on them. */}
+          {data.can.author ? (
+            <>
+              <button
+                type="button"
+                className="fv-btn outline sm"
+                disabled={busy}
+                onClick={() =>
+                  void run(async () => {
+                    await addWeek(data.course.id);
+                  })
+                }
+              >
+                <FIcon name="add" size={15} />
+                New week
+              </button>
+              <button
+                type="button"
+                className="fv-btn primary sm"
+                disabled={busy}
+                onClick={() => (creating ? setCreating(false) : openForm())}
+                aria-expanded={creating}
+              >
+                <FIcon name="add" size={15} />
+                Activity
+              </button>
+            </>
+          ) : null}
         </div>
       </div>
 

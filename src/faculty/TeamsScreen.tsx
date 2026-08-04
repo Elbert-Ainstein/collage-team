@@ -275,6 +275,11 @@ export function TeamsScreen(props: {
 
   const withoutEmail = roster.filter((s) => !s.email).length;
 
+  // A teaching fellow sees who is in the class, and nothing they can change:
+  // every roster write is owner-only in RLS, so the controls would only ever
+  // produce an error.
+  const canEdit = data.can.manageRoster;
+
   return (
     <div className="fv-panel">
       <div className="fv-head">
@@ -284,22 +289,24 @@ export function TeamsScreen(props: {
           assigned by faculty; self-selection is not offered.
         </span>
         <span style={{ flex: 1 }} />
-        <div className="fv-headbtns">
-          <button
-            type="button"
-            className="fv-btn outline sm"
-            onClick={() => setBuilder(true)}
-            disabled={roster.length === 0}
-            title={
-              roster.length === 0
-                ? "Add students first — teams are formed from the roster."
-                : undefined
-            }
-          >
-            <FIcon name="groups" size={15} />
-            Form teams
-          </button>
-        </div>
+        {canEdit ? (
+          <div className="fv-headbtns">
+            <button
+              type="button"
+              className="fv-btn outline sm"
+              onClick={() => setBuilder(true)}
+              disabled={roster.length === 0}
+              title={
+                roster.length === 0
+                  ? "Add students first — teams are formed from the roster."
+                  : undefined
+              }
+            >
+              <FIcon name="groups" size={15} />
+              Form teams
+            </button>
+          </div>
+        ) : null}
       </div>
 
       <FacultyError error={error} onClear={() => setError(null)} />
@@ -336,6 +343,21 @@ export function TeamsScreen(props: {
                     {s.name}
                   </span>
 
+                  {!canEdit ? (
+                    <span
+                      style={{
+                        width: 208,
+                        flex: "none",
+                        fontSize: "var(--fv-2xs)",
+                        color: s.email ? "var(--fv-muted)" : "var(--fv-amber)",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {s.email ?? "no address — cannot sign in"}
+                    </span>
+                  ) : (
                   <input
                     className="fv-in"
                     style={{
@@ -362,7 +384,8 @@ export function TeamsScreen(props: {
                       }
                     }}
                   />
-                  {changed ? (
+                  )}
+                  {canEdit && changed ? (
                     <button
                       type="button"
                       className="fv-btn sm"
@@ -401,7 +424,7 @@ export function TeamsScreen(props: {
                     {teamOf.get(s.id) ?? "no team"}
                   </span>
 
-                  {armedRemove === s.id ? (
+                  {!canEdit ? null : armedRemove === s.id ? (
                     <button
                       type="button"
                       className="fv-btn sm"
@@ -446,6 +469,8 @@ export function TeamsScreen(props: {
             </div>
           ) : null}
 
+          {canEdit ? (
+            <>
           <input
             ref={file}
             type="file"
@@ -584,6 +609,8 @@ export function TeamsScreen(props: {
             <div className="fv-sub" style={{ marginTop: 10, lineHeight: 1.5 }}>
               {note}
             </div>
+          ) : null}
+            </>
           ) : null}
         </div>
       </div>

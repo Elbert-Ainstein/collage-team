@@ -34,12 +34,14 @@ function rewrite(el: HTMLSpanElement | null, value: string): void {
 function LadderRow({
   item,
   editing,
+  canEdit = true,
   onToggleEdit,
   onCommit,
   onDelete,
 }: {
   item: RubricItem;
   editing: boolean;
+  canEdit?: boolean;
   onToggleEdit: () => void;
   onCommit: (patch: Patch) => void;
   onDelete: () => void;
@@ -152,6 +154,7 @@ function LadderRow({
         {item.description}
       </span>
 
+      {canEdit ? (
       <button
         type="button"
         className="fv-iconbtn"
@@ -171,9 +174,10 @@ function LadderRow({
       >
         <FIcon name="edit" size={15} />
       </button>
+      ) : null}
 
       {/* Only faculty-added rows can go; the base ladder is fixed. */}
-      {item.is_custom ? (
+      {canEdit && item.is_custom ? (
         <button
           type="button"
           className="fv-iconbtn"
@@ -198,10 +202,13 @@ function LadderRow({
 
 export function CriteriaEditor({
   activity,
+  canEdit = true,
   onDone,
   onError,
 }: {
   activity: Activity;
+  /** Criteria are the instructor's to write; a TF reads them while marking. */
+  canEdit?: boolean;
   onDone: () => void;
   onError: (e: unknown) => void;
 }): JSX.Element {
@@ -210,7 +217,7 @@ export function CriteriaEditor({
 
   useEffect(() => {
     let live = true;
-    ensureRubric(activity)
+    ensureRubric(activity, canEdit)
       .then((rows) => {
         if (live) setItems(rows);
       })
@@ -286,6 +293,13 @@ export function CriteriaEditor({
             <div className="fv-sub" style={{ marginTop: 20 }}>
               Loading criteria…
             </div>
+          ) : items.length === 0 ? (
+            // Only the owner may write rubric_items, so a TF who gets here first
+            // sees nothing to seed. Saying so beats an empty card.
+            <div className="fv-sub" style={{ marginTop: 20, lineHeight: 1.6, maxWidth: "56ch" }}>
+              The instructor has not set criteria for this activity yet. They appear the first
+              time the instructor opens this screen.
+            </div>
           ) : (
             <div className="fv-card fv-ladder" style={{ maxWidth: 620, marginTop: 20 }}>
               <div className="fv-ladderhead" style={{ alignItems: "center" }}>
@@ -304,7 +318,8 @@ export function CriteriaEditor({
                   <LadderRow
                     key={item.id}
                     item={item}
-                    editing={editId === item.id}
+                    editing={canEdit && editId === item.id}
+                    canEdit={canEdit}
                     onToggleEdit={() => setEditId((cur) => (cur === item.id ? null : item.id))}
                     onCommit={(patch) => commit(item.id, patch)}
                     onDelete={() => remove(item.id)}
@@ -312,28 +327,39 @@ export function CriteriaEditor({
                 ))}
               </div>
 
-              <div style={{ padding: "12px 14px", borderTop: "1px solid var(--fv-neutral-200)" }}>
-                <button type="button" className="fv-btn outline sm" onClick={add}>
-                  <FIcon name="add" size={15} />
-                  Add criterion
-                </button>
-              </div>
+              {canEdit ? (
+                <div style={{ padding: "12px 14px", borderTop: "1px solid var(--fv-neutral-200)" }}>
+                  <button type="button" className="fv-btn outline sm" onClick={add}>
+                    <FIcon name="add" size={15} />
+                    Add criterion
+                  </button>
+                </div>
+              ) : null}
             </div>
           )}
 
           {/* Each row is written the moment it is committed, so "Save criteria" is
               a way out, not a commit point. Both buttons do the same thing. */}
           <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
-            <button type="button" className="fv-btn primary" onClick={onDone}>
-              Save criteria
-            </button>
-            <button type="button" className="fv-btn ghost" onClick={onDone}>
-              Cancel
-            </button>
+            {canEdit ? (
+              <>
+                <button type="button" className="fv-btn primary" onClick={onDone}>
+                  Save criteria
+                </button>
+                <button type="button" className="fv-btn ghost" onClick={onDone}>
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button type="button" className="fv-btn primary" onClick={onDone}>
+                Back to the activity
+              </button>
+            )}
           </div>
           <div style={{ fontSize: "var(--fv-2xs)", color: "var(--fv-muted)", marginTop: 10 }}>
-            Applies to every submission for this activity. TFs with grading permission use these
-            criteria.
+            {canEdit
+              ? "Applies to every submission for this activity. TFs with grading permission use these criteria."
+              : "These are the instructor's criteria for this activity. You mark against them; only the instructor can change them."}
           </div>
         </div>
       </div>

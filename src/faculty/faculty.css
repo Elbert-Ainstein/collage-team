@@ -354,6 +354,7 @@
   min-width: 0;
   display: flex;
   padding: 12px 12px 12px 0;
+  position: relative;
 }
 .fv-panel {
   flex: 1;

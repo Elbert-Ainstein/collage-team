@@ -28,7 +28,7 @@ import type {
   Student,
   TeamWithMembers,
 } from "@/checkins/types";
-import { listTFs, listWeeks } from "./facultyData";
+import { listTFs, listWeeks, myTFCourses } from "./facultyData";
 import { statFor, type ActivityStat } from "./model";
 import { FIcon } from "./icons";
 import { ActivitiesScreen } from "./ActivitiesScreen";
@@ -40,6 +40,39 @@ import { TFsScreen } from "./TFsScreen";
 import "./faculty.css";
 
 export type Screen = "activities" | "teams" | "tfs" | "detail" | "criteria" | "grade";
+
+/**
+ * What this account may do on this course.
+ *
+ * Derived from ownership and the course-wide TF permissions, never from
+ * profiles.role — role is picked by the person signing up, so it decides which
+ * app you see but can never decide what you may change.
+ *
+ * The UI hides what it grants false. That is a courtesy, not the boundary: RLS
+ * and the grading guard in 0006/0007 are what actually stop the write. Showing
+ * a control that always fails is the thing worth avoiding.
+ */
+export interface Capabilities {
+  isOwner: boolean;
+  /** Create and edit activities, weeks and criteria. */
+  author: boolean;
+  /** Put marks on submissions. */
+  grade: boolean;
+  /** Add, remove and email students; form teams. */
+  manageRoster: boolean;
+  /** See and change the TF roster and its permissions. */
+  manageTFs: boolean;
+}
+
+export function capabilitiesFor(course: Course, isOwner: boolean): Capabilities {
+  return {
+    isOwner,
+    author: isOwner,
+    grade: isOwner || course.tf_can_grade,
+    manageRoster: isOwner,
+    manageTFs: isOwner,
+  };
+}
 
 /** Everything the screens read. Loaded once here, refreshed on any write. */
 export interface FacultyData {
@@ -53,6 +86,7 @@ export interface FacultyData {
   tfs: CourseTF[];
   /** Keyed by activity id — the one derived object both views read. */
   stats: Map<string, ActivityStat>;
+  can: Capabilities;
 }
 
 const FULL_SCREEN: Screen[] = ["detail", "criteria", "grade"];
@@ -60,9 +94,18 @@ const FULL_SCREEN: Screen[] = ["detail", "criteria", "grade"];
 export function FacultyApp({
   account,
   onSignOut,
+  /**
+   * "owner" provisions the AP 50 sessions and runs them. "tf" attaches to
+   * courses somebody else owns — crucially it must NOT call ensureSessions,
+   * which would read the instructor's courses through the TF read policy,
+   * conclude nothing is missing, and hand a teaching fellow the full authoring
+   * UI on a course they cannot write to.
+   */
+  mode = "owner",
 }: {
   account?: string;
   onSignOut?: () => Promise<void>;
+  mode?: "owner" | "tf";
 }) {
   const [screen, setScreen] = useState<Screen>("activities");
   const [view, setView] = useState<"rows" | "columns">("rows");
@@ -78,10 +121,10 @@ export function FacultyApp({
   const fail = (e: unknown) => setError(String((e as Error)?.message ?? e));
 
   const loadCourses = useCallback(async () => {
-    const cs = await ensureSessions();
+    const cs = mode === "tf" ? await myTFCourses() : await ensureSessions();
     setCourses(cs);
     setCourseId((prev) => (prev && cs.some((c) => c.id === prev) ? prev : (cs[0]?.id ?? null)));
-  }, []);
+  }, [mode]);
 
   const refresh = useCallback(async () => {
     if (!courseId) return;
@@ -90,12 +133,15 @@ export function FacultyApp({
     if (busy.current) return;
     busy.current = true;
     try {
+      const isOwner = mode === "owner";
       const [roster, activities, weeks, sets, tfs] = await Promise.all([
         listStudents(courseId),
         listActivities(courseId),
         listWeeks(courseId),
         listTeamSets(courseId),
-        listTFs(courseId),
+        // A TF may only read their own row, so asking for the list would come
+        // back as just them and read like the roster had been emptied.
+        isOwner ? listTFs(courseId) : Promise.resolve([] as CourseTF[]),
       ]);
       const checkIns = activities.length ? await listCheckIns(activities.map((a) => a.id)) : [];
       const results = checkIns.length ? await listResults(checkIns.map((c) => c.id)) : [];
@@ -112,11 +158,22 @@ export function FacultyApp({
         stats.set(a.id, statFor(a, checkIns, results, roster, teams));
       }
 
-      setData({ course, weeks, roster, activities, checkIns, results, teams, tfs, stats });
+      setData({
+        course,
+        weeks,
+        roster,
+        activities,
+        checkIns,
+        results,
+        teams,
+        tfs,
+        stats,
+        can: capabilitiesFor(course, isOwner),
+      });
     } finally {
       busy.current = false;
     }
-  }, [courseId, courses]);
+  }, [courseId, courses, mode]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -176,7 +233,8 @@ export function FacultyApp({
     if (!ready || !data) {
       return (
         <div className="fv-panel">
-          <div className="fv-sub">{error ?? "Loading…"}</div>
+          {banner}
+          <div className="fv-sub">{error ? "" : "Loading…"}</div>
         </div>
       );
     }
@@ -184,7 +242,9 @@ export function FacultyApp({
       case "teams":
         return <TeamsScreen data={data} onChanged={() => void refresh().catch(fail)} onError={fail} />;
       case "tfs":
-        return <TFsScreen data={data} onChanged={() => void refresh().catch(fail)} onError={fail} />;
+        return data.can.manageTFs ? (
+          <TFsScreen data={data} onChanged={() => void refresh().catch(fail)} onError={fail} />
+        ) : null;
       case "detail":
         return selected ? (
           <ActivityDetail
@@ -199,7 +259,12 @@ export function FacultyApp({
         ) : null;
       case "criteria":
         return selected ? (
-          <CriteriaEditor activity={selected} onDone={() => setScreen("detail")} onError={fail} />
+          <CriteriaEditor
+            activity={selected}
+            canEdit={data.can.author}
+            onDone={() => setScreen("detail")}
+            onError={fail}
+          />
         ) : null;
       case "grade":
         return selected ? (
@@ -226,6 +291,12 @@ export function FacultyApp({
   };
 
   const full = FULL_SCREEN.includes(screen);
+
+  // Every screen reports failures through `fail`. Until now that state was only
+  // rendered while the app was still loading, so a rejected write on Activities,
+  // detail, criteria or grading produced nothing at all on screen — which is
+  // what made the rubric and check-in failures look like hangs.
+  const banner = <FacultyError error={error} onClear={() => setError(null)} />;
 
   return (
     <div className="fv">
@@ -264,8 +335,10 @@ export function FacultyApp({
                 { id: "activities" as const, label: "Activities", icon: "assignment" },
                 { id: "teams" as const, label: "Teams", icon: "groups" },
                 { id: "tfs" as const, label: "TFs", icon: "school" },
-              ]
-            ).map((t) => (
+              ] as const
+            )
+              .filter((t) => t.id !== "tfs" || (data?.can.manageTFs ?? true))
+              .map((t) => (
               <button
                 key={t.id}
                 type="button"
@@ -280,6 +353,26 @@ export function FacultyApp({
               </button>
             ))}
           </nav>
+
+          {data && !data.can.isOwner ? (
+            <div
+              style={{
+                margin: "14px 0 0",
+                padding: "9px 10px",
+                border: "1px solid var(--fv-neutral-200)",
+                borderRadius: "var(--fv-r-md)",
+                background: "var(--fv-cream-100)",
+                fontSize: "var(--fv-2xs)",
+                color: "var(--fv-muted)",
+                lineHeight: 1.5,
+              }}
+            >
+              You are a teaching fellow on this course.{" "}
+              {data.can.grade
+                ? "You can grade submissions; the instructor edits activities and the roster."
+                : "Grading is turned off for TFs on this course, so this view is read-only."}
+            </div>
+          ) : null}
 
           <div style={{ flex: 1 }} />
 
@@ -301,7 +394,14 @@ export function FacultyApp({
         </aside>
       )}
 
-      <div className="fv-main">{body()}</div>
+      <div className="fv-main">
+        {error ? (
+          <div style={{ position: "absolute", inset: "18px 24px auto 24px", zIndex: 20 }}>
+            {banner}
+          </div>
+        ) : null}
+        {body()}
+      </div>
     </div>
   );
 }

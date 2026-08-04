@@ -98,8 +98,11 @@ function dueLine(a: Assignment): string {
   const scope = SCOPE_OF[act.type];
   const closed = act.stage >= 4;
   const verb = closed ? "Closed" : "Due";
-  const indiv = fmtWhen(act.individual_due_at);
-  const team = fmtWhen(act.team_due_at);
+  // due_at is what the faculty app writes (migration 0007). The older per-scope
+  // columns are still honoured so activities authored before it keep their
+  // dates, but they are the fallback now, not the source.
+  const indiv = fmtWhen(act.due_at ?? act.individual_due_at);
+  const team = fmtWhen(act.due_at ?? act.team_due_at);
 
   if (scope === "team") {
     return team ? `${verb} ${team}` : act.dates_label ?? "No due date set";
