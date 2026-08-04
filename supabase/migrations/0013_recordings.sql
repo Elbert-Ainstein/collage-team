@@ -125,6 +125,20 @@ $$;
  * my_check_in() is asked as well, exactly as the student write policies in 0006
  * do, so a guessed result id cannot pull an object into a stranger's course.
  */
+
+create or replace function can_write_result(rid uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from check_in_results r
+     where r.id = rid
+       and my_check_in(r.check_in_id)
+       and (
+         (r.subject_type = 'student'
+           and r.student_id in (select s.id from students s where s.user_id = auth.uid()))
+         or (r.subject_type = 'team' and r.team_id in (select my_team_ids()))
+       ));
+$$;
+
 /**
  * May the caller REMOVE a recording on this result?
  *
@@ -139,19 +153,6 @@ language sql stable security definer set search_path = public as $$
       or exists (
         select 1 from check_in_results r
          where r.id = rid and owns_check_in(r.check_in_id));
-$$;
-
-create or replace function can_write_result(rid uuid) returns boolean
-language sql stable security definer set search_path = public as $$
-  select exists (
-    select 1 from check_in_results r
-     where r.id = rid
-       and my_check_in(r.check_in_id)
-       and (
-         (r.subject_type = 'student'
-           and r.student_id in (select s.id from students s where s.user_id = auth.uid()))
-         or (r.subject_type = 'team' and r.team_id in (select my_team_ids()))
-       ));
 $$;
 
 /**
