@@ -6,9 +6,17 @@
 // week summary, the row caption and the column header all print numbers that
 // came out of statFor, which is the only place they are worked out.
 
-import { Fragment, useMemo, useState, type CSSProperties } from "react";
+import { Fragment, type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import { createActivity, updateActivity } from "@/checkins/data";
-import { addWeek, ensureCheckIn, setQuestionShape, shapeFor } from "./facultyData";
+import {
+  addWeek,
+  backfillWeeks,
+  ensureCheckIn,
+  setLiveWeek,
+  setQuestionShape,
+  setWeekDates,
+  shapeFor,
+} from "./facultyData";
 import {
   SCOPE_LABEL,
   SCOPE_OF,
@@ -31,6 +39,7 @@ import {
   toGradeLabel,
   type Cell,
   type CellState,
+  type WeekGroup,
 } from "./model";
 import { FAvatar, FIcon } from "./icons";
 import type { FacultyData } from "./FacultyApp";
@@ -123,22 +132,31 @@ export function ActivitiesScreen(props: {
   const [type, setType] = useState<ActivityType>("combo");
   const [week, setWeek] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  // The week the last "New week" press created, so the press has something to
+  // point at. Cleared once that week holds anything, or on dismiss.
+  const [newWeek, setNewWeek] = useState<number | null>(null);
 
-  const weekNumbers = useMemo(
-    () => data.weeks.map((w) => w.week).sort((a, b) => b - a),
-    [data.weeks],
-  );
+  // The banner belongs to the course it was raised on. This screen is not
+  // remounted when the sidebar switches courses, so without this it would
+  // re-resolve against the new course's weeks and announce one this session
+  // never created.
+  useEffect(() => {
+    setNewWeek(null);
+  }, [data.course.id]);
 
-  const dates = useMemo(
-    () => new Map(data.weeks.map((w) => [w.week, w.dates_label] as const)),
-    [data.weeks],
-  );
 
   // One grouping feeds both views, so a week cannot be ordered one way in the
   // list and another way across the gradebook's header.
   const groups = useMemo(
-    () => groupByWeek(data.activities, data.stats, dates),
-    [data.activities, data.stats, dates],
+    () => groupByWeek(data.activities, data.weeks, data.stats),
+    [data.activities, data.weeks, data.stats],
+  );
+
+  // Every week an activity can be filed under, newest first — groups already
+  // carry the union of course_weeks and the weeks activities name.
+  const weekNumbers = useMemo(
+    () => groups.flatMap((g) => (g.week == null ? [] : [g.week])),
+    [groups],
   );
 
   const percents = useMemo(
@@ -149,10 +167,12 @@ export function ActivitiesScreen(props: {
   const columns = useMemo(() => groups.flatMap((g) => g.activities), [groups]);
 
   // The tally follows the week that is running; with none set, the newest week
-  // that has any activities is the one people are working on.
+  // that has any activities is the one people are working on. An empty week is
+  // skipped in that fallback — nobody is working on a week with nothing in it.
   const tallyWeek = useMemo(() => {
     const live = data.course.live_week;
-    const target = live ?? groups.find((g) => g.week != null)?.week ?? null;
+    const target =
+      live ?? groups.find((g) => g.week != null && g.activities.length > 0)?.week ?? null;
     return target == null ? [] : data.activities.filter((a) => a.week === target && SCOPE_OF[a.type] !== "team");
   }, [data.course.live_week, data.activities, groups]);
 
@@ -174,10 +194,31 @@ export function ActivitiesScreen(props: {
     }
   };
 
-  const openForm = () => {
-    setWeek(weekNumbers[0] ?? null);
+  // `at` is the week the instructor asked to fill; without one, the newest.
+  const openForm = (at?: number) => {
+    setWeek(at ?? weekNumbers[0] ?? null);
     setCreating(true);
   };
+
+  const saveDates = (id: string, label: string | null) =>
+    void run(async () => {
+      await setWeekDates(id, label);
+    });
+
+  // live_week is one column on the course, so marking a week live is inherently
+  // exclusive — the previous one stops being live in the same write.
+  const makeLive = (target: number | null) =>
+    void run(async () => {
+      await setLiveWeek(data.course.id, target);
+    });
+
+  // The notice stands down on its own once the week it announced holds
+  // something, so adding the first activity is what closes it.
+  const announced = useMemo(() => {
+    if (newWeek == null) return null;
+    const g = groups.find((x) => x.week === newWeek);
+    return g && g.activities.length === 0 ? newWeek : null;
+  }, [newWeek, groups]);
 
   const submitNew = () =>
     void run(async () => {
@@ -227,7 +268,16 @@ export function ActivitiesScreen(props: {
                 disabled={busy}
                 onClick={() =>
                   void run(async () => {
-                    await addWeek(data.course.id);
+                    // Weeks that exist only because an activity names them have
+                    // no course_weeks row, so they cannot be dated or set live
+                    // and their controls simply are not there. Repair them on
+                    // the way past: this is the moment weeks are being thought
+                    // about, and it is what makes the numbering below correct.
+                    await backfillWeeks(data.course.id);
+                    const created = await addWeek(data.course.id);
+                    // Without this the press had no visible result at all and
+                    // repeat presses piled up weeks nobody could see.
+                    setNewWeek(created.week);
                   })
                 }
               >
@@ -248,6 +298,49 @@ export function ActivitiesScreen(props: {
           ) : null}
         </div>
       </div>
+
+      {/* Outside the scroller on purpose: the week it announces may be far down
+          the list, and a press has to answer wherever the instructor is. */}
+      {announced != null ? (
+        <div
+          role="status"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            flexWrap: "wrap",
+            flex: "none",
+            gap: 10,
+            padding: "8px 12px",
+            marginBottom: 12,
+            border: "1px solid var(--fv-neutral-200)",
+            background: "var(--fv-cream-100)",
+            borderRadius: "var(--fv-r-md)",
+            fontSize: "var(--fv-xs)",
+            color: "var(--fv-muted)",
+          }}
+        >
+          <span style={{ flex: 1 }}>Week {announced} added. Nothing in it yet.</span>
+          {data.can.author ? (
+            <button
+              type="button"
+              className="fv-btn sm"
+              style={{ height: 24, padding: "0 10px", flex: "none" }}
+              onClick={() => openForm(announced)}
+            >
+              Add the first activity
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="fv-iconbtn"
+            style={{ width: 22, height: 22, flex: "none" }}
+            aria-label="Dismiss"
+            onClick={() => setNewWeek(null)}
+          >
+            <FIcon name="close" size={14} />
+          </button>
+        </div>
+      ) : null}
 
       <div className="fv-scroll">
         {creating ? (
@@ -320,10 +413,25 @@ export function ActivitiesScreen(props: {
           </form>
         ) : null}
 
-        {data.activities.length === 0 ? (
-          <div className="fv-sub">No activities yet. Add a week, then an activity.</div>
+        {/* Weeks, not activities: a course with weeks and nothing in them has
+            something to show, and used to show this line instead. */}
+        {groups.length === 0 ? (
+          <div className="fv-sub">
+            {data.can.author
+              ? "No weeks yet. Add a week, then an activity."
+              : "Nothing here yet."}
+          </div>
         ) : view === "rows" ? (
-          <RowView groups={groups} data={data} onOpen={onOpen} />
+          <RowView
+            groups={groups}
+            data={data}
+            busy={busy}
+            highlight={announced}
+            onOpen={onOpen}
+            onAddTo={openForm}
+            onDates={saveDates}
+            onLive={makeLive}
+          />
         ) : (
           <ColumnView
             data={data}
@@ -363,26 +471,229 @@ export function ActivitiesScreen(props: {
 
 // ------------------------------------------------------------------ row view
 
+/**
+ * The dates label and the live-week switch, both editing in place.
+ *
+ * The inline idiom is the roster's: type, Enter to save, Escape to abandon —
+ * this app has no modal for a one-field change, and window.confirm is
+ * suppressed here anyway.
+ */
+function WeekHead({
+  group,
+  canEdit,
+  canGoLive,
+  isLive,
+  busy,
+  onDates,
+  onLive,
+}: {
+  group: WeekGroup;
+  canEdit: boolean;
+  /** Marking a week live follows the check-in permission, not authoring. */
+  canGoLive: boolean;
+  isLive: boolean;
+  busy: boolean;
+  onDates: (id: string, label: string | null) => void;
+  onLive: (week: number | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  // Only a course_weeks row can hold dates. A week that exists solely because
+  // an activity names it has nothing to write to, so it reads rather than edits.
+  const editable = canEdit && group.id != null;
+
+  const open = () => {
+    setDraft(group.dates ?? "");
+    setEditing(true);
+  };
+
+  const commit = () => {
+    if (!group.id) return;
+    const next = draft.trim() || null;
+    setEditing(false);
+    if (next !== (group.dates ?? null)) onDates(group.id, next);
+  };
+
+  return (
+    <div className="fv-weekhead">
+      {isLive ? (
+        <span
+          className="fv-dot"
+          style={{ background: "var(--fv-emerald)" }}
+          aria-hidden="true"
+        />
+      ) : null}
+      <span className="fv-weekname">{group.label}</span>
+
+      {editing ? (
+        <>
+          <input
+            className="fv-in"
+            style={{
+              width: 128,
+              flex: "none",
+              height: 24,
+              padding: "0 8px",
+              fontSize: "var(--fv-2xs)",
+            }}
+            value={draft}
+            autoFocus
+            placeholder="Feb 17-21"
+            aria-label={`Dates for ${group.label}`}
+            disabled={busy}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commit();
+              }
+              if (e.key === "Escape") setEditing(false);
+            }}
+          />
+          <button
+            type="button"
+            className="fv-btn sm"
+            style={{ height: 22, padding: "0 8px", flex: "none" }}
+            disabled={busy}
+            onClick={commit}
+          >
+            Save
+          </button>
+        </>
+      ) : editable ? (
+        <button
+          type="button"
+          className="fv-btn ghost sm"
+          style={{
+            height: 22,
+            padding: "0 6px",
+            flex: "none",
+            fontSize: "var(--fv-2xs)",
+            fontWeight: 400,
+            color: group.dates ? "var(--fv-muted)" : "var(--fv-neutral-400)",
+          }}
+          title={`Set the dates for ${group.label}`}
+          onClick={open}
+        >
+          {group.dates ?? "Add dates"}
+        </button>
+      ) : group.dates ? (
+        <span className="fv-sub">{group.dates}</span>
+      ) : null}
+
+      <span className="fv-rule" />
+
+      {group.week == null ? null : canGoLive ? (
+        <button
+          type="button"
+          className="fv-btn ghost sm"
+          style={{
+            height: 22,
+            padding: "0 8px",
+            flex: "none",
+            fontSize: "var(--fv-2xs)",
+            fontWeight: isLive ? 600 : 400,
+            color: isLive ? "var(--fv-emerald)" : "var(--fv-neutral-400)",
+            background: isLive ? "rgba(5, 150, 105, 0.1)" : undefined,
+          }}
+          aria-pressed={isLive}
+          disabled={busy}
+          title={
+            isLive
+              ? "This is the week in progress — team cells pulse while a discussion runs, and earlier weeks read as late. Click to clear it."
+              : `Mark ${group.label} as the week in progress`
+          }
+          onClick={() => onLive(isLive ? null : group.week)}
+        >
+          {isLive ? "Live" : "Make live"}
+        </button>
+      ) : isLive ? (
+        <span className="fv-badge" style={{ flex: "none", color: "var(--fv-emerald)" }}>
+          Live
+        </span>
+      ) : null}
+
+      <span className="fv-weeksum">{toGradeLabel(group.waiting)}</span>
+    </div>
+  );
+}
+
 function RowView({
   groups,
   data,
+  busy,
+  highlight,
   onOpen,
+  onAddTo,
+  onDates,
+  onLive,
 }: {
-  groups: ReturnType<typeof groupByWeek>;
+  groups: WeekGroup[];
   data: FacultyData;
+  busy: boolean;
+  /** The week a "New week" press just created, so it can be scrolled to. */
+  highlight: number | null;
   onOpen: (id: string) => void;
+  onAddTo: (week: number) => void;
+  onDates: (id: string, label: string | null) => void;
+  onLive: (week: number | null) => void;
 }) {
+  const flash = useCallback(
+    (el: HTMLElement | null) => {
+      if (el && highlight != null) el.scrollIntoView({ block: "center", behavior: "smooth" });
+    },
+    [highlight],
+  );
+
   return (
     <>
       <div className="fv-weeks">
-        {groups.map((g) => (
-          <section key={g.label}>
-            <div className="fv-weekhead">
-              <span className="fv-weekname">{g.label}</span>
-              {g.dates ? <span className="fv-sub">{g.dates}</span> : null}
-              <span className="fv-rule" />
-              <span className="fv-weeksum">{toGradeLabel(g.waiting)}</span>
-            </div>
+        {groups.map((g) => {
+          // Held as a local so the null check survives into the click handler.
+          const weekNo = g.week;
+          return (
+          <section key={g.label} ref={weekNo === highlight ? flash : undefined}>
+            <WeekHead
+              group={g}
+              canEdit={data.can.author}
+              canGoLive={data.can.runCheckIns}
+              isLive={g.week != null && g.week === data.course.live_week}
+              busy={busy}
+              onDates={onDates}
+              onLive={onLive}
+            />
+            {/* A heading with nothing under it reads as another kind of broken,
+                so an empty week says it is empty and offers the way out of it. */}
+            {g.activities.length === 0 ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "12px 16px",
+                  border: "1px dashed",
+                  borderColor:
+                    weekNo === highlight ? "var(--fv-navy-700)" : "var(--fv-neutral-200)",
+                  borderRadius: "var(--fv-r-lg)",
+                  fontSize: "var(--fv-xs)",
+                  color: "var(--fv-muted)",
+                }}
+              >
+                <span style={{ flex: 1 }}>Nothing in this week yet.</span>
+                {data.can.author && weekNo != null ? (
+                  <button
+                    type="button"
+                    className="fv-btn outline sm"
+                    style={{ height: 24, padding: "0 10px", flex: "none" }}
+                    onClick={() => onAddTo(weekNo)}
+                  >
+                    <FIcon name="add" size={14} />
+                    Add the first activity
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             <div className="fv-rows">
               {g.activities.map((a) => {
                 const stat = data.stats.get(a.id);
@@ -419,7 +730,8 @@ function RowView({
               })}
             </div>
           </section>
-        ))}
+          );
+        })}
       </div>
       <div className="fv-more" aria-hidden="true">
         …
@@ -440,7 +752,7 @@ function ColumnView({
   onOpen,
 }: {
   data: FacultyData;
-  groups: ReturnType<typeof groupByWeek>;
+  groups: WeekGroup[];
   columns: Activity[];
   percents: Map<string, number | null>;
   tallyWeek: Activity[];
@@ -448,6 +760,15 @@ function ColumnView({
   onOpen: (id: string) => void;
 }) {
   const live = data.course.live_week;
+
+  // An empty week has no columns to span, and colSpan={0} means "to the end of
+  // the row" — one empty week would swallow the rest of the header.
+  const spanning = groups.filter((g) => g.activities.length > 0);
+  // A week with nothing in it contributes no columns, so it cannot be a colspan
+  // group — colSpan={0} would swallow the rest of the header row. Name them
+  // under the table instead, or an empty week is invisible here exactly as it
+  // was before.
+  const emptyWeeks = groups.filter((g) => g.week != null && g.activities.length === 0);
 
   const cells = (subject: { kind: "student" | "team"; id: string }, who: string) =>
     columns.map((a) => {
@@ -468,6 +789,16 @@ function ColumnView({
         </td>
       );
     });
+
+  // Reachable now that a course can hold weeks and no activities; a gradebook
+  // with no columns is a grid of nothing.
+  if (!columns.length) {
+    return (
+      <div className="fv-sub">
+        No activities yet — the gradebook fills in as you add them to a week.
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -490,8 +821,19 @@ function ColumnView({
               <th className="fv-sticky-l fv-eyebrow" style={STICKY_L} scope="col">
                 Team / student
               </th>
-              {groups.map((g) => (
+              {spanning.map((g) => (
                 <th key={g.label} colSpan={g.activities.length} scope="colgroup">
+                  {g.week != null && g.week === live ? (
+                    <span
+                      className="fv-dot"
+                      style={{
+                        background: "var(--fv-emerald)",
+                        display: "inline-block",
+                        marginRight: 6,
+                      }}
+                      aria-hidden="true"
+                    />
+                  ) : null}
                   <span className="fv-weekname" style={{ fontSize: "var(--fv-sm)" }}>
                     {g.label}
                   </span>
@@ -638,6 +980,15 @@ function ColumnView({
           </tbody>
         </table>
       </div>
+
+      {emptyWeeks.length ? (
+        <div className="fv-sub" style={{ marginTop: 10, lineHeight: 1.5 }}>
+          {emptyWeeks.map((g) => g.label).join(", ")}{" "}
+          {emptyWeeks.length === 1 ? "has" : "have"} no activities yet, so{" "}
+          {emptyWeeks.length === 1 ? "it does" : "they do"} not appear above. Add one from the
+          Rows view.
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -11,6 +11,7 @@ import {
   type Activity,
   type CheckIn,
   type CheckInResult,
+  type CourseWeek,
   type Scope,
   type Student,
   type Team,
@@ -105,18 +106,35 @@ export function toGradeLabel(n: number): string {
 /** Every activity in a week, plus the week's own outstanding count. */
 export interface WeekGroup {
   week: number | null;
+  /**
+   * The course_weeks row behind this group, when there is one.
+   *
+   * Null for the unscheduled group, and for a week that exists only because an
+   * activity points at it — those have no row to hang dates on, so the caller
+   * has nothing to offer an editor for.
+   */
+  id: string | null;
   label: string;
   dates: string | null;
   activities: Activity[];
   waiting: number;
 }
 
+/**
+ * One group per KNOWN week — the union of course_weeks and the weeks activities
+ * name — not one group per week that already holds something.
+ *
+ * Grouping over activities alone is what made "New week" look like a dead
+ * button: the insert succeeded and then had nowhere to appear, so a week only
+ * became visible once it stopped being empty.
+ */
 export function groupByWeek(
   activities: Activity[],
+  weeks: CourseWeek[],
   stats: Map<string, ActivityStat>,
-  dates: Map<number, string | null>,
 ): WeekGroup[] {
   const byWeek = new Map<number | null, Activity[]>();
+  for (const w of weeks) if (!byWeek.has(w.week)) byWeek.set(w.week, []);
   for (const a of activities) {
     const key = a.week ?? null;
     const list = byWeek.get(key);
@@ -124,12 +142,21 @@ export function groupByWeek(
     else byWeek.set(key, [a]);
   }
 
+  // course_weeks is unique on (course_id, week), so first wins is the only row.
+  const rowFor = new Map<number, CourseWeek>();
+  for (const w of weeks) if (!rowFor.has(w.week)) rowFor.set(w.week, w);
+
   const groups: WeekGroup[] = [];
   for (const [week, list] of byWeek) {
+    const row = week == null ? undefined : rowFor.get(week);
     groups.push({
       week,
+      id: row?.id ?? null,
       label: week == null ? "Unscheduled" : `Week ${week}`,
-      dates: week == null ? null : (dates.get(week) ?? list.find((a) => a.dates_label)?.dates_label ?? null),
+      dates:
+        week == null
+          ? null
+          : (row?.dates_label ?? list.find((a) => a.dates_label)?.dates_label ?? null),
       activities: list.slice().sort((x, y) => x.position - y.position),
       waiting: list.reduce((n, a) => n + (stats.get(a.id)?.waiting ?? 0), 0),
     });

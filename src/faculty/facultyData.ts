@@ -40,8 +40,26 @@ export async function listWeeks(courseId: string): Promise<CourseWeek[]> {
 
 /** Add the next week after the highest one that exists. */
 export async function addWeek(courseId: string, datesLabel?: string): Promise<CourseWeek> {
-  const weeks = await listWeeks(courseId);
-  const next = weeks.reduce((n, w) => Math.max(n, w.week), 0) + 1;
+  // Number off BOTH tables. course_weeks was added by 0007 with no backfill, so
+  // on a course that predates it the table is empty while the activities
+  // already occupy weeks 1..N — numbering off course_weeks alone returned "1",
+  // inserted a week that was already on screen because an activity pointed at
+  // it, and looked like the button did nothing. Pressing again just walked
+  // invisibly up through the weeks that already existed.
+  const [weeks, used] = await Promise.all([
+    listWeeks(courseId),
+    db()
+      .from("activities")
+      .select("week")
+      .eq("course_id", courseId)
+      .not("week", "is", null)
+      .order("week", { ascending: false })
+      .limit(1),
+  ]);
+  if (used.error) throw dbError(used.error);
+
+  const highestUsed = ((used.data as { week: number | null }[] | null) ?? [])[0]?.week ?? 0;
+  const next = Math.max(weeks.reduce((n, w) => Math.max(n, w.week), 0), highestUsed) + 1;
   const rows = unwrap(
     await db()
       .from("course_weeks")
@@ -49,6 +67,34 @@ export async function addWeek(courseId: string, datesLabel?: string): Promise<Co
       .select(),
   ) as CourseWeek[];
   return rows[0];
+}
+
+/**
+ * Give every week an activity references a course_weeks row of its own.
+ *
+ * Without one a week renders (activities name it) but has no id, so it cannot
+ * be dated or marked live — the controls simply are not there, which reads as
+ * another dead button. Idempotent: 0007 declares unique (course_id, week), and
+ * a duplicate is another caller having won the race.
+ */
+export async function backfillWeeks(courseId: string): Promise<number> {
+  const [weeks, rows] = await Promise.all([
+    listWeeks(courseId),
+    db().from("activities").select("week").eq("course_id", courseId).not("week", "is", null),
+  ]);
+  if (rows.error) throw dbError(rows.error);
+
+  const known = new Set(weeks.map((w) => w.week));
+  const missing = Array.from(
+    new Set(((rows.data as { week: number | null }[] | null) ?? []).map((r) => r.week)),
+  ).filter((w): w is number => w != null && !known.has(w));
+  if (!missing.length) return 0;
+
+  const { error } = await db()
+    .from("course_weeks")
+    .insert(missing.map((week) => ({ course_id: courseId, week, dates_label: null })));
+  if (error && !/duplicate key|23505/i.test(error.message)) throw dbError(error);
+  return missing.length;
 }
 
 export async function setWeekDates(id: string, datesLabel: string | null): Promise<void> {

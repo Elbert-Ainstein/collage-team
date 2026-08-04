@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
 import {
   ensureSessions,
+  listCourses,
   listActivities,
   listCheckIns,
   listResults,
@@ -148,12 +149,21 @@ export function FacultyApp({
 
   const refresh = useCallback(async () => {
     if (!courseId) return;
-    const course = courses.find((c) => c.id === courseId);
-    if (!course) return;
+    const known = courses.find((c) => c.id === courseId);
+    if (!known) return;
     if (busy.current) return;
     busy.current = true;
     try {
       const isOwner = mode === "owner";
+
+      // Re-read the course row on every refresh. It used to come only from the
+      // `courses` array, which loadCourses fills once at mount — so every write
+      // to the courses table (the live week, both TF permission switches) landed
+      // in the database and then appeared to do nothing until a full reload.
+      // Deliberately NOT written back into `courses` state: that array is what
+      // refresh depends on, and updating it here would re-trigger this effect
+      // in a loop. The switcher only needs the code, which does not change.
+      const course = (await listCourses()).find((c) => c.id === courseId) ?? known;
       const [roster, activities, weeks, sets, tfs] = await Promise.all([
         listStudents(courseId),
         listActivities(courseId),
