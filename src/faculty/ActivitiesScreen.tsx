@@ -134,6 +134,24 @@ function membersIn(
   ).length;
 }
 
+/**
+ * The opens_at to store for a chosen "visible from".
+ *
+ * A time that is not in the future stores as NULL — the unambiguous "visible",
+ * and the same value "Make visible now" writes. Storing the browser's own clock
+ * instead meant a laptop a minute fast created an activity the faculty screen
+ * called visible while RLS, which compares the DATABASE clock, still hid it
+ * from all sixteen students. A minute of skew on a date genuinely in the future
+ * does not matter; a minute of skew on "now" is the whole bug.
+ */
+function scheduledOpen(localValue: string): string | null {
+  const iso = fromLocalInput(localValue);
+  if (!iso) return null;
+  const at = Date.parse(iso);
+  if (Number.isNaN(at) || at <= Date.now()) return null;
+  return iso;
+}
+
 export function ActivitiesScreen(props: {
   data: FacultyData;
   view: "rows" | "columns";
@@ -267,7 +285,7 @@ export function ActivitiesScreen(props: {
         courseId: data.course.id,
         week,
         title: name,
-        opensAt: fromLocalInput(opens),
+        opensAt: scheduledOpen(opens),
       });
       // `type` still needs a second write — it picks the accent, the scope and
       // therefore the question shape, and createActivity does not carry it. That

@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { AuthGate } from "@/checkins/AuthGate";
-import { ClassCheckins } from "@/checkins/ClassCheckins";
 import { FacultyApp } from "@/faculty/FacultyApp";
 import { StudentApp } from "@/student/StudentApp";
 import { claimStudentRows, getEnrolment, getRole } from "@/checkins/studentData";
@@ -16,7 +15,9 @@ type Kind = "faculty" | "tf" | "student";
 // Class Check-ins, behind a sign-in wall. The account's role decides which app
 // it is: faculty run the sessions, students see their own work.
 export default function Page() {
-  if (!isSupabaseConfigured) return <ClassCheckins />;
+  // Without a database there is nothing to sign in to; FacultyApp renders the
+  // "connect your database" card for exactly this case.
+  if (!isSupabaseConfigured) return <FacultyApp />;
   return (
     <AuthGate>
       {(session, signOut) => (
@@ -125,16 +126,18 @@ function RoleRouter({
 
   if (kind === "student") return <StudentApp account={account} onSignOut={onSignOut} />;
 
-  // The redesigned faculty app is the default. The previous one stays reachable
-  // at /ck?classic=1 until 0007 has been run everywhere — it is the only way
-  // back if the new screens hit a schema that has not caught up yet.
-  const classic =
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("classic") === "1";
-
-  return classic ? (
-    <ClassCheckins account={account} onSignOut={onSignOut} />
-  ) : (
+  // The previous faculty app used to be reachable at /ck?classic=1 as a way back
+  // if the new screens met a schema that had not caught up. Every migration is
+  // applied now, so that reason is gone — and it was never a safe fallback: it
+  // writes the same tables with a different model of them, it has no notion of
+  // a teaching fellow (a TF landed there got an authoring UI they could not
+  // write to and provisioned a stray course), and a live-session cell edit
+  // there overwrote work handed in since the page loaded. Retiring the route is
+  // the cheapest risk left to remove before a real class.
+  //
+  // The team BUILDER is not retired — TeamsScreen still embeds TeamsPillar
+  // behind "Form teams", because the redesign has no replacement for it.
+  return (
     <FacultyApp account={account} onSignOut={onSignOut} mode={kind === "tf" ? "tf" : "owner"} />
   );
 }
