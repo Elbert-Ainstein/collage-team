@@ -268,11 +268,16 @@ export function ActivityDetail(props: {
   // and every mark. Count it before the second click rather than after.
   const [deleteCost, setDeleteCost] = useState<string | null>(null);
 
-  const openEditor = () => {
+  const openEditor = (opts?: { blankTitle?: boolean }) => {
     setKind(activity.type);
     // Seed from the activity every time rather than once, so a refresh that
     // happened while the editor was closed is not overwritten by stale fields.
-    setTitle(activity.title);
+    //
+    // Except on a brand-new one: "Untitled activity" is a stand-in the create
+    // step wrote, not something anyone typed, so arriving with it in the box
+    // means the first thing you do is delete it. Start empty and let the
+    // placeholder say what belongs there.
+    setTitle(opts?.blankTitle ? "" : activity.title);
     setDesc(activity.source_text ?? "");
     setDue(toLocalInput(dueOf(activity)));
     setOpens(toLocalInput(activity.opens_at));
@@ -287,9 +292,9 @@ export function ActivityDetail(props: {
   // from one click and landing them here.
   useEffect(() => {
     if (!fresh) return;
-    openEditor();
-    // The title is what they came to write.
-    window.setTimeout(() => document.getElementById("fv-ed-title")?.focus(), 0);
+    // The title field carries autoFocus for the same reason — a setTimeout
+    // focus does not survive the re-render the editor opening causes.
+    openEditor({ blankTitle: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fresh, activity.id]);
 
@@ -322,7 +327,9 @@ export function ActivityDetail(props: {
     setSaving(true);
     try {
       const patch: Partial<Activity> & WithDue = {
-        title: title.trim() || activity.title,
+        // An empty title keeps the placeholder rather than writing "": a row
+        // with no name is worse than one that says it has none.
+        title: title.trim() || "Untitled activity",
         source_text: desc.trim() ? desc.trim() : null,
         due_at: fromLocalInput(due),
       };
@@ -387,13 +394,26 @@ export function ActivityDetail(props: {
             <span className="fv-badge">{SCOPE_LABEL[scope]}</span>
           </div>
 
-          <h1 className="fv-display" style={{ fontSize: 32, lineHeight: 1.14, marginTop: 8 }}>
-            {activity.title}
-          </h1>
+          {/* Editing REPLACES the view rather than appending to it. The editor
+              used to render as a card below the finished page, so a freshly
+              created activity showed "Untitled activity" and its description
+              with a form stapled underneath — you were reading the thing you
+              were still writing. */}
+          {editing ? (
+            <h1 className="fv-display" style={{ fontSize: 32, lineHeight: 1.14, marginTop: 8 }}>
+              {fresh ? "New activity" : "Edit activity"}
+            </h1>
+          ) : (
+            <>
+              <h1 className="fv-display" style={{ fontSize: 32, lineHeight: 1.14, marginTop: 8 }}>
+                {activity.title}
+              </h1>
 
-          <div className="fv-sub" style={{ marginTop: 8 }}>
-            {dueLine ? `Due ${dueLine}` : "No due date set"}
-          </div>
+              <div className="fv-sub" style={{ marginTop: 8 }}>
+                {dueLine ? `Due ${dueLine}` : "No due date set"}
+              </div>
+            </>
+          )}
 
           {/* The state line, not a switch: it reads the same opens_at the
               student app reads, so what it says is what the class can see.
@@ -498,33 +518,39 @@ export function ActivityDetail(props: {
             </div>
           ) : null}
 
-          <p style={{ margin: "20px 0 0", fontSize: 16, lineHeight: 1.65, maxWidth: "64ch" }}>
-            {blurb}
-          </p>
+          {editing ? null : (
+            <p style={{ margin: "20px 0 0", fontSize: 16, lineHeight: 1.65, maxWidth: "64ch" }}>
+              {blurb}
+            </p>
+          )}
 
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 20 }}>
-            <span className="fv-badge secondary">
-              {shape.count} {shape.count === 1 ? "question" : "questions"}
-            </span>
-            <span className="fv-badge secondary">{pointsLabel(activity)}</span>
-          </div>
+          {editing ? null : (
+            <>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 20 }}>
+                <span className="fv-badge secondary">
+                  {shape.count} {shape.count === 1 ? "question" : "questions"}
+                </span>
+                <span className="fv-badge secondary">{pointsLabel(activity)}</span>
+              </div>
 
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 24 }}>
-            {data.can.author ? (
-              <button
-                type="button"
-                className="fv-btn outline sm"
-                aria-expanded={editing}
-                onClick={() => (editing ? setEditing(false) : openEditor())}
-              >
-                <FIcon name="edit" size={15} />
-                Edit activity
-              </button>
-            ) : null}
-            <button type="button" className="fv-btn outline sm" onClick={onCriteria}>
-              Grading criteria
-            </button>
-          </div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 24 }}>
+                {data.can.author ? (
+                  <button
+                    type="button"
+                    className="fv-btn outline sm"
+                    aria-expanded={editing}
+                    onClick={() => openEditor()}
+                  >
+                    <FIcon name="edit" size={15} />
+                    Edit activity
+                  </button>
+                ) : null}
+                <button type="button" className="fv-btn outline sm" onClick={onCriteria}>
+                  Grading criteria
+                </button>
+              </div>
+            </>
+          )}
 
           {editing ? (
             <div className="fv-card" style={{ marginTop: 16, padding: "14px 16px", maxWidth: "64ch" }}>
@@ -576,6 +602,8 @@ export function ActivityDetail(props: {
                 className="fv-in"
                 style={{ marginTop: 4 }}
                 value={title}
+                autoFocus={fresh}
+                placeholder="What are they working on?"
                 onChange={(e) => setTitle(e.target.value)}
               />
 
@@ -680,15 +708,20 @@ export function ActivityDetail(props: {
                   disabled={saving}
                   onClick={() => void save()}
                 >
-                  {saving ? "Saving…" : "Save changes"}
+                  {saving ? "Saving…" : fresh ? "Save activity" : "Save changes"}
                 </button>
                 <button
                   type="button"
                   className="fv-btn ghost sm"
                   disabled={saving}
                   onClick={() => setEditing(false)}
+                  title={
+                    fresh
+                      ? "Leaves it as an untitled draft, hidden from students. Delete it below if you don't want it."
+                      : undefined
+                  }
                 >
-                  Cancel
+                  {fresh ? "Not now" : "Cancel"}
                 </button>
 
                 <span style={{ flex: 1 }} />
