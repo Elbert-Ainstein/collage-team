@@ -322,6 +322,13 @@ export async function listActivities(courseId: string): Promise<Activity[]> {
 export async function createActivity(input: {
   courseId: string; week: number; title: string; topic?: string; datesLabel?: string;
   resubmitMode?: "team" | "individual" | "choice"; sourceText?: string; position?: number;
+  /**
+   * When students may see it. Set on the INSERT, never on a follow-up write:
+   * the column default is NULL, NULL means visible, so an activity created
+   * without it is in front of the whole class for the length of a round trip —
+   * and stays there permanently if that second write fails.
+   */
+  opensAt?: string | null;
 }): Promise<Activity> {
   return unwrap(
     await db().from("activities").insert({
@@ -333,6 +340,7 @@ export async function createActivity(input: {
       resubmit_mode: input.resubmitMode || "team",
       source_text: input.sourceText || null,
       position: input.position ?? input.week,
+      opens_at: input.opensAt ?? null,
     }).select().single(),
   );
 }

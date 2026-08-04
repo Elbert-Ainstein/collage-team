@@ -763,11 +763,16 @@ function AssignmentDetail({
         ? `Submitted ${fmtWhen(a.teamResult.updated_at) ?? "recently"} by your team`
         : "Your team has not submitted yet";
 
-  const savedLine = a.myResult?.status === "draft"
-    ? `Draft saved ${fmtWhen(a.myResult.updated_at) ?? "recently"}`
-    : submittedAt(a)
-      ? `Submitted ${submittedAt(a)}`
-      : "Nothing saved yet";
+  // Seeing an activity and being able to hand work in are separate things: an
+  // activity is visible from the moment it opens, but its check-in is a
+  // separate row the instructor may not have added yet.
+  const savedLine = !a.indivCheckIn
+    ? "Not open for submissions yet"
+    : a.myResult?.status === "draft"
+      ? `Draft saved ${fmtWhen(a.myResult.updated_at) ?? "recently"}`
+      : submittedAt(a)
+        ? `Submitted ${submittedAt(a)}`
+        : "Nothing saved yet";
 
   return (
     <section>
@@ -812,7 +817,17 @@ function AssignmentDetail({
             <div>
               <DescriptionCard a={a} />
               <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 14 }}>
-                <button type="button" className="sv-btn primary" onClick={() => onOpenWork(act.id, "indiv")}>
+                <button
+                  type="button"
+                  className="sv-btn primary"
+                  onClick={() => onOpenWork(act.id, "indiv")}
+                  disabled={!a.indivCheckIn}
+                  title={
+                    a.indivCheckIn
+                      ? "Write and submit your own answer"
+                      : "Your instructor has not opened this for submissions yet"
+                  }
+                >
                   Open my work
                 </button>
                 <span className="sv-sub">{savedLine}</span>
@@ -916,7 +931,8 @@ export function Assignments(props: {
         <div className="sv-card" style={{ marginTop: 14, padding: "26px 20px", textAlign: "center" }}>
           <div className="sv-h2">That assignment is not available</div>
           <p className="sv-sub" style={{ margin: "8px 0 0" }}>
-            It may have been unposted. Go back to the list to pick another one.
+            Your instructor either removed it or has not opened it yet — an activity can be
+            scheduled to appear later in the term. Go back to the list to pick another one.
           </p>
         </div>
       </section>

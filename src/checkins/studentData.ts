@@ -3,7 +3,9 @@
 // Everything here reads as the signed-in STUDENT. The database decides what is
 // visible (supabase/migrations/0006): their own course, their own submissions,
 // their own team — never a classmate's individual work. These functions do not
-// re-filter for security, they just shape what comes back.
+// re-filter for security, they just shape what comes back. The one exception is
+// the opens_at check below, which restates a rule RLS already enforces so that
+// the schedule is legible in the code a student's screen is actually built from.
 
 import { requireSupabase } from "@/lib/supabaseClient";
 import { dbError } from "./data";
@@ -156,16 +158,43 @@ function gradeOf(r: CheckInResult | null, ci: CheckIn | null): string {
 }
 
 /**
+ * Whether a student may see this activity yet.
+ *
+ * A NULL opens_at means visible, not hidden: every activity authored before
+ * scheduling existed has one, and reading NULL as "not open" would empty a live
+ * course's assignment list. Faculty opt in to hiding by setting a future
+ * instant; `posted` is a faculty-side flag and governs nothing here.
+ */
+export function isOpenToStudents(activity: Activity, now: Date = new Date()): boolean {
+  // Falsy rather than `=== null`: rows reach here through a cast, so an absent
+  // column would arrive as undefined and must read as "no schedule set" too.
+  if (!activity.opens_at) return true;
+  const at = Date.parse(activity.opens_at);
+  // An unparseable stamp is a broken row, not a schedule. Treating it as hidden
+  // would take work away from a class with nothing on screen to explain why.
+  if (Number.isNaN(at)) return true;
+  return at <= now.getTime();
+}
+
+/**
  * Everything this student owes, newest week first. Scope decides which result
  * drives the row: an individual activity reads their own, a team activity the
  * team's, and a `both` activity leads with the individual one.
  */
 export async function listAssignments(enrolment: Enrolment): Promise<Assignment[]> {
-  const activities = unwrap(
+  const all = unwrap(
     await db().from("activities").select("*")
       .eq("course_id", enrolment.course.id)
       .order("week", { ascending: false, nullsFirst: false }),
   ) as Activity[] ?? [];
+
+  // RLS already withholds unopened activities; this repeats the test so that a
+  // policy someone later loosens cannot quietly put next week's half-written
+  // draft on a student's list, and so the rule is readable from the screen it
+  // governs. One `now` for the whole list keeps a long fetch from opening an
+  // activity partway down it.
+  const now = new Date();
+  const activities = all.filter((a) => isOpenToStudents(a, now));
   if (!activities.length) return [];
 
   const checkIns = unwrap(

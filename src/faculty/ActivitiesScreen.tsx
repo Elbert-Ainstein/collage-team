@@ -8,6 +8,8 @@
 
 import { Fragment, type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import { createActivity, updateActivity } from "@/checkins/data";
+import { isOpenToStudents } from "@/checkins/studentData";
+import { fmtInstant, fromLocalInput, toLocalInput } from "./ActivityDetail";
 import {
   addWeek,
   backfillWeeks,
@@ -97,6 +99,19 @@ function glyphFor(cell: Cell): string {
 }
 
 /**
+ * How this activity reads to the class right now, for the markers both views
+ * carry: null when students can already see it, otherwise the instant it opens.
+ *
+ * The same rule the student app applies, so nothing here can drift from what is
+ * actually on their lists. The empty string covers an opens_at that will not
+ * format — still hidden, just with no date to print.
+ */
+function hiddenUntil(a: Activity): string | null {
+  if (isOpenToStudents(a)) return null;
+  return (a.opens_at ? fmtInstant(a.opens_at) : null) ?? "";
+}
+
+/**
  * How many of a team have handed this week's individual work in — the "4/4 in"
  * tally. Team work is excluded on purpose: the tally is about the people.
  */
@@ -131,6 +146,10 @@ export function ActivitiesScreen(props: {
   const [title, setTitle] = useState("");
   const [type, setType] = useState<ActivityType>("combo");
   const [week, setWeek] = useState<number | null>(null);
+  // Defaulted to now on every open, so creating an activity says out loud when
+  // the class gets it instead of publishing one by omission. Pushing it forward
+  // is what schedules it.
+  const [opens, setOpens] = useState("");
   const [busy, setBusy] = useState(false);
   // The week the last "New week" press created, so the press has something to
   // point at. Cleared once that week holds anything, or on dismiss.
@@ -194,9 +213,22 @@ export function ActivitiesScreen(props: {
     }
   };
 
+  // Scheduling follows the check-in permission rather than authoring, the same
+  // way posting check-ins and setting the live week do.
+  const canSchedule = data.can.runCheckIns;
+
+  // Only worth a line when the instructor has actually pushed the field forward
+  // — the ordinary case is "now", and saying so would be noise.
+  const opensIso = fromLocalInput(opens);
+  const scheduledFor =
+    opensIso != null && Date.parse(opensIso) > Date.now() ? fmtInstant(opensIso) : null;
+
   // `at` is the week the instructor asked to fill; without one, the newest.
   const openForm = (at?: number) => {
     setWeek(at ?? weekNumbers[0] ?? null);
+    // now -> local wall clock, reseeded per open so a form left closed for an
+    // hour does not come back offering an opening time in the past.
+    setOpens(toLocalInput(new Date().toISOString()));
     setCreating(true);
   };
 
@@ -225,9 +257,20 @@ export function ActivitiesScreen(props: {
       const name = title.trim();
       if (!name || week == null) return;
 
-      const created = await createActivity({ courseId: data.course.id, week, title: name });
-      // createActivity has no `type` field of its own, and type is what picks
-      // the accent, the scope and therefore the question shape.
+      // opens_at goes on the INSERT, not a follow-up patch. The column default
+      // is NULL and NULL means visible, so an activity created without it sits
+      // in front of the whole class for the length of a round trip — and stays
+      // there for good if that second write fails. Local wall clock -> instant.
+      const created = await createActivity({
+        courseId: data.course.id,
+        week,
+        title: name,
+        opensAt: fromLocalInput(opens),
+      });
+      // `type` still needs a second write — it picks the accent, the scope and
+      // therefore the question shape, and createActivity does not carry it. That
+      // one is safe to follow up: a wrong type is visible and fixable, whereas a
+      // wrongly-visible draft is not recallable.
       await updateActivity(created.id, { type });
 
       const shape = shapeFor(type);
@@ -393,6 +436,18 @@ export function ActivitiesScreen(props: {
                 ))}
               </select>
             </label>
+            {canSchedule ? (
+              <label style={{ flex: "1 1 190px", minWidth: 0 }}>
+                <span className="fv-eyebrow">Visible to students from</span>
+                <input
+                  type="datetime-local"
+                  className="fv-in"
+                  style={{ marginTop: 4 }}
+                  value={opens}
+                  onChange={(e) => setOpens(e.target.value)}
+                />
+              </label>
+            ) : null}
             <div style={{ display: "flex", alignItems: "flex-end", gap: 8, flex: "none" }}>
               <button
                 type="submit"
@@ -405,6 +460,15 @@ export function ActivitiesScreen(props: {
                 Cancel
               </button>
             </div>
+            {scheduledFor ? (
+              <div
+                className="fv-sub"
+                style={{ flexBasis: "100%", color: "var(--fv-amber)" }}
+                role="status"
+              >
+                Hidden from students until {scheduledFor}. You can change that afterwards.
+              </div>
+            ) : null}
             {weekNumbers.length === 0 ? (
               <div className="fv-sub" style={{ flexBasis: "100%" }}>
                 Add a week first — every activity belongs to one.
@@ -698,6 +762,7 @@ function RowView({
               {g.activities.map((a) => {
                 const stat = data.stats.get(a.id);
                 const accent = TYPE_ACCENT[a.type];
+                const until = hiddenUntil(a);
                 const pct = (n: number) =>
                   stat && stat.total > 0 ? `${(n / stat.total) * 100}%` : "0%";
                 return (
@@ -713,6 +778,13 @@ function RowView({
                     </span>
                     <span className="fv-title">{a.title}</span>
                     <span className="fv-badge">{SCOPE_LABEL[SCOPE_OF[a.type]]}</span>
+                    {/* Without this the list looks the same whether the class
+                        can see the work or not. Quiet, but on the row itself. */}
+                    {until == null ? null : (
+                      <span className="fv-badge" style={{ color: "var(--fv-amber)" }}>
+                        {until ? `Hidden until ${until}` : "Hidden"}
+                      </span>
+                    )}
                     {stat ? (
                       <span className="fv-prog">
                         <span className="fv-track">
@@ -859,13 +931,20 @@ function ColumnView({
                     : scope === "both"
                       ? "Ind + team"
                       : `Ind · ${pointsLabel(a)}`;
+                // The header is ~116px wide, so the date goes in the tooltip and
+                // only the word stays on screen.
+                const until = hiddenUntil(a);
                 return (
                   <th
                     key={a.id}
                     className="act"
                     scope="col"
                     style={{ borderTopColor: TYPE_ACCENT[a.type] }}
-                    title={a.title}
+                    title={
+                      until == null
+                        ? a.title
+                        : `${a.title} — hidden from students${until ? ` until ${until}` : ""}`
+                    }
                   >
                     <span style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <span
@@ -896,6 +975,19 @@ function ColumnView({
                     >
                       {stat ? `${stat.graded}/${stat.total} ${stat.verb}` : ""}
                     </span>
+                    {until == null ? null : (
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "var(--fv-2xs)",
+                          marginTop: 2,
+                          whiteSpace: "nowrap",
+                          color: "var(--fv-amber)",
+                        }}
+                      >
+                        Hidden
+                      </span>
+                    )}
                   </th>
                 );
               })}

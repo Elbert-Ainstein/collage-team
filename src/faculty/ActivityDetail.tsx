@@ -6,8 +6,9 @@
 // Everything on the right is keyed off SCOPE, so a team activity lists teams and
 // counts out of the number of teams — type only picks the label and the accent.
 
-import { useMemo, useState } from "react";
-import { deleteActivity, setCheckInsPosted, tintFor, updateActivity } from "@/checkins/data";
+import { useEffect, useMemo, useState } from "react";
+import { deleteActivity, tintFor, updateActivity } from "@/checkins/data";
+import { isOpenToStudents } from "@/checkins/studentData";
 import {
   IS_COMPLETION,
   SCOPE_LABEL,
@@ -71,8 +72,14 @@ function fmtStamp(iso: string | null): string | null {
   return `${d.toLocaleDateString(undefined, { weekday: "short" })} ${fmtTime(d)}`;
 }
 
-/** The due line carries the date too — it is read out of context of a week. */
-function fmtDue(iso: string): string | null {
+/**
+ * "Mon, Mar 3, 9:00am" — a whole instant, weekday and date included.
+ *
+ * Both dated lines on this screen are read out of the context of a week: a due
+ * date and the day the class gets to see the activity are equally useless as a
+ * bare time.
+ */
+export function fmtInstant(iso: string): string | null {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
   return `${d.toLocaleDateString(undefined, {
@@ -82,7 +89,14 @@ function fmtDue(iso: string): string | null {
   })}, ${fmtTime(d)}`;
 }
 
-function toLocalInput(iso: string | null): string {
+/**
+ * timestamptz -> the value a <input type="datetime-local"> wants.
+ *
+ * The column is an absolute instant; the input has no zone at all. Going this
+ * way we render the instant in the BROWSER's zone, so an 09:00 written from
+ * this desk reads back as 09:00 at this desk.
+ */
+export function toLocalInput(iso: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
@@ -91,10 +105,38 @@ function toLocalInput(iso: string | null): string {
   )}:${pad2(d.getMinutes())}`;
 }
 
-function fromLocalInput(v: string): string | null {
+/**
+ * The datetime-local value -> timestamptz.
+ *
+ * The reverse of toLocalInput: `new Date("2026-03-10T09:00")` reads the string
+ * as local wall-clock time, and toISOString turns it into the UTC instant the
+ * column stores. An empty input is null, never epoch zero — for opens_at that
+ * distinction is the whole feature, since null means visible.
+ */
+export function fromLocalInput(v: string): string | null {
   if (!v) return null;
   const d = new Date(v);
   return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+/** The datetime-local value for an instant `days` from now, for seeding a field. */
+function localInputIn(days: number): string {
+  return toLocalInput(new Date(Date.now() + days * 86_400_000).toISOString());
+}
+
+/**
+ * The one sentence saying what the class can see, read off the same rule the
+ * student app applies.
+ *
+ * A null opens_at is an activity authored before scheduling existed: visible,
+ * with no date to name. That is why it does not say "since".
+ */
+function visibilityOf(a: Activity): { text: string; open: boolean } {
+  const at = a.opens_at ? fmtInstant(a.opens_at) : null;
+  if (!isOpenToStudents(a)) {
+    return { text: at ? `Hidden until ${at}` : "Hidden from students", open: false };
+  }
+  return { text: at ? `Visible to students since ${at}` : "Visible to students", open: true };
 }
 
 /**
@@ -151,7 +193,12 @@ export function ActivityDetail(props: {
   }, [data.weeks, activity.week, activity.dates_label]);
 
   const dueAt = dueOf(activity);
-  const dueLine = dueAt ? fmtDue(dueAt) : null;
+  const dueLine = dueAt ? fmtInstant(dueAt) : null;
+
+  // Scheduling is the check-in permission, not authoring: a TF trusted to run
+  // check-ins is trusted to decide when the class sees the work.
+  const canSchedule = data.can.runCheckIns;
+  const visibility = visibilityOf(activity);
 
   // Whitespace-only source text is not a description; the editor writes null for
   // it, but rows written elsewhere can still carry "".
@@ -196,11 +243,25 @@ export function ActivityDetail(props: {
   const [title, setTitle] = useState(activity.title);
   const [desc, setDesc] = useState(activity.source_text ?? "");
   const [due, setDue] = useState(() => toLocalInput(dueAt));
+  const [opens, setOpens] = useState(() => toLocalInput(activity.opens_at));
+
+  // Adopt an opens_at changed by the Hide / Make-visible control above. Both are
+  // on screen at once and this screen re-renders rather than remounting, so
+  // without this the editor kept its pre-hide value and "Save changes" — which
+  // also writes opens_at — put the draft straight back in front of the class.
+  useEffect(() => {
+    setOpens(toLocalInput(activity.opens_at));
+  }, [activity.opens_at]);
   const [count, setCount] = useState(String(shape.count));
   const [per, setPer] = useState(String(shape.per));
   const [kind, setKind] = useState<ActivityType>(activity.type);
   const [armedDelete, setArmedDelete] = useState(false);
-  const [posting, setPosting] = useState(false);
+  const [visBusy, setVisBusy] = useState(false);
+  // Hiding takes work off every student's list, so it names the instant it will
+  // come back rather than disappearing indefinitely — opens_at holds one date,
+  // and there is no value in it that means "hidden, ask me later".
+  const [hideArmed, setHideArmed] = useState(false);
+  const [hideAt, setHideAt] = useState("");
   // Deleting an activity cascades its check-ins, every submission against them,
   // and every mark. Count it before the second click rather than after.
   const [deleteCost, setDeleteCost] = useState<string | null>(null);
@@ -212,6 +273,7 @@ export function ActivityDetail(props: {
     setTitle(activity.title);
     setDesc(activity.source_text ?? "");
     setDue(toLocalInput(dueOf(activity)));
+    setOpens(toLocalInput(activity.opens_at));
     setCount(String(shape.count));
     setPer(String(shape.per));
     setEditing(true);
@@ -223,23 +285,24 @@ export function ActivityDetail(props: {
   const nextPer = Math.max(0, Math.round(Number(per) || 0));
   const nextTotal = pointsTotal({ question_count: nextCount, points_per_question: nextPer });
 
-  const togglePosted = async () => {
-    setPosting(true);
+  /** Every visibility control writes the same one column and nothing else. */
+  const setOpensAt = async (next: string | null) => {
+    setVisBusy(true);
     try {
-      const next = !activity.posted;
-      // The activity and its check-ins are posted together — the student app
-      // needs a check-in to submit against, so a posted activity with unposted
-      // check-ins is a row students can see and cannot answer.
-      await updateActivity(activity.id, { posted: next });
-      const ids = data.checkIns.filter((c) => c.activity_id === activity.id).map((c) => c.id);
-      if (ids.length) await setCheckInsPosted(ids, next);
+      await updateActivity(activity.id, { opens_at: next });
+      setHideArmed(false);
       onChanged();
     } catch (e) {
       onError(e);
     } finally {
-      setPosting(false);
+      setVisBusy(false);
     }
   };
+
+  // Local wall-clock -> the instant to compare against now. Held here so the
+  // confirm can be refused before it writes a date that would change nothing.
+  const hideIso = fromLocalInput(hideAt);
+  const hideIsFuture = hideIso != null && Date.parse(hideIso) > Date.now();
 
   const save = async () => {
     setSaving(true);
@@ -251,6 +314,13 @@ export function ActivityDetail(props: {
       };
       if (kind !== activity.type) {
         patch.type = kind;
+      }
+      // Only when it actually moved. Writing it on every save meant editing a
+      // title re-sent whatever the field happened to hold, which is how a hide
+      // made from the control above could be silently undone.
+      const nextOpens = fromLocalInput(opens);
+      if (canSchedule && nextOpens !== (activity.opens_at ?? null)) {
+        patch.opens_at = nextOpens;
       }
       await updateActivity(activity.id, patch);
 
@@ -311,6 +381,109 @@ export function ActivityDetail(props: {
             {dueLine ? `Due ${dueLine}` : "No due date set"}
           </div>
 
+          {/* The state line, not a switch: it reads the same opens_at the
+              student app reads, so what it says is what the class can see.
+              The button that used to sit further down toggled `posted`, which
+              governs no student visibility at all. */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: 8,
+              marginTop: 6,
+            }}
+          >
+            <span
+              className="fv-dot"
+              style={{
+                flex: "none",
+                background: visibility.open ? "var(--fv-emerald)" : "var(--fv-amber)",
+              }}
+              aria-hidden="true"
+            />
+            <span
+              className="fv-sub"
+              style={{ color: visibility.open ? "var(--fv-muted)" : "var(--fv-amber)" }}
+            >
+              {visibility.text}
+            </span>
+            {canSchedule && !hideArmed ? (
+              <button
+                type="button"
+                className="fv-btn ghost sm"
+                style={{ height: 22, padding: "0 8px", flex: "none", fontSize: "var(--fv-2xs)" }}
+                disabled={visBusy}
+                onClick={() => {
+                  if (visibility.open) {
+                    setHideAt(localInputIn(7));
+                    setHideArmed(true);
+                    return;
+                  }
+                  // NULL, not now(). RLS compares opens_at against the
+                  // DATABASE clock, so writing the browser's would let a laptop
+                  // a minute fast store a future instant and then read it back
+                  // as "visible" while every student's policy still hid it.
+                  // NULL is unambiguous, and it is what the editor's empty
+                  // field writes — one representation of visible, not two.
+                  void setOpensAt(null);
+                }}
+              >
+                {visBusy ? "Saving…" : visibility.open ? "Hide" : "Make visible now"}
+              </button>
+            ) : null}
+          </div>
+
+          {hideArmed ? (
+            <div
+              className="fv-card"
+              style={{ marginTop: 8, padding: "10px 12px", maxWidth: "48ch" }}
+            >
+              <label className="fv-eyebrow" htmlFor="fv-hide-at" style={{ display: "block" }}>
+                Hide until
+              </label>
+              <input
+                id="fv-hide-at"
+                type="datetime-local"
+                className="fv-in"
+                style={{ marginTop: 4 }}
+                value={hideAt}
+                autoFocus
+                onChange={(e) => setHideAt(e.target.value)}
+              />
+              <div
+                style={{
+                  marginTop: 6,
+                  fontSize: "var(--fv-2xs)",
+                  color: hideIsFuture ? "var(--fv-muted)" : "var(--fv-amber)",
+                  lineHeight: 1.5,
+                }}
+              >
+                {hideIsFuture
+                  ? "It leaves every student's assignment list until then. Anything already handed in is kept."
+                  : "Pick a time in the future — an instant that has passed leaves it visible."}
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button
+                  type="button"
+                  className="fv-btn primary sm"
+                  disabled={visBusy || !hideIsFuture}
+                  onClick={() => void setOpensAt(hideIso)}
+                >
+                  {visBusy ? "Saving…" : "Hide it"}
+                </button>
+                <button
+                  type="button"
+                  className="fv-btn ghost sm"
+                  disabled={visBusy}
+                  onClick={() => setHideArmed(false)}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           <p style={{ margin: "20px 0 0", fontSize: 16, lineHeight: 1.65, maxWidth: "64ch" }}>
             {blurb}
           </p>
@@ -337,30 +510,6 @@ export function ActivityDetail(props: {
             <button type="button" className="fv-btn outline sm" onClick={onCriteria}>
               Grading criteria
             </button>
-
-            {/* Posting is what the "Check-in" TF permission grants. Until this
-                control existed the permission was enforceable in the database
-                and exercised by nothing, so the switch on the TFs tab implied a
-                capability no screen offered. */}
-            {data.can.runCheckIns ? (
-              <button
-                type="button"
-                className="fv-btn outline sm"
-                disabled={posting}
-                title={
-                  activity.posted
-                    ? "Students can see this. Unposting hides it; their work is kept."
-                    : "Students cannot see this yet."
-                }
-                onClick={() => void togglePosted()}
-              >
-                {posting
-                  ? "Saving…"
-                  : activity.posted
-                    ? "Posted to students"
-                    : "Post to students"}
-              </button>
-            ) : null}
           </div>
 
           {editing ? (
@@ -440,6 +589,37 @@ export function ActivityDetail(props: {
                 value={due}
                 onChange={(e) => setDue(e.target.value)}
               />
+
+              {canSchedule ? (
+                <>
+                  <label
+                    className="fv-eyebrow"
+                    htmlFor="fv-ed-opens"
+                    style={{ display: "block", marginTop: 12 }}
+                  >
+                    Visible to students from
+                  </label>
+                  <input
+                    id="fv-ed-opens"
+                    type="datetime-local"
+                    className="fv-in"
+                    style={{ marginTop: 4 }}
+                    value={opens}
+                    onChange={(e) => setOpens(e.target.value)}
+                  />
+                  <div
+                    style={{
+                      marginTop: 6,
+                      fontSize: "var(--fv-2xs)",
+                      color: "var(--fv-muted)",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    Until then it is not on any student&rsquo;s list. Leave it empty to keep it
+                    visible with no opening date.
+                  </div>
+                </>
+              ) : null}
 
               <div style={{ display: "flex", alignItems: "flex-end", gap: 10, marginTop: 12 }}>
                 <div style={{ width: 92 }}>

@@ -67,7 +67,36 @@ export function StudentApp({
       .finally(() => setReady(true));
   }, [load]);
 
+  // An activity opens at a time the instructor picked, so a student sitting on
+  // this page at 8:59 should not have to know to reload at 9:00. Re-fetch when
+  // the tab comes back to the front, and quietly on a timer while it is open.
+  // Cheap: the whole list is four queries and this only runs for one student.
+  useEffect(() => {
+    const again = () => void load().catch(() => undefined);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") again();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", again);
+    const t = window.setInterval(again, 120_000);
+    return () => {
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", again);
+      window.clearInterval(t);
+    };
+  }, [load]);
+
   const selected = assignments.find((a) => a.activity.id === selId) ?? null;
+
+  // The instructor can now hide an activity that is already open, so one can
+  // vanish from under a student mid-session. Without this the work and detail
+  // screens render nothing and leave them on a blank panel with no way back.
+  useEffect(() => {
+    if (selId && !selected && (screen === "detail" || screen === "work")) {
+      setSelId(null);
+      setScreen("list");
+    }
+  }, [selId, selected, screen]);
   const dueCount = assignments.filter(
     (a) => a.status === "Not started" || a.status === "Late",
   ).length;
