@@ -141,9 +141,21 @@ begin
     'team_members','check_ins','check_in_results'
   ] loop
     execute format('alter table %I enable row level security', t);
-    execute format($p$
-      create policy "prototype anon full access" on %I
-        for all to anon, authenticated using (true) with check (true)
-    $p$, t);
+    -- This policy opens every table to the public anon key. It was right for
+    -- the pre-auth prototype and 0003 drops it by name.
+    --
+    -- Re-running this file after 0003 would therefore SUCCEED — the name is
+    -- free again — and silently re-open the whole database to anyone holding
+    -- the anon key, which is public by design. So it is created only when the
+    -- owner-scoped policies that replaced it are not already present.
+    if not exists (
+      select 1 from pg_policies
+       where schemaname = 'public' and tablename = t and policyname = 'own ' || t
+    ) then
+      execute format($p$
+        create policy "prototype anon full access" on %I
+          for all to anon, authenticated using (true) with check (true)
+      $p$, t);
+    end if;
   end loop;
 end $$;

@@ -16,6 +16,7 @@ import {
 import type { Activity, Course, Student } from "./types";
 import { isSupportedRosterFile, parseRoster, type ParsedStudent } from "./rosterImport";
 import { reconcileRoster } from "./rosterReconcile";
+import { countWorkForStudent } from "@/faculty/facultyData";
 import { Avatar, ErrorBanner } from "./ui";
 import { TeamsPillar } from "./TeamsPillar";
 import { GradebookPillar } from "./GradebookPillar";
@@ -494,6 +495,8 @@ function RosterRow({
   const [value, setValue] = useState(student.email ?? "");
   const [busy, setBusy] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [armedRemove, setArmedRemove] = useState(false);
+  const [removeCost, setRemoveCost] = useState<string | null>(null);
   const linked = Boolean(student.user_id);
 
   // Rows are keyed by student id, so an import that back-fills addresses
@@ -607,9 +610,44 @@ function RosterRow({
           signed in
         </span>
       )}
-      <button className="t-x" title="Remove from roster" onClick={onRemove}>
-        ✕
-      </button>
+      {/* Removing a student cascades away every submission and grade of theirs.
+          This was one unguarded click on the fallback UI faculty are pointed at
+          when something else goes wrong — the worst possible place for it. */}
+      {armedRemove ? (
+        <button
+          className="t-btn sm danger"
+          title={removeCost ?? "Click again to remove"}
+          onBlur={() => {
+            setArmedRemove(false);
+            setRemoveCost(null);
+          }}
+          onClick={() => {
+            setArmedRemove(false);
+            setRemoveCost(null);
+            onRemove();
+          }}
+        >
+          {removeCost ?? "Remove?"}
+        </button>
+      ) : (
+        <button
+          className="t-x"
+          title="Remove from roster"
+          onClick={() => {
+            setArmedRemove(true);
+            setRemoveCost(null);
+            void countWorkForStudent(student.id)
+              .then((n) =>
+                setRemoveCost(
+                  n === 0 ? "Remove?" : `Remove and delete ${n} ${n === 1 ? "submission" : "submissions"}?`,
+                ),
+              )
+              .catch(() => setRemoveCost("Remove? (could not check their work)"));
+          }}
+        >
+          ✕
+        </button>
+      )}
     </div>
   );
 }

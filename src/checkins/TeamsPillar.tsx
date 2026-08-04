@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   autoFormTeams,
+  countOneTeamResults,
   countTeamResults,
   createTeam,
   createTeamSet,
@@ -53,6 +54,8 @@ export function TeamsPillar(props: PillarProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDeleteSet, setConfirmDeleteSet] = useState(false);
+  const [armedTeam, setArmedTeam] = useState<string | null>(null);
+  const [teamCost, setTeamCost] = useState<string | null>(null);
   /** A pending re-form that would destroy recorded team scores. */
   const [confirmReform, setConfirmReform] = useState<{ n: number; scores: number } | null>(null);
 
@@ -760,13 +763,46 @@ export function TeamsPillar(props: PillarProps) {
                   <span className={"t-chip" + (under ? " amber" : "")}>
                     {t.members.length} / {activeSetSize}
                   </span>
-                  <button
-                    className="t-x"
-                    title="Delete team"
-                    onClick={() => void onDeleteTeam(t.id)}
-                  >
-                    ✕
-                  </button>
+                  {/* Deleting a team cascades away every tRAT that team wrote
+                      and every mark on it, across all weeks. It used to be one
+                      unguarded click. Arm first, and say what goes. */}
+                  {armedTeam === t.id ? (
+                    <button
+                      className="t-btn sm danger"
+                      title={teamCost ?? "Click to delete this team"}
+                      onBlur={() => {
+                        setArmedTeam(null);
+                        setTeamCost(null);
+                      }}
+                      onClick={() => {
+                        setArmedTeam(null);
+                        setTeamCost(null);
+                        void onDeleteTeam(t.id);
+                      }}
+                    >
+                      {teamCost ?? "Delete team?"}
+                    </button>
+                  ) : (
+                    <button
+                      className="t-x"
+                      title="Delete team"
+                      onClick={() => {
+                        setArmedTeam(t.id);
+                        setTeamCost(null);
+                        void countOneTeamResults(t.id)
+                          .then((n) =>
+                            setTeamCost(
+                              n === 0
+                                ? "Delete team?"
+                                : `Delete team and ${n} recorded ${n === 1 ? "score" : "scores"}?`,
+                            ),
+                          )
+                          .catch(() => setTeamCost("Delete team? (could not check its scores)"));
+                      }}
+                    >
+                      ✕
+                    </button>
+                  )}
                 </div>
 
                 <div

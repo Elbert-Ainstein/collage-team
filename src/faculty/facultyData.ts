@@ -188,6 +188,53 @@ export async function addRubricItem(
   return rows[0];
 }
 
+/**
+ * How many submissions are currently marked with this ladder row.
+ *
+ * Deleting the row cascades those marks away, and the delete fires the rescore
+ * trigger — so every student marked with it silently GAINS the points that
+ * deduction was taking off. That is a regrade, and nobody should do it without
+ * being told how many people it moves.
+ */
+export async function countMarksForRubricItem(id: string): Promise<number> {
+  const rows =
+    (unwrap(await db().from("submission_marks").select("id").eq("rubric_item_id", id)) as
+      | { id: string }[]
+      | null) ?? [];
+  return rows.length;
+}
+
+/** Work that would be destroyed with an activity: submissions, and how many are graded. */
+export async function countWorkForActivity(
+  activityId: string,
+): Promise<{ submissions: number; graded: number }> {
+  const cis =
+    (unwrap(await db().from("check_ins").select("id").eq("activity_id", activityId)) as
+      | { id: string }[]
+      | null) ?? [];
+  if (!cis.length) return { submissions: 0, graded: 0 };
+
+  const rows =
+    (unwrap(
+      await db()
+        .from("check_in_results")
+        .select("id,status")
+        .in("check_in_id", cis.map((c) => c.id)),
+    ) as { id: string; status: string }[] | null) ?? [];
+
+  const real = rows.filter((r) => r.status !== "none");
+  return { submissions: real.length, graded: real.filter((r) => r.status === "scored").length };
+}
+
+/** Work that would be destroyed with a student. */
+export async function countWorkForStudent(studentId: string): Promise<number> {
+  const rows =
+    (unwrap(
+      await db().from("check_in_results").select("id,status").eq("student_id", studentId),
+    ) as { id: string; status: string }[] | null) ?? [];
+  return rows.filter((r) => r.status !== "none").length;
+}
+
 /** Only faculty-added rows can go; the base ladder is fixed. */
 export async function deleteRubricItem(id: string): Promise<void> {
   const { error } = await db().from("rubric_items").delete().eq("id", id).eq("is_custom", true);

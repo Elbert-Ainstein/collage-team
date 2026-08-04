@@ -110,6 +110,7 @@
 .t-btn.ghost{background:transparent;color:var(--ink2);box-shadow:none}
 .t-btn.line{background:var(--paper3);color:var(--ink);box-shadow:none}
 .t-btn.green{border-color:var(--green);background:var(--greenBg);color:var(--green);box-shadow:none}
+.t-btn.danger{border-color:var(--red,#dc2626);background:transparent;color:var(--red,#dc2626);box-shadow:none;white-space:nowrap}
 .t-btn.amber{border-color:var(--amber);background:var(--amberBg);color:var(--amber);box-shadow:none}
 .t-btn.sm{font-size:11px;padding:2px 8px}
 .t-card{border:1px solid var(--line);background:var(--paper2);border-radius:10px;padding:13px}

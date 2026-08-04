@@ -80,9 +80,20 @@ export function GradingScreen({
   const [note, setNote] = useState("");
   const [releasing, setReleasing] = useState(false);
 
+  // A `both`-scope activity has TWO halves to mark, and picking "individual"
+  // unconditionally meant the team half of every Challenge could never be
+  // graded at all — the gradebook showed those tRATs as handed in and there was
+  // no screen that would mark them.
+  const [half, setHalf] = useState<"individual" | "team">(
+    scope === "team" ? "team" : "individual",
+  );
+  useEffect(() => {
+    setHalf(scope === "team" ? "team" : "individual");
+  }, [scope]);
+
   // Scope decides who is graded: a team activity is marked once per team.
   const subjects: Subject[] = useMemo(() => {
-    const kind = scope === "team" ? "team" : "individual";
+    const kind = scope === "both" ? half : scope === "team" ? "team" : "individual";
     const checkIn = data.checkIns.find((c) => c.activity_id === activity.id && c.kind === kind);
     if (!checkIn) return [];
 
@@ -91,7 +102,7 @@ export function GradingScreen({
 
     const rows = data.results.filter((r) => r.check_in_id === checkIn.id && handedIn(r));
     const out: Subject[] = [];
-    if (scope === "team") {
+    if (kind === "team") {
       for (const t of data.teams) {
         const r = rows.find((x) => x.team_id === t.id);
         if (r) out.push({ id: t.id, name: t.name, tint: null, result: r });
@@ -103,7 +114,7 @@ export function GradingScreen({
       }
     }
     return out.sort((a, b) => a.name.localeCompare(b.name));
-  }, [activity.id, data.checkIns, data.results, data.roster, data.teams, scope]);
+  }, [activity.id, data.checkIns, data.results, data.roster, data.teams, scope, half]);
 
   const subject = subjects[stIdx] ?? null;
 
@@ -305,7 +316,7 @@ export function GradingScreen({
             Nothing to grade yet
           </div>
           <p className="fv-sub" style={{ marginTop: 8, lineHeight: 1.6, maxWidth: "56ch" }}>
-            No {scope === "team" ? "team has" : "student has"} handed this in. Once work arrives it
+            No {half === "team" ? "team has" : "student has"} handed this in. Once work arrives it
             will appear here, one question at a time.
           </p>
         </div>
@@ -327,6 +338,24 @@ export function GradingScreen({
               {stamp(subject.result.submitted_at ?? subject.result.updated_at)}
             </span>
             <span style={{ flex: 1 }} />
+            {scope === "both" ? (
+              <div className="fv-seg" style={{ padding: 2 }}>
+                {(["individual", "team"] as const).map((k) => (
+                  <button
+                    key={k}
+                    type="button"
+                    className={half === k ? "on" : ""}
+                    onClick={() => {
+                      setHalf(k);
+                      setStIdx(0);
+                      setQIdx(0);
+                    }}
+                  >
+                    {k === "individual" ? "Individual" : "Team"}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <span style={{ fontSize: "var(--fv-xs)", color: "var(--fv-muted)" }}>
               Question {qIdx + 1}
             </span>
@@ -533,7 +562,7 @@ export function GradingScreen({
             />
             <div style={{ borderTop: "1px solid var(--fv-neutral-200)", paddingTop: 10, marginTop: 10 }}>
               <Stepper
-                label={`${scope === "team" ? "Team" : "Student"} ${stIdx + 1} of ${subjects.length}`}
+                label={`${half === "team" ? "Team" : "Student"} ${stIdx + 1} of ${subjects.length}`}
                 onPrev={() => {
                   setStIdx((i) => Math.max(0, i - 1));
                   setQIdx(0);

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AuthGate } from "@/checkins/AuthGate";
+import { listCourses } from "@/checkins/data";
 import { ClassCheckins } from "@/checkins/ClassCheckins";
 import { FacultyApp } from "@/faculty/FacultyApp";
 import { StudentApp } from "@/student/StudentApp";
@@ -77,14 +78,22 @@ function RoleRouter({
       // Self-heal a wrong pick. "Faculty" is the default button, so a student
       // who signs up without noticing it would otherwise be stranded in an empty
       // gradebook forever — the role is write-once by design, so there is no way
-      // back from inside the app. Being on a roster is the stronger evidence of
-      // what someone is, so it wins.
+      // back from inside the app.
+      //
+      // But ONLY for an account that owns no course. An instructor who put their
+      // own address on their own roster — to see what students see, which is a
+      // normal thing to do — would otherwise be thrown into the student app and
+      // locked out of their own gradebook, with the same no-way-back problem
+      // this is meant to solve. Owning a course is the stronger signal.
       try {
-        await claimStudentRows();
-        const enrolment = await getEnrolment();
-        if (enrolment) return "student" as Kind;
+        const owned = (await listCourses()).filter((c) => c.owner_id === uid);
+        if (!owned.length) {
+          await claimStudentRows();
+          const enrolment = await getEnrolment();
+          if (enrolment) return "student" as Kind;
+        }
       } catch {
-        // No roster row, or the claim failed — carry on as faculty.
+        // No roster row, or the lookup failed — carry on as faculty.
       }
 
       return "faculty" as Kind;

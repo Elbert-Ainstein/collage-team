@@ -18,7 +18,7 @@ import {
   type ActivityType,
   type CheckInResult,
 } from "@/checkins/types";
-import { ensureCheckIn, setQuestionShape } from "./facultyData";
+import { countWorkForActivity, ensureCheckIn, setQuestionShape } from "./facultyData";
 import { pointsLabel, pointsTotal, questionShape, statFor } from "./model";
 import { FAvatar, FIcon } from "./icons";
 import type { FacultyData } from "./FacultyApp";
@@ -200,6 +200,9 @@ export function ActivityDetail(props: {
   const [per, setPer] = useState(String(shape.per));
   const [kind, setKind] = useState<ActivityType>(activity.type);
   const [armedDelete, setArmedDelete] = useState(false);
+  // Deleting an activity cascades its check-ins, every submission against them,
+  // and every mark. Count it before the second click rather than after.
+  const [deleteCost, setDeleteCost] = useState<string | null>(null);
 
   const openEditor = () => {
     setKind(activity.type);
@@ -464,6 +467,17 @@ export function ActivityDetail(props: {
                   onClick={() => {
                     if (!armedDelete) {
                       setArmedDelete(true);
+                      void countWorkForActivity(activity.id)
+                        .then(({ submissions, graded }) =>
+                          setDeleteCost(
+                            submissions === 0
+                              ? "Nothing has been handed in for this yet."
+                              : `${submissions} submission${submissions === 1 ? "" : "s"}` +
+                                (graded ? `, ${graded} of them graded,` : "") +
+                                " will be deleted with it. This cannot be undone.",
+                          ),
+                        )
+                        .catch(() => setDeleteCost("Could not check what would be deleted."));
                       return;
                     }
                     void (async () => {
@@ -475,15 +489,30 @@ export function ActivityDetail(props: {
                       } catch (e) {
                         onError(e);
                         setArmedDelete(false);
+                        setDeleteCost(null);
                       } finally {
                         setSaving(false);
                       }
                     })();
                   }}
                   onBlur={() => setArmedDelete(false)}
+                  title={deleteCost ?? undefined}
                 >
                   {armedDelete ? "Delete it and every mark?" : "Delete activity"}
                 </button>
+                {armedDelete && deleteCost ? (
+                  <span
+                    style={{
+                      fontSize: "var(--fv-2xs)",
+                      color: "var(--fv-destructive)",
+                      alignSelf: "center",
+                      maxWidth: "34ch",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {deleteCost}
+                  </span>
+                ) : null}
               </div>
             </div>
           ) : null}

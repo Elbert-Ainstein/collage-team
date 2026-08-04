@@ -19,10 +19,15 @@ export function AuthGate({
 
   useEffect(() => {
     const sb = requireSupabase();
-    sb.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setReady(true);
-    });
+    // No .catch here meant a rejected getSession — an unreachable network, a
+    // token refresh that fails — left the WHOLE app on "Loading…" forever, with
+    // no error and no way to sign in. Treat a failure as "not signed in": the
+    // sign-in form is the right place to be when we cannot tell.
+    sb.auth
+      .getSession()
+      .then(({ data }) => setSession(data.session))
+      .catch(() => setSession(null))
+      .finally(() => setReady(true));
     const { data: sub } = sb.auth.onAuthStateChange((_e, s) => setSession(s));
     return () => sub.subscription.unsubscribe();
   }, []);

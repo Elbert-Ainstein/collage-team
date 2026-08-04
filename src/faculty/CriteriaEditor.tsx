@@ -7,7 +7,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Activity, RubricItem } from "@/checkins/types";
-import { addRubricItem, deleteRubricItem, ensureRubric, updateRubricItem } from "./facultyData";
+import {
+  addRubricItem,
+  countMarksForRubricItem,
+  deleteRubricItem,
+  ensureRubric,
+  updateRubricItem,
+} from "./facultyData";
 import { pointsTotal } from "./model";
 import { FIcon } from "./icons";
 
@@ -38,6 +44,8 @@ function LadderRow({
   onToggleEdit,
   onCommit,
   onDelete,
+  onArm,
+  armedNote,
 }: {
   item: RubricItem;
   editing: boolean;
@@ -45,6 +53,9 @@ function LadderRow({
   onToggleEdit: () => void;
   onCommit: (patch: Patch) => void;
   onDelete: () => void;
+  /** Called when the ✕ is armed, so the parent can count what would be lost. */
+  onArm: () => void;
+  armedNote: string | null;
 }) {
   const numRef = useRef<HTMLSpanElement | null>(null);
   const descRef = useRef<HTMLSpanElement | null>(null);
@@ -176,14 +187,35 @@ function LadderRow({
       </button>
       ) : null}
 
+      {armed && armedNote ? (
+        <span
+          style={{
+            fontSize: "var(--fv-2xs)",
+            color: "var(--fv-destructive)",
+            alignSelf: "center",
+            maxWidth: "28ch",
+            lineHeight: 1.4,
+          }}
+        >
+          {armedNote}
+        </span>
+      ) : null}
+
       {/* Only faculty-added rows can go; the base ladder is fixed. */}
       {canEdit && item.is_custom ? (
         <button
           type="button"
           className="fv-iconbtn"
           aria-label={armed ? "Confirm delete criterion" : "Delete criterion"}
-          title={armed ? "Click again to delete" : "Delete criterion"}
-          onClick={() => (armed ? onDelete() : setArmed(true))}
+          title={armed ? (armedNote ?? "Click again to delete") : "Delete criterion"}
+          onClick={() => {
+            if (armed) {
+              onDelete();
+              return;
+            }
+            setArmed(true);
+            onArm();
+          }}
           onBlur={() => setArmed(false)}
           style={{
             width: 24,
@@ -214,6 +246,31 @@ export function CriteriaEditor({
 }): JSX.Element {
   const [items, setItems] = useState<RubricItem[] | null>(null);
   const [editId, setEditId] = useState<string | null>(null);
+  const [armedNotes, setArmedNotes] = useState<Record<string, string>>({});
+
+  // Deleting a criterion cascades its marks away and re-scores everyone who was
+  // marked with it — upward, since the deduction disappears. Say how many
+  // before the second click, not after.
+  const countArmed = useCallback(
+    async (id: string) => {
+      try {
+        const n = await countMarksForRubricItem(id);
+        setArmedNotes((prev) => ({
+          ...prev,
+          [id]:
+            n === 0
+              ? "Nobody has been marked with this line yet."
+              : `${n} submission${n === 1 ? "" : "s"} marked with this line will be re-scored upward.`,
+        }));
+      } catch {
+        setArmedNotes((prev) => ({
+          ...prev,
+          [id]: "Could not check how many submissions use this line.",
+        }));
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     let live = true;
@@ -323,6 +380,8 @@ export function CriteriaEditor({
                     onToggleEdit={() => setEditId((cur) => (cur === item.id ? null : item.id))}
                     onCommit={(patch) => commit(item.id, patch)}
                     onDelete={() => remove(item.id)}
+                    onArm={() => void countArmed(item.id)}
+                    armedNote={armedNotes[item.id] ?? null}
                   />
                 ))}
               </div>

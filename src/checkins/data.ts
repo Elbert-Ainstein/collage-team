@@ -321,6 +321,15 @@ export async function moveStudents(
  * deletes the team rows, and check_in_results.team_id cascades — so this is what
  * a re-form would destroy.
  */
+/** Recorded results for ONE team — what a per-team delete would cascade away. */
+export async function countOneTeamResults(teamId: string): Promise<number> {
+  const rows =
+    (unwrap(
+      await db().from("check_in_results").select("id").eq("team_id", teamId).neq("status", "none"),
+    ) as { id: string }[] | null) ?? [];
+  return rows.length;
+}
+
 export async function countTeamResults(teamSetId: string): Promise<number> {
   const teams = unwrap(
     await db().from("teams").select("id").eq("team_set_id", teamSetId),
@@ -413,6 +422,25 @@ export async function saveResult(input: {
 }): Promise<CheckInResult> {
   const sb = db();
   const isStudent = input.subject.type === "student";
+
+  // An UPDATE must carry ONLY what the caller supplied. This used to send a
+  // full row with `?? null` defaults for everything omitted, so any caller that
+  // did not mention `score` silently erased a released grade — and the same for
+  // flagged, transcription and is_ci. Two live callers pass an incomplete set,
+  // which made re-saving a submission wipe the mark on it.
+  const patch: Record<string, unknown> = {
+    status: input.status,
+    updated_at: new Date().toISOString(),
+  };
+  if (input.score !== undefined) patch.score = input.score;
+  if (input.isCi !== undefined) patch.is_ci = input.isCi;
+  if (input.text !== undefined) patch.text = input.text;
+  if (input.transcription !== undefined) patch.transcription = input.transcription;
+  if (input.transcriptionState !== undefined) patch.transcription_state = input.transcriptionState;
+  if (input.flagged !== undefined) patch.flagged = input.flagged;
+
+  // A new row still wants the full shape, so the columns land at their defaults
+  // rather than as nulls the readers would have to cope with.
   const fields = {
     status: input.status,
     score: input.score ?? null,
@@ -433,7 +461,7 @@ export async function saveResult(input: {
 
   if (existing.length) {
     return unwrap(
-      await sb.from("check_in_results").update(fields).eq("id", existing[0].id)
+      await sb.from("check_in_results").update(patch).eq("id", existing[0].id)
         .select().single(),
     );
   }

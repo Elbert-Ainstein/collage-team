@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TeamsPillar } from "@/checkins/TeamsPillar";
 import { addStudents, removeStudent, setStudentEmail } from "@/checkins/data";
+import { countWorkForStudent } from "@/faculty/facultyData";
 import {
   isSupportedRosterFile,
   parseRoster,
@@ -55,6 +56,14 @@ export function TeamsScreen(props: {
   const [builder, setBuilder] = useState(false);
   /** window.confirm is suppressed here, so removals take two clicks. */
   const [armedRemove, setArmedRemove] = useState<string | null>(null);
+  // Removing a student cascades away every submission and mark of theirs. Say
+  // how much before the confirming click, not after it.
+  const [removeCost, setRemoveCost] = useState<string | null>(null);
+  // The big dropzone is the empty state. Once there are students it stops being
+  // the point of the screen and becomes a wall between the instructor and the
+  // roster, so it collapses to a link — late enrolments still happen, so it
+  // folds away rather than disappearing.
+  const [importOpen, setImportOpen] = useState(false);
   const [armedClear, setArmedClear] = useState<string | null>(null);
   /** Only addresses being edited right now. Everything else reads the props,
    *  so a saved — or deleted — address is never shadowed by a stale draft. */
@@ -219,6 +228,7 @@ export function TeamsScreen(props: {
       for (const fillIn of p.emailFills) {
         await setStudentEmail(fillIn.student.id, fillIn.email);
       }
+      setImportOpen(false);
       setNote(
         [
           p.fresh.length ? `Added ${plural(p.fresh.length, "student", "students")}.` : "",
@@ -436,9 +446,13 @@ export function TeamsScreen(props: {
                       }}
                       disabled={busy}
                       onClick={() => void drop(s)}
-                      onBlur={() => setArmedRemove(null)}
+                      onBlur={() => {
+                        setArmedRemove(null);
+                        setRemoveCost(null);
+                      }}
+                      title={removeCost ?? undefined}
                     >
-                      Remove?
+                      {removeCost ? "Remove and delete their work?" : "Remove?"}
                     </button>
                   ) : (
                     <button
@@ -447,7 +461,19 @@ export function TeamsScreen(props: {
                       style={{ width: 22, height: 22, flex: "none" }}
                       aria-label={`Remove ${s.name}`}
                       disabled={busy}
-                      onClick={() => setArmedRemove(s.id)}
+                      onClick={() => {
+                        setArmedRemove(s.id);
+                        setRemoveCost(null);
+                        void countWorkForStudent(s.id)
+                          .then((n) =>
+                            setRemoveCost(
+                              n === 0
+                                ? null
+                                : `${n} submission${n === 1 ? "" : "s"} of theirs will be deleted too.`,
+                            ),
+                          )
+                          .catch(() => setRemoveCost(null));
+                      }}
                     >
                       <FIcon name="close" size={15} />
                     </button>
@@ -469,8 +495,34 @@ export function TeamsScreen(props: {
             </div>
           ) : null}
 
-          {canEdit ? (
+          {canEdit && roster.length > 0 && !importOpen ? (
+            <button
+              type="button"
+              className="fv-btn outline sm"
+              style={{ marginTop: 4 }}
+              onClick={() => setImportOpen(true)}
+            >
+              <FIcon name="add" size={15} />
+              Add more students
+            </button>
+          ) : null}
+
+          {canEdit && (roster.length === 0 || importOpen) ? (
             <>
+          {importOpen ? (
+            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
+              <button
+                type="button"
+                className="fv-btn ghost sm"
+                onClick={() => {
+                  setImportOpen(false);
+                  setPending(null);
+                }}
+              >
+                Done
+              </button>
+            </div>
+          ) : null}
           <input
             ref={file}
             type="file"
