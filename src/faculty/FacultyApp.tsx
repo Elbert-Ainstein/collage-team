@@ -35,6 +35,7 @@ import { statFor, type ActivityStat } from "./model";
 import { FIcon } from "./icons";
 import { ActivitiesScreen } from "./ActivitiesScreen";
 import { ActivityDetail } from "./ActivityDetail";
+import { CheckInScreen } from "./CheckInScreen";
 import { GradingScreen } from "./GradingScreen";
 import { RubricBuilder } from "./RubricBuilder";
 import { TeamsScreen } from "./TeamsScreen";
@@ -43,6 +44,7 @@ import "./faculty.css";
 
 export type Screen =
   | "activities"
+  | "checkin"
   | "teams"
   | "tfs"
   | "detail"
@@ -299,6 +301,8 @@ export function FacultyApp({
       );
     }
     switch (screen) {
+      case "checkin":
+        return <CheckInScreen data={data} />;
       case "teams":
         return <TeamsScreen data={data} onChanged={() => refresh().catch(fail)} onError={fail} />;
       case "tfs":
@@ -403,6 +407,9 @@ export function FacultyApp({
             {(
               [
                 { id: "activities" as const, label: "Activities", icon: "assignment" },
+                // Between Activities and Teams: it is what happens in the room,
+                // and it reads off the teams below it.
+                { id: "checkin" as const, label: "Check-in", icon: "check" },
                 { id: "teams" as const, label: "Teams", icon: "groups" },
                 { id: "tfs" as const, label: "TFs", icon: "school" },
               ] as const
