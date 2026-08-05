@@ -60,9 +60,10 @@ create index if not exists idx_tutorial_absences_team on tutorial_absences (team
 
 -- ------------------------------------------------------------------ guards
 -- Nothing in the policies below says the people named have anything to do with
--- the team, or the team with the activity's course. Without this an instructor
--- of one course could file a mark against another course's team, and a
--- presenter could be someone who has never been on the team.
+-- the team, or the team with the activity's course. Without these an instructor
+-- of one course could file a mark against another course's team, and a presenter
+-- could be someone who has never been on the team.
+--
 -- Does this team belong to the same course as this activity? A team carries no
 -- course of its own — it belongs to a team_set, and the SET belongs to a course.
 create or replace function tutorial_team_fits(aid uuid, tid uuid) returns boolean
