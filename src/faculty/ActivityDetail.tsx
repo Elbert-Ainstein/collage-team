@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteActivity, tintFor, updateActivity } from "@/checkins/data";
+import { deleteActivityRecordings } from "@/checkins/audio";
 import { isOpenToStudents } from "@/checkins/studentData";
 import {
   HIDDEN_INSTANT,
@@ -881,6 +882,11 @@ export function ActivityDetail(props: {
             void (async () => {
               setSaving(true);
               try {
+                // Audio first: a foreign key cascades the recording ROWS and
+                // leaves the files in the bucket, so they have to go while
+                // the rows that name them still exist. Loud on failure —
+                // better to stop than to half-delete.
+                await deleteActivityRecordings(activity.id);
                 await deleteActivity(activity.id);
                 onChanged();
                 onBack();

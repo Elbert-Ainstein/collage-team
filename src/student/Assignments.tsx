@@ -8,8 +8,9 @@
 // the detail shows Individual/Team tabs and which layout renders.
 //
 // Real data arrives via props (activities, weeks, due dates, status, grade,
-// submissions, the team). The regions with no schema behind them yet — the
-// recording, the team-resource tiles, the live-grading rubric, the question
+// submissions, the team), and the Audio card is real too — it records, stores
+// and replays through src/checkins/audio.ts. The regions with no schema behind
+// them yet — the team-resource tiles, the live-grading rubric, the question
 // count — are rendered from the handoff's seed copy and are labelled "Sample"
 // in their section header so nobody mistakes them for live data.
 
@@ -20,6 +21,7 @@ import type { Assignment, AssignmentStatus, Enrolment } from "@/checkins/student
 import type { ActivityType, Scope, Student } from "@/checkins/types";
 import { SCOPE_LABEL, SCOPE_OF, TYPE_LABEL } from "@/checkins/types";
 import { SIcon } from "./icons";
+import { Recorder } from "./Recorder";
 
 // ------------------------------------------------------------------ tokens
 
@@ -386,11 +388,6 @@ function AssignmentsList({
 
 // ------------------------------------------------------------------ detail
 
-const WAVE = Array.from({ length: 64 }, (_, i) => ({
-  height: Math.round(8 + Math.abs(Math.sin(i * 0.7) * 26) + (i % 5) * 2),
-  played: i < 38,
-}));
-
 const STRIP: { icon: string; title: string; meta: string; bg: string }[] = [
   { icon: "image", title: "Final board", meta: "Thu 2:14pm", bg: "var(--neutral-100)" },
   { icon: "mic", title: "Thursday session", meta: "12:41", bg: "var(--sky-100)" },
@@ -429,91 +426,38 @@ function DescriptionCard({ a }: { a: Assignment }) {
   );
 }
 
-function AudioCard({ presenter }: { presenter: string }) {
-  return (
-    <div className="sv-card" style={{ marginTop: 12 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-        <div className="sv-eyebrow" style={{ flex: 1 }}>
-          Audio
-        </div>
-        <SampleTag what="recordings are not stored yet" />
-        <span className="sv-badge warning">
-          <SIcon name="mic" size={13} />
-          Recording · 12:41
-        </span>
-      </div>
-
-      <div style={{ display: "flex", gap: 16, alignItems: "center", marginTop: 14, flexWrap: "wrap" }}>
-        <div style={{ flex: 1, minWidth: 280 }}>
-          <div style={{ display: "flex", alignItems: "flex-end", gap: 2, height: 46 }} aria-hidden="true">
-            {WAVE.map((b, i) => (
-              <span
-                key={i}
-                style={{
-                  flex: 1,
-                  minWidth: 2,
-                  height: b.height,
-                  borderRadius: 2,
-                  background: b.played ? "var(--navy)" : "var(--neutral-300)",
-                }}
-              />
-            ))}
-          </div>
-          <div
-            className="sv-num"
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              fontSize: "var(--text-2xs)",
-              color: "var(--muted-foreground)",
-              marginTop: 6,
-            }}
-          >
-            <span>00:00</span>
-            <span>Trial 2 · {presenter} presenting</span>
-            <span>12:41</span>
-          </div>
-        </div>
-
-        <div
-          style={{
-            width: 230,
-            flex: "none",
-            borderLeft: "1px solid var(--neutral-200)",
-            paddingLeft: 16,
-          }}
-        >
-          <Eyebrow>Feedback</Eyebrow>
-          <p
-            style={{
-              margin: "7px 0 0",
-              fontSize: "var(--text-xs)",
-              lineHeight: 1.55,
-              color: "var(--muted-foreground)",
-            }}
-          >
-            Your accounting of the 8% momentum loss stayed qualitative. Name the friction term explicitly and
-            estimate it.
-          </p>
-          <div style={{ fontSize: "var(--text-2xs)", color: "var(--muted-foreground)", marginTop: 8 }}>
-            Generated from the recording
-          </div>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 14 }}>
-        <button
-          type="button"
-          className="sv-btn outline sm"
-          disabled
-          title="Not wired up yet — recordings have no storage behind them."
-        >
-          <SIcon name="add" size={15} />
-          Add to Team resources
-        </button>
-      </div>
-    </div>
-  );
+/**
+ * Why this activity cannot hold audio, or null when it can.
+ *
+ * Audio hangs off the TEAM check-in's result row — the same row MyWork writes
+ * and StudentApp threads through `submitTeamWork`, resolved here exactly as
+ * listAssignments resolved it: `a.teamResult`. There is no second lookup,
+ * because a second lookup is how two screens end up disagreeing about which
+ * submission a team is working on.
+ */
+function whyNoAudio(enrolment: Enrolment, a: Assignment): string | null {
+  if (!a.teamCheckIn) {
+    return (
+      "This activity has no team check-in, so there is no shared submission for a " +
+      "recording to belong to. Your instructor adds one when the discussion is part " +
+      "of the work."
+    );
+  }
+  if (!enrolment.team) {
+    return (
+      "You are not on a team yet, and a recording belongs to a team rather than to " +
+      "one person. Your instructor assigns teams — once you are on one, the recorder " +
+      "appears here."
+    );
+  }
+  if (!a.teamResult) {
+    return (
+      "Recordings attach to your team's submission for this activity, and nothing has " +
+      "been saved to it yet. Open team work and submit once — even a first sentence — " +
+      "and the recorder appears here."
+    );
+  }
+  return null;
 }
 
 function ResourceStrip({ onOpenResources }: { onOpenResources: () => void }) {
@@ -752,7 +696,6 @@ function AssignmentDetail({
   const weekLabel = act.week == null ? act.dates_label ?? "Unscheduled" : `Week ${act.week}`;
   const brief = act.source_text?.trim();
   const names = teammateNames(enrolment);
-  const presenter = names[0] ?? SEED_PRESENTERS[0];
   const gradingNames = names.length ? names : SEED_PRESENTERS;
 
   const teamSavedLine = !enrolment.team
@@ -847,7 +790,10 @@ function AssignmentDetail({
                 <p style={CARD_BODY}>{brief || SEED_INSTRUCTIONS}</p>
               </div>
 
-              <AudioCard presenter={presenter} />
+              <Recorder
+                resultId={a.teamResult?.id ?? null}
+                unavailable={whyNoAudio(enrolment, a)}
+              />
 
               {a.teamCheckIn ? (
                 <div
