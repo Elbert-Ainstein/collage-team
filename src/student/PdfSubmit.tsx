@@ -341,170 +341,175 @@ export function PdfSubmit({
       />
 
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
-            {locked ? (
-              <span className="sv-sub">This has been graded, so it can no longer be changed.</span>
-            ) : armedReplace ? (
-              <>
+        {locked ? (
+          <span className="sv-sub">This has been graded, so it can no longer be changed.</span>
+        ) : armedReplace ? (
+          <>
+            <button
+              type="button"
+              className="sv-btn"
+              style={{ color: "var(--amber-700)" }}
+              disabled={busy != null}
+              onBlur={() => setArmedReplace(false)}
+              onClick={() => void replace()}
+            >
+              Replace it and lose the page assignments?
+            </button>
+            <span className="sv-sub" style={{ fontSize: "var(--text-2xs)" }}>
+              Page 3 of a new scan isn&rsquo;t page 3 of this one.
+            </span>
+          </>
+        ) : (
+          <button
+            type="button"
+            className="sv-btn outline"
+            disabled={busy != null}
+            onClick={() => setArmedReplace(true)}
+          >
+            Upload a different PDF
+          </button>
+        )}
+      </div>
+
+      {!questions.length ? (
+        <div className="sv-sub" style={{ marginTop: 14, lineHeight: 1.55, maxWidth: "62ch" }}>
+          Your instructor hasn&rsquo;t listed the questions for this activity, so there is
+          nothing to map pages to yet. Your PDF is handed in.
+        </div>
+      ) : (
+        <div className="sv-sub" style={{ marginTop: 14, lineHeight: 1.55, maxWidth: "62ch" }}>
+          Pick a question on the left, then click the pages that answer it. A page can answer
+          more than one, and a question can span several.
+        </div>
+      )}
+
+      {/* Questions down the left, pages on the right. The chips-over-a-grid
+          version put a 20-page scan under a wrapping row of question pills, so
+          the question you were assigning to scrolled out of sight exactly when
+          you needed it. */}
+      <div className="sv-pdfsplit">
+        {questions.length ? (
+          <div className="sv-pdfq">
+            <div className="sv-eyebrow" style={{ padding: "0 2px 8px" }}>
+              Questions
+            </div>
+            {questions.map((q) => {
+              const n = pages.get(q.id)?.size ?? 0;
+              const on = activeQ === q.id;
+              return (
                 <button
+                  key={q.id}
                   type="button"
-                  className="sv-btn"
-                  style={{ color: "var(--amber-700)" }}
-                  disabled={busy != null}
-                  onBlur={() => setArmedReplace(false)}
-                  onClick={() => void replace()}
+                  className={`sv-pdfqbtn${on ? " on" : ""}`}
+                  aria-pressed={on}
+                  onClick={() => setActiveQ(q.id)}
                 >
-                  Replace it and lose the page assignments?
+                  <span style={{ flex: 1, minWidth: 0, textAlign: "left" }}>{q.label}</span>
+                  <span
+                    className="sv-num"
+                    style={{
+                      fontSize: "var(--text-2xs)",
+                      color: on ? "inherit" : n ? "var(--navy-700)" : "var(--muted-foreground)",
+                    }}
+                  >
+                    {n ? `${n}p` : "—"}
+                  </span>
                 </button>
-                <span className="sv-sub" style={{ fontSize: "var(--text-2xs)" }}>
-                  Page 3 of a new scan isn&rsquo;t page 3 of this one.
-                </span>
-              </>
-            ) : (
-              <button
-                type="button"
-                className="sv-btn outline"
-                disabled={busy != null}
-                onClick={() => setArmedReplace(true)}
+              );
+            })}
+
+            {unanswered.length ? (
+              <div
+                className="sv-sub"
+                style={{
+                  marginTop: 10,
+                  padding: "0 2px",
+                  color: "var(--amber-700)",
+                  fontSize: "var(--text-2xs)",
+                  lineHeight: 1.5,
+                }}
               >
-                Upload a different PDF
-              </button>
+                No pages yet for {unanswered.map((q) => q.label).join(", ")}. Your marker will
+                see nothing for {unanswered.length === 1 ? "it" : "those"}.
+              </div>
+            ) : (
+              <div
+                className="sv-sub"
+                style={{
+                  marginTop: 10,
+                  padding: "0 2px",
+                  color: "var(--emerald-600)",
+                  fontSize: "var(--text-2xs)",
+                }}
+              >
+                Every question has pages.
+              </div>
             )}
           </div>
+        ) : null}
 
-          {questions.length ? (
-            <>
-              <div className="sv-sub" style={{ marginTop: 18, lineHeight: 1.55, maxWidth: "62ch" }}>
-                Pick a question, then click the pages that answer it. A page can answer more than
-                one, and a question can span several.
-              </div>
-
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
-                {questions.map((q) => {
-                  const n = pages.get(q.id)?.size ?? 0;
-                  const on = activeQ === q.id;
-                  return (
-                    <button
-                      key={q.id}
-                      type="button"
-                      onClick={() => setActiveQ(q.id)}
-                      aria-pressed={on}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 6,
-                        padding: "5px 10px",
-                        borderRadius: 999,
-                        border: `1px solid ${on ? "var(--navy)" : "var(--neutral-200)"}`,
-                        background: on ? "var(--navy)" : "var(--cream-100)",
-                        color: on ? "var(--cream-100)" : n ? "var(--navy)" : "var(--muted-foreground)",
-                        font: "inherit",
-                        fontSize: "var(--text-xs)",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                      }}
-                    >
-                      {q.label}
-                      <span style={{ fontWeight: 400, opacity: 0.85 }}>
-                        {n ? `${n}p` : "—"}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-
-              {unanswered.length ? (
-                <div
-                  className="sv-sub"
-                  style={{ marginTop: 8, color: "var(--amber-700)", lineHeight: 1.5 }}
-                >
-                  No pages yet for {unanswered.map((q) => q.label).join(", ")}. Your marker will
-                  see nothing for {unanswered.length === 1 ? "it" : "those"}.
-                </div>
-              ) : (
-                <div className="sv-sub" style={{ marginTop: 8, color: "var(--emerald-600)" }}>
-                  Every question has pages.
-                </div>
-              )}
-            </>
-          ) : (
-            <div className="sv-sub" style={{ marginTop: 14, lineHeight: 1.55 }}>
-              Your instructor hasn&rsquo;t listed the questions for this activity, so there is
-              nothing to map pages to yet. Your PDF is handed in.
-            </div>
-          )}
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
-              gap: 10,
-              marginTop: 14,
-            }}
-          >
-            {loaded
-              ? loaded.thumbs.map((src, i) => {
-                  const page = i + 1;
-                  const mine = activeQ ? (pages.get(activeQ)?.has(page) ?? false) : false;
-                  const labels = assignedTo(page);
-                  return (
-                    <button
-                      key={page}
-                      type="button"
-                      onClick={() => void togglePage(page)}
-                      disabled={locked || !activeQ}
-                      aria-pressed={mine}
-                      aria-label={`Page ${page}${labels.length ? `, answers ${labels.join(", ")}` : ""}`}
-                      style={{
-                        padding: 4,
-                        border: `2px solid ${mine ? "var(--navy)" : "var(--neutral-200)"}`,
-                        borderRadius: 8,
-                        background: mine ? "var(--cream-400)" : "var(--cream-100)",
-                        cursor: locked ? "default" : "pointer",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 4,
-                      }}
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={src}
-                        alt=""
-                        style={{ width: "100%", display: "block", borderRadius: 4 }}
-                      />
-                      <span
-                        className="sv-num"
-                        style={{
-                          fontSize: "var(--text-2xs)",
-                          color: "var(--muted-foreground)",
-                          display: "flex",
-                          gap: 4,
-                          justifyContent: "center",
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        <span>p{page}</span>
-                        {labels.length ? (
-                          <span style={{ color: "var(--navy)", fontWeight: 600 }}>
-                            {labels.join(" ")}
-                          </span>
-                        ) : null}
-                      </span>
-                    </button>
-                  );
-                })
-              : busy === "loading"
-                ? [0, 1, 2, 3].map((i) => (
-                    <div
-                      key={i}
-                      style={{
-                        height: 150,
-                        borderRadius: 8,
-                        background: "var(--neutral-100)",
-                      }}
+        <div className="sv-pdfpages">
+          {loaded
+            ? loaded.thumbs.map((src, i) => {
+                const page = i + 1;
+                const mine = activeQ ? (pages.get(activeQ)?.has(page) ?? false) : false;
+                const labels = assignedTo(page);
+                return (
+                  <button
+                    key={page}
+                    type="button"
+                    onClick={() => void togglePage(page)}
+                    disabled={locked || !activeQ}
+                    aria-pressed={mine}
+                    aria-label={`Page ${page}${labels.length ? `, answers ${labels.join(", ")}` : ""}`}
+                    style={{
+                      padding: 4,
+                      border: `2px solid ${mine ? "var(--navy)" : "var(--neutral-200)"}`,
+                      borderRadius: 8,
+                      background: mine ? "var(--cream-400)" : "var(--cream-100)",
+                      cursor: locked || !activeQ ? "default" : "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 4,
+                    }}
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={src}
+                      alt=""
+                      style={{ width: "100%", display: "block", borderRadius: 4 }}
                     />
-                  ))
-                : null}
-          </div>
+                    <span
+                      className="sv-num"
+                      style={{
+                        fontSize: "var(--text-2xs)",
+                        color: "var(--muted-foreground)",
+                        display: "flex",
+                        gap: 4,
+                        justifyContent: "center",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <span>p{page}</span>
+                      {labels.length ? (
+                        <span style={{ color: "var(--navy)", fontWeight: 600 }}>
+                          {labels.join(" ")}
+                        </span>
+                      ) : null}
+                    </span>
+                  </button>
+                );
+              })
+            : busy === "loading"
+              ? [0, 1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    style={{ height: 150, borderRadius: 8, background: "var(--neutral-100)" }}
+                  />
+                ))
+              : null}
+        </div>
+      </div>
     </div>
   );
 }

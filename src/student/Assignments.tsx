@@ -840,6 +840,7 @@ function AssignmentDetail({
   onBack,
   onTabChange,
   onOpenWork,
+  onOpenSubmit,
   onOpenResources,
   showLiveGrading,
 }: {
@@ -849,6 +850,8 @@ function AssignmentDetail({
   onBack: () => void;
   onTabChange: (t: "indiv" | "team") => void;
   onOpenWork: (id: string, mode: "indiv" | "team") => void;
+  /** The PDF hand-in, on its own screen. */
+  onOpenSubmit: (id: string) => void;
   onOpenResources: () => void;
   showLiveGrading: boolean;
 }) {
@@ -951,6 +954,12 @@ function AssignmentDetail({
         ? `Submitted ${fmtWhen(a.teamResult.updated_at) ?? "recently"} by your team`
         : "Your team has not submitted yet";
 
+  // The INDIVIDUAL half's own state. handedIn() reads the lead result, which is
+  // the team's on a team-only activity — the wrong row to label this button by.
+  const indivStatus = a.myResult?.status;
+  const arrivedIndiv =
+    indivStatus === "submitted" || indivStatus === "needs_review" || indivStatus === "scored";
+
   // Seeing an activity and being able to hand work in are separate things: an
   // activity is visible from the moment it opens, but its check-in is a
   // separate row the instructor may not have added yet.
@@ -1009,17 +1018,30 @@ function AssignmentDetail({
           {onIndiv ? (
             <div>
               <DescriptionCard a={a} questions={questions.length} />
+              {/* Handing the work in is the primary action, and it says so.
+                  The written box is a note to the marker, so it goes second —
+                  it used to be the only door, and the actual hand-in lived
+                  inside it as a 138px-wide sidebar. */}
               <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 14 }}>
                 <button
                   type="button"
                   className="sv-btn primary"
-                  onClick={() => onOpenWork(act.id, "indiv")}
+                  onClick={() => onOpenSubmit(act.id)}
                   disabled={!a.indivCheckIn}
                   title={
                     a.indivCheckIn
-                      ? "Write and submit your own answer"
+                      ? "Upload your work as a PDF and mark which pages answer which question"
                       : "Your instructor has not opened this for submissions yet"
                   }
+                >
+                  {arrivedIndiv ? "View submission" : "Submit assignment"}
+                </button>
+                <button
+                  type="button"
+                  className="sv-btn outline"
+                  onClick={() => onOpenWork(act.id, "indiv")}
+                  disabled={!a.indivCheckIn}
+                  title="Write a note to whoever marks this"
                 >
                   Open my work
                 </button>
@@ -1105,6 +1127,8 @@ export function Assignments(props: {
   onBack: () => void;
   onTabChange: (t: "indiv" | "team") => void;
   onOpenWork: (id: string, mode: "indiv" | "team") => void;
+  /** The PDF hand-in, on its own screen. */
+  onOpenSubmit: (id: string) => void;
   onOpenResources: () => void;
   showLiveGrading?: boolean;
 }) {
@@ -1117,6 +1141,7 @@ export function Assignments(props: {
     onBack,
     onTabChange,
     onOpenWork,
+    onOpenSubmit,
     onOpenResources,
     showLiveGrading = true,
   } = props;
@@ -1152,6 +1177,7 @@ export function Assignments(props: {
         onBack={onBack}
         onTabChange={onTabChange}
         onOpenWork={onOpenWork}
+        onOpenSubmit={onOpenSubmit}
         onOpenResources={onOpenResources}
         showLiveGrading={showLiveGrading}
       />

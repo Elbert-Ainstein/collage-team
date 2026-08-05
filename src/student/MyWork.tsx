@@ -10,15 +10,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  ensureMyResult,
   isSubmissionConflict,
-  listMyQuestions,
   type Assignment,
   type Enrolment,
 } from "@/checkins/studentData";
-import type { ActivityQuestion } from "@/checkins/types";
 import { SIcon } from "./icons";
-import { PdfSubmit } from "./PdfSubmit";
 
 /* ------------------------------------------------------------- placeholder */
 
@@ -175,11 +171,6 @@ export function MyWork(props: {
   const [expected, setExpected] = useState<string | null>(serverStamp);
   const [restoredAt, setRestoredAt] = useState<string | null>(null);
   const [draftError, setDraftError] = useState<string | null>(null);
-  // The individual half is handed in as a PDF whose pages are mapped to
-  // questions, so it needs a result row to exist BEFORE anything is uploaded —
-  // the row used to appear only when work was submitted.
-  const [resultId, setResultId] = useState<string | null>(null);
-  const [questions, setQuestions] = useState<ActivityQuestion[]>([]);
   /** The key whose draft restore has finished; see the persist effect below. */
   const restoredFor = useRef<string | null>(null);
   /** A draft was found but not restored — so it must not be deleted either. */
@@ -258,29 +249,9 @@ export function MyWork(props: {
   // no conflict shown, which is precisely what the stamp exists to prevent.
   // Holding the old one means the write is refused and the student is offered
   // both versions. The sibling effect above already guards this way; this one
-  // Individual work only: the team answer stays a written one.
-  useEffect(() => {
-    if (isTeam || !checkIn) return;
-    let alive = true;
-    void (async () => {
-      try {
-        const [id, qs] = await Promise.all([
-          ensureMyResult(checkIn.id, enrolment.student.id),
-          listMyQuestions(assignment.activity.id),
-        ]);
-        if (!alive) return;
-        setResultId(id);
-        setQuestions(qs);
-      } catch (e) {
-        if (alive) setError(e instanceof Error ? e.message : "Could not open your hand-in.");
-      }
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [isTeam, checkIn, enrolment.student.id, assignment.activity.id]);
-
-  // did not, and the background refresh I added is what made it reachable.
+  // (The draft-row + questions fetch that used to sit here fed PdfSubmit, which
+  // has moved to its own screen. It also meant merely opening My work wrote a
+  // row; SubmitScreen creates one when there is actually a PDF to hang off it.)
   useEffect(() => {
     setBox((b) => {
       if (b.text === b.saved) setExpected(serverStamp);
@@ -562,19 +533,13 @@ export function MyWork(props: {
             Questions can span more than one page. Attach the page and tag it.
           </div>
 
-          {/* The real hand-in, for individual work: one PDF, then say which
-              pages answer which question. The written box on the right stays —
-              it is where a note to the marker goes, not the work itself. */}
-          {isTeam ? null : (
-            <PdfSubmit
-              resultId={resultId}
-              courseId={enrolment.course.id}
-              activityId={assignment.activity.id}
-              questions={questions}
-              locked={result?.status === "scored"}
-              onChanged={() => undefined}
-            />
-          )}
+          {/* The hand-in itself lives on its own screen now — "Submit
+              assignment" on the activity page. It was rendered here, inside
+              this 204px column, which after the column's padding and the
+              card's own left roughly 138px for a page grid asking for
+              minmax(120px, 1fr): a twenty-page scan came out as a twenty-item
+              vertical stack of postage stamps. Two doors to one submission is
+              also how they come to disagree. */}
         </div>
 
         {/* ------------------------------------------------- right column */}

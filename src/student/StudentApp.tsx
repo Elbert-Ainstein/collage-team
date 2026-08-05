@@ -16,9 +16,10 @@ import { SIcon } from "./icons";
 import { Assignments } from "./Assignments";
 import { MyWork } from "./MyWork";
 import { TeamResources } from "./TeamResources";
+import { SubmitScreen } from "./SubmitScreen";
 import "./student.css";
 
-type Screen = "list" | "detail" | "work" | "tr" | "trDetail";
+type Screen = "list" | "detail" | "work" | "submit" | "tr" | "trDetail";
 
 /** How many faces the stack shows before the count carries the remainder. */
 const STACK_CAP = 4;
@@ -387,6 +388,17 @@ export function StudentApp({
     );
   }
 
+  if (screen === "submit" && selected) {
+    return shell(
+      <SubmitScreen
+        assignment={selected}
+        enrolment={enrolment}
+        onBack={() => setScreen("detail")}
+        onChanged={() => void load().catch(() => undefined)}
+      />,
+    );
+  }
+
   if (screen === "work" && selected) {
     return shell(
       <MyWork
@@ -467,6 +479,10 @@ export function StudentApp({
         setSelId(id);
         setWorkMode(mode);
         setScreen("work");
+      }}
+      onOpenSubmit={(id) => {
+        setSelId(id);
+        setScreen("submit");
       }}
       onOpenResources={() => {
         setTrId(selId);
