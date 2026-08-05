@@ -134,8 +134,15 @@ export interface Assignment {
   submitted: string | null;
 }
 
-function statusOf(r: CheckInResult | null, stage: number): AssignmentStatus {
-  if (!r || r.status === "none") return stage >= 2 ? "Late" : "Not started";
+export function statusOf(r: CheckInResult | null, stage: number): AssignmentStatus {
+  // "draft" alongside "none": a draft row is created merely by opening the
+  // hand-in screen or the recorder, and it holds nothing. Letting it fall to the
+  // default below returned "Not started", which quietly cleared the Late badge
+  // off overdue work the moment a student looked at it — the deadline stops
+  // being flagged exactly when they are dealing with it.
+  if (!r || r.status === "none" || r.status === "draft") {
+    return stage >= 2 ? "Late" : "Not started";
+  }
   switch (r.status) {
     case "scored":
       return "Graded";
@@ -305,17 +312,6 @@ async function submit(
   const id = subject.subject_type === "student" ? subject.student_id : subject.team_id;
   const fields = () => ({ status: "submitted" as const, text, updated_at: new Date().toISOString() });
 
-  if (expectedUpdatedAt === null) {
-    // The caller saw no row, so this should be the first submission. If someone
-    // got there first the partial unique index rejects the insert, and that
-    // rejection is the conflict.
-    const { error } = await db().from("check_in_results")
-      .insert({ check_in_id: checkInId, ...subject, ...fields() });
-    if (!error) return;
-    if (!/duplicate key|23505/i.test(error.message)) throw dbError(error);
-    throw new SubmissionConflictError(await readResult(checkInId, column, id));
-  }
-
   // .select() is what makes a lost race visible: without a returned row, an
   // UPDATE that matched nothing is indistinguishable from one that succeeded.
   const write = async (expected: string): Promise<boolean> => {
@@ -326,6 +322,30 @@ async function submit(
     ) as { id: string }[] ?? [];
     return rows.length > 0;
   };
+
+  if (expectedUpdatedAt === null) {
+    // The caller saw no row, so this should be the first submission. If someone
+    // got there first the partial unique index rejects the insert, and that
+    // rejection is the conflict.
+    const { error } = await db().from("check_in_results")
+      .insert({ check_in_id: checkInId, ...subject, ...fields() });
+    if (!error) return;
+    if (!/duplicate key|23505/i.test(error.message)) throw dbError(error);
+
+    const existing = await readResult(checkInId, column, id);
+    // ...unless what it collided with is an empty draft. Those are created just
+    // by opening the hand-in screen, and by the recorder on the team half, so a
+    // student who submits before the list refetches collides with a row holding
+    // nothing. Nobody lost a race there, and offering "keep yours or theirs"
+    // against an empty box is a question with no meaning. Adopt it and write.
+    if (existing && existing.status === "draft" && !existing.text?.trim()) {
+      if (await write(existing.updated_at)) return;
+      // It moved between the read and the write — that IS a race, so fall
+      // through and report it against whatever is there now.
+      throw new SubmissionConflictError(await readResult(checkInId, column, id));
+    }
+    throw new SubmissionConflictError(existing);
+  }
 
   if (await write(expectedUpdatedAt)) return;
 
@@ -387,6 +407,50 @@ export async function ensureMyResult(checkInId: string, studentId: string): Prom
     }).select("id"),
   ) as { id: string }[];
   return rows[0].id;
+}
+
+/**
+ * The TEAM's result row for a check-in, creating an empty one if missing.
+ *
+ * The team twin of ensureMyResult, and it exists for the same reason: audio
+ * hangs off this row (0013), and the row was only created when the team
+ * submitted written work — so the recorder was dark on every activity a team
+ * had not typed an answer into yet. Recording the discussion is usually what
+ * comes FIRST, so that ordering had it backwards.
+ *
+ * Created as a DRAFT, which statusOf reads as nothing-submitted, so a team
+ * getting a recorder does not tell the instructor they have handed work in.
+ *
+ * Unlike the individual case the race here is real — every member of a team can
+ * open the same activity at once, and the partial unique index lets exactly one
+ * of them win. Losing that race is not an error: the row the winner made is the
+ * row this caller wanted.
+ */
+export async function ensureTeamResult(checkInId: string, teamId: string): Promise<string> {
+  const find = async (): Promise<string | null> => {
+    const rows = (unwrap(
+      await db().from("check_in_results").select("id")
+        .eq("check_in_id", checkInId).eq("team_id", teamId).limit(1),
+    ) as { id: string }[] | null) ?? [];
+    return rows[0]?.id ?? null;
+  };
+
+  const found = await find();
+  if (found) return found;
+
+  const { data, error } = await db().from("check_in_results").insert({
+    check_in_id: checkInId,
+    subject_type: "team",
+    team_id: teamId,
+    status: "draft",
+  }).select("id");
+
+  if (!error) return (data as { id: string }[])[0].id;
+  if (!/duplicate key|23505/i.test(error.message)) throw dbError(error);
+
+  const raced = await find();
+  if (raced) return raced;
+  throw dbError(error);
 }
 
 /**

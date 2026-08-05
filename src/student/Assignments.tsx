@@ -14,9 +14,10 @@
 // count — are rendered from the handoff's seed copy and are labelled "Sample"
 // in their section header so nobody mistakes them for live data.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
+import { ensureTeamResult } from "@/checkins/studentData";
 import type { Assignment, AssignmentStatus, Enrolment } from "@/checkins/studentData";
 import type { ActivityType, Scope, Student } from "@/checkins/types";
 import { SCOPE_LABEL, SCOPE_OF, TYPE_LABEL } from "@/checkins/types";
@@ -445,11 +446,12 @@ function DescriptionCard({ a }: { a: Assignment }) {
 /**
  * Why this activity cannot hold audio, or null when it can.
  *
- * Audio hangs off the TEAM check-in's result row — the same row MyWork writes
- * and StudentApp threads through `submitTeamWork`, resolved here exactly as
- * listAssignments resolved it: `a.teamResult`. There is no second lookup,
- * because a second lookup is how two screens end up disagreeing about which
- * submission a team is working on.
+ * Only two things can stop it now, and neither is the student's doing: no team
+ * check-in on the activity, and no team to own the recording. The third reason
+ * this used to give — "your team hasn't submitted yet" — was wrong about the
+ * order people work in. A team records the discussion and then writes the
+ * answer, so requiring the answer first meant the recorder was dark on every
+ * activity except the ones already finished.
  */
 function whyNoAudio(enrolment: Enrolment, a: Assignment): string | null {
   if (!a.teamCheckIn) {
@@ -464,13 +466,6 @@ function whyNoAudio(enrolment: Enrolment, a: Assignment): string | null {
       "You are not on a team yet, and a recording belongs to a team rather than to " +
       "one person. Your instructor assigns teams — once you are on one, the recorder " +
       "appears here."
-    );
-  }
-  if (!a.teamResult) {
-    return (
-      "Recordings attach to your team's submission for this activity, and nothing has " +
-      "been saved to it yet. Open team work and submit once — even a first sentence — " +
-      "and the recorder appears here."
     );
   }
   return null;
@@ -722,6 +717,40 @@ function AssignmentDetail({
   const onIndiv = effective === "indiv";
   const onTeam = effective === "team";
 
+  // The team's result row, created on demand so the recorder has somewhere to
+  // attach. MyWork does the same for the individual side; this is the team twin,
+  // and without it audio only ever worked on activities a team had already
+  // written an answer into.
+  //
+  // Only while the team half is actually on screen: an activity a student never
+  // opens the Team tab of should not gain a row.
+  // Stored WITH the check-in it was made for, and ignored when that does not
+  // match. This component is not keyed on the activity, so React keeps the same
+  // instance when a student goes back and opens a different one — a bare id
+  // would survive that and point the next activity's recorder at the previous
+  // activity's row.
+  const [made, setMade] = useState<{ checkInId: string; resultId: string } | null>(null);
+  const teamCheckInId = a.teamCheckIn?.id ?? null;
+  const teamId = enrolment.team?.id ?? null;
+  const teamResultId =
+    a.teamResult?.id ?? (made && made.checkInId === teamCheckInId ? made.resultId : null);
+
+  useEffect(() => {
+    if (!onTeam || !teamCheckInId || !teamId || teamResultId) return;
+    let alive = true;
+    ensureTeamResult(teamCheckInId, teamId)
+      .then((id) => {
+        if (alive) setMade({ checkInId: teamCheckInId, resultId: id });
+      })
+      // Swallowed on purpose: the Recorder shows its own message when it has no
+      // row, and a failure here must not take down an activity a student opened
+      // to read the brief.
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [onTeam, teamCheckInId, teamId, teamResultId]);
+
   const weekLabel = act.week == null ? act.dates_label ?? "Unscheduled" : `Week ${act.week}`;
   const brief = act.source_text?.trim();
   const names = teammateNames(enrolment);
@@ -819,10 +848,7 @@ function AssignmentDetail({
                 <p style={CARD_BODY}>{brief || SEED_INSTRUCTIONS}</p>
               </div>
 
-              <Recorder
-                resultId={a.teamResult?.id ?? null}
-                unavailable={whyNoAudio(enrolment, a)}
-              />
+              <Recorder resultId={teamResultId} unavailable={whyNoAudio(enrolment, a)} />
 
               {a.teamCheckIn ? (
                 <div

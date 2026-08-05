@@ -424,9 +424,12 @@ export function Recorder({
   }, [recordings]);
 
   const blocked = resultId === null;
+  // Reached only when the caller had no reason to give but still passed no row —
+  // the row is created on demand now, so this is a write that did not land
+  // rather than a state the student put themselves in.
   const reason =
     unavailable ??
-    "There is no team submission here yet, so there is nowhere to keep a recording.";
+    "Setting this activity up for recording didn't finish. Reload the page and try again.";
 
   return (
     <div className="sv-card" style={{ marginTop: 12 }}>
