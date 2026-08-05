@@ -105,10 +105,20 @@ export interface Activity {
   dates_label: string | null;
   type: ActivityType;
   /**
-   * How the activity is worked and marked. The total is the PRODUCT of these
-   * two — there is deliberately no points_total column for it to drift from.
+   * What this activity is out of. One number, chosen by faculty; every
+   * criterion deducts from it.
+   */
+  points_total: number;
+  /**
+   * The shape points used to be expressed in — N questions worth P each.
+   * Replaced by points_total in 0013, which was backfilled from their product.
+   * Left on the type because the columns are still there; read nothing from
+   * them.
+   *
+   * @deprecated
    */
   question_count: number;
+  /** @deprecated see question_count */
   points_per_question: number;
   /** One instant, replacing the older per-scope due columns below. */
   due_at: string | null;
@@ -206,16 +216,16 @@ export interface CourseWeek {
 /**
  * One question or sub-question of an activity, written on the rubric page.
  *
- * 0013 made these rows. An activity with none of them is scored the old way —
- * `question_count` questions of `points_per_question` each — which is what
- * every activity authored before 0013 relies on.
+ * Deliberately carries no points of its own: an activity has ONE total, and
+ * criteria deduct from it. How many questions there are and what the activity
+ * is worth are separate facts, and tying them together is what made the old
+ * count x points shape unable to describe a real assignment.
  */
 export interface ActivityQuestion {
   id: string;
   activity_id: string;
   /** "1", "2", "2a" — a sub-question is a naming convention, not a second table. */
   label: string;
-  points: number;
   /** Ordering, and the question_index a submission mark records against. */
   position: number;
   created_at: string;
@@ -264,17 +274,6 @@ export interface CourseTF {
   position: number;
   created_at: string;
 }
-
-/**
- * Per-type defaults: questions x points-per-question. The total is always the
- * product — never stored beside them, or the two drift.
- */
-export const QUESTION_SHAPE: Record<ActivityType, { count: number; per: number }> = {
-  challenge: { count: 5, per: 1 },
-  combo: { count: 10, per: 5 },
-  amplify: { count: 3, per: 1 },
-  skills: { count: 5, per: 2 },
-};
 
 /** Challenge and Amplify are marked complete/incomplete; the others carry points. */
 export const IS_COMPLETION: Record<ActivityType, boolean> = {

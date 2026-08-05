@@ -9,11 +9,9 @@
 import { requireSupabase } from "@/lib/supabaseClient";
 import { countAll, countAllIn, dbError, selectAll, selectAllIn, tintFor } from "@/checkins/data";
 import {
-  QUESTION_SHAPE,
   type Activity,
   type ActivityQuestion,
   type Course,
-  type ActivityType,
   type CheckIn,
   type CourseTF,
   type CourseWeek,
@@ -126,41 +124,33 @@ export async function setLiveWeek(courseId: string, week: number | null): Promis
 // ------------------------------------------------------- questions & points
 
 /**
- * Change an activity's question shape.
+ * Set what an activity is out of.
  *
- * check_ins.max_points is written from the same numbers in the same call: the
- * student view renders max_points directly, so leaving it stale would show
- * students a total the gradebook disagrees with.
+ * check_ins.max_points is written in the same call: the student view renders it
+ * directly, so leaving it stale would show students a total the gradebook
+ * disagrees with. Changing points_total also fires 0013's trigger, which
+ * re-scores every submission already marked against it.
  */
-export async function setQuestionShape(
-  activityId: string,
-  count: number,
-  per: number,
-): Promise<void> {
+export async function setActivityPoints(activityId: string, total: number): Promise<void> {
+  const points = Math.max(0, total);
   const { error } = await db()
     .from("activities")
-    .update({ question_count: count, points_per_question: per })
+    .update({ points_total: points })
     .eq("id", activityId);
   if (error) throw dbError(error);
 
-  const total = count * per;
   const { error: e2 } = await db()
     .from("check_ins")
-    .update({ max_points: total })
+    .update({ max_points: points })
     .eq("activity_id", activityId);
   if (e2) throw dbError(e2);
 }
 
-/** The defaults for a type, used when an activity is created. */
-export function shapeFor(type: ActivityType): { count: number; per: number } {
-  return QUESTION_SHAPE[type];
-}
-
 // --------------------------------------------------------------- questions
 //
-// 0013 made questions rows. The activity still carries the old count and
-// points-per-question, and they are still what scores an activity that has no
-// rows yet — so every read here falls back to them rather than reporting zero.
+// Structure only. What an activity is out of is one number on the activity
+// (setActivityPoints above); these rows say what its questions are called and
+// what order they come in, and criteria hang off them.
 
 export async function listQuestions(activityId: string): Promise<ActivityQuestion[]> {
   return selectAll<ActivityQuestion>((from, to) =>
@@ -183,10 +173,10 @@ export async function listQuestionsFor(activityIds: string[]): Promise<ActivityQ
 /**
  * The activity's questions, seeding them from the old shape the first time.
  *
- * An activity authored before 0013 says "10 questions worth 5" and has no rows;
- * opening the rubric turns that into ten rows saying the same thing, so what
- * faculty then edit is the same activity they had. Seeding on READ rather than
- * at creation is what lets activities that already exist arrive here intact.
+ * An activity authored before 0013 says "10 questions" as a count and has no
+ * rows; opening the rubric writes those ten questions down, so what faculty
+ * then edit is the same activity they had. Seeding on READ rather than at
+ * creation is what lets activities that already exist arrive here intact.
  *
  * `canSeed` matters for the same reason it does on the ladder: writing these is
  * owner-only, so a teaching fellow gets what is there rather than an error.
@@ -198,11 +188,13 @@ export async function ensureQuestions(
   const existing = await listQuestions(activity.id);
   if (existing.length || !canSeed) return existing;
 
-  const count = Math.max(1, activity.question_count);
+  // Zero is what an activity created since 0013 carries, and it means what it
+  // says: no questions until someone writes one. Only a legacy count seeds.
+  const count = activity.question_count;
+  if (count <= 0) return [];
   const rows = Array.from({ length: count }, (_, i) => ({
     activity_id: activity.id,
     label: String(i + 1),
-    points: activity.points_per_question,
     position: i,
   }));
   const inserted = unwrap(
@@ -222,28 +214,23 @@ export async function addQuestion(
   activityId: string,
   rows: ActivityQuestion[],
   label: string,
-  points: number,
   after?: ActivityQuestion,
 ): Promise<ActivityQuestion[]> {
   const at = after ? after.position + 1 : rows.length;
   const inserted = unwrap(
     await db()
       .from("activity_questions")
-      .insert({ activity_id: activityId, label, points, position: at })
+      .insert({ activity_id: activityId, label, position: at })
       .select()
       .single(),
   ) as ActivityQuestion;
 
   const next = [...rows.slice(0, at), inserted, ...rows.slice(at)];
   await renumber(next);
-  await syncQuestionTotals(activityId, next);
   return next.map((q, i) => ({ ...q, position: i }));
 }
 
-export async function updateQuestion(
-  id: string,
-  patch: { label?: string; points?: number },
-): Promise<void> {
+export async function updateQuestion(id: string, patch: { label?: string }): Promise<void> {
   // .select() so an RLS-filtered write is DETECTABLE — the same trap the ladder
   // had: a teaching fellow's edit came back with no error and no rows, and the
   // screen kept a number the database had refused.
@@ -287,7 +274,6 @@ export async function deleteQuestion(
 
   const next = rows.filter((q) => q.id !== question.id);
   await renumber(next);
-  await syncQuestionTotals(activityId, next);
   return next.map((q, i) => ({ ...q, position: i }));
 }
 
@@ -303,69 +289,7 @@ async function renumber(rows: ActivityQuestion[]): Promise<void> {
   }
 }
 
-/**
- * Keep the numbers derived from the questions in step with them.
- *
- * Two of them: check_ins.max_points, which the student view renders directly,
- * and activities.question_count, which is what the pre-0013 fallback counts.
- * points_per_question is deliberately left alone — questions may now carry
- * different values and no single number can stand for all of them, so the
- * fallback product is only ever consulted for an activity that has no rows.
- */
-export async function syncQuestionTotals(
-  activityId: string,
-  rows: ActivityQuestion[],
-): Promise<void> {
-  const total = rows.reduce((n, q) => n + q.points, 0);
-
-  const { error } = await db()
-    .from("check_ins")
-    .update({ max_points: total })
-    .eq("activity_id", activityId);
-  if (error) throw dbError(error);
-
-  // The check constraint from 0007 requires a positive count, so an activity
-  // stripped back to no questions keeps the last number it had rather than
-  // failing the write.
-  if (rows.length > 0) {
-    const { error: e2 } = await db()
-      .from("activities")
-      .update({ question_count: rows.length })
-      .eq("id", activityId);
-    if (e2) throw dbError(e2);
-  }
-}
-
 // ------------------------------------------------------------ rubric ladders
-
-/**
- * The default deduction ladder, which depends on what one question is worth:
- * a six-step ladder for 5-pt questions, three steps for 2-pt, and
- * complete/missing for 1-pt.
- */
-export function defaultLadder(pointsPerQuestion: number): { description: string; deduction: number }[] {
-  if (pointsPerQuestion >= 5) {
-    return [
-      { description: "Correct, with a thorough, well-reasoned argument.", deduction: 0 },
-      { description: "Correct and argued, but the reasoning is thin.", deduction: 1 },
-      { description: "Correct, but no real argument — little evidence of effort.", deduction: 2 },
-      { description: "Incorrect, though it shows genuine effort or insight.", deduction: 3 },
-      { description: "Incorrect and shows little effort.", deduction: 4 },
-      { description: "Missing, or too sketchy to evaluate.", deduction: 5 },
-    ];
-  }
-  if (pointsPerQuestion >= 2) {
-    return [
-      { description: "Correct and clearly explained.", deduction: 0 },
-      { description: "On the right track, with a gap in the reasoning.", deduction: 1 },
-      { description: "Incorrect or missing.", deduction: 2 },
-    ];
-  }
-  return [
-    { description: "Complete.", deduction: 0 },
-    { description: "Missing or incomplete.", deduction: 1 },
-  ];
-}
 
 export async function listRubric(activityId: string): Promise<RubricItem[]> {
   return selectAll<RubricItem>((from, to) =>
@@ -376,30 +300,17 @@ export async function listRubric(activityId: string): Promise<RubricItem[]> {
 }
 
 /**
- * The activity's ladder, seeding the default one the first time it is opened.
+ * The activity's criteria.
  *
- * Seeding on read rather than on activity creation means activities that
- * predate this migration get a ladder the moment someone grades them.
+ * Nothing is seeded. Criteria used to arrive as a six-step ladder generated
+ * from what one question was worth — there is no such number now, and a
+ * generated ladder is a guess at how someone marks. They are written on the
+ * rubric, per question, by the person who will mark against them.
  *
- * `canSeed` matters: writing rubric_items is owner-only, so a teaching fellow
- * opening an activity nobody has set criteria for would have the insert
- * rejected. Returning empty lets the caller say so; attempting it left the
- * grading screen on "Loading the ladder…" with no way forward.
+ * The `canSeed` argument is kept so callers need not change; it does nothing.
  */
-export async function ensureRubric(activity: Activity, canSeed = true): Promise<RubricItem[]> {
-  const existing = await listRubric(activity.id);
-  if (existing.length) return existing;
-  if (!canSeed) return [];
-
-  const rows = defaultLadder(activity.points_per_question).map((r, i) => ({
-    activity_id: activity.id,
-    row_index: i,
-    description: r.description,
-    deduction: r.deduction,
-    is_custom: false,
-  }));
-  const inserted = unwrap(await db().from("rubric_items").insert(rows).select()) as RubricItem[];
-  return (inserted ?? []).sort((a, b) => a.row_index - b.row_index);
+export async function ensureRubric(activity: Activity, _canSeed = true): Promise<RubricItem[]> {
+  return listRubric(activity.id);
 }
 
 export async function updateRubricItem(
@@ -797,7 +708,7 @@ export async function ensureCheckIn(
         activity_id: activity.id,
         label: kind === "team" ? "tRAT" : "iRAT",
         kind,
-        scale: activity.points_per_question * activity.question_count > 0 ? "points" : "ci",
+        scale: pointsTotal(activity) > 0 ? "points" : "ci",
         max_points: pointsTotal(activity),
         posted: activity.posted,
         position: kind === "team" ? 1 : 0,

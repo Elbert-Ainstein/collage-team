@@ -20,8 +20,8 @@ import {
   type ActivityType,
   type CheckInResult,
 } from "@/checkins/types";
-import { countWorkForActivity, ensureCheckIn } from "./facultyData";
-import { pointsLabel, questionCount, questionsFor, statFor } from "./model";
+import { countWorkForActivity, ensureCheckIn, setActivityPoints } from "./facultyData";
+import { pointsLabel, pointsTotal, questionCount, questionsFor, statFor } from "./model";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { FAvatar, FIcon } from "./icons";
 import type { FacultyData } from "./FacultyApp";
@@ -254,6 +254,7 @@ export function ActivityDetail(props: {
   const [title, setTitle] = useState(activity.title);
   const [desc, setDesc] = useState(activity.source_text ?? "");
   const [due, setDue] = useState(() => toLocalInput(dueAt));
+  const [points, setPoints] = useState(String(pointsTotal(activity)));
   const [kind, setKind] = useState<ActivityType>(activity.type);
   const [visBusy, setVisBusy] = useState(false);
   // Deleting an activity cascades its check-ins, every submission against them,
@@ -278,6 +279,7 @@ export function ActivityDetail(props: {
     setTitle(opts?.blankTitle ? "" : activity.title);
     setDesc(activity.source_text ?? "");
     setDue(toLocalInput(dueOf(activity)));
+    setPoints(String(pointsTotal(activity)));
     setEditing(true);
   };
 
@@ -345,6 +347,13 @@ export function ActivityDetail(props: {
       // save of an unrelated field used to put a hidden draft back in front of
       // the class.
       await updateActivity(activity.id, patch);
+
+      // Points go through facultyData rather than the same patch: the write
+      // also has to reach check_ins.max_points, which the student view renders.
+      const nextPoints = Math.max(0, Math.round(Number(points) || 0));
+      if (nextPoints !== pointsTotal(activity)) {
+        await setActivityPoints(activity.id, nextPoints);
+      }
 
       // Type picks scope, and scope decides which check-ins have to exist. A
       // widened scope needs its new half created; a narrowed one keeps the old
@@ -517,7 +526,7 @@ export function ActivityDetail(props: {
                 <span className="fv-badge secondary">
                   {qCount} {qCount === 1 ? "question" : "questions"}
                 </span>
-                <span className="fv-badge secondary">{pointsLabel(activity, questions)}</span>
+                <span className="fv-badge secondary">{pointsLabel(activity)}</span>
               </div>
 
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 24 }}>
@@ -586,17 +595,26 @@ export function ActivityDetail(props: {
                   />
                 </div>
 
-                {/* Questions are no longer a count and a multiplier typed in
-                    here. They are written on the rubric page, where each one
-                    carries its own points and can hold sub-questions — so this
-                    reports what is there and points at where to change it. */}
-                <div className="fv-field">
-                  <span className="fv-eyebrow">Questions</span>
-                  <span className="fv-sub fv-num" style={{ paddingBottom: 8 }}>
-                    {qCount} · {pointsLabel(activity, questions)}
-                    {IS_COMPLETION[activity.type] ? " (marked for completion)" : ""}
-                  </span>
+                {/* One number: what the activity is out of. It is not derived
+                    from anything — not a count of questions, not a value per
+                    question — because those are separate facts and tying them
+                    together could not describe a real assignment. */}
+                <div className="fv-field" style={{ width: 110 }}>
+                  <label className="fv-eyebrow" htmlFor="fv-ed-points">
+                    Out of
+                  </label>
+                  <input
+                    id="fv-ed-points"
+                    className="fv-in quiet fv-num"
+                    inputMode="numeric"
+                    value={points}
+                    onChange={(e) => setPoints(e.target.value)}
+                  />
                 </div>
+                <span className="fv-sub" style={{ paddingBottom: 8 }}>
+                  pts
+                  {IS_COMPLETION[activity.type] ? " (marked for completion)" : ""}
+                </span>
               </div>
 
               {kind !== activity.type ? (

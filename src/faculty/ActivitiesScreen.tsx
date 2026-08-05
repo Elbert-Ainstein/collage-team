@@ -17,9 +17,7 @@ import {
   backfillWeeks,
   ensureCheckIn,
   setLiveWeek,
-  setQuestionShape,
   setWeekDates,
-  shapeFor,
 } from "./facultyData";
 import {
   HIDDEN_INSTANT,
@@ -262,19 +260,15 @@ export function ActivitiesScreen(props: {
         // switch for this and it is the instructor who decides when to flip it.
         opensAt: HIDDEN_INSTANT,
       });
-      await updateActivity(created.id, { type });
+      // question_count 0 says "nobody has written the questions yet", which is
+      // what stops the rubric page seeding some number of them on first open.
+      // 0013 relaxed the constraint that used to forbid it.
+      await updateActivity(created.id, { type, question_count: 0, points_total: 0 });
 
-      const shape = shapeFor(type);
-      await setQuestionShape(created.id, shape.count, shape.per);
-
-      // ensureCheckIn writes max_points off the activity it is handed, so give
-      // it the new shape rather than the defaults the insert came back with.
-      const withShape = {
-        ...created,
-        type,
-        question_count: shape.count,
-        points_per_question: shape.per,
-      };
+      // No points and no questions: what this is out of is one number the
+      // instructor sets on the activity, and its questions are written on the
+      // rubric. Guessing either here is what the old per-type shape did.
+      const withShape = { ...created, type, question_count: 0, points_total: 0 };
       const scope = SCOPE_OF[type];
       if (scope !== "team") await ensureCheckIn(withShape, "individual", data.checkIns);
       if (scope !== "indiv") await ensureCheckIn(withShape, "team", data.checkIns);

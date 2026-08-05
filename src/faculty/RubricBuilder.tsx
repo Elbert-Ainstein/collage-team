@@ -7,10 +7,9 @@
 // screen. Nothing here is a draft: every edit writes straight to the same
 // rubric_items rows the grading screen marks against.
 //
-// Questions are not a table. They are `activities.question_count` numbered 1..N,
-// and a sub-question exists exactly when a criterion names it ("2b") — so
-// adding one is adding its first criterion, and the last criterion leaving takes
-// the sub-question with it.
+// Questions here are structure and nothing else: "1", "2", "2a", in order, each
+// holding the criteria written against it. They carry no points — the activity
+// has ONE total, chosen on its own page, and every criterion deducts from that.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Activity, ActivityQuestion, FileRef, RubricItem } from "@/checkins/types";
@@ -25,7 +24,6 @@ import {
   ensureRubric,
   removeActivityFile,
   setRubricQuestion,
-  syncQuestionTotals,
   updateQuestion,
   updateRubricItem,
   uploadActivityFile,
@@ -141,23 +139,19 @@ function QuestionHead({
   group,
   canEdit,
   onRename,
-  onRepoint,
   onSub,
   onDelete,
 }: {
   group: Group;
   canEdit: boolean;
   onRename: (label: string) => void;
-  onRepoint: (points: number) => void;
   onSub: () => void;
   onDelete: () => void;
 }) {
   const q = group.question;
   const [label, setLabel] = useState(q?.label ?? "");
-  const [pts, setPts] = useState(String(q?.points ?? 0));
 
   useEffect(() => setLabel(q?.label ?? ""), [q?.label]);
-  useEffect(() => setPts(String(q?.points ?? 0)), [q?.points]);
 
   const isSub = q != null && q.label !== String(baseOf(q.label) ?? "");
 
@@ -203,27 +197,6 @@ function QuestionHead({
         }}
       />
       <span style={{ flex: 1 }} />
-      <input
-        className="fv-qname fv-num"
-        style={{ flex: "none", width: 48, textAlign: "right" }}
-        aria-label={`Points for question ${q.label}`}
-        inputMode="numeric"
-        disabled={!canEdit}
-        value={pts}
-        onChange={(e) => setPts(e.target.value)}
-        onBlur={() => {
-          const parsed = Number.parseFloat(pts.replace(/[^\d.]/g, ""));
-          const next = Number.isFinite(parsed) && parsed >= 0 ? Math.round(parsed) : q.points;
-          setPts(String(next));
-          if (next !== q.points) onRepoint(next);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") e.currentTarget.blur();
-        }}
-      />
-      <span className="fv-sub" style={{ flex: "none", fontSize: "var(--fv-2xs)" }}>
-        {unit(q.points)}
-      </span>
       {canEdit && !isSub ? (
         <button
           type="button"
@@ -609,13 +582,7 @@ export function RubricBuilder({
 
   // ------------------------------------------------------------- questions
 
-  /**
-   * Add a question, or a sub-question of one.
-   *
-   * A new question is worth what the last one is worth. Guessing a number is
-   * unavoidable — every question has to be out of something — and matching its
-   * neighbour is right far more often than any constant would be.
-   */
+  /** Add a question, or a sub-question of one. */
   const addQ = useCallback(
     (parent?: ActivityQuestion) => {
       const rows = questions;
@@ -624,9 +591,8 @@ export function RubricBuilder({
       const label = parent
         ? nextSub(baseOf(parent.label) ?? rows.length + 1, taken)
         : nextTop(taken);
-      const points = parent ? parent.points : (rows[rows.length - 1]?.points ?? 1);
       setBusy(true);
-      addQuestion(activity.id, rows, label, points, parent)
+      addQuestion(activity.id, rows, label, parent)
         .then((next) => {
           setQuestions(next);
           return onChanged();
@@ -638,7 +604,7 @@ export function RubricBuilder({
   );
 
   const patchQ = useCallback(
-    (q: ActivityQuestion, patch: { label?: string; points?: number }) => {
+    (q: ActivityQuestion, patch: { label?: string }) => {
       const before = questions;
       setQuestions((prev) => prev?.map((x) => (x.id === q.id ? { ...x, ...patch } : x)) ?? prev);
 
@@ -665,20 +631,13 @@ export function RubricBuilder({
                 .map((it) => setRubricQuestion(it.id, patch.label ?? null)),
             );
           }
-          if (patch.points != null) {
-            const next = (before ?? []).map((x) =>
-              x.id === q.id ? { ...x, ...patch } : x,
-            );
-            await syncQuestionTotals(activity.id, next);
-            await onChanged();
-          }
         } catch (e) {
           setQuestions(before);
           onError(e);
         }
       })();
     },
-    [activity.id, questions, items, onChanged, onError],
+    [questions, items, onError],
   );
 
   // Deleting a criterion cascades its marks and re-scores everyone marked with
@@ -744,7 +703,7 @@ export function RubricBuilder({
   }, [activity.id, pendingQ, questions, onChanged, onError]);
 
   const week = activity.week == null ? "Unscheduled" : `Week ${activity.week}`;
-  const total = pointsTotal(activity, questions ?? []);
+  const total = pointsTotal(activity);
 
   return (
     <div className="fv-panel">
@@ -804,7 +763,6 @@ export function RubricBuilder({
                       group={g}
                       canEdit={canEdit && !busy}
                       onRename={(label) => g.question && patchQ(g.question, { label })}
-                      onRepoint={(points) => g.question && patchQ(g.question, { points })}
                       onSub={() => g.question && addQ(g.question)}
                       onDelete={() => g.question && armQ(g.question, g.items)}
                     />

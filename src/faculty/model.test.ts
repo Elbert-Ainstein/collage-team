@@ -34,51 +34,43 @@ describe("week groups", () => {
   });
 });
 
-// What an activity is out of decides every score released from it, so the
-// fallback matters as much as the sum: every activity authored before questions
-// became rows has a count and no rows, and must keep scoring exactly as it did.
+// What an activity is out of decides every score released from it.
 describe("what an activity is out of", () => {
-  const shaped = { question_count: 10, points_per_question: 5 };
-  const q = (
-    activity_id: string,
-    label: string,
-    points: number,
-    position: number,
-  ): ActivityQuestion => ({
+  const q = (activity_id: string, label: string, position: number): ActivityQuestion => ({
     id: `${activity_id}-${label}`,
     activity_id,
     label,
-    points,
     position,
     created_at: "",
   });
 
-  it("multiplies the old shape when the activity has no questions", () => {
-    expect(pointsTotal(shaped)).toBe(50);
-    expect(pointsTotal(shaped, [])).toBe(50);
+  it("is the one number faculty chose", () => {
+    expect(pointsTotal({ points_total: 40, question_count: 10, points_per_question: 5 })).toBe(40);
   });
 
-  it("sums the questions once it has them, whatever they are each worth", () => {
-    const qs = [q("a", "1", 5, 0), q("a", "2", 10, 1), q("a", "3", 1, 2)];
-    expect(pointsTotal(shaped, qs)).toBe(16);
+  it("is zero when that is what they chose — not a fallback to the old product", () => {
+    expect(pointsTotal({ points_total: 0, question_count: 10, points_per_question: 5 })).toBe(0);
   });
 
-  it("counts sub-questions as questions — each one is separately marked", () => {
-    const qs = [q("a", "1", 5, 0), q("a", "1a", 2, 1), q("a", "2", 5, 2)];
-    expect(questionCount({ ...shaped } as Activity, qs)).toBe(3);
-    expect(questionCount({ ...shaped } as Activity, [])).toBe(10);
+  it("falls back to the old product only for a row loaded before the column existed", () => {
+    // A client holding a pre-0013 row. The migration backfills exactly this
+    // product, so the two can never disagree about an existing activity.
+    const legacy = { question_count: 10, points_per_question: 5 } as unknown as Parameters<
+      typeof pointsTotal
+    >[0];
+    expect(pointsTotal(legacy)).toBe(50);
+  });
+
+  it("counts questions as structure, with no bearing on the points", () => {
+    const qs = [q("a", "1", 0), q("a", "1a", 1), q("a", "2", 2)];
+    const activity = { question_count: 10 } as Activity;
+    expect(questionCount(activity, qs)).toBe(3);
+    expect(questionCount(activity, [])).toBe(10);
   });
 
   it("reads one activity's questions in the order they are asked", () => {
-    const all = [q("b", "2", 5, 1), q("a", "1", 5, 0), q("b", "1", 5, 0)];
+    const all = [q("b", "2", 1), q("a", "1", 0), q("b", "1", 0)];
     expect(questionsFor("b", all).map((x) => x.label)).toEqual(["1", "2"]);
     expect(questionsFor("a", all)).toHaveLength(1);
-  });
-
-  it("is zero for an activity whose questions were all removed", () => {
-    // Not the stale product: the rows are the truth once any exist, and an
-    // empty list has to be distinguishable from "never had any".
-    expect(pointsTotal(shaped, [])).toBe(50);
-    expect(pointsTotal({ question_count: 1, points_per_question: 0 }, [])).toBe(0);
   });
 });

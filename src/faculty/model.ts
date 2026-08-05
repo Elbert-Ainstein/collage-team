@@ -19,19 +19,16 @@ import {
 } from "@/checkins/types";
 
 /**
- * What the activity is out of. Never read a stored total; there isn't one.
+ * What the activity is out of — one number, chosen by faculty.
  *
- * The sum of its questions once it has any — they may each be worth something
- * different — and the old count x points-per-question when it has none. Every
- * activity authored before 0013 is in that second case, and this is the same
- * fallback recompute_result_score applies, so a score and the total it is out
- * of cannot come from different rules.
+ * The fallback is for a client that loaded a row before 0013 added the column:
+ * the product it replaces is exactly what the migration backfills from, so the
+ * two can never disagree about an existing activity.
  */
 export function pointsTotal(
-  a: Pick<Activity, "question_count" | "points_per_question">,
-  questions?: ActivityQuestion[],
+  a: Pick<Activity, "points_total" | "question_count" | "points_per_question">,
 ): number {
-  if (questions && questions.length) return questions.reduce((n, q) => n + q.points, 0);
+  if (a.points_total != null) return a.points_total;
   return a.question_count * a.points_per_question;
 }
 
@@ -50,15 +47,16 @@ export function questionsFor(
  *
  * Sub-questions count: each one is separately marked, so "12 questions" on an
  * activity with 10 questions and two sub-questions is the number of marks a
- * grader makes, which is what the word is doing on that screen.
+ * grader makes, which is what the word is doing on that screen. This is a
+ * count of STRUCTURE and says nothing about points — those are the activity's.
  */
 export function questionCount(a: Activity, questions?: ActivityQuestion[]): number {
   return questions && questions.length ? questions.length : a.question_count;
 }
 
 /** "50 pts", or "Completion" for the types that are marked rather than scored. */
-export function pointsLabel(a: Activity, questions?: ActivityQuestion[]): string {
-  return IS_COMPLETION[a.type] ? "Completion" : `${pointsTotal(a, questions)} pts`;
+export function pointsLabel(a: Activity): string {
+  return IS_COMPLETION[a.type] ? "Completion" : `${pointsTotal(a)} pts`;
 }
 
 /** Completion types are "marked"; point types are "graded". */

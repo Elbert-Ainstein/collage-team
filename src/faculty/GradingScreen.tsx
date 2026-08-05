@@ -81,15 +81,13 @@ export function GradingScreen({
       id: `synthetic-${i}`,
       activity_id: activity.id,
       label: String(i + 1),
-      points: activity.points_per_question,
       position: i,
       created_at: "",
     })) as ActivityQuestion[];
-  }, [activity.id, activity.question_count, activity.points_per_question, data.questions]);
+  }, [activity.id, activity.question_count, data.questions]);
 
   const qCount = questions.length;
   const question = questions[Math.min(qIdx, qCount - 1)] ?? questions[0];
-  const per = question?.points ?? activity.points_per_question;
 
   const [ladder, setLadder] = useState<RubricItem[] | null>(null);
   // resultId -> questionIndex -> rubric_item_id
@@ -214,12 +212,13 @@ export function GradingScreen({
   const deductionOf = (id: string | null) =>
     ladder?.find((r) => r.id === id)?.deduction ?? 0;
 
-  const thisQuestion = Math.max(per - deductionOf(pickedId), 0);
+  /** What the pick on this question costs — a deduction off the activity total. */
+  const takenHere = deductionOf(pickedId);
   const runningTotal = useMemo(() => {
     if (!ladder) return null;
     let taken = 0;
     for (const [, id] of picks) taken += deductionOf(id);
-    return Math.max(pointsTotal(activity, questions) - taken, 0);
+    return Math.max(pointsTotal(activity) - taken, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ladder, picks, questions]);
 
@@ -496,7 +495,7 @@ export function GradingScreen({
                 Question {question?.label ?? qIdx + 1} rubric
               </span>
               <span className="fv-num" style={{ fontSize: "var(--fv-sm)", fontWeight: 600 }}>
-                {thisQuestion} / {pts(per)}
+                {takenHere > 0 ? `− ${pts(takenHere)}` : "no deduction"}
               </span>
             </div>
             <p
@@ -507,7 +506,8 @@ export function GradingScreen({
                 margin: "6px 0 10px",
               }}
             >
-              Pick one — the deduction comes off this question&rsquo;s {pts(per)}. {data.can.author ? " Use the pencil to edit a line." : ""}
+              Pick one — its points come off the {pts(pointsTotal(activity))} this activity is out
+              of.{data.can.author ? " Use the pencil to edit a line." : ""}
             </p>
 
             {forQuestion == null ? (
@@ -555,7 +555,7 @@ export function GradingScreen({
               className="fv-num"
               style={{ marginTop: 8, fontSize: "var(--fv-2xs)", color: "var(--fv-muted)" }}
             >
-              Submission so far · {runningTotal ?? "—"} / {pts(pointsTotal(activity, questions))}
+              Submission so far · {runningTotal ?? "—"} / {pts(pointsTotal(activity))}
             </div>
           </div>
 
@@ -593,7 +593,7 @@ export function GradingScreen({
               ? "Released"
               : releasing
                 ? "Releasing…"
-                : `Release ${runningTotal ?? 0} / ${pts(pointsTotal(activity, questions))}`}
+                : `Release ${runningTotal ?? 0} / ${pts(pointsTotal(activity))}`}
           </button>
 
           <div className="fv-card" style={{ padding: "12px 14px" }}>
