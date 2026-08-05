@@ -265,9 +265,17 @@ export function TeamsPillar(props: PillarProps) {
   const doReform = async (n: number) => {
     if (!activeSet) return;
     const setIdNow = activeSet.id;
+    // Re-forming DROPS every team in the set and builds new ones, so it is a
+    // delete like the other two — and the least obviously so, because it reads
+    // as nudging a number. Without this, changing the team size from 4 to 5
+    // destroyed the whole set's whiteboard photos: the rows cascade, the
+    // objects do not, and 0018 authorises removal by joining back through the
+    // team that no longer exists.
+    const doomedTeams = teams.map((t) => t.id);
     setConfirmReform(null);
     setSel(new Set());
     await run(async () => {
+      await deleteTeamResourceObjects(doomedTeams);
       if (n !== activeSetSize) {
         setSets((prev) => prev.map((s) => (s.id === setIdNow ? { ...s, team_size: n } : s)));
         await setTeamSetSize(setIdNow, n);

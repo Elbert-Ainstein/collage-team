@@ -121,7 +121,39 @@ export async function uploadSubmissionPdf(
     await db().storage.from(BUCKET).remove([path]);
     throw dbError(rows.error);
   }
+
+  // The PDF IS the hand-in. Without this the result stayed "draft" — the row
+  // ensureMyResult creates just to have something to hang a file off — so a
+  // student who uploaded their work and mapped every page still read
+  // "Nothing submitted yet", and the instructor's list still said nobody had
+  // handed in. Ordered after the row so a failed insert cannot mark work
+  // submitted that is not there.
+  await markSubmitted(resultId, true);
+
   return (rows.data as SubmissionFile[])[0];
+}
+
+/**
+ * Move the result between draft and submitted as the PDF comes and goes.
+ *
+ * Never touches a scored row: the guard in 0008 refuses it, and re-opening
+ * graded work is the instructor's call rather than a side effect of a student
+ * pressing Replace.
+ */
+async function markSubmitted(resultId: string, submitted: boolean): Promise<void> {
+  const rows = (unwrap(
+    await db().from("check_in_results").select("status").eq("id", resultId).limit(1),
+  ) as { status: string }[] | null) ?? [];
+  const now = rows[0]?.status;
+  if (!now || now === "scored" || now === "excused" || now === "discussing") return;
+
+  const next = submitted ? "submitted" : "draft";
+  if (now === next) return;
+
+  const { error } = await db().from("check_in_results")
+    .update({ status: next, updated_at: new Date().toISOString() })
+    .eq("id", resultId);
+  if (error) throw dbError(error);
 }
 
 /** Remove the current pdf and its page mapping. */
@@ -140,6 +172,10 @@ export async function clearSubmission(resultId: string): Promise<void> {
 
   const { error } = await db().from("submission_files").delete().eq("id", existing.id);
   if (error) throw dbError(error);
+
+  // Back to a draft: there is no longer anything handed in, and leaving it
+  // "submitted" would tell an instructor to go and grade an empty row.
+  await markSubmitted(resultId, false);
 }
 
 /** A short-lived URL the browser can render. The bucket is private. */

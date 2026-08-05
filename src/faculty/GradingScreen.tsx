@@ -222,7 +222,12 @@ export function GradingScreen({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ladder, picks, questions]);
 
-  const answeredAll = subject != null && picks.size >= qCount;
+  // A completion activity has no criteria to pick — the rubric collapses to one
+  // Complete/Not complete for the whole assignment — so requiring a pick per
+  // question left Release permanently disabled with no control anywhere that
+  // could enable it. Completion is the instructor's judgement, not a sum.
+  const forCompletion = isCompletion(activity);
+  const answeredAll = subject != null && (forCompletion || picks.size >= qCount);
 
   async function pick(item: RubricItem) {
     if (!subject) return;
@@ -593,7 +598,9 @@ export function GradingScreen({
               ? "Released"
               : releasing
                 ? "Releasing…"
-                : `Release ${runningTotal ?? 0} / ${pts(pointsTotal(activity))}`}
+                : forCompletion
+                  ? "Mark complete"
+                  : `Release ${runningTotal ?? 0} / ${pts(pointsTotal(activity))}`}
           </button>
 
           <div className="fv-card" style={{ padding: "12px 14px" }}>

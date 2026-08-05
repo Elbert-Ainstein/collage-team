@@ -9,7 +9,7 @@
 // safety; it only shapes what comes back and turns refusals into words.
 
 import { requireSupabase } from "@/lib/supabaseClient";
-import { dbError, selectAllIn } from "./data";
+import { dbError, selectAll, selectAllIn } from "./data";
 import type { Recording } from "./types";
 
 export type { Recording };
@@ -267,26 +267,27 @@ export async function recordingUrl(path: string): Promise<string> {
  * under an unexpected prefix should still be cleaned up.
  */
 export async function deleteActivityRecordings(activityId: string): Promise<number> {
-  const checkIns =
-    (unwrap(await db().from("check_ins").select("id").eq("activity_id", activityId)) as
-      | { id: string }[]
-      | null) ?? [];
+  // Paged and chunked, like every other read in this app. Bare selects are
+  // capped at 1000 rows SILENTLY, and a long .in() list blows the URL — either
+  // way the sweep would come back short and skip the rest with no error, which
+  // is the orphan this function exists to prevent.
+  const checkIns = await selectAll<{ id: string }>((from, to) =>
+    db().from("check_ins").select("id").eq("activity_id", activityId).order("id").range(from, to),
+  );
   if (!checkIns.length) return 0;
 
-  const results = (unwrap(
-    await db()
-      .from("check_in_results")
-      .select("id")
-      .in("check_in_id", checkIns.map((c) => c.id)),
-  ) as { id: string }[] | null) ?? [];
+  const results = await selectAllIn<{ id: string }>(
+    checkIns.map((c) => c.id),
+    (chunk, from, to) =>
+      db().from("check_in_results").select("id").in("check_in_id", chunk).order("id").range(from, to),
+  );
   if (!results.length) return 0;
 
-  const rows = (unwrap(
-    await db()
-      .from("recordings")
-      .select("path")
-      .in("result_id", results.map((r) => r.id)),
-  ) as { path: string }[] | null) ?? [];
+  const rows = await selectAllIn<{ path: string }>(
+    results.map((r) => r.id),
+    (chunk, from, to) =>
+      db().from("recordings").select("path").in("result_id", chunk).order("id").range(from, to),
+  );
   if (!rows.length) return 0;
 
   // storage.remove takes a list; chunk it so a term's worth of takes cannot

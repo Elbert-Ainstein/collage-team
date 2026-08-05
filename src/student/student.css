@@ -320,7 +320,11 @@
 .sv-pdfq {
   flex: 0 0 168px;
   min-width: 0;
-  align-self: stretch;
+  /* NOT align-self: stretch. Stretching makes the box as tall as the page grid
+     beside it, so there is nothing left for sticky to travel through and the
+     question you are assigning to scrolls away — the exact thing this column
+     exists to prevent. flex-start keeps it its own height. */
+  align-self: flex-start;
   position: sticky;
   top: 0;
   border-right: 1px solid var(--neutral-200);
