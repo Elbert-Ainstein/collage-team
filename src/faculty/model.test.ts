@@ -53,7 +53,7 @@ describe("what an activity is out of", () => {
   });
 
   it("falls back to the old product only for a row loaded before the column existed", () => {
-    // A client holding a pre-0013 row. The migration backfills exactly this
+    // A client holding a pre-0014 row. The migration backfills exactly this
     // product, so the two can never disagree about an existing activity.
     const legacy = { question_count: 10, points_per_question: 5 } as unknown as Parameters<
       typeof pointsTotal

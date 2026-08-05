@@ -21,7 +21,7 @@ import {
 /**
  * What the activity is out of — one number, chosen by faculty.
  *
- * The fallback is for a client that loaded a row before 0013 added the column:
+ * The fallback is for a client that loaded a row before 0014 added the column:
  * the product it replaces is exactly what the migration backfills from, so the
  * two can never disagree about an existing activity.
  */

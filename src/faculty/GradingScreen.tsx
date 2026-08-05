@@ -71,7 +71,7 @@ export function GradingScreen({
   const stat = data.stats.get(activity.id);
   /** Which question is being marked — its POSITION, which is what a mark records. */
   const [qIdx, setQIdx] = useState(0);
-  // Questions are rows (0013), in the order the rubric puts them. An activity
+  // Questions are rows (0014), in the order the rubric puts them. An activity
   // that has none yet still grades the old way — N questions of equal value —
   // so this synthesises that shape rather than showing a grader nothing.
   const questions = useMemo(() => {

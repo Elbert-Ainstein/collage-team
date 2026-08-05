@@ -263,7 +263,7 @@ export function ActivitiesScreen(props: {
       });
       // question_count 0 says "nobody has written the questions yet", which is
       // what stops the rubric page seeding some number of them on first open.
-      // 0013 relaxed the constraint that used to forbid it.
+      // 0014 relaxed the constraint that used to forbid it.
       await updateActivity(created.id, { type, question_count: 0, points_total: 0 });
 
       // No points and no questions: what this is out of is one number the

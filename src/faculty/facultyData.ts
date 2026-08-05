@@ -128,7 +128,7 @@ export async function setLiveWeek(courseId: string, week: number | null): Promis
  *
  * check_ins.max_points is written in the same call: the student view renders it
  * directly, so leaving it stale would show students a total the gradebook
- * disagrees with. Changing points_total also fires 0013's trigger, which
+ * disagrees with. Changing points_total also fires 0014's trigger, which
  * re-scores every submission already marked against it.
  */
 export async function setActivityPoints(activityId: string, total: number): Promise<void> {
@@ -173,7 +173,7 @@ export async function listQuestionsFor(activityIds: string[]): Promise<ActivityQ
 /**
  * The activity's questions, seeding them from the old shape the first time.
  *
- * An activity authored before 0013 says "10 questions" as a count and has no
+ * An activity authored before 0014 says "10 questions" as a count and has no
  * rows; opening the rubric writes those ten questions down, so what faculty
  * then edit is the same activity they had. Seeding on READ rather than at
  * creation is what lets activities that already exist arrive here intact.
@@ -188,7 +188,7 @@ export async function ensureQuestions(
   const existing = await listQuestions(activity.id);
   if (existing.length || !canSeed) return existing;
 
-  // Zero is what an activity created since 0013 carries, and it means what it
+  // Zero is what an activity created since 0014 carries, and it means what it
   // says: no questions until someone writes one. Only a legacy count seeds.
   const count = activity.question_count;
   if (count <= 0) return [];

@@ -108,7 +108,7 @@ export interface FacultyData {
   weeks: CourseWeek[];
   roster: Student[];
   activities: Activity[];
-  /** Every activity's questions (0013). Empty for one that has none yet. */
+  /** Every activity's questions (0014). Empty for one that has none yet. */
   questions: ActivityQuestion[];
   checkIns: CheckIn[];
   results: CheckInResult[];

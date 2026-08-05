@@ -37,7 +37,17 @@ function StackAvatar({
   return (
     <span
       className={"sv-stack-av" + (isMe ? " me" : "")}
-      style={{ background: tint + "22", color: tint, zIndex: depth }}
+      style={{
+        // The pale tint has to sit on an OPAQUE base. As a bare `tint + "22"`
+        // the fill was 13% alpha, so the faces the stack overlaps showed
+        // straight through the one in front and the initials smeared together.
+        // The base is the same variable the separating ring uses, so it tracks
+        // whatever is behind the stack — including the button's hover state.
+        backgroundColor: "var(--stack-ring, var(--cream-100))",
+        backgroundImage: `linear-gradient(0deg, ${tint}22, ${tint}22)`,
+        color: tint,
+        zIndex: depth,
+      }}
     >
       {initials(student.name)}
     </span>

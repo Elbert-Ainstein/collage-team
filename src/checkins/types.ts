@@ -111,7 +111,7 @@ export interface Activity {
   points_total: number;
   /**
    * The shape points used to be expressed in — N questions worth P each.
-   * Replaced by points_total in 0013, which was backfilled from their product.
+   * Replaced by points_total in 0014, which was backfilled from their product.
    * Left on the type because the columns are still there; read nothing from
    * them.
    *
