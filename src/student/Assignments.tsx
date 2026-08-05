@@ -119,17 +119,33 @@ function dueLine(a: Assignment): string {
   return only ? `${verb} ${only}` : act.dates_label ?? "No due date set";
 }
 
-/** A submission only counts once the result left "Not started". */
+/**
+ * Whether work actually arrived.
+ *
+ * Deliberately one definition, because two would drift: a draft result row is
+ * created the moment the hand-in screen is opened, so "is there a result" and
+ * "is there a timestamp" both answer yes for a student who has submitted
+ * nothing. And "Late" is not a late submission — statusOf gives it to a row
+ * with nothing in it once the activity is past its stage, so it means
+ * missing-and-overdue.
+ */
+function handedIn(a: Assignment): boolean {
+  return a.status === "Turned in" || a.status === "Graded" || a.status === "Discussing";
+}
+
+/** When it arrived — null whenever nothing did, whatever timestamp the row carries. */
 function submittedAt(a: Assignment): string | null {
-  if (!a.submitted || a.status === "Not started") return null;
+  if (!a.submitted || !handedIn(a)) return null;
   return fmtWhen(a.submitted) ?? a.submitted;
 }
 
 function statusStamp(a: Assignment): string {
   const when = submittedAt(a);
   if (when) return `Submitted ${when}`;
-  if (a.status === "Late") return "Submitted late";
   if (a.status === "Graded") return "Marked in session";
+  // Including "Late": saying "submitted late" over work that never came would
+  // tell a student the deadline is behind them when it is the thing they still
+  // have to act on.
   return "Nothing submitted yet";
 }
 
@@ -518,6 +534,7 @@ function ResourceStrip({ onOpenResources }: { onOpenResources: () => void }) {
 
 function StatusCard({ a, scope }: { a: Assignment; scope: Scope }) {
   const when = submittedAt(a);
+  const arrived = handedIn(a);
   return (
     <div className="sv-card" style={{ padding: "16px 18px" }}>
       <Eyebrow>Status</Eyebrow>
@@ -531,45 +548,57 @@ function StatusCard({ a, scope }: { a: Assignment; scope: Scope }) {
         {statusStamp(a)}
       </div>
 
-      <div className="sv-rule" style={{ margin: "14px 0" }} />
+      {/* Nothing about a grade until something has actually been handed in.
+          "Pending — released after grading" over work that was never submitted
+          reads as though it is with a marker and the student is waiting, when
+          in fact nothing has been sent and the deadline is still theirs to
+          meet. Same for a Resubmit button with nothing to resubmit. */}
+      {arrived ? (
+        <>
+          <div className="sv-rule" style={{ margin: "14px 0" }} />
 
-      <Eyebrow>Grade</Eyebrow>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 8 }}>
-        <span
+          <Eyebrow>Grade</Eyebrow>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 8 }}>
+            <span
+              style={{
+                fontFamily: "var(--font-serif)",
+                fontSize: "var(--text-lg)",
+                fontWeight: "var(--weight-bold)",
+                color: "var(--muted-foreground)",
+              }}
+            >
+              {a.grade === "—" ? "Pending" : a.grade}
+            </span>
+          </div>
+          <div style={{ fontSize: "var(--text-xs)", color: "var(--muted-foreground)", marginTop: 4 }}>
+            {GRADE_NOTE[scope]}
+          </div>
+
+          {when ? (
+            <div
+              style={{
+                fontSize: "var(--text-2xs)",
+                color: "var(--muted-foreground)",
+                marginTop: 12,
+                textAlign: "center",
+              }}
+            >
+              Handed in {when}. Open your work to replace it.
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <div
           style={{
-            fontFamily: "var(--font-serif)",
-            fontSize: "var(--text-lg)",
-            fontWeight: "var(--weight-bold)",
+            fontSize: "var(--text-xs)",
             color: "var(--muted-foreground)",
+            marginTop: 12,
+            lineHeight: 1.55,
           }}
         >
-          {a.grade === "—" ? "Pending" : a.grade}
-        </span>
-      </div>
-      <div style={{ fontSize: "var(--text-xs)", color: "var(--muted-foreground)", marginTop: 4 }}>
-        {GRADE_NOTE[scope]}
-      </div>
-
-      <div style={{ marginTop: 16 }}>
-        <button
-          type="button"
-          className="sv-btn outline full"
-          disabled
-          title="Not wired up yet — resubmission needs the upload flow on My work."
-        >
-          Resubmit
-        </button>
-      </div>
-      <div
-        style={{
-          fontSize: "var(--text-2xs)",
-          color: "var(--muted-foreground)",
-          marginTop: 7,
-          textAlign: "center",
-        }}
-      >
-        {when ? `Replaces your ${when} submission` : "You have not submitted yet"}
-      </div>
+          Nothing has been handed in yet, so there is no mark to wait for.
+        </div>
+      )}
     </div>
   );
 }

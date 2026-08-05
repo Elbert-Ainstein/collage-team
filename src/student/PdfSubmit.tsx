@@ -229,17 +229,87 @@ export function PdfSubmit({
     );
   }
 
+  // Two steps, not one screen with everything on it. Until a PDF exists there
+  // is nothing to map pages to, so showing the question chips and an empty grid
+  // asks the student to read past controls that cannot do anything yet.
+  //
+  // Returning early on `!file` also narrows it for everything below, so step two
+  // can read file.page_count without re-asking whether there is a file.
+  if (!file) {
+    return (
+      <div className="sv-card" style={{ marginTop: 12 }}>
+        <div className="sv-eyebrow">Step 1 of 2 · Upload</div>
+
+        {error ? (
+          <div
+            role="alert"
+            style={{
+              marginTop: 8,
+              padding: "8px 10px",
+              border: "1px solid var(--cream-500)",
+              borderRadius: 8,
+              fontSize: "var(--text-xs)",
+              color: "var(--amber-700)",
+              lineHeight: 1.5,
+            }}
+          >
+            {error}
+          </div>
+        ) : null}
+
+        <input
+          ref={picker}
+          type="file"
+          accept="application/pdf,.pdf"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            void take(e.target.files?.[0]);
+            e.target.value = "";
+          }}
+        />
+
+        <button
+          type="button"
+          className="sv-dz"
+          disabled={busy != null || locked}
+          onClick={() => picker.current?.click()}
+          style={{ width: "100%", marginTop: 10, font: "inherit", color: "inherit" }}
+        >
+          <SIcon name="attachFile" size={28} />
+          <span
+            style={{
+              fontFamily: "var(--font-serif)",
+              fontSize: "var(--text-lg)",
+              fontWeight: 700,
+            }}
+          >
+            {busy === "uploading"
+              ? "Reading your PDF…"
+              : busy === "loading"
+                ? "Checking for a submission…"
+                : "Upload your work as a PDF"}
+          </span>
+          <span
+            className="sv-sub"
+            style={{ maxWidth: "48ch", textAlign: "center", lineHeight: 1.5 }}
+          >
+            One file for the whole assignment. Once it&rsquo;s up you&rsquo;ll mark which pages
+            answer which question, so your marker opens straight to the right page.
+          </span>
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="sv-card" style={{ marginTop: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <div className="sv-eyebrow" style={{ flex: 1 }}>
-          Your PDF
+          Step 2 of 2 · Which pages answer which question
         </div>
-        {file ? (
-          <span className="sv-sub" style={{ fontSize: "var(--text-2xs)" }}>
-            {file.page_count} {file.page_count === 1 ? "page" : "pages"}
-          </span>
-        ) : null}
+        <span className="sv-sub" style={{ fontSize: "var(--text-2xs)" }}>
+          {file.page_count} {file.page_count === 1 ? "page" : "pages"}
+        </span>
       </div>
 
       {error ? (
@@ -270,31 +340,7 @@ export function PdfSubmit({
         }}
       />
 
-      {!file ? (
-        <>
-          <button
-            type="button"
-            className="sv-dz"
-            disabled={busy != null || locked}
-            onClick={() => picker.current?.click()}
-            style={{ width: "100%", marginTop: 10, font: "inherit", color: "inherit" }}
-          >
-            <SIcon name="attachFile" size={28} />
-            <span style={{ fontFamily: "var(--font-serif)", fontSize: "var(--text-lg)", fontWeight: 700 }}>
-              {busy === "uploading" ? "Reading your PDF…" : "Upload your work as a PDF"}
-            </span>
-            <span
-              className="sv-sub"
-              style={{ maxWidth: "48ch", textAlign: "center", lineHeight: 1.5 }}
-            >
-              One file for the whole assignment. You&rsquo;ll then mark which pages answer which
-              question, so your marker opens straight to the right page.
-            </span>
-          </button>
-        </>
-      ) : (
-        <>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
             {locked ? (
               <span className="sv-sub">This has been graded, so it can no longer be changed.</span>
             ) : armedReplace ? (
@@ -327,10 +373,7 @@ export function PdfSubmit({
 
           {questions.length ? (
             <>
-              <div className="sv-eyebrow" style={{ marginTop: 18 }}>
-                Which pages answer which question
-              </div>
-              <div className="sv-sub" style={{ marginTop: 4, lineHeight: 1.55, maxWidth: "62ch" }}>
+              <div className="sv-sub" style={{ marginTop: 18, lineHeight: 1.55, maxWidth: "62ch" }}>
                 Pick a question, then click the pages that answer it. A page can answer more than
                 one, and a question can span several.
               </div>
@@ -462,8 +505,6 @@ export function PdfSubmit({
                   ))
                 : null}
           </div>
-        </>
-      )}
     </div>
   );
 }
