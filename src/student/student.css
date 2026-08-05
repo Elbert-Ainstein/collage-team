@@ -250,3 +250,21 @@
 @media (prefers-reduced-motion: reduce) {
   .sv * { transition: none !important; }
 }
+
+/* Drop zone — the PDF hand-in. Same shape as the faculty roster dropzone so the
+   two surfaces read as one product. */
+.sv-dz {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 34px 24px;
+  border: 2px dashed var(--neutral-200);
+  border-radius: var(--radius-xl);
+  background: var(--cream-300);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 140ms ease;
+}
+.sv-dz:hover:not(:disabled) { border-color: var(--neutral-300); }
+.sv-dz:disabled { opacity: 0.6; cursor: default; }

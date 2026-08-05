@@ -11,6 +11,7 @@ import { requireSupabase } from "@/lib/supabaseClient";
 import { dbError } from "./data";
 import type {
   Activity,
+  ActivityQuestion,
   CheckIn,
   CheckInResult,
   Course,
@@ -336,6 +337,56 @@ async function submit(
   if (current && current.text === text && (await write(current.updated_at))) return;
 
   throw new SubmissionConflictError(current);
+}
+
+/**
+ * The questions of an activity, for the page-mapping step.
+ *
+ * RLS ("student reads open activity_questions", 0014) already limits this to
+ * activities open to them, so there is nothing to re-filter. A database without
+ * 0014 has no such table; questions are an enhancement and the hand-in works
+ * without them, so that one error degrades to none rather than blanking the
+ * screen a student is trying to submit from.
+ */
+export async function listMyQuestions(activityId: string): Promise<ActivityQuestion[]> {
+  try {
+    return (
+      (unwrap(
+        await db().from("activity_questions").select("*")
+          .eq("activity_id", activityId)
+          .order("position").order("label"),
+      ) as ActivityQuestion[] | null) ?? []
+    );
+  } catch (e) {
+    if (/activity_questions/.test(String((e as Error)?.message ?? e))) return [];
+    throw e;
+  }
+}
+
+/**
+ * This student's result row for a check-in, creating an empty one if missing.
+ *
+ * A PDF has to hang off a result row, and the row was only ever created when
+ * work was submitted — so there was nothing for an upload to attach to. Created
+ * as a DRAFT, which no count treats as handed in, so opening the hand-in screen
+ * does not tell the instructor a student has submitted when they have not.
+ */
+export async function ensureMyResult(checkInId: string, studentId: string): Promise<string> {
+  const existing = (unwrap(
+    await db().from("check_in_results").select("id")
+      .eq("check_in_id", checkInId).eq("student_id", studentId).limit(1),
+  ) as { id: string }[] | null) ?? [];
+  if (existing.length) return existing[0].id;
+
+  const rows = unwrap(
+    await db().from("check_in_results").insert({
+      check_in_id: checkInId,
+      subject_type: "student",
+      student_id: studentId,
+      status: "draft",
+    }).select("id"),
+  ) as { id: string }[];
+  return rows[0].id;
 }
 
 /**
