@@ -9,6 +9,7 @@
 import { Fragment, type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import { createActivity, deleteActivity, updateActivity } from "@/checkins/data";
 import { deleteActivityRecordings } from "@/checkins/audio";
+import { purgeActivityStorage } from "@/checkins/purge";
 import { isOpenToStudents } from "@/checkins/studentData";
 import { ConfirmDialog } from "./ConfirmDialog";
 import {
@@ -767,9 +768,10 @@ function RowView({
                       busy={busy}
                       onDelete={() =>
                         void run(async () => {
-                          // See ActivityDetail: the recordings' files must go
-                          // before the rows naming them cascade away.
+                          // See ActivityDetail: every bucket's objects must
+                          // go before the rows naming them cascade away.
                           await deleteActivityRecordings(a.id);
+                          await purgeActivityStorage(a.id, (a.files ?? []).map((f) => f.path));
                           await deleteActivity(a.id);
                         })
                       }

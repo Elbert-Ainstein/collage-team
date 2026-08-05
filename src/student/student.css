@@ -117,12 +117,31 @@
   flex: 1; min-width: 0;
   border: 1px solid var(--neutral-200); background: var(--cream-200);
   border-radius: var(--radius-xl); box-shadow: var(--shadow);
-  padding: 26px 30px 34px;
-  /* The one region that scrolls. min-height:0 because a flex child will not
-     shrink below its content otherwise, which is what silently handed the
+  padding: 26px 30px 20px;
+  /* A column, not a scroller. The panel holds a pinned head and one scrolling
+     region below it — the same shape the faculty panel has, so a student
+     scrolling a long list keeps the screen's title and filters in view instead
+     of losing them off the top. min-height:0 because a flex child will not
+     shrink below its content otherwise, which is what silently hands the
      overflow back to the document. */
-  min-height: 0; overflow-y: auto; overflow-x: hidden;
+  display: flex; flex-direction: column;
+  min-height: 0; overflow: hidden;
+}
+
+/* Each screen is itself a column inside the panel: a pinned head, then the one
+   region that scrolls. */
+.sv-screen { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+/* The screen's title row and anything that filters what is below it. Pinned. */
+.sv-head { flex: none; }
+
+/* The one region that scrolls. The negative margin puts the scrollbar at the
+   panel edge rather than inside the content column. */
+.sv-scroll {
+  flex: 1; min-height: 0;
+  overflow-y: auto; overflow-x: hidden;
   overscroll-behavior: contain;
+  margin: 0 -30px; padding: 0 30px 14px;
 }
 
 /* --------------------------------------------------------------- atoms */
@@ -260,7 +279,11 @@
   .sv { flex-direction: column; height: auto; min-height: 100dvh; overflow: visible; }
   .sv-sidebar { width: auto; flex: none; }
   .sv-main { padding: 0 12px 12px; }
-  .sv-panel { padding: 18px 16px 26px; overflow-y: visible; }
+  .sv-panel { padding: 18px 16px 26px; overflow: visible; }
+  /* Stacked, so the document scrolls and pinning a head inside a panel that is
+     itself scrolling away would only trap the content. */
+  .sv-screen { display: block; }
+  .sv-scroll { overflow-y: visible; margin: 0 -16px; padding: 0 16px 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .sv * { transition: none !important; }

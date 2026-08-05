@@ -273,13 +273,6 @@ export function CheckInScreen({ data }: { data: FacultyData }): JSX.Element {
                 {loading ? <span className="fv-sub">Loading…</span> : null}
               </div>
 
-              {!canEdit ? (
-                <p className="fv-sub" style={{ marginBottom: 10, lineHeight: 1.55 }}>
-                  You can see this sheet but not fill it in — running check-ins is a
-                  permission the course owner grants on the TFs tab.
-                </p>
-              ) : null}
-
               <div className="fv-tblwrap">
                 <table className="fv-tbl">
                   <thead>

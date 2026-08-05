@@ -19,8 +19,10 @@ import type { CSSProperties, ReactNode } from "react";
 
 import { ensureTeamResult } from "@/checkins/studentData";
 import { getMyTeamMarks, type TutorialMark } from "@/checkins/tutorial";
+import { listTeamResources, resourceUrls, type TeamResource } from "@/checkins/resources";
+import { listMyQuestions } from "@/checkins/studentData";
 import type { Assignment, AssignmentStatus, Enrolment } from "@/checkins/studentData";
-import type { ActivityType, Scope, Student } from "@/checkins/types";
+import type { ActivityQuestion, ActivityType, Scope, Student } from "@/checkins/types";
 import { SCOPE_LABEL, SCOPE_OF, TYPE_LABEL } from "@/checkins/types";
 import { SIcon } from "./icons";
 import { Recorder } from "./Recorder";
@@ -193,15 +195,6 @@ function groupByWeek(list: Assignment[]): WeekGroup[] {
 
 // ------------------------------------------------------------------- atoms
 
-/** Honest marker for a region rendered from the handoff's seed copy. */
-function SampleTag({ what }: { what: string }) {
-  return (
-    <span className="sv-badge outline" title={`Sample content — ${what}`}>
-      Sample
-    </span>
-  );
-}
-
 function Eyebrow({ children }: { children: ReactNode }) {
   return <div className="sv-eyebrow">{children}</div>;
 }
@@ -329,13 +322,14 @@ function AssignmentsList({
   );
 
   return (
-    <section>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap", marginBottom: 6 }}>
-        <h1 className="sv-h1">Assignments</h1>
-        <span className="sv-sub">Everything you owe, and everything your team owes together.</span>
-      </div>
+    <section className="sv-screen">
+      <div className="sv-head">
+        <div style={{ display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap", marginBottom: 6 }}>
+          <h1 className="sv-h1">Assignments</h1>
+          <span className="sv-sub">Everything you owe, and everything your team owes together.</span>
+        </div>
 
-      <div style={{ margin: "14px 0 18px" }}>
+        <div style={{ margin: "14px 0 18px" }}>
         <div className="sv-tabs" role="tablist" aria-label="Filter assignments">
           {FILTERS.map((f) => (
             <button
@@ -348,10 +342,12 @@ function AssignmentsList({
             >
               {f.value === "all" ? f.label : `${f.label} · ${counts[f.value]}`}
             </button>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
 
+      <div className="sv-scroll">
       {assignments.length === 0 ? (
         <div className="sv-card" style={{ padding: "34px 20px", textAlign: "center" }}>
           <div className="sv-h2">Nothing assigned yet</div>
@@ -392,39 +388,55 @@ function AssignmentsList({
           ))}
         </div>
       )}
+      </div>
     </section>
   );
 }
 
+/** How many of a team's photos preview on the activity page. The rest are one click away. */
+const STRIP_MAX = 3;
+
+/** "Aug 5, 2:14pm" — same shape the folder uses, so a tile reads the same in both places. */
+function resourceStamp(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const day = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const h24 = d.getHours();
+  const h = h24 % 12 === 0 ? 12 : h24 % 12;
+  return `${day}, ${h}:${String(d.getMinutes()).padStart(2, "0")}${h24 >= 12 ? "pm" : "am"}`;
+}
+
 // ------------------------------------------------------------------ detail
 
-const STRIP: { icon: string; title: string; meta: string; bg: string }[] = [
-  { icon: "image", title: "Final board", meta: "Thu 2:14pm", bg: "var(--neutral-100)" },
-  { icon: "mic", title: "Thursday session", meta: "12:41", bg: "var(--sky-100)" },
-  { icon: "assignment", title: "Trials 1–3", meta: "Generated", bg: "var(--cream-400)" },
-];
 
-/** Seed copy from the handoff, used only when the activity carries no brief. */
-const SEED_DESCRIPTION = "Work the problem set on your own, then bring your answers to the discussion.";
-const SEED_INSTRUCTIONS = "Record the discussion. Rotate who presents each problem.";
-const SEED_QUESTION_COUNT = "5 questions";
-
-function DescriptionCard({ a }: { a: Assignment }) {
+/**
+ * The brief, plus what the activity is out of.
+ *
+ * No invented fallback. This used to print "Work the problem set on your own,
+ * then bring your answers to the discussion." for an activity whose instructor
+ * wrote nothing — badged Sample, but it still read like an assignment, and a
+ * student following it is following something nobody set. The question count
+ * beside it was a hard-coded "5 questions"; it is the real rubric now.
+ */
+function DescriptionCard({ a, questions }: { a: Assignment; questions: number }) {
   const brief = a.activity.source_text?.trim();
-  const sampleOf = brief
-    ? "the question count has no schema behind it yet"
-    : "no brief has been posted, and the question count has no schema behind it yet";
   return (
     <div className="sv-card" style={{ marginTop: 14 }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <div className="sv-eyebrow" style={{ flex: 1 }}>
-          Description
-        </div>
-        <SampleTag what={sampleOf} />
-      </div>
-      <p style={CARD_BODY}>{brief || SEED_DESCRIPTION}</p>
+      <div className="sv-eyebrow">Description</div>
+      {brief ? (
+        <p style={CARD_BODY}>{brief}</p>
+      ) : (
+        <p style={{ ...CARD_BODY, color: "var(--muted-foreground)" }}>
+          Your instructor hasn&rsquo;t written a brief for this one. Ask in the session if
+          you&rsquo;re not sure what it asks for.
+        </p>
+      )}
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
-        <span className="sv-badge secondary">{SEED_QUESTION_COUNT}</span>
+        {questions > 0 ? (
+          <span className="sv-badge secondary">
+            {questions} {questions === 1 ? "question" : "questions"}
+          </span>
+        ) : null}
         <span className="sv-badge warning">{dueLine(a)}</span>
       </div>
     </div>
@@ -459,58 +471,151 @@ function whyNoAudio(enrolment: Enrolment, a: Assignment): string | null {
   return null;
 }
 
-function ResourceStrip({ onOpenResources }: { onOpenResources: () => void }) {
+/**
+ * The team's photos for THIS activity, on the activity page.
+ *
+ * Real rows (0017). This used to render three invented tiles — "Final board",
+ * "Thursday session", "Trials 1-3" — behind a Sample badge, which was
+ * defensible while nothing was real and became a lie the moment the folder
+ * was: a student saw three artefacts here that were not in their folder.
+ */
+function ResourceStrip({
+  activityId,
+  teamId,
+  onOpenResources,
+}: {
+  activityId: string;
+  teamId: string | null;
+  onOpenResources: () => void;
+}) {
+  const [items, setItems] = useState<TeamResource[]>([]);
+  const [urls, setUrls] = useState<Map<string, string>>(new Map());
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!teamId) {
+      setItems([]);
+      return;
+    }
+    let alive = true;
+    setLoading(true);
+    listTeamResources(activityId, teamId)
+      .then(async (rows) => {
+        if (!alive) return;
+        setItems(rows);
+        // Only what is shown gets a signed URL — the strip is a preview of the
+        // folder, not the folder.
+        const shown = rows.slice(-STRIP_MAX);
+        setUrls(await resourceUrls(shown.map((r) => r.path)));
+      })
+      // Silent: the folder is one click away and says what went wrong there.
+      // A red box on the activity page over a preview strip is not the place.
+      .catch(() => undefined)
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [activityId, teamId]);
+
+  // Newest first — the photo anyone wants is the one just taken.
+  const shown = items.slice(-STRIP_MAX).reverse();
+  const more = items.length - shown.length;
+
   return (
     <div className="sv-card" style={{ marginTop: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
         <div className="sv-eyebrow" style={{ flex: 1 }}>
           Team resources
         </div>
-        <SampleTag what="team artefacts have no schema behind them yet" />
         <button
           type="button"
           className="sv-btn link"
           onClick={onOpenResources}
           style={{ color: "var(--navy-700)" }}
         >
-          Open all
+          {items.length ? (more > 0 ? `Open all · ${items.length}` : "Open all") : "Add a photo"}
         </button>
       </div>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {STRIP.map((t) => (
-          <div
-            key={t.title}
-            style={{
-              width: 150,
-              border: "1px solid var(--neutral-200)",
-              background: "var(--cream-300)",
-              borderRadius: "var(--radius-md)",
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                height: 62,
-                background: t.bg,
-                color: "var(--muted-foreground)",
-              }}
-            >
-              <SIcon name={t.icon} size={20} />
-            </div>
-            <div style={{ padding: "8px 10px" }}>
-              <div style={{ fontSize: "var(--text-xs)", fontWeight: "var(--weight-semibold)", lineHeight: 1.3 }}>
-                {t.title}
-              </div>
-              <div style={{ fontSize: "var(--text-2xs)", color: "var(--muted-foreground)", marginTop: 2 }}>
-                {t.meta}
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
+
+      {loading && !items.length ? (
+        <div className="sv-sub" style={{ fontSize: "var(--text-xs)" }}>
+          Loading…
+        </div>
+      ) : !items.length ? (
+        <p
+          style={{
+            margin: 0,
+            fontSize: "var(--text-xs)",
+            color: "var(--muted-foreground)",
+            lineHeight: 1.55,
+            maxWidth: "60ch",
+          }}
+        >
+          {teamId
+            ? "Nothing here yet. Photos of a whiteboard your team worked on go in Team resources, filed under this activity."
+            : "You are not on a team yet, and these belong to a team."}
+        </p>
+      ) : (
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {shown.map((r) => {
+            const url = urls.get(r.path);
+            return (
+              <button
+                key={r.id}
+                type="button"
+                onClick={onOpenResources}
+                title={`Open ${r.title} in Team resources`}
+                style={{
+                  width: 150,
+                  padding: 0,
+                  font: "inherit",
+                  textAlign: "left",
+                  cursor: "pointer",
+                  border: "1px solid var(--neutral-200)",
+                  background: "var(--cream-300)",
+                  borderRadius: "var(--radius-md)",
+                  overflow: "hidden",
+                }}
+              >
+                <span
+                  style={{
+                    display: "block",
+                    height: 62,
+                    background: url
+                      ? `var(--neutral-100) url("${url}") center/cover no-repeat`
+                      : "var(--neutral-100)",
+                  }}
+                />
+                <span style={{ display: "block", padding: "8px 10px" }}>
+                  <span
+                    className="sv-ellip"
+                    style={{
+                      display: "block",
+                      fontSize: "var(--text-xs)",
+                      fontWeight: "var(--weight-semibold)",
+                      lineHeight: 1.3,
+                    }}
+                  >
+                    {r.title}
+                  </span>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "var(--text-2xs)",
+                      color: "var(--muted-foreground)",
+                      marginTop: 2,
+                    }}
+                  >
+                    {resourceStamp(r.created_at)}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -773,6 +878,22 @@ function AssignmentDetail({
   const teamResultId =
     a.teamResult?.id ?? (made && made.checkInId === teamCheckInId ? made.resultId : null);
 
+  // The activity's questions. Real rows (0014) — the count on the description
+  // card, and what the hand-in maps pages to.
+  const [questions, setQuestions] = useState<ActivityQuestion[]>([]);
+
+  useEffect(() => {
+    let alive = true;
+    listMyQuestions(act.id)
+      .then((qs) => {
+        if (alive) setQuestions(qs);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [act.id]);
+
   // What the instructor recorded for this team in the session. Loaded on the
   // team half only, which is the only place it is shown.
   const [marks, setMarks] = useState<TutorialMark[]>([]);
@@ -842,13 +963,18 @@ function AssignmentDetail({
         : "Nothing saved yet";
 
   return (
-    <section>
-      <button type="button" className="sv-btn link" onClick={onBack} style={{ gap: 4 }}>
-        <SIcon name="chevronLeft" size={15} />
-        All assignments
-      </button>
+    <section className="sv-screen">
+      <div className="sv-head">
+        <button type="button" className="sv-btn link" onClick={onBack} style={{ gap: 4 }}>
+          <SIcon name="chevronLeft" size={15} />
+          All assignments
+        </button>
+      </div>
 
-      <div style={{ display: "flex", gap: 22, alignItems: "flex-start", flexWrap: "wrap", marginTop: 10 }}>
+      <div
+        className="sv-scroll"
+        style={{ display: "flex", gap: 22, alignItems: "flex-start", flexWrap: "wrap", paddingTop: 10 }}
+      >
         <div style={{ flex: 1, minWidth: 420 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <span className={`sv-badge ${TYPE_BADGE[act.type]}`}>{TYPE_LABEL[act.type]}</span>
@@ -882,7 +1008,7 @@ function AssignmentDetail({
 
           {onIndiv ? (
             <div>
-              <DescriptionCard a={a} />
+              <DescriptionCard a={a} questions={questions.length} />
               <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 14 }}>
                 <button
                   type="button"
@@ -909,9 +1035,14 @@ function AssignmentDetail({
                   <div className="sv-eyebrow" style={{ flex: 1 }}>
                     Instructions
                   </div>
-                  {brief ? null : <SampleTag what="no brief has been posted for this activity" />}
                 </div>
-                <p style={CARD_BODY}>{brief || SEED_INSTRUCTIONS}</p>
+                {brief ? (
+                  <p style={CARD_BODY}>{brief}</p>
+                ) : (
+                  <p style={{ ...CARD_BODY, color: "var(--muted-foreground)" }}>
+                    Your instructor hasn&rsquo;t written instructions for this one.
+                  </p>
+                )}
               </div>
 
               <Recorder resultId={teamResultId} unavailable={whyNoAudio(enrolment, a)} />
@@ -943,7 +1074,11 @@ function AssignmentDetail({
                 </div>
               ) : null}
 
-              <ResourceStrip onOpenResources={onOpenResources} />
+              <ResourceStrip
+                activityId={act.id}
+                teamId={teamId}
+                onOpenResources={onOpenResources}
+              />
             </div>
           ) : null}
         </div>

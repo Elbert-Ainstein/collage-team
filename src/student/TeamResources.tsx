@@ -151,24 +151,27 @@ export function TeamResources(props: {
   }
 
   return (
-    <section>
+    <section className="sv-screen">
       {style}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "baseline",
-          gap: 14,
-          flexWrap: "wrap",
-          marginBottom: 6,
-        }}
-      >
-        <h1 className="sv-h1">Team resources</h1>
-        <span className="sv-sub">
-          Photos of {teamName}&rsquo;s work, filed under the activity they came from. Visible to
-          your team only.
-        </span>
+      <div className="sv-head">
+        <div
+          style={{
+            display: "flex",
+            alignItems: "baseline",
+            gap: 14,
+            flexWrap: "wrap",
+            marginBottom: 6,
+          }}
+        >
+          <h1 className="sv-h1">Team resources</h1>
+          <span className="sv-sub">
+            Photos of {teamName}&rsquo;s work, filed under the activity they came from. Visible to
+            your team only.
+          </span>
+        </div>
       </div>
 
+      <div className="sv-scroll">
       {!teamId ? (
         <div className="sv-card" style={{ marginTop: 18 }}>
           <div className="sv-eyebrow">No team yet</div>
@@ -299,6 +302,7 @@ export function TeamResources(props: {
           })}
         </div>
       )}
+      </div>
     </section>
   );
 }
@@ -430,8 +434,9 @@ function Folder({
   const total = items.length;
 
   return (
-    <section>
+    <section className="sv-screen">
       {style}
+      <div className="sv-head">
       <button type="button" className="sv-btn link" onClick={onBack}>
         <SIcon name="chevronLeft" size={15} />
         Team resources
@@ -483,7 +488,9 @@ function Folder({
       <div style={{ fontSize: "var(--text-xs)", color: "var(--muted-foreground)", marginTop: 5 }}>
         {weekLabel(assignment)} · {countLabel(total)} · your team only
       </div>
+      </div>
 
+      <div className="sv-scroll">
       {error ? (
         <div
           role="alert"
@@ -626,6 +633,7 @@ function Folder({
           })}
         </div>
       )}
+      </div>
 
       {zoom && urls.get(zoom.path) ? (
         <button

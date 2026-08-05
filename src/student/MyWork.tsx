@@ -438,8 +438,9 @@ export function MyWork(props: {
   }
 
   return (
-    <section>
+    <section className="sv-screen">
       {/* ---------------------------------------------------------- header */}
+      <div className="sv-head">
       <div
         style={{
           display: "flex",
@@ -474,9 +475,10 @@ export function MyWork(props: {
           {busy ? "Submitting…" : isTeam ? "Submit for team" : "Submit"}
         </button>
       </div>
+      </div>
 
       {/* ------------------------------------------------------------ body */}
-      <div style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+      <div className="sv-scroll" style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
         {/* ------------------------------------------------ question list */}
         <div className="sv-card" style={{ width: 204, flex: "none", padding: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 4px 8px" }}>

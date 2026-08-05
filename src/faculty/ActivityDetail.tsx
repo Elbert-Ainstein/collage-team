@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteActivity, tintFor, updateActivity } from "@/checkins/data";
 import { deleteActivityRecordings } from "@/checkins/audio";
+import { purgeActivityStorage } from "@/checkins/purge";
 import { isOpenToStudents } from "@/checkins/studentData";
 import {
   HIDDEN_INSTANT,
@@ -933,11 +934,15 @@ export function ActivityDetail(props: {
             void (async () => {
               setSaving(true);
               try {
-                // Audio first: a foreign key cascades the recording ROWS and
-                // leaves the files in the bucket, so they have to go while
-                // the rows that name them still exist. Loud on failure —
-                // better to stop than to half-delete.
+                // Every bucket first. A foreign key cascades the ROWS and
+                // leaves the objects, so they have to go while the rows that
+                // name them still exist. The assignment document is the one
+                // that cannot wait at all: its storage policy joins back to
+                // the activity row, so once that row is gone nobody can ever
+                // delete the object again. Loud on failure — better to stop
+                // than to half-delete.
                 await deleteActivityRecordings(activity.id);
+                await purgeActivityStorage(activity.id, (activity.files ?? []).map((f) => f.path));
                 await deleteActivity(activity.id);
                 onChanged();
                 onBack();

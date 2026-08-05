@@ -302,7 +302,7 @@ export function FacultyApp({
     }
     switch (screen) {
       case "checkin":
-        return <CheckInScreen data={data} />;
+        return data.can.runCheckIns ? <CheckInScreen data={data} /> : null;
       case "teams":
         return <TeamsScreen data={data} onChanged={() => refresh().catch(fail)} onError={fail} />;
       case "tfs":
@@ -433,7 +433,14 @@ export function FacultyApp({
                 { id: "tfs" as const, label: "TFs", icon: "school" },
               ] as const
             )
+              // A TF who can only grade reads NO rows from tutorial_marks
+              // (0016 gates reads on can_run_checkins_course), so the tab
+              // painted a complete, plausible, entirely blank sheet — which
+              // reads as "nothing has been marked yet" rather than "this is
+              // not yours to see". Showing a control that always fails is the
+              // thing worth avoiding.
               .filter((t) => t.id !== "tfs" || (data?.can.manageTFs ?? true))
+              .filter((t) => t.id !== "checkin" || (data?.can.runCheckIns ?? true))
               .map((t) => (
               <button
                 key={t.id}
