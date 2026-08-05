@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
 import { ensureTeamResult } from "@/checkins/studentData";
+import { getMyTeamMarks, type TutorialMark } from "@/checkins/tutorial";
 import type { Assignment, AssignmentStatus, Enrolment } from "@/checkins/studentData";
 import type { ActivityType, Scope, Student } from "@/checkins/types";
 import { SCOPE_LABEL, SCOPE_OF, TYPE_LABEL } from "@/checkins/types";
@@ -188,14 +189,6 @@ function groupByWeek(list: Assignment[]): WeekGroup[] {
       items,
     };
   });
-}
-
-/** First names of the student's teammates, excluding the student themselves. */
-function teammateNames(enrolment: Enrolment): string[] {
-  return enrolment.teammates
-    .filter((s: Student) => s.id !== enrolment.student.id)
-    .map((s) => s.name.trim().split(/\s+/)[0])
-    .filter((n) => n.length > 0);
 }
 
 // ------------------------------------------------------------------- atoms
@@ -415,11 +408,6 @@ const STRIP: { icon: string; title: string; meta: string; bg: string }[] = [
 const SEED_DESCRIPTION = "Work the problem set on your own, then bring your answers to the discussion.";
 const SEED_INSTRUCTIONS = "Record the discussion. Rotate who presents each problem.";
 const SEED_QUESTION_COUNT = "5 questions";
-const SEED_PRESENTERS = ["Ellie", "Caleb"];
-const RUBRIC: [number, number][] = [
-  [5, 4],
-  [4, 5],
-];
 
 function DescriptionCard({ a }: { a: Assignment }) {
   const brief = a.activity.source_text?.trim();
@@ -598,15 +586,32 @@ function StatusCard({ a, scope }: { a: Assignment; scope: Scope }) {
   );
 }
 
-function LiveGrading({ names }: { names: string[] }) {
-  const presenters = names.slice(0, 2).map((name, i) => ({
-    slot: `Presenter ${i + 1}`,
-    name,
-    scores: [
-      { label: "Accuracy", value: RUBRIC[i][0] },
-      { label: "Collaboration", value: RUBRIC[i][1] },
-    ],
-  }));
+/**
+ * What the instructor recorded for THIS team during the session.
+ *
+ * Real rows now (0016), not the handoff's seed copy. A team sees only its own —
+ * the policy on tutorial_marks is what enforces that; this just renders what
+ * came back. Absences are deliberately absent: who else on your team was marked
+ * away is a fact about them.
+ */
+function LiveGrading({
+  marks,
+  members,
+  loading,
+}: {
+  marks: TutorialMark[];
+  members: Student[];
+  loading: boolean;
+}) {
+  const nameOf = (id: string | null) =>
+    (id && members.find((m) => m.id === id)?.name) || "Not recorded";
+
+  // A row exists as soon as anything is touched, so "has a row" is not the
+  // question — an all-null row means the instructor opened the sheet, nothing
+  // more, and showing empty bars for it would read as a score of zero.
+  const filled = marks
+    .filter((m) => m.presenter_id !== null || m.accuracy !== null || m.discussion !== null)
+    .sort((x, y) => x.slot - y.slot);
 
   return (
     <div style={{ borderLeft: "1px solid var(--neutral-200)", padding: "2px 0 2px 20px" }}>
@@ -614,78 +619,111 @@ function LiveGrading({ names }: { names: string[] }) {
         <div className="sv-eyebrow" style={{ flex: 1 }}>
           Live grading
         </div>
-        <SampleTag what="the rubric has no schema behind it yet" />
-        <span
-          style={{
-            display: "inline-block",
-            width: 7,
-            height: 7,
-            borderRadius: 999,
-            background: "var(--emerald-500)",
-          }}
-        />
+        {filled.length ? (
+          <span
+            style={{
+              display: "inline-block",
+              width: 7,
+              height: 7,
+              borderRadius: 999,
+              background: "var(--emerald-500)",
+            }}
+          />
+        ) : null}
       </div>
       <div style={{ fontSize: "var(--text-2xs)", color: "var(--muted-foreground)", marginTop: 5 }}>
         Marked by your instructor during the session
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 14 }}>
-        {presenters.map((p) => (
-          <div key={p.slot} style={{ borderTop: "1px solid var(--neutral-200)", paddingTop: 11 }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-              <span
-                style={{ fontSize: "var(--text-2xs)", color: "var(--muted-foreground)", whiteSpace: "nowrap" }}
-              >
-                {p.slot}
-              </span>
-              <span className="sv-ellip" style={{ fontSize: "var(--text-xs)", fontWeight: "var(--weight-semibold)" }}>
-                {p.name}
-              </span>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 7, marginTop: 9 }}>
-              {p.scores.map((s) => (
-                <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                  <span
-                    style={{
-                      width: 78,
-                      flex: "none",
-                      fontSize: "var(--text-xs)",
-                      color: "var(--muted-foreground)",
-                    }}
-                  >
-                    {s.label}
-                  </span>
-                  <span
-                    style={{
-                      flex: 1,
-                      height: 6,
-                      borderRadius: 3,
-                      background: "var(--neutral-200)",
-                      overflow: "hidden",
-                    }}
-                  >
+      {loading ? (
+        <div className="sv-sub" style={{ marginTop: 14, fontSize: "var(--text-xs)" }}>
+          Loading…
+        </div>
+      ) : !filled.length ? (
+        <div
+          style={{
+            marginTop: 14,
+            fontSize: "var(--text-xs)",
+            color: "var(--muted-foreground)",
+            lineHeight: 1.55,
+          }}
+        >
+          Nothing recorded for your team on this activity yet. It appears here during or
+          after the tutorial.
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 14 }}>
+          {filled.map((m) => (
+            <div key={m.slot} style={{ borderTop: "1px solid var(--neutral-200)", paddingTop: 11 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span
+                  style={{
+                    fontSize: "var(--text-2xs)",
+                    color: "var(--muted-foreground)",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  Check-in {m.slot}
+                </span>
+                <span
+                  className="sv-ellip"
+                  style={{ fontSize: "var(--text-xs)", fontWeight: "var(--weight-semibold)" }}
+                >
+                  {nameOf(m.presenter_id)}
+                </span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 7, marginTop: 9 }}>
+                {(
+                  [
+                    { label: "Accuracy", value: m.accuracy },
+                    { label: "Discussion", value: m.discussion },
+                  ] as const
+                ).map((s) => (
+                  <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 9 }}>
                     <span
                       style={{
-                        display: "block",
-                        width: `${(s.value / 5) * 100}%`,
-                        height: "100%",
-                        borderRadius: 3,
-                        background: s.value === 5 ? "var(--emerald-600)" : "var(--navy-700)",
+                        width: 78,
+                        flex: "none",
+                        fontSize: "var(--text-xs)",
+                        color: "var(--muted-foreground)",
                       }}
-                    />
-                  </span>
-                  <span
-                    className="sv-num"
-                    style={{ fontSize: "var(--text-xs)", width: 26, textAlign: "right" }}
-                  >
-                    {s.value}/5
-                  </span>
-                </div>
-              ))}
+                    >
+                      {s.label}
+                    </span>
+                    <span
+                      style={{
+                        flex: 1,
+                        height: 6,
+                        borderRadius: 3,
+                        background: "var(--neutral-200)",
+                        overflow: "hidden",
+                      }}
+                    >
+                      {s.value != null ? (
+                        <span
+                          style={{
+                            display: "block",
+                            width: `${(s.value / 5) * 100}%`,
+                            height: "100%",
+                            borderRadius: 3,
+                            background: s.value === 5 ? "var(--emerald-600)" : "var(--navy-700)",
+                          }}
+                        />
+                      ) : null}
+                    </span>
+                    <span
+                      className="sv-num"
+                      style={{ fontSize: "var(--text-xs)", width: 26, textAlign: "right" }}
+                    >
+                      {s.value != null ? `${s.value}/5` : "—"}
+                    </span>
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -735,6 +773,36 @@ function AssignmentDetail({
   const teamResultId =
     a.teamResult?.id ?? (made && made.checkInId === teamCheckInId ? made.resultId : null);
 
+  // What the instructor recorded for this team in the session. Loaded on the
+  // team half only, which is the only place it is shown.
+  const [marks, setMarks] = useState<TutorialMark[]>([]);
+  const [marksLoading, setMarksLoading] = useState(false);
+
+  useEffect(() => {
+    if (!onTeam || !teamId) {
+      setMarks([]);
+      return;
+    }
+    let alive = true;
+    setMarksLoading(true);
+    getMyTeamMarks(act.id, teamId)
+      .then((rows) => {
+        if (alive) setMarks(rows);
+      })
+      .catch(() => {
+        // The rest of the activity is readable without it, and the card says
+        // "nothing recorded yet" — which is what a student sees anyway when the
+        // instructor has not marked them.
+        if (alive) setMarks([]);
+      })
+      .finally(() => {
+        if (alive) setMarksLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [onTeam, teamId, act.id]);
+
   useEffect(() => {
     if (!onTeam || !teamCheckInId || !teamId || teamResultId) return;
     let alive = true;
@@ -753,8 +821,6 @@ function AssignmentDetail({
 
   const weekLabel = act.week == null ? act.dates_label ?? "Unscheduled" : `Week ${act.week}`;
   const brief = act.source_text?.trim();
-  const names = teammateNames(enrolment);
-  const gradingNames = names.length ? names : SEED_PRESENTERS;
 
   const teamSavedLine = !enrolment.team
     ? "You are not on a team yet"
@@ -884,7 +950,9 @@ function AssignmentDetail({
 
         <div style={{ width: 270, flex: "none", display: "flex", flexDirection: "column", gap: 12 }}>
           {onIndiv ? <StatusCard a={a} scope={scope} /> : null}
-          {onTeam && showLiveGrading ? <LiveGrading names={gradingNames} /> : null}
+          {onTeam && showLiveGrading ? (
+            <LiveGrading marks={marks} members={enrolment.teammates} loading={marksLoading} />
+          ) : null}
         </div>
       </div>
     </section>

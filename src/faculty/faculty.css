@@ -1310,3 +1310,70 @@
     max-width: none;
   }
 }
+
+/* ------------------------------------------------------- check-in sheet
+   A list of what can be checked in on the left, the sheet for the chosen one
+   on the right. Both scroll on their own: the week list is long by the end of
+   term and the sheet is wide, and tying them to one scrollbar means reaching a
+   team row by first scrolling past every week. */
+.fv-cksplit {
+  display: flex;
+  gap: 20px;
+  flex: 1;
+  min-height: 0;
+}
+.fv-cknav {
+  flex: 0 0 232px;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+  border-right: 1px solid var(--fv-neutral-200);
+}
+.fv-ckitem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 9px;
+  margin-bottom: 2px;
+  border-radius: var(--fv-r-md);
+  border: 1px solid transparent;
+  background: transparent;
+  font: inherit;
+  font-size: var(--fv-xs);
+  color: var(--fv-muted);
+  cursor: pointer;
+  text-align: left;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.fv-ckitem:hover {
+  background: var(--fv-cream-300);
+}
+.fv-ckitem.on {
+  background: var(--fv-cream-400);
+  color: var(--fv-navy);
+  font-weight: 600;
+  border-color: var(--fv-neutral-200);
+}
+.fv-cksheet {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+@media (max-width: 900px) {
+  /* Stacked: the picker above the sheet, each keeping its own scroll. */
+  .fv-cksplit {
+    flex-direction: column;
+  }
+  .fv-cknav {
+    flex: 0 0 auto;
+    max-height: 30vh;
+    border-right: 0;
+    border-bottom: 1px solid var(--fv-neutral-200);
+    padding-right: 0;
+    padding-bottom: 8px;
+  }
+}
