@@ -1377,3 +1377,28 @@
     padding-bottom: 8px;
   }
 }
+
+/* The Team half of an activity page. It takes the LARGER share, unlike the
+   submissions column it sits in place of: it holds an eight-column table, and
+   at a third of the width every row is horizontal scrolling and a column of
+   single-name chips. The activity text next to it reads fine narrow. */
+.fv-split.fv-teamhalf .fv-left23 {
+  flex: 1;
+}
+.fv-teampanel {
+  flex: 2;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  border-left: 1px solid var(--fv-neutral-200);
+  padding-left: 20px;
+}
+
+@media (max-width: 900px) {
+  .fv-teampanel {
+    border-left: 0;
+    padding-left: 0;
+    border-top: 1px solid var(--fv-neutral-200);
+    padding-top: 16px;
+  }
+}

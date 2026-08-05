@@ -337,6 +337,10 @@ export function FacultyApp({
               setFresh(null);
               setScreen("grade");
             }}
+            onCheckIn={() => {
+              setFresh(null);
+              setScreen("checkin");
+            }}
             onChanged={() => refresh().catch(fail)}
             onError={fail}
           />

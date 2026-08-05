@@ -26,6 +26,7 @@ import { pointsLabel, pointsTotal, questionCount, questionsFor, statFor } from "
 import { ConfirmDialog } from "./ConfirmDialog";
 import { FAvatar, FIcon } from "./icons";
 import type { FacultyData } from "./FacultyApp";
+import { ActivityTeamPanel } from "./ActivityTeamPanel";
 
 /**
  * 0007 added `activities.due_at`; the shared row type in checkins/types.ts has
@@ -170,6 +171,8 @@ export function ActivityDetail(props: {
   /** The rubric: the assignment document, its questions and their criteria. */
   onRubric: () => void;
   onGrade: () => void;
+  /** The Check-in tab, where the team half is actually filled in. */
+  onCheckIn: () => void;
   onChanged: () => void | Promise<void>;
   onError: (e: unknown) => void;
 }): JSX.Element {
@@ -180,6 +183,7 @@ export function ActivityDetail(props: {
     onBack,
     onRubric,
     onGrade,
+    onCheckIn,
     onChanged,
     onError,
   } = props;
@@ -247,6 +251,13 @@ export function ActivityDetail(props: {
 
   const [subOpen, setSubOpen] = useState(true);
   const [notOpen, setNotOpen] = useState(false);
+
+  // Which half of the activity is on screen. Scope decides which halves exist:
+  // an individual-only activity has no team side to look at, and a team-only
+  // one has no individual side. `both` is the only case with a choice to make,
+  // and it is the only case that shows a tab strip.
+  const [half, setHalf] = useState<"indiv" | "team">(scope === "team" ? "team" : "indiv");
+  const onTeamHalf = scope === "team" || (scope === "both" && half === "team");
 
   // ------------------------------------------------------------- the editor
 
@@ -400,7 +411,28 @@ export function ActivityDetail(props: {
         <span className="fv-sub">{weekLine}</span>
       </div>
 
-      <div className="fv-split">
+      {/* Only `both` gets a strip. One tab is not a choice, and rendering it
+          anyway would suggest there is another half somewhere. */}
+      {scope === "both" ? (
+        <div className="fv-seg" style={{ alignSelf: "flex-start", marginBottom: 12 }}>
+          <button
+            type="button"
+            className={half === "indiv" ? "on" : ""}
+            onClick={() => setHalf("indiv")}
+          >
+            Individual
+          </button>
+          <button
+            type="button"
+            className={half === "team" ? "on" : ""}
+            onClick={() => setHalf("team")}
+          >
+            Team
+          </button>
+        </div>
+      ) : null}
+
+      <div className={`fv-split${onTeamHalf ? " fv-teamhalf" : ""}`}>
         <div className="fv-left23" style={{ paddingRight: 4 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <span className="fv-type" style={{ width: "auto", color: accent }}>
@@ -717,7 +749,13 @@ export function ActivityDetail(props: {
             column would report "0 of 1 submitted" and offer to grade something
             that does not exist yet. It comes back the moment the activity is
             saved and you are looking at it rather than writing it. */}
-        {editing ? null : (
+        {onTeamHalf ? (
+          <ActivityTeamPanel
+            activityId={activity.id}
+            teams={data.teams}
+            onOpenCheckIn={onCheckIn}
+          />
+        ) : editing ? null : (
         <div className="fv-right13">
           <div style={{ flex: 1, minHeight: 0, overflowY: "auto" }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
