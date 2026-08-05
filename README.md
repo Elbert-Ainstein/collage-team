@@ -1,4 +1,4 @@
-# Collage AI — Team Learning Module
+# Collage AI — Team Learning Module (3rd pillar)
 
 A team- and project-based learning engine modeled on Harvard's AP 50 (Prof. Kelly Miller).
 Two roles (Instructor / Student), four-stage activity pipeline, immutable originals,
