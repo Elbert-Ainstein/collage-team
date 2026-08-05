@@ -22,14 +22,9 @@
 // supabase/migrations/0018_purge_on_delete.sql.
 
 import { requireSupabase } from "@/lib/supabaseClient";
-import { dbError } from "./data";
+import { selectAll, selectAllIn } from "./data";
 
 const db = () => requireSupabase();
-
-function unwrap<T>(res: { data: T | null; error: { message: string } | null }): T {
-  if (res.error) throw dbError(res.error);
-  return res.data as T;
-}
 
 /** storage.remove takes a list; chunk it so a term's worth cannot blow the request. */
 async function removeAll(bucket: string, paths: string[]): Promise<number> {
@@ -42,19 +37,25 @@ async function removeAll(bucket: string, paths: string[]): Promise<number> {
   return paths.length;
 }
 
-/** The ids of every result row hanging off an activity's check-ins. */
+/**
+ * The ids of every result row hanging off an activity's check-ins.
+ *
+ * Paged and chunked, not a bare select. PostgREST caps a select at 1000 rows
+ * SILENTLY, so a big section's results would come back truncated and the sweep
+ * would quietly skip everything past the cap — leaving exactly the orphans this
+ * module exists to prevent, with no error to say so.
+ */
 async function resultIdsFor(activityId: string): Promise<string[]> {
-  const checkIns =
-    (unwrap(await db().from("check_ins").select("id").eq("activity_id", activityId)) as
-      | { id: string }[]
-      | null) ?? [];
+  const checkIns = await selectAll<{ id: string }>((from, to) =>
+    db().from("check_ins").select("id").eq("activity_id", activityId).order("id").range(from, to),
+  );
   if (!checkIns.length) return [];
 
-  const results =
-    (unwrap(
-      await db().from("check_in_results").select("id")
-        .in("check_in_id", checkIns.map((c) => c.id)),
-    ) as { id: string }[] | null) ?? [];
+  const results = await selectAllIn<{ id: string }>(
+    checkIns.map((c) => c.id),
+    (chunk, from, to) =>
+      db().from("check_in_results").select("id").in("check_in_id", chunk).order("id").range(from, to),
+  );
   return results.map((r) => r.id);
 }
 
@@ -67,10 +68,9 @@ export async function deleteActivitySubmissions(activityId: string): Promise<num
   const ids = await resultIdsFor(activityId);
   if (!ids.length) return 0;
 
-  const rows =
-    (unwrap(
-      await db().from("submission_files").select("path").in("result_id", ids),
-    ) as { path: string }[] | null) ?? [];
+  const rows = await selectAllIn<{ path: string }>(ids, (chunk, from, to) =>
+    db().from("submission_files").select("path").in("result_id", chunk).order("id").range(from, to),
+  );
   if (!rows.length) return 0;
 
   return removeAll("submissions", rows.map((r) => r.path));
@@ -78,10 +78,9 @@ export async function deleteActivitySubmissions(activityId: string): Promise<num
 
 /** Every team photo filed under this activity. */
 export async function deleteActivityResources(activityId: string): Promise<number> {
-  const rows =
-    (unwrap(
-      await db().from("team_resources").select("path").eq("activity_id", activityId),
-    ) as { path: string }[] | null) ?? [];
+  const rows = await selectAll<{ path: string }>((from, to) =>
+    db().from("team_resources").select("path").eq("activity_id", activityId).order("id").range(from, to),
+  );
   if (!rows.length) return 0;
 
   return removeAll("resources", rows.map((r) => r.path));
@@ -90,10 +89,9 @@ export async function deleteActivityResources(activityId: string): Promise<numbe
 /** Every team photo belonging to a team — for when a team or its set is removed. */
 export async function deleteTeamResourceObjects(teamIds: string[]): Promise<number> {
   if (!teamIds.length) return 0;
-  const rows =
-    (unwrap(
-      await db().from("team_resources").select("path").in("team_id", teamIds),
-    ) as { path: string }[] | null) ?? [];
+  const rows = await selectAllIn<{ path: string }>(teamIds, (chunk, from, to) =>
+    db().from("team_resources").select("path").in("team_id", chunk).order("id").range(from, to),
+  );
   if (!rows.length) return 0;
 
   return removeAll("resources", rows.map((r) => r.path));

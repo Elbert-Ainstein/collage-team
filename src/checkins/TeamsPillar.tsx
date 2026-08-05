@@ -16,6 +16,7 @@ import {
   setTeamSetLocked,
   setTeamSetSize,
 } from "./data";
+import { deleteTeamResourceObjects } from "./purge";
 import type { Activity, Student, TeamSet, TeamWithMembers } from "./types";
 import { Avatar, EmptyState, ErrorBanner, weekLabel, type PillarProps } from "./ui";
 
@@ -316,6 +317,11 @@ export function TeamsPillar(props: PillarProps) {
     const setIdNow = activeSetId;
     setTeams((prev) => prev.filter((t) => t.id !== teamId));
     await run(async () => {
+      // The team's photos first. team_resources cascades from teams, and the
+      // cascade does not reach storage — so the objects would be left behind,
+      // and 0018 only lets the course owner remove them WHILE the team row is
+      // still there to authorise against.
+      await deleteTeamResourceObjects([teamId]);
       await deleteTeam(teamId);
       await reload(setIdNow);
     });
@@ -341,7 +347,10 @@ export function TeamsPillar(props: PillarProps) {
   const onDeleteSet = async () => {
     if (!activeSetId) return;
     const doomed = activeSetId;
+    const doomedTeams = teams.map((t) => t.id);
     await run(async () => {
+      // Same reason as onDeleteTeam, for every team in the set.
+      await deleteTeamResourceObjects(doomedTeams);
       await deleteTeamSet(doomed);
       const remaining = sets.filter((s) => s.id !== doomed);
       setSets(remaining);
