@@ -170,7 +170,7 @@ export function ActivityDetail(props: {
   /** The rubric: the assignment document, its questions and their criteria. */
   onRubric: () => void;
   onGrade: () => void;
-  onChanged: () => void;
+  onChanged: () => void | Promise<void>;
   onError: (e: unknown) => void;
 }): JSX.Element {
   const {
@@ -277,7 +277,10 @@ export function ActivityDetail(props: {
     // step wrote, not something anyone typed, so arriving with it in the box
     // means the first thing you do is delete it. Start empty and let the
     // placeholder say what belongs there.
-    setTitle(opts?.blankTitle ? "" : activity.title);
+    // Only ever the stand-in: once a real title is saved, re-opening the editor
+    // must show it. Clearing whatever is there is what made a return trip look
+    // like the activity had been wiped.
+    setTitle(opts?.blankTitle && activity.title === "Untitled activity" ? "" : activity.title);
     setDesc(activity.source_text ?? "");
     setDue(toLocalInput(dueOf(activity)));
     setPoints(String(pointsTotal(activity)));
@@ -330,7 +333,8 @@ export function ActivityDetail(props: {
     }
   };
 
-  const save = async () => {
+  /** Returns whether it landed — the rubric hand-off must not leave on a failure. */
+  const save = async (): Promise<boolean> => {
     setSaving(true);
     try {
       const patch: Partial<Activity> & WithDue = {
@@ -367,9 +371,14 @@ export function ActivityDetail(props: {
         if (scope !== "indiv") await ensureCheckIn(withKind, "team", data.checkIns);
       }
       setEditing(false);
-      onChanged();
+      // Awaited, not fired and forgotten: whoever called this may navigate away
+      // next, and the screen they land on reads the same `data`. Leaving before
+      // the refetch is how a saved activity came back looking empty.
+      await onChanged();
+      return true;
     } catch (e) {
       onError(e);
+      return false;
     } finally {
       setSaving(false);
     }
@@ -663,7 +672,11 @@ export function ActivityDetail(props: {
                   className="fv-btn outline sm"
                   disabled={saving}
                   title="Save this, then write the grading criteria against the assignment"
-                  onClick={() => void save().then(onRubric)}
+                  onClick={() =>
+                    void save().then((ok) => {
+                      if (ok) onRubric();
+                    })
+                  }
                 >
                   <FIcon name="assignment" size={15} />
                   Add rubric

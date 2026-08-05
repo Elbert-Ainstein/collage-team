@@ -62,7 +62,15 @@
   background: var(--cream-300);
   -webkit-font-smoothing: antialiased;
   text-wrap: pretty;
-  min-height: 100vh;
+  /* Locked to the window, like the faculty shell: the page itself never
+     scrolls, only the panel inside it. With min-height the whole document grew
+     with the assignment list and pushed the sidebar's Sign out below the fold,
+     so signing out meant scrolling a list to reach a control that has nothing
+     to do with it. dvh rather than vh so a phone's collapsing address bar does
+     not leave a strip of the panel permanently off-screen. */
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   display: flex;
 }
 
@@ -104,12 +112,17 @@
   border-top: 1px solid var(--neutral-200); padding-top: 10px;
   display: flex; align-items: center; gap: 8px;
 }
-.sv-main { flex: 1; display: flex; padding: 12px 12px 12px 0; min-width: 0; }
+.sv-main { flex: 1; display: flex; padding: 12px 12px 12px 0; min-width: 0; min-height: 0; }
 .sv-panel {
   flex: 1; min-width: 0;
   border: 1px solid var(--neutral-200); background: var(--cream-200);
   border-radius: var(--radius-xl); box-shadow: var(--shadow);
-  padding: 26px 30px 34px; overflow-x: hidden;
+  padding: 26px 30px 34px;
+  /* The one region that scrolls. min-height:0 because a flex child will not
+     shrink below its content otherwise, which is what silently handed the
+     overflow back to the document. */
+  min-height: 0; overflow-y: auto; overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 
 /* --------------------------------------------------------------- atoms */
@@ -242,10 +255,12 @@
 .sv-ellip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 @media (max-width: 900px) {
-  .sv { flex-direction: column; }
+  /* Stacked, so there is no room for a fixed-height shell: the sidebar and the
+     panel both need the document's scroll. */
+  .sv { flex-direction: column; height: auto; min-height: 100dvh; overflow: visible; }
   .sv-sidebar { width: auto; flex: none; }
   .sv-main { padding: 0 12px 12px; }
-  .sv-panel { padding: 18px 16px 26px; }
+  .sv-panel { padding: 18px 16px 26px; overflow-y: visible; }
 }
 @media (prefers-reduced-motion: reduce) {
   .sv * { transition: none !important; }

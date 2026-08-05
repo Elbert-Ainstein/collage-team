@@ -324,8 +324,19 @@ export function FacultyApp({
             activity={selected}
             onBack={() => setScreen("activities")}
             fresh={fresh === selected.id}
-            onRubric={() => setScreen("rubric")}
-            onGrade={() => setScreen("grade")}
+            // Leaving the detail screen SPENDS the freshness. `fresh` means
+            // "this activity was just created, open its editor" — a one-time
+            // instruction, but it was surviving the trip to the rubric builder
+            // and back, so returning re-opened the editor and blanked the title
+            // again. Every time, that looked like the work had been thrown away.
+            onRubric={() => {
+              setFresh(null);
+              setScreen("rubric");
+            }}
+            onGrade={() => {
+              setFresh(null);
+              setScreen("grade");
+            }}
             onChanged={() => refresh().catch(fail)}
             onError={fail}
           />
@@ -378,6 +389,10 @@ export function FacultyApp({
         <div style={{ width: 12, flex: "0 0 12px" }} />
       ) : (
         <aside className="fv-sidebar">
+          {/* Everything above the account row lives in here so it can scroll on
+              a short window, leaving Sign out anchored to the bottom instead of
+              pushed past it. */}
+          <div className="fv-sidetop">
           <div className="fv-coursetitle">{data?.course.name ?? "Applied Physics 50"}</div>
           <div className="fv-meta">
             <span>{data ? `${data.roster.length} students` : "—"}</span>
@@ -448,7 +463,7 @@ export function FacultyApp({
             </div>
           ) : null}
 
-          <div style={{ flex: 1 }} />
+          </div>
 
           <div className="fv-sidefoot">
             <span className="fv-email" title={account}>
