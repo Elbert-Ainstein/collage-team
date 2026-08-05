@@ -15,6 +15,7 @@ import {
   IS_COMPLETION,
   SCOPE_OF,
   type Activity,
+  type ActivityQuestion,
   type CheckInResult,
   type RubricItem,
 } from "@/checkins/types";
@@ -28,7 +29,7 @@ import {
   setMark,
   updateRubricItem,
 } from "./facultyData";
-import { pointsTotal } from "./model";
+import { pointsTotal, questionsFor } from "./model";
 import type { FacultyData } from "./FacultyApp";
 import { FAvatar, FIcon } from "./icons";
 
@@ -68,13 +69,31 @@ export function GradingScreen({
 }) {
   const scope = SCOPE_OF[activity.type];
   const stat = data.stats.get(activity.id);
-  const qCount = Math.max(activity.question_count, 1);
-  const per = activity.points_per_question;
+  /** Which question is being marked — its POSITION, which is what a mark records. */
+  const [qIdx, setQIdx] = useState(0);
+  // Questions are rows (0013), in the order the rubric puts them. An activity
+  // that has none yet still grades the old way — N questions of equal value —
+  // so this synthesises that shape rather than showing a grader nothing.
+  const questions = useMemo(() => {
+    const rows = questionsFor(activity.id, data.questions);
+    if (rows.length) return rows;
+    return Array.from({ length: Math.max(activity.question_count, 1) }, (_, i) => ({
+      id: `synthetic-${i}`,
+      activity_id: activity.id,
+      label: String(i + 1),
+      points: activity.points_per_question,
+      position: i,
+      created_at: "",
+    })) as ActivityQuestion[];
+  }, [activity.id, activity.question_count, activity.points_per_question, data.questions]);
+
+  const qCount = questions.length;
+  const question = questions[Math.min(qIdx, qCount - 1)] ?? questions[0];
+  const per = question?.points ?? activity.points_per_question;
 
   const [ladder, setLadder] = useState<RubricItem[] | null>(null);
   // resultId -> questionIndex -> rubric_item_id
   const [marks, setMarks] = useState<Map<string, Map<number, string>>>(new Map());
-  const [qIdx, setQIdx] = useState(0);
   const [stIdx, setStIdx] = useState(0);
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [note, setNote] = useState("");
@@ -178,6 +197,20 @@ export function GradingScreen({
 
   const picks = subject ? (marks.get(subject.result.id) ?? new Map<number, string>()) : new Map();
   const pickedId = picks.get(qIdx) ?? null;
+
+  /**
+   * The lines that may be picked for the question on screen.
+   *
+   * Its own criteria, plus any that carry no question at all — the shared
+   * ladder, which is what every activity written before per-question criteria
+   * has and what many still want. Offering the whole rubric here would let a
+   * grader deduct question 4's points from question 1.
+   */
+  const forQuestion = useMemo(() => {
+    if (!ladder) return null;
+    const label = question?.label ?? null;
+    return ladder.filter((r) => !r.question_label || r.question_label === label);
+  }, [ladder, question?.label]);
   const deductionOf = (id: string | null) =>
     ladder?.find((r) => r.id === id)?.deduction ?? 0;
 
@@ -186,9 +219,9 @@ export function GradingScreen({
     if (!ladder) return null;
     let taken = 0;
     for (const [, id] of picks) taken += deductionOf(id);
-    return Math.max(pointsTotal(activity) - taken, 0);
+    return Math.max(pointsTotal(activity, questions) - taken, 0);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ladder, picks, activity.question_count, activity.points_per_question]);
+  }, [ladder, picks, questions]);
 
   const answeredAll = subject != null && picks.size >= qCount;
 
@@ -217,11 +250,17 @@ export function GradingScreen({
   }
 
   async function addLine() {
-    if (!ladder) return;
+    if (!ladder || !forQuestion) return;
     try {
-      const row = await addRubricItem(activity.id, ladder);
+      // Attached to the question being marked, not to the whole activity: this
+      // button sits inside "Question 3 rubric", and a line added from there
+      // that then appeared under every question would be a surprise nobody
+      // asked for. The shared ladder is written on the Rubric page.
+      const row = await addRubricItem(activity.id, ladder, question?.label ?? null);
       setLadder([...ladder, row]);
-      setEditIdx(ladder.length);
+      // The index is into the FILTERED list, which is what the rows below are
+      // rendered from — the new line lands at its end.
+      setEditIdx(forQuestion.length);
     } catch (e) {
       onError(e);
     }
@@ -381,7 +420,7 @@ export function GradingScreen({
               </div>
               <p className="fv-prompt">
                 {activity.source_text?.trim() ||
-                  `Question ${qIdx + 1} of ${qCount} for ${activity.title}. The prompt is set on the activity; add one with “Edit activity”.`}
+                  `Question ${question?.label ?? qIdx + 1} of ${qCount} for ${activity.title}. The prompt is set on the activity; add one with “Edit activity”.`}
               </p>
               <div
                 style={{ height: 1, background: "var(--fv-neutral-200)", margin: "20px 0 0" }}
@@ -422,7 +461,7 @@ export function GradingScreen({
                       fontFamily: "var(--fv-sans)",
                     }}
                   >
-                    Page {qIdx + 1} of {qCount} · assigned to Question {qIdx + 1}
+                    Page {qIdx + 1} of {qCount} · assigned to Question {question?.label ?? qIdx + 1}
                   </div>
                 </>
               )}
@@ -454,7 +493,7 @@ export function GradingScreen({
           <div className="fv-card" style={{ padding: "14px 16px" }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
               <span className="fv-eyebrow" style={{ flex: 1 }}>
-                Question {qIdx + 1} rubric
+                Question {question?.label ?? qIdx + 1} rubric
               </span>
               <span className="fv-num" style={{ fontSize: "var(--fv-sm)", fontWeight: 600 }}>
                 {thisQuestion} / {pts(per)}
@@ -471,18 +510,18 @@ export function GradingScreen({
               Pick one — the deduction comes off this question&rsquo;s {pts(per)}. {data.can.author ? " Use the pencil to edit a line." : ""}
             </p>
 
-            {ladder == null ? (
+            {forQuestion == null ? (
               <div className="fv-sub">Loading the ladder…</div>
-            ) : ladder.length === 0 ? (
-              // Only the instructor can create a ladder, so say that rather than
+            ) : forQuestion.length === 0 ? (
+              // Only the instructor can write criteria, so say that rather than
               // showing an empty list that looks broken.
               <div className="fv-sub" style={{ lineHeight: 1.6 }}>
-                No grading criteria have been set for this activity yet. Ask the instructor to
-                open <strong>Grading criteria</strong> on the activity, then reload.
+                No criteria have been written for this question yet. Ask the instructor to open
+                the <strong>Rubric</strong> on the activity and add some, then reload.
               </div>
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: 2, margin: "0 -4px" }}>
-                {ladder.map((item, i) => (
+                {forQuestion.map((item, i) => (
                   <RubricRow
                     key={item.id}
                     item={item}
@@ -505,8 +544,8 @@ export function GradingScreen({
               disabled={!ladder || !data.can.author}
               title={
                 data.can.author
-                  ? undefined
-                  : "Only the instructor who owns this course can change the grading criteria."
+                  ? "Adds a line to this question's criteria"
+                  : "Only the instructor who owns this course can change the rubric."
               }
             >
               <FIcon name="add" size={14} />
@@ -516,7 +555,7 @@ export function GradingScreen({
               className="fv-num"
               style={{ marginTop: 8, fontSize: "var(--fv-2xs)", color: "var(--fv-muted)" }}
             >
-              Submission so far · {runningTotal ?? "—"} / {pts(pointsTotal(activity))}
+              Submission so far · {runningTotal ?? "—"} / {pts(pointsTotal(activity, questions))}
             </div>
           </div>
 
@@ -554,12 +593,12 @@ export function GradingScreen({
               ? "Released"
               : releasing
                 ? "Releasing…"
-                : `Release ${runningTotal ?? 0} / ${pts(pointsTotal(activity))}`}
+                : `Release ${runningTotal ?? 0} / ${pts(pointsTotal(activity, questions))}`}
           </button>
 
           <div className="fv-card" style={{ padding: "12px 14px" }}>
             <Stepper
-              label={`Question ${qIdx + 1} of ${qCount}`}
+              label={`Question ${question?.label ?? qIdx + 1} of ${qCount}`}
               onPrev={() => setQIdx((i) => Math.max(0, i - 1))}
               onNext={() => setQIdx((i) => Math.min(qCount - 1, i + 1))}
               prevOk={qIdx > 0}

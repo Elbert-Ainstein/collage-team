@@ -11,6 +11,7 @@ import { countAll, countAllIn, dbError, selectAll, selectAllIn, tintFor } from "
 import {
   QUESTION_SHAPE,
   type Activity,
+  type ActivityQuestion,
   type Course,
   type ActivityType,
   type CheckIn,
@@ -153,6 +154,186 @@ export async function setQuestionShape(
 /** The defaults for a type, used when an activity is created. */
 export function shapeFor(type: ActivityType): { count: number; per: number } {
   return QUESTION_SHAPE[type];
+}
+
+// --------------------------------------------------------------- questions
+//
+// 0013 made questions rows. The activity still carries the old count and
+// points-per-question, and they are still what scores an activity that has no
+// rows yet — so every read here falls back to them rather than reporting zero.
+
+export async function listQuestions(activityId: string): Promise<ActivityQuestion[]> {
+  return selectAll<ActivityQuestion>((from, to) =>
+    db().from("activity_questions").select("*").eq("activity_id", activityId)
+      .order("position").order("label")
+      .range(from, to),
+  );
+}
+
+/** Every question on a course's activities, for the screens that show totals. */
+export async function listQuestionsFor(activityIds: string[]): Promise<ActivityQuestion[]> {
+  if (!activityIds.length) return [];
+  return selectAllIn<ActivityQuestion>(activityIds, (chunk, from, to) =>
+    db().from("activity_questions").select("*").in("activity_id", chunk)
+      .order("position").order("label")
+      .range(from, to),
+  );
+}
+
+/**
+ * The activity's questions, seeding them from the old shape the first time.
+ *
+ * An activity authored before 0013 says "10 questions worth 5" and has no rows;
+ * opening the rubric turns that into ten rows saying the same thing, so what
+ * faculty then edit is the same activity they had. Seeding on READ rather than
+ * at creation is what lets activities that already exist arrive here intact.
+ *
+ * `canSeed` matters for the same reason it does on the ladder: writing these is
+ * owner-only, so a teaching fellow gets what is there rather than an error.
+ */
+export async function ensureQuestions(
+  activity: Activity,
+  canSeed = true,
+): Promise<ActivityQuestion[]> {
+  const existing = await listQuestions(activity.id);
+  if (existing.length || !canSeed) return existing;
+
+  const count = Math.max(1, activity.question_count);
+  const rows = Array.from({ length: count }, (_, i) => ({
+    activity_id: activity.id,
+    label: String(i + 1),
+    points: activity.points_per_question,
+    position: i,
+  }));
+  const inserted = unwrap(
+    await db().from("activity_questions").insert(rows).select(),
+  ) as ActivityQuestion[];
+  return (inserted ?? []).sort((a, b) => a.position - b.position);
+}
+
+/**
+ * Add a question, or a sub-question of one.
+ *
+ * `after` places it: a sub-question goes directly under its parent rather than
+ * at the end, and everything below shifts down. Position is what
+ * submission_marks records against, so this renumbers rather than leaving gaps.
+ */
+export async function addQuestion(
+  activityId: string,
+  rows: ActivityQuestion[],
+  label: string,
+  points: number,
+  after?: ActivityQuestion,
+): Promise<ActivityQuestion[]> {
+  const at = after ? after.position + 1 : rows.length;
+  const inserted = unwrap(
+    await db()
+      .from("activity_questions")
+      .insert({ activity_id: activityId, label, points, position: at })
+      .select()
+      .single(),
+  ) as ActivityQuestion;
+
+  const next = [...rows.slice(0, at), inserted, ...rows.slice(at)];
+  await renumber(next);
+  await syncQuestionTotals(activityId, next);
+  return next.map((q, i) => ({ ...q, position: i }));
+}
+
+export async function updateQuestion(
+  id: string,
+  patch: { label?: string; points?: number },
+): Promise<void> {
+  // .select() so an RLS-filtered write is DETECTABLE — the same trap the ladder
+  // had: a teaching fellow's edit came back with no error and no rows, and the
+  // screen kept a number the database had refused.
+  const { data, error } = await db()
+    .from("activity_questions")
+    .update(patch)
+    .eq("id", id)
+    .select("id");
+  if (error) throw dbError(error);
+  if (!data || data.length === 0) {
+    throw new Error(
+      "That question was not saved — only the instructor who owns this course can change the " +
+        "rubric.",
+    );
+  }
+}
+
+/**
+ * Delete a question and the criteria written under it.
+ *
+ * The criteria go too because they are addressed by the question's LABEL: left
+ * behind they would belong to a question that no longer exists, and the builder
+ * would show them under a heading nobody can reach. Deleting a criterion
+ * cascades its marks, which re-scores the submissions it was taken from — the
+ * caller counts that first.
+ */
+export async function deleteQuestion(
+  activityId: string,
+  question: ActivityQuestion,
+  rows: ActivityQuestion[],
+): Promise<ActivityQuestion[]> {
+  const { error: e1 } = await db()
+    .from("rubric_items")
+    .delete()
+    .eq("activity_id", activityId)
+    .eq("question_label", question.label);
+  if (e1) throw dbError(e1);
+
+  const { error } = await db().from("activity_questions").delete().eq("id", question.id);
+  if (error) throw dbError(error);
+
+  const next = rows.filter((q) => q.id !== question.id);
+  await renumber(next);
+  await syncQuestionTotals(activityId, next);
+  return next.map((q, i) => ({ ...q, position: i }));
+}
+
+/** Write positions 0..n-1, skipping the rows that already hold theirs. */
+async function renumber(rows: ActivityQuestion[]): Promise<void> {
+  for (let i = 0; i < rows.length; i += 1) {
+    if (rows[i].position === i) continue;
+    const { error } = await db()
+      .from("activity_questions")
+      .update({ position: i })
+      .eq("id", rows[i].id);
+    if (error) throw dbError(error);
+  }
+}
+
+/**
+ * Keep the numbers derived from the questions in step with them.
+ *
+ * Two of them: check_ins.max_points, which the student view renders directly,
+ * and activities.question_count, which is what the pre-0013 fallback counts.
+ * points_per_question is deliberately left alone — questions may now carry
+ * different values and no single number can stand for all of them, so the
+ * fallback product is only ever consulted for an activity that has no rows.
+ */
+export async function syncQuestionTotals(
+  activityId: string,
+  rows: ActivityQuestion[],
+): Promise<void> {
+  const total = rows.reduce((n, q) => n + q.points, 0);
+
+  const { error } = await db()
+    .from("check_ins")
+    .update({ max_points: total })
+    .eq("activity_id", activityId);
+  if (error) throw dbError(error);
+
+  // The check constraint from 0007 requires a positive count, so an activity
+  // stripped back to no questions keeps the last number it had rather than
+  // failing the write.
+  if (rows.length > 0) {
+    const { error: e2 } = await db()
+      .from("activities")
+      .update({ question_count: rows.length })
+      .eq("id", activityId);
+    if (e2) throw dbError(e2);
+  }
 }
 
 // ------------------------------------------------------------ rubric ladders

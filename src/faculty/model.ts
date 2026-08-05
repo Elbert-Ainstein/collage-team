@@ -9,6 +9,7 @@ import {
   IS_COMPLETION,
   SCOPE_OF,
   type Activity,
+  type ActivityQuestion,
   type CheckIn,
   type CheckInResult,
   type CourseWeek,
@@ -17,18 +18,47 @@ import {
   type Team,
 } from "@/checkins/types";
 
-/** questions x points-per-question. Never read a stored total; there isn't one. */
-export function pointsTotal(a: Pick<Activity, "question_count" | "points_per_question">): number {
+/**
+ * What the activity is out of. Never read a stored total; there isn't one.
+ *
+ * The sum of its questions once it has any — they may each be worth something
+ * different — and the old count x points-per-question when it has none. Every
+ * activity authored before 0013 is in that second case, and this is the same
+ * fallback recompute_result_score applies, so a score and the total it is out
+ * of cannot come from different rules.
+ */
+export function pointsTotal(
+  a: Pick<Activity, "question_count" | "points_per_question">,
+  questions?: ActivityQuestion[],
+): number {
+  if (questions && questions.length) return questions.reduce((n, q) => n + q.points, 0);
   return a.question_count * a.points_per_question;
 }
 
-export function questionShape(a: Activity): { count: number; per: number } {
-  return { count: a.question_count, per: a.points_per_question };
+/** This activity's questions, in the order they are asked. */
+export function questionsFor(
+  activityId: string,
+  questions: ActivityQuestion[],
+): ActivityQuestion[] {
+  return questions
+    .filter((q) => q.activity_id === activityId)
+    .sort((a, b) => a.position - b.position);
+}
+
+/**
+ * How many questions there are, from the rows when they exist.
+ *
+ * Sub-questions count: each one is separately marked, so "12 questions" on an
+ * activity with 10 questions and two sub-questions is the number of marks a
+ * grader makes, which is what the word is doing on that screen.
+ */
+export function questionCount(a: Activity, questions?: ActivityQuestion[]): number {
+  return questions && questions.length ? questions.length : a.question_count;
 }
 
 /** "50 pts", or "Completion" for the types that are marked rather than scored. */
-export function pointsLabel(a: Activity): string {
-  return IS_COMPLETION[a.type] ? "Completion" : `${pointsTotal(a)} pts`;
+export function pointsLabel(a: Activity, questions?: ActivityQuestion[]): string {
+  return IS_COMPLETION[a.type] ? "Completion" : `${pointsTotal(a, questions)} pts`;
 }
 
 /** Completion types are "marked"; point types are "graded". */
@@ -285,7 +315,11 @@ export function studentPercents(
       // A completion mark carries no points, so it cannot move a percentage.
       if (r.is_ci) continue;
       earned += r.score ?? 0;
-      possible += pointsTotal(a);
+      // What the check-in is out of, which the data layer keeps equal to the
+      // sum of the activity's questions. Reading the activity's own count x
+      // points here would disagree with it the moment a question is re-pointed,
+      // and max_points is also the number the student was shown.
+      possible += ci.max_points ?? pointsTotal(a);
     }
     out.set(s.id, possible > 0 ? Math.round((earned / possible) * 100) : null);
   }

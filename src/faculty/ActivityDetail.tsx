@@ -20,8 +20,8 @@ import {
   type ActivityType,
   type CheckInResult,
 } from "@/checkins/types";
-import { countWorkForActivity, ensureCheckIn, setQuestionShape } from "./facultyData";
-import { pointsLabel, pointsTotal, questionShape, statFor } from "./model";
+import { countWorkForActivity, ensureCheckIn } from "./facultyData";
+import { pointsLabel, questionCount, questionsFor, statFor } from "./model";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { FAvatar, FIcon } from "./icons";
 import type { FacultyData } from "./FacultyApp";
@@ -166,8 +166,7 @@ export function ActivityDetail(props: {
   /** Just created — open the editor and put the caret in the title. */
   fresh?: boolean;
   onBack: () => void;
-  onCriteria: () => void;
-  /** The document-and-criteria builder. */
+  /** The rubric: the assignment document, its questions and their criteria. */
   onRubric: () => void;
   onGrade: () => void;
   onChanged: () => void;
@@ -178,7 +177,6 @@ export function ActivityDetail(props: {
     activity,
     fresh = false,
     onBack,
-    onCriteria,
     onRubric,
     onGrade,
     onChanged,
@@ -187,7 +185,10 @@ export function ActivityDetail(props: {
 
   const accent = TYPE_ACCENT[activity.type];
   const scope = SCOPE_OF[activity.type];
-  const shape = questionShape(activity);
+  // Questions are rows now, written on the rubric page. An activity with none
+  // yet still reports the count it was created with, which is what scores it.
+  const questions = questionsFor(activity.id, data.questions);
+  const qCount = questionCount(activity, questions);
 
   // The row view and the column view print this number; so does the hint under
   // "Grade now". One object, never recomputed here.
@@ -253,8 +254,6 @@ export function ActivityDetail(props: {
   const [title, setTitle] = useState(activity.title);
   const [desc, setDesc] = useState(activity.source_text ?? "");
   const [due, setDue] = useState(() => toLocalInput(dueAt));
-  const [count, setCount] = useState(String(shape.count));
-  const [per, setPer] = useState(String(shape.per));
   const [kind, setKind] = useState<ActivityType>(activity.type);
   const [visBusy, setVisBusy] = useState(false);
   // Deleting an activity cascades its check-ins, every submission against them,
@@ -279,8 +278,6 @@ export function ActivityDetail(props: {
     setTitle(opts?.blankTitle ? "" : activity.title);
     setDesc(activity.source_text ?? "");
     setDue(toLocalInput(dueOf(activity)));
-    setCount(String(shape.count));
-    setPer(String(shape.per));
     setEditing(true);
   };
 
@@ -316,12 +313,6 @@ export function ActivityDetail(props: {
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
   }, [editing, desc]);
-
-  // Clamped to what 0007's check constraint allows (count > 0, per >= 0), so a
-  // typo comes back as a corrected number rather than a database error.
-  const nextCount = Math.max(1, Math.round(Number(count) || 0));
-  const nextPer = Math.max(0, Math.round(Number(per) || 0));
-  const nextTotal = pointsTotal({ question_count: nextCount, points_per_question: nextPer });
 
   /** The visibility switch writes this one column and nothing else. */
   const setOpensAt = async (next: string | null) => {
@@ -364,11 +355,6 @@ export function ActivityDetail(props: {
         const withKind = { ...activity, ...patch, type: kind } as Activity;
         if (scope !== "team") await ensureCheckIn(withKind, "individual", data.checkIns);
         if (scope !== "indiv") await ensureCheckIn(withKind, "team", data.checkIns);
-      }
-      // The shape goes through facultyData rather than the same patch: it also
-      // rewrites check_ins.max_points, which the student view renders directly.
-      if (nextCount !== shape.count || nextPer !== shape.per) {
-        await setQuestionShape(activity.id, nextCount, nextPer);
       }
       setEditing(false);
       onChanged();
@@ -529,9 +515,9 @@ export function ActivityDetail(props: {
             <>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 20 }}>
                 <span className="fv-badge secondary">
-                  {shape.count} {shape.count === 1 ? "question" : "questions"}
+                  {qCount} {qCount === 1 ? "question" : "questions"}
                 </span>
-                <span className="fv-badge secondary">{pointsLabel(activity)}</span>
+                <span className="fv-badge secondary">{pointsLabel(activity, questions)}</span>
               </div>
 
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 24 }}>
@@ -546,12 +532,13 @@ export function ActivityDetail(props: {
                     Edit activity
                   </button>
                 ) : null}
+                {/* One door to the rubric. There used to be a second — a
+                    "Grading criteria" page editing the same rubric_items rows
+                    from a screen that could not see the questions they belong
+                    to — and two ways into one thing is how they drift. */}
                 <button type="button" className="fv-btn outline sm" onClick={onRubric}>
                   <FIcon name="assignment" size={15} />
                   Rubric
-                </button>
-                <button type="button" className="fv-btn outline sm" onClick={onCriteria}>
-                  Grading criteria
                 </button>
               </div>
             </>
@@ -599,39 +586,17 @@ export function ActivityDetail(props: {
                   />
                 </div>
 
-                <div className="fv-field" style={{ width: 84 }}>
-                  <label className="fv-eyebrow" htmlFor="fv-ed-count">
-                    Questions
-                  </label>
-                  <input
-                    id="fv-ed-count"
-                    className="fv-in quiet fv-num"
-                    inputMode="numeric"
-                    value={count}
-                    onChange={(e) => setCount(e.target.value)}
-                  />
+                {/* Questions are no longer a count and a multiplier typed in
+                    here. They are written on the rubric page, where each one
+                    carries its own points and can hold sub-questions — so this
+                    reports what is there and points at where to change it. */}
+                <div className="fv-field">
+                  <span className="fv-eyebrow">Questions</span>
+                  <span className="fv-sub fv-num" style={{ paddingBottom: 8 }}>
+                    {qCount} · {pointsLabel(activity, questions)}
+                    {IS_COMPLETION[activity.type] ? " (marked for completion)" : ""}
+                  </span>
                 </div>
-                <span className="fv-sub" style={{ paddingBottom: 8 }}>
-                  ×
-                </span>
-                <div className="fv-field" style={{ width: 84 }}>
-                  <label className="fv-eyebrow" htmlFor="fv-ed-per">
-                    Pts each
-                  </label>
-                  <input
-                    id="fv-ed-per"
-                    className="fv-in quiet fv-num"
-                    inputMode="numeric"
-                    value={per}
-                    onChange={(e) => setPer(e.target.value)}
-                  />
-                </div>
-                {/* The total is shown, never stored — this is the only place the
-                    two numbers are visibly multiplied, which is the point. */}
-                <span className="fv-sub fv-num" style={{ paddingBottom: 8 }} aria-live="polite">
-                  = {nextTotal} pts
-                  {IS_COMPLETION[activity.type] ? " (marked for completion)" : ""}
-                </span>
               </div>
 
               {kind !== activity.type ? (

@@ -203,6 +203,24 @@ export interface CourseWeek {
   created_at: string;
 }
 
+/**
+ * One question or sub-question of an activity, written on the rubric page.
+ *
+ * 0013 made these rows. An activity with none of them is scored the old way —
+ * `question_count` questions of `points_per_question` each — which is what
+ * every activity authored before 0013 relies on.
+ */
+export interface ActivityQuestion {
+  id: string;
+  activity_id: string;
+  /** "1", "2", "2a" — a sub-question is a naming convention, not a second table. */
+  label: string;
+  points: number;
+  /** Ordering, and the question_index a submission mark records against. */
+  position: number;
+  created_at: string;
+}
+
 /** One line of an activity's deduction ladder. */
 export interface RubricItem {
   id: string;

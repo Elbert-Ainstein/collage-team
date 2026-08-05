@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { groupByWeek } from "@/faculty/model";
-import type { Activity, CourseWeek } from "@/checkins/types";
+import { groupByWeek, pointsTotal, questionCount, questionsFor } from "@/faculty/model";
+import type { Activity, ActivityQuestion, CourseWeek } from "@/checkins/types";
 import type { ActivityStat } from "@/faculty/model";
 
 const act = (id: string, week: number | null): Activity =>
@@ -31,5 +31,54 @@ describe("week groups", () => {
   it("keeps unscheduled activities last", () => {
     const g = groupByWeek([act("a", null), act("b", 2)], [wk(2)], stats);
     expect(g.map((x) => x.label)).toEqual(["Week 2", "Unscheduled"]);
+  });
+});
+
+// What an activity is out of decides every score released from it, so the
+// fallback matters as much as the sum: every activity authored before questions
+// became rows has a count and no rows, and must keep scoring exactly as it did.
+describe("what an activity is out of", () => {
+  const shaped = { question_count: 10, points_per_question: 5 };
+  const q = (
+    activity_id: string,
+    label: string,
+    points: number,
+    position: number,
+  ): ActivityQuestion => ({
+    id: `${activity_id}-${label}`,
+    activity_id,
+    label,
+    points,
+    position,
+    created_at: "",
+  });
+
+  it("multiplies the old shape when the activity has no questions", () => {
+    expect(pointsTotal(shaped)).toBe(50);
+    expect(pointsTotal(shaped, [])).toBe(50);
+  });
+
+  it("sums the questions once it has them, whatever they are each worth", () => {
+    const qs = [q("a", "1", 5, 0), q("a", "2", 10, 1), q("a", "3", 1, 2)];
+    expect(pointsTotal(shaped, qs)).toBe(16);
+  });
+
+  it("counts sub-questions as questions — each one is separately marked", () => {
+    const qs = [q("a", "1", 5, 0), q("a", "1a", 2, 1), q("a", "2", 5, 2)];
+    expect(questionCount({ ...shaped } as Activity, qs)).toBe(3);
+    expect(questionCount({ ...shaped } as Activity, [])).toBe(10);
+  });
+
+  it("reads one activity's questions in the order they are asked", () => {
+    const all = [q("b", "2", 5, 1), q("a", "1", 5, 0), q("b", "1", 5, 0)];
+    expect(questionsFor("b", all).map((x) => x.label)).toEqual(["1", "2"]);
+    expect(questionsFor("a", all)).toHaveLength(1);
+  });
+
+  it("is zero for an activity whose questions were all removed", () => {
+    // Not the stale product: the rows are the truth once any exist, and an
+    // empty list has to be distinguishable from "never had any".
+    expect(pointsTotal(shaped, [])).toBe(50);
+    expect(pointsTotal({ question_count: 1, points_per_question: 0 }, [])).toBe(0);
   });
 });

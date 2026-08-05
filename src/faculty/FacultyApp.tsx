@@ -21,6 +21,7 @@ import {
 } from "@/checkins/data";
 import type {
   Activity,
+  ActivityQuestion,
   CheckIn,
   CheckInResult,
   Course,
@@ -29,12 +30,11 @@ import type {
   Student,
   TeamWithMembers,
 } from "@/checkins/types";
-import { listTFs, listWeeks, myTFCourses } from "./facultyData";
+import { listQuestionsFor, listTFs, listWeeks, myTFCourses } from "./facultyData";
 import { statFor, type ActivityStat } from "./model";
 import { FIcon } from "./icons";
 import { ActivitiesScreen } from "./ActivitiesScreen";
 import { ActivityDetail } from "./ActivityDetail";
-import { CriteriaEditor } from "./CriteriaEditor";
 import { GradingScreen } from "./GradingScreen";
 import { RubricBuilder } from "./RubricBuilder";
 import { TeamsScreen } from "./TeamsScreen";
@@ -46,7 +46,6 @@ export type Screen =
   | "teams"
   | "tfs"
   | "detail"
-  | "criteria"
   | "rubric"
   | "grade";
 
@@ -63,7 +62,7 @@ export type Screen =
  */
 export interface Capabilities {
   isOwner: boolean;
-  /** Create and edit activities, weeks and criteria. */
+  /** Create and edit activities, weeks and rubrics. */
   author: boolean;
   /** Put marks on submissions. */
   grade: boolean;
@@ -109,6 +108,8 @@ export interface FacultyData {
   weeks: CourseWeek[];
   roster: Student[];
   activities: Activity[];
+  /** Every activity's questions (0013). Empty for one that has none yet. */
+  questions: ActivityQuestion[];
   checkIns: CheckIn[];
   results: CheckInResult[];
   teams: TeamWithMembers[];
@@ -118,7 +119,7 @@ export interface FacultyData {
   can: Capabilities;
 }
 
-const FULL_SCREEN: Screen[] = ["detail", "criteria", "rubric", "grade"];
+const FULL_SCREEN: Screen[] = ["detail", "rubric", "grade"];
 
 export function FacultyApp({
   account,
@@ -185,6 +186,12 @@ export function FacultyApp({
       ]);
       const checkIns = activities.length ? await listCheckIns(activities.map((a) => a.id)) : [];
       const results = checkIns.length ? await listResults(checkIns.map((c) => c.id)) : [];
+      // Loaded here rather than per screen: the activity page prints what an
+      // activity is out of, and so does the gradebook, and those two numbers
+      // disagreeing is the failure this whole module is written to avoid.
+      const questions = activities.length
+        ? await listQuestionsFor(activities.map((a) => a.id))
+        : [];
 
       // The gradebook needs ONE set of teams. Our team sets are per-activity, so
       // prefer a course-wide set and fall back to the most recent — the design
@@ -203,6 +210,7 @@ export function FacultyApp({
         weeks,
         roster,
         activities,
+        questions,
         checkIns,
         results,
         teams,
@@ -312,19 +320,9 @@ export function FacultyApp({
             activity={selected}
             onBack={() => setScreen("activities")}
             fresh={fresh === selected.id}
-            onCriteria={() => setScreen("criteria")}
             onRubric={() => setScreen("rubric")}
             onGrade={() => setScreen("grade")}
             onChanged={() => refresh().catch(fail)}
-            onError={fail}
-          />
-        ) : null;
-      case "criteria":
-        return selected ? (
-          <CriteriaEditor
-            activity={selected}
-            canEdit={data.can.author}
-            onDone={() => setScreen("detail")}
             onError={fail}
           />
         ) : null;
@@ -366,7 +364,7 @@ export function FacultyApp({
 
   // Every screen reports failures through `fail`. Until now that state was only
   // rendered while the app was still loading, so a rejected write on Activities,
-  // detail, criteria or grading produced nothing at all on screen — which is
+  // detail, rubric or grading produced nothing at all on screen — which is
   // what made the rubric and check-in failures look like hangs.
   const banner = <FacultyError error={error} onClear={() => setError(null)} />;
 
