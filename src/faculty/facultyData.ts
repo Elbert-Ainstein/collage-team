@@ -163,11 +163,23 @@ export async function listQuestions(activityId: string): Promise<ActivityQuestio
 /** Every question on a course's activities, for the screens that show totals. */
 export async function listQuestionsFor(activityIds: string[]): Promise<ActivityQuestion[]> {
   if (!activityIds.length) return [];
-  return selectAllIn<ActivityQuestion>(activityIds, (chunk, from, to) =>
-    db().from("activity_questions").select("*").in("activity_id", chunk)
-      .order("position").order("label")
-      .range(from, to),
-  );
+  try {
+    return await selectAllIn<ActivityQuestion>(activityIds, (chunk, from, to) =>
+      db().from("activity_questions").select("*").in("activity_id", chunk)
+        .order("position").order("label")
+        .range(from, to),
+    );
+  } catch (e) {
+    // A database that has not had 0014 run yet has no activity_questions table,
+    // and this read happens inside the faculty app's main refresh — so the
+    // missing table took the WHOLE Activities screen down to an error card with
+    // nothing on it. Questions are an enhancement: every screen that uses them
+    // already falls back to the old question_count shape when there are none.
+    // So degrade to none and let the app work, rather than holding the course
+    // hostage to a migration nobody has run.
+    if (/activity_questions/.test(String((e as Error)?.message ?? e))) return [];
+    throw e;
+  }
 }
 
 /**
