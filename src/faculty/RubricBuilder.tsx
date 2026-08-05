@@ -13,6 +13,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Activity, ActivityQuestion, FileRef, RubricItem } from "@/checkins/types";
+import { isCompletion } from "@/checkins/types";
+import { updateActivity } from "@/checkins/data";
 import {
   activityFileUrl,
   addQuestion,
@@ -31,6 +33,7 @@ import {
 import { pointsTotal } from "./model";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { FIcon } from "./icons";
+import { NEW_ACTIVITY_STEPS, Steps } from "./Steps";
 
 const unit = (n: number) => (n === 1 ? "pt" : "pts");
 
@@ -514,14 +517,21 @@ function DocumentPane({
 export function RubricBuilder({
   activity,
   canEdit = true,
+  wizard = false,
   onDone,
+  onStep1,
   onChanged,
   onError,
 }: {
   activity: Activity;
   /** Criteria and the document are the instructor's; a TF reads both. */
   canEdit?: boolean;
+  /** Step 2 of creating an activity, rather than an edit of an existing one. */
+  wizard?: boolean;
+  /** Leave for good. In the wizard this is Finish, and it ends the sequence. */
   onDone: () => void;
+  /** Back to step 1, WITHOUT ending the sequence. Wizard only. */
+  onStep1?: () => void;
   /** The document lives on the activity row, so uploading it changes `data`. */
   onChanged: () => void | Promise<void>;
   onError: (e: unknown) => void;
@@ -705,10 +715,39 @@ export function RubricBuilder({
   const week = activity.week == null ? "Unscheduled" : `Week ${activity.week}`;
   const total = pointsTotal(activity);
 
+  // Marked complete/incomplete, or out of points (0019). Held locally so the
+  // switch answers immediately, and reconciled from the row when the parent
+  // refetches — the row is the authority, not this.
+  const [completion, setCompletion] = useState(isCompletion(activity));
+  const [ciBusy, setCiBusy] = useState(false);
+  useEffect(() => {
+    setCompletion(isCompletion(activity));
+  }, [activity]);
+
+  const setCi = useCallback(
+    (next: boolean) => {
+      setCompletion(next);
+      setCiBusy(true);
+      updateActivity(activity.id, { completion: next })
+        .then(() => onChanged())
+        .catch((e) => {
+          setCompletion(!next);
+          onError(e);
+        })
+        .finally(() => setCiBusy(false));
+    },
+    [activity.id, onChanged, onError],
+  );
+
   return (
     <div className="fv-panel">
       <div className="fv-topbar">
-        <button type="button" className="fv-back" aria-label="Back to activity" onClick={onDone}>
+        <button
+          type="button"
+          className="fv-back"
+          aria-label={wizard ? "Back to the activity's details" : "Back to activity"}
+          onClick={wizard && onStep1 ? onStep1 : onDone}
+        >
           <FIcon name="chevronLeft" size={18} />
         </button>
         <span className="fv-sub">
@@ -716,14 +755,23 @@ export function RubricBuilder({
         </span>
         <div style={{ flex: 1 }} />
         <button type="button" className="fv-btn primary sm" onClick={onDone}>
-          Done
+          {wizard ? "Finish" : "Done"}
         </button>
       </div>
 
+      {wizard ? <Steps steps={NEW_ACTIVITY_STEPS} current={1} onGo={onStep1} /> : null}
+
       <div style={{ marginBottom: 12 }}>
         <h1 className="fv-display" style={{ fontSize: 26, lineHeight: 1.16 }}>
-          Rubric
+          {wizard ? "Questions & grading" : "Rubric"}
         </h1>
+        {wizard ? (
+          <p className="fv-sub" style={{ marginTop: 6, lineHeight: 1.55, maxWidth: "68ch" }}>
+            List the questions students will map their pages to, and say how each one is
+            marked. Both are needed either way — the questions are what a student attaches a
+            page to when they hand in.
+          </p>
+        ) : null}
       </div>
 
       <div className="fv-rubric">
@@ -737,10 +785,36 @@ export function RubricBuilder({
         <div className="fv-rubricside">
           <div className="fv-panehead">
             <span className="fv-eyebrow" style={{ flex: 1 }}>
-              Questions & criteria
+              Questions &amp; criteria
             </span>
             <span className="fv-sub fv-num" style={{ fontSize: "var(--fv-2xs)" }}>
-              {total} pts
+              {completion ? "Completion" : `${total} pts`}
+            </span>
+          </div>
+
+          {/* How it is marked, above the ladder it governs. A switch rather
+              than two radio buttons: it is one question with a yes and a no,
+              and the sentence under it changes to say what the answer means. */}
+          <div className="fv-ciband">
+            <button
+              type="button"
+              className={`fv-switch${completion ? " on" : ""}`}
+              role="switch"
+              aria-checked={completion}
+              aria-label="Marked for completion"
+              disabled={!canEdit || ciBusy}
+              onClick={() => setCi(!completion)}
+            />
+            <span style={{ fontSize: "var(--fv-xs)", fontWeight: 600 }}>
+              {completion ? "Marked for completion" : "Marked out of points"}
+            </span>
+            <span
+              className="fv-sub"
+              style={{ flex: 1, minWidth: 180, fontSize: "var(--fv-2xs)", lineHeight: 1.5 }}
+            >
+              {completion
+                ? "One Complete / Not complete for the whole assignment. Questions are still needed — they are what a student attaches pages to."
+                : `Each question carries criteria, and each criterion deducts from the ${total} this is out of.`}
             </span>
           </div>
 
@@ -767,7 +841,15 @@ export function RubricBuilder({
                       onDelete={() => g.question && armQ(g.question, g.items)}
                     />
 
-                    {g.items.length === 0 ? (
+                    {completion ? (
+                      // Nothing to ladder: the whole assignment is one answer.
+                      // The criteria rows are not deleted — switching back
+                      // should not throw away what somebody wrote.
+                      <div className="fv-cirow fv-sub">
+                        <FIcon name="check" size={14} />
+                        Complete / Not complete — for the whole assignment
+                      </div>
+                    ) : g.items.length === 0 ? (
                       <div
                         className="fv-sub"
                         style={{ padding: "8px 12px 8px 26px", fontSize: "var(--fv-xs)" }}
@@ -789,7 +871,7 @@ export function RubricBuilder({
                         ))
                     )}
 
-                    {canEdit ? (
+                    {canEdit && !completion ? (
                       <div className="fv-qfoot">
                         <button
                           type="button"
@@ -826,7 +908,9 @@ export function RubricBuilder({
                     className="fv-sub"
                     style={{ marginTop: 8, fontSize: "var(--fv-2xs)", lineHeight: 1.5 }}
                   >
-                    No questions yet — this activity is out of 0 pts until you add one.
+                    {completion
+                      ? "No questions yet — students need at least one to attach a page to."
+                      : "No questions yet — this activity is out of 0 pts until you add one."}
                   </div>
                 ) : null}
               </div>

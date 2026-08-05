@@ -329,10 +329,10 @@ export function FacultyApp({
             // instruction, but it was surviving the trip to the rubric builder
             // and back, so returning re-opened the editor and blanked the title
             // again. Every time, that looked like the work had been thrown away.
-            onRubric={() => {
-              setFresh(null);
-              setScreen("rubric");
-            }}
+            // Step 2 of creating one, so the freshness is NOT spent here —
+            // it is what tells both screens they are in a sequence, and coming
+            // back to step 1 has to find it still set. Finishing spends it.
+            onRubric={() => setScreen("rubric")}
             onGrade={() => {
               setFresh(null);
               setScreen("grade");
@@ -350,7 +350,14 @@ export function FacultyApp({
           <RubricBuilder
             activity={selected}
             canEdit={data.can.author}
-            onDone={() => setScreen("detail")}
+            wizard={fresh === selected.id}
+            // Finish is what ends the sequence. Stepping back to the details
+            // must not, or the strip vanishes under you halfway through.
+            onDone={() => {
+              setFresh(null);
+              setScreen("detail");
+            }}
+            onStep1={() => setScreen("detail")}
             onChanged={() => refresh().catch(fail)}
             onError={fail}
           />

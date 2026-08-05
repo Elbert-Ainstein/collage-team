@@ -6,7 +6,7 @@
 // how they came to disagree in an earlier pass.
 
 import {
-  IS_COMPLETION,
+  isCompletion,
   SCOPE_OF,
   type Activity,
   type ActivityQuestion,
@@ -56,12 +56,12 @@ export function questionCount(a: Activity, questions?: ActivityQuestion[]): numb
 
 /** "50 pts", or "Completion" for the types that are marked rather than scored. */
 export function pointsLabel(a: Activity): string {
-  return IS_COMPLETION[a.type] ? "Completion" : `${pointsTotal(a)} pts`;
+  return isCompletion(a) ? "Completion" : `${pointsTotal(a)} pts`;
 }
 
 /** Completion types are "marked"; point types are "graded". */
 export function verbFor(a: Activity): "marked" | "graded" {
-  return IS_COMPLETION[a.type] ? "marked" : "graded";
+  return isCompletion(a) ? "marked" : "graded";
 }
 
 export interface ActivityStat {

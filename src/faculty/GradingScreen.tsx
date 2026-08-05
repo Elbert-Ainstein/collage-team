@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  IS_COMPLETION,
+  isCompletion,
   SCOPE_OF,
   type Activity,
   type ActivityQuestion,
@@ -278,7 +278,7 @@ export function GradingScreen({
     if (!subject) return;
     setReleasing(true);
     try {
-      await releaseMark(subject.result.id, IS_COMPLETION[activity.type]);
+      await releaseMark(subject.result.id, isCompletion(activity));
       onChanged();
     } catch (e) {
       onError(e);

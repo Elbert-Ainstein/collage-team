@@ -120,6 +120,14 @@ export interface Activity {
   question_count: number;
   /** @deprecated see question_count */
   points_per_question: number;
+  /**
+   * Marked complete/incomplete rather than out of points. A CHOICE per activity
+   * (0019), no longer a property of the type — an instructor can run a Challenge
+   * for points, or a Combo for completion, however their course actually works.
+   * Optional on the type because a client reading a database without 0019 gets
+   * undefined, and isCompletion() falls back to the old map for exactly that.
+   */
+  completion?: boolean | null;
   /** One instant, replacing the older per-scope due columns below. */
   due_at: string | null;
   stage: number; // 0 setup,1 individual,2 discuss,3 resubmit,4 closed
@@ -292,7 +300,14 @@ export interface CourseTF {
   created_at: string;
 }
 
-/** Challenge and Amplify are marked complete/incomplete; the others carry points. */
+/**
+ * What each type meant before completion became a per-activity choice (0019).
+ *
+ * Kept as the FALLBACK only: a database without 0019 has no column, so the row
+ * arrives with `completion` undefined and this is what it meant. Read through
+ * isCompletion(), never directly — reading the map directly is how a Challenge
+ * an instructor deliberately set to points goes on saying "Completion".
+ */
 export const IS_COMPLETION: Record<ActivityType, boolean> = {
   challenge: true,
   combo: false,
@@ -306,3 +321,13 @@ export const TYPE_ACCENT: Record<ActivityType, string> = {
   amplify: "var(--fv-lavender)",
   skills: "var(--fv-sky)",
 };
+
+/**
+ * Is this activity marked complete/incomplete rather than out of points?
+ *
+ * The column wins when it is there. Falsy-vs-nullish matters: `false` is a real
+ * answer an instructor chose, so only null/undefined falls back to the type.
+ */
+export function isCompletion(a: Pick<Activity, "type" | "completion">): boolean {
+  return a.completion ?? IS_COMPLETION[a.type];
+}

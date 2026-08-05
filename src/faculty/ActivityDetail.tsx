@@ -13,7 +13,7 @@ import { purgeActivityStorage } from "@/checkins/purge";
 import { isOpenToStudents } from "@/checkins/studentData";
 import {
   HIDDEN_INSTANT,
-  IS_COMPLETION,
+  isCompletion,
   SCOPE_LABEL,
   SCOPE_OF,
   TYPE_ACCENT,
@@ -28,6 +28,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { FAvatar, FIcon } from "./icons";
 import type { FacultyData } from "./FacultyApp";
 import { ActivityTeamPanel } from "./ActivityTeamPanel";
+import { NEW_ACTIVITY_STEPS, Steps } from "./Steps";
 
 /**
  * 0007 added `activities.due_at`; the shared row type in checkins/types.ts has
@@ -412,6 +413,12 @@ export function ActivityDetail(props: {
         <span className="fv-sub">{weekLine}</span>
       </div>
 
+      {/* Creating an activity is a sequence: its details, then its questions
+          and how they are marked. Only while creating — editing one later is
+          not a sequence, and a wizard bar over a page somebody came back to
+          would suggest there is more to do. */}
+      {fresh ? <Steps steps={NEW_ACTIVITY_STEPS} current={0} /> : null}
+
       {/* Only `both` gets a strip. One tab is not a choice, and rendering it
           anyway would suggest there is another half somewhere. */}
       {scope === "both" ? (
@@ -656,7 +663,7 @@ export function ActivityDetail(props: {
                 </div>
                 <span className="fv-sub" style={{ paddingBottom: 8 }}>
                   pts
-                  {IS_COMPLETION[activity.type] ? " (marked for completion)" : ""}
+                  {isCompletion(activity) ? " (marked for completion)" : ""}
                 </span>
               </div>
 
@@ -680,9 +687,16 @@ export function ActivityDetail(props: {
                   type="button"
                   className="fv-btn primary sm"
                   disabled={saving}
-                  onClick={() => void save()}
+                  onClick={() =>
+                    void save().then((ok) => {
+                      // Only on success, and only in the sequence: a failed
+                      // save that still walked you to step 2 was how an
+                      // activity came back looking empty.
+                      if (ok && fresh) onRubric();
+                    })
+                  }
                 >
-                  {saving ? "Saving…" : fresh ? "Save activity" : "Save changes"}
+                  {saving ? "Saving…" : fresh ? "Save and continue" : "Save changes"}
                 </button>
                 <button
                   type="button"
@@ -697,23 +711,27 @@ export function ActivityDetail(props: {
                 >
                   {fresh ? "Not now" : "Cancel"}
                 </button>
-                {/* Saves first: the rubric is written against this activity's
-                    question count, and walking away from an unsaved shape would
-                    build the ladder for the wrong number of questions. */}
-                <button
-                  type="button"
-                  className="fv-btn outline sm"
-                  disabled={saving}
-                  title="Save this, then write the grading criteria against the assignment"
-                  onClick={() =>
-                    void save().then((ok) => {
-                      if (ok) onRubric();
-                    })
-                  }
-                >
-                  <FIcon name="assignment" size={15} />
-                  Add rubric
-                </button>
+                {/* Saves first: the rubric is written against this activity,
+                    and walking away from an unsaved shape would build it
+                    against something nobody committed. In the sequence this is
+                    what "Save and continue" already does, so it is only offered
+                    on its own once the activity exists. */}
+                {fresh ? null : (
+                  <button
+                    type="button"
+                    className="fv-btn outline sm"
+                    disabled={saving}
+                    title="Save this, then write the questions and how they are marked"
+                    onClick={() =>
+                      void save().then((ok) => {
+                        if (ok) onRubric();
+                      })
+                    }
+                  >
+                    <FIcon name="assignment" size={15} />
+                    Rubric
+                  </button>
+                )}
 
                 <span style={{ flex: 1 }} />
 
