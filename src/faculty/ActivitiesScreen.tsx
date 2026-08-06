@@ -152,8 +152,6 @@ export function ActivitiesScreen(props: {
   // The week the last "New week" press created, so the press has something to
   // point at. Cleared once that week holds anything, or on dismiss.
   const [newWeek, setNewWeek] = useState<number | null>(null);
-  /** Which week the header's "Activity" button files into. Null follows the newest. */
-  const [targetWeek, setTargetWeek] = useState<number | null>(null);
 
   // The banner belongs to the course it was raised on. This screen is not
   // remounted when the sidebar switches courses, so without this it would
@@ -177,9 +175,6 @@ export function ActivitiesScreen(props: {
     () => groups.flatMap((g) => (g.week == null ? [] : [g.week])),
     [groups],
   );
-
-  const pickedWeek =
-    targetWeek != null && weekNumbers.includes(targetWeek) ? targetWeek : weekNumbers[0] ?? null;
 
   const percents = useMemo(
     () => studentPercents(data.activities, data.roster, data.checkIns, data.results),
@@ -323,31 +318,6 @@ export function ActivitiesScreen(props: {
                 <FIcon name="add" size={15} />
                 New week
               </button>
-              {/* Which week, asked before the activity is made rather than
-                  after. The button used to file silently into the newest week,
-                  so filling last week's gap meant creating it in the wrong place
-                  and then having no way to move it. Defaults to the newest,
-                  which is right most of the time and is what it did before. */}
-              <label
-                className="fv-sub"
-                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-              >
-                <span style={{ fontSize: "var(--fv-2xs)" }}>in</span>
-                <select
-                  className="fv-in"
-                  style={{ height: 30, padding: "0 6px", minWidth: 88 }}
-                  aria-label="Week for the new activity"
-                  disabled={busy || weekNumbers.length === 0}
-                  value={pickedWeek ?? ""}
-                  onChange={(e) => setTargetWeek(e.target.value ? Number(e.target.value) : null)}
-                >
-                  {weekNumbers.map((w) => (
-                    <option key={w} value={w}>
-                      Week {w}
-                    </option>
-                  ))}
-                </select>
-              </label>
               <button
                 type="button"
                 className="fv-btn primary sm"
@@ -355,11 +325,9 @@ export function ActivitiesScreen(props: {
                 title={
                   weekNumbers.length === 0
                     ? "Add a week first — every activity belongs to one."
-                    : pickedWeek != null
-                      ? `Create an activity in week ${pickedWeek} and open it`
-                      : "Create an activity and open it"
+                    : "Create an activity and open it — you pick its week there"
                 }
-                onClick={() => startNewActivity(pickedWeek ?? undefined)}
+                onClick={() => startNewActivity()}
               >
                 <FIcon name="add" size={15} />
                 Activity

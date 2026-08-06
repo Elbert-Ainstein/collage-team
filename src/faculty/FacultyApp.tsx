@@ -140,6 +140,23 @@ export function FacultyApp({
   mode?: "owner" | "tf";
 }) {
   const [screen, setScreen] = useState<Screen>("activities");
+  // Remembered, because it is a preference about how somebody wants to work and
+  // re-collapsing it on every reload would make it not worth using.
+  const [railed, setRailed] = useState(false);
+  useEffect(() => {
+    setRailed(window.localStorage.getItem("fv-rail") === "1");
+  }, []);
+  const toggleRail = () =>
+    setRailed((was) => {
+      const next = !was;
+      try {
+        window.localStorage.setItem("fv-rail", next ? "1" : "0");
+      } catch {
+        // A browser refusing storage (private mode, blocked cookies) should not
+        // stop the sidebar from collapsing — it just will not be remembered.
+      }
+      return next;
+    });
   const [view, setView] = useState<"rows" | "columns">("rows");
   const [selId, setSelId] = useState<string | null>(null);
   /** The activity that was just created, so its page can open ready to edit. */
@@ -399,11 +416,23 @@ export function FacultyApp({
       {full ? (
         <div style={{ width: 12, flex: "0 0 12px" }} />
       ) : (
-        <aside className="fv-sidebar">
+        <aside className={`fv-sidebar${railed ? " collapsed" : ""}`}>
           {/* Everything above the account row lives in here so it can scroll on
               a short window, leaving Sign out anchored to the bottom instead of
               pushed past it. */}
           <div className="fv-sidetop">
+          <div className="fv-railtop">
+            <button
+              type="button"
+              className="fv-collapse"
+              aria-label={railed ? "Expand the sidebar" : "Collapse the sidebar"}
+              aria-expanded={!railed}
+              title={railed ? "Expand the sidebar" : "Collapse the sidebar"}
+              onClick={toggleRail}
+            >
+              <FIcon name={railed ? "chevronRight" : "chevronLeft"} size={16} />
+            </button>
+          </div>
           <div className="fv-coursetitle">{data?.course.name ?? "Applied Physics 50"}</div>
           <div className="fv-meta">
             <span>{data ? `${data.roster.length} students` : "—"}</span>
@@ -454,11 +483,18 @@ export function FacultyApp({
                 type="button"
                 className={`fv-navbtn${screen === t.id ? " on" : ""}`}
                 onClick={() => setScreen(t.id)}
+                title={railed ? t.label : undefined}
               >
                 <FIcon name={t.icon} size={18} />
-                {t.label}
+                <span className="fv-navlbl">{t.label}</span>
                 {t.id === "activities" && toGrade > 0 ? (
-                  <span className="fv-navcount">{toGrade} to grade</span>
+                  railed ? (
+                    // The count has nowhere to go on the rail, but "there is
+                    // work waiting" is the part worth keeping.
+                    <span className="fv-navdot" aria-label={`${toGrade} to grade`} />
+                  ) : (
+                    <span className="fv-navcount">{toGrade} to grade</span>
+                  )
                 ) : null}
               </button>
             ))}
@@ -476,6 +512,7 @@ export function FacultyApp({
                 color: "var(--fv-muted)",
                 lineHeight: 1.5,
               }}
+              className="fv-tfnote"
             >
               You are a teaching fellow on this course. {tfNote(data.can)}
             </div>
@@ -493,8 +530,9 @@ export function FacultyApp({
                 className="fv-btn outline sm"
                 style={{ height: 26, padding: "0 10px", fontSize: "var(--fv-2xs)" }}
                 onClick={() => void onSignOut()}
+                title={account ?? "Sign out"}
               >
-                Sign out
+                {railed ? "Out" : "Sign out"}
               </button>
             ) : null}
           </div>

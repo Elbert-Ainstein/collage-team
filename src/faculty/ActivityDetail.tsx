@@ -23,7 +23,7 @@ import {
   type CheckInResult,
 } from "@/checkins/types";
 import { countWorkForActivity, ensureCheckIn, setActivityPoints } from "./facultyData";
-import { pointsLabel, pointsTotal, questionCount, questionsFor, statFor } from "./model";
+import { pointsLabel, nextPositionIn, pointsTotal, questionCount, questionsFor, statFor } from "./model";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { FAvatar, FIcon } from "./icons";
 import type { FacultyData } from "./FacultyApp";
@@ -192,6 +192,17 @@ export function ActivityDetail(props: {
 
   const accent = TYPE_ACCENT[activity.type];
   const scope = SCOPE_OF[activity.type];
+
+  // Every week an activity can be filed under: the course's own weeks, plus any
+  // week an activity already names (a week with no course_weeks row still holds
+  // work, and dropping it from the list would make that work unreachable to
+  // move back to).
+  const weeksAvailable = useMemo(() => {
+    const set = new Set<number>();
+    for (const w of data.weeks) set.add(w.week);
+    for (const a of data.activities) if (a.week != null) set.add(a.week);
+    return [...set].sort((x, y) => y - x);
+  }, [data.weeks, data.activities]);
   // Questions are rows now, written on the rubric page. An activity with none
   // yet still reports the count it was created with, which is what scores it.
   const questions = questionsFor(activity.id, data.questions);
@@ -270,6 +281,11 @@ export function ActivityDetail(props: {
   const [due, setDue] = useState(() => toLocalInput(dueAt));
   const [points, setPoints] = useState(String(pointsTotal(activity)));
   const [kind, setKind] = useState<ActivityType>(activity.type);
+  // Which week it is filed under. Asked here rather than beside the button that
+  // creates it: at that point the activity does not exist yet and the choice
+  // has nothing to attach to, and it is the one field you cannot revise
+  // afterwards without it.
+  const [week, setWeek] = useState<number | null>(activity.week);
   const [visBusy, setVisBusy] = useState(false);
   // Deleting an activity cascades its check-ins, every submission against them,
   // and every mark. Counted while the question is on screen, not after it.
@@ -296,6 +312,7 @@ export function ActivityDetail(props: {
     setTitle(opts?.blankTitle && activity.title === "Untitled activity" ? "" : activity.title);
     setDesc(activity.source_text ?? "");
     setDue(toLocalInput(dueOf(activity)));
+    setWeek(activity.week);
     setPoints(String(pointsTotal(activity)));
     setEditing(true);
   };
@@ -359,6 +376,13 @@ export function ActivityDetail(props: {
       };
       if (kind !== activity.type) {
         patch.type = kind;
+      }
+      if (week !== activity.week) {
+        patch.week = week;
+        // position orders activities WITHIN a week, so a row arriving from
+        // another week has to be given a place in this one. The end is the
+        // honest default — it is the newest thing here.
+        patch.position = weeksAvailable.length ? nextPositionIn(data.activities, week) : 0;
       }
       // opens_at is deliberately NOT in this patch. Visibility is its own
       // switch, written the moment it is flipped; including it here is how a
@@ -609,6 +633,25 @@ export function ActivityDetail(props: {
           {editing ? (
             <div style={{ maxWidth: "64ch" }}>
               <div className="fv-fields">
+                <div className="fv-field" style={{ width: 150 }}>
+                  <label className="fv-eyebrow" htmlFor="fv-ed-week">
+                    Week
+                  </label>
+                  <select
+                    id="fv-ed-week"
+                    className="fv-in quiet"
+                    value={week ?? ""}
+                    onChange={(e) => setWeek(e.target.value === "" ? null : Number(e.target.value))}
+                  >
+                    <option value="">Unscheduled</option>
+                    {weeksAvailable.map((w) => (
+                      <option key={w} value={w}>
+                        Week {w}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div className="fv-field" style={{ minWidth: 210 }}>
                   {/* Type is what picks scope, and scope decides which check-ins
                       exist — so getting it wrong at creation used to be

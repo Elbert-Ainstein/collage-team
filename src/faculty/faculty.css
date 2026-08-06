@@ -1466,3 +1466,83 @@ button.fv-steplabel:hover { color: var(--fv-navy); }
   padding: 9px 12px 9px 26px;
   font-size: var(--fv-xs);
 }
+
+/* ------------------------------------------------- collapsing the sidebar
+   Collapsed is a RAIL, not a hidden panel: the four destinations stay one
+   click away as icons. Hiding them entirely would trade a little width for
+   having to expand before you can go anywhere. */
+.fv-sidebar.collapsed {
+  width: 58px;
+  flex: 0 0 58px;
+  padding: 22px 8px 14px;
+}
+.fv-sidebar.collapsed .fv-coursetitle,
+.fv-sidebar.collapsed .fv-meta,
+.fv-sidebar.collapsed .fv-seg,
+.fv-sidebar.collapsed .fv-navcount,
+.fv-sidebar.collapsed .fv-email,
+.fv-sidebar.collapsed .fv-tfnote {
+  display: none;
+}
+.fv-sidebar.collapsed .fv-navbtn {
+  justify-content: center;
+  padding: 0;
+  gap: 0;
+}
+/* The LABEL, not every span: the "work waiting" dot is a span too, and a
+   blanket rule hid the one signal the rail still needs to carry. */
+.fv-sidebar.collapsed .fv-navlbl {
+  display: none;
+}
+.fv-sidebar.collapsed .fv-sidefoot {
+  justify-content: center;
+}
+.fv-sidebar.collapsed .fv-nav {
+  margin-top: 8px;
+}
+
+/* The handle. Sits at the top of the rail in both states so it does not move
+   under the cursor when you use it. */
+.fv-collapse {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border: 1px solid var(--fv-neutral-200);
+  border-radius: 999px;
+  background: var(--fv-cream-100);
+  color: var(--fv-muted);
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+.fv-collapse:hover {
+  background: var(--fv-cream-300);
+  color: var(--fv-navy);
+}
+.fv-railtop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.fv-sidebar.collapsed .fv-railtop {
+  justify-content: center;
+}
+/* A dot on the rail when there is grading waiting, since the count is hidden. */
+.fv-navdot {
+  position: absolute;
+  top: 7px;
+  right: 9px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--fv-amber);
+}
+.fv-sidebar.collapsed .fv-navbtn { position: relative; }
+
+@media (max-width: 900px) {
+  /* Already narrow; the rail is the only sensible state there. */
+  .fv-sidebar.collapsed { width: 52px; flex: 0 0 52px; }
+}

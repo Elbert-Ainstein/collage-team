@@ -333,3 +333,19 @@ export function teamPercent(
   if (!vals.length) return null;
   return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length);
 }
+
+/**
+ * Where a row lands when it moves into a week: after everything already there.
+ *
+ * `position` orders activities WITHIN a week, so an activity arriving from
+ * another week carries a number that means nothing here — two rows can share
+ * it, and the order they come out in is then arbitrary.
+ */
+export function nextPositionIn(activities: Activity[], week: number | null): number {
+  let top = -1;
+  for (const a of activities) {
+    if ((a.week ?? null) !== week) continue;
+    if (a.position > top) top = a.position;
+  }
+  return top + 1;
+}
