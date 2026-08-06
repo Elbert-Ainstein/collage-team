@@ -1,0 +1,74 @@
+-- Which migrations are actually applied to THIS database?
+--
+-- Paste into Supabase → SQL Editor and run. Read-only: it writes nothing and
+-- locks nothing, so it is safe against a live course.
+--
+-- Every row should say "applied". Anything else names the file to run.
+--
+-- Checks the thing the migration DID, not a version number — there is no
+-- migration table here, and a file that was pasted but errored halfway would
+-- leave a version row lying about what happened.
+
+select '0014 activity questions' as migration,
+       case when to_regclass('public.activity_questions') is not null
+            then 'applied'
+            else 'NOT APPLIED — run 0014_activity_questions.sql' end as status
+union all
+select '0015 submission PDFs',
+       case when to_regclass('public.submission_files') is not null
+             and exists (select 1 from storage.buckets where id = 'submissions')
+            then 'applied'
+            else 'NOT APPLIED — run 0015_submission_pdfs.sql' end
+union all
+select '0016 tutorial check-ins',
+       case when to_regclass('public.tutorial_marks') is not null
+             and to_regclass('public.tutorial_absences') is not null
+            then 'applied'
+            else 'NOT APPLIED — run 0016_tutorial_check_ins.sql' end
+union all
+select '0017 team resources',
+       case when to_regclass('public.team_resources') is not null
+             and exists (select 1 from storage.buckets where id = 'resources')
+            then 'applied'
+            else 'NOT APPLIED — run 0017_team_resources.sql' end
+union all
+select '0018 purge permissions',
+       case when exists (
+              select 1
+                from pg_proc p
+                join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'public'
+                 and p.proname = 'can_remove_team_resource')
+            then 'applied'
+            else 'NOT APPLIED — run 0018_purge_on_delete.sql' end
+union all
+select '0019 activity completion',
+       case when exists (
+              select 1
+                from information_schema.columns
+               where table_schema = 'public'
+                 and table_name = 'activities'
+                 and column_name = 'completion')
+            then 'applied'
+            else 'NOT APPLIED — run 0019_activity_completion.sql' end
+union all
+-- The one that matters most, and the only one you cannot see by looking at the
+-- app: until it is in, deleting an activity a team set is filed under takes the
+-- course's teams and every team result on every other activity with it.
+--
+-- confdeltype is the FK's ON DELETE rule: 'c' = CASCADE (the bug), 'n' = SET
+-- NULL (fixed).
+select '0020 team sets survive activity delete',
+       coalesce(
+         (select case confdeltype
+                   when 'n' then 'applied'
+                   when 'c' then 'NOT APPLIED — deleting an activity still wipes '
+                                 || 'the course''s teams. Run 0020.'
+                   else 'unexpected ON DELETE rule: ' || confdeltype
+                 end
+            from pg_constraint
+           where conrelid = 'public.team_sets'::regclass
+             and contype = 'f'
+             and conname = 'team_sets_activity_id_fkey'),
+         'NOT FOUND — no FK by that name; check 0020 ran cleanly')
+order by 1;
