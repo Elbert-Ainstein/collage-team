@@ -56,7 +56,27 @@ function RoleRouter({
         // which is what every pre-roles account already was.
         role = "faculty";
       }
-      if (role === "student") return "student" as Kind;
+      if (role === "student") {
+        // ...unless they are also on somebody's TF list. "Faculty" is the
+        // default button at sign-up, so a TF who picked Student was sent
+        // straight to the student app and could never reach the course they
+        // were listed on — the role short-circuited before anything asked.
+        //
+        // Being on an instructor's TF list is a fact the instructor asserted,
+        // not a claim this account made, so honouring it grants nothing the
+        // owner did not already hand out. Their own course is excluded for the
+        // same reason it is below: owning it is the stronger signal.
+        try {
+          await claimTFRows();
+          const tfCourses = await myTFCourses();
+          if (tfCourses.length && !tfCourses.some((c) => c.owner_id === uid)) {
+            return "tf" as Kind;
+          }
+        } catch {
+          // Not a TF, or the lookup failed — carry on into the student app.
+        }
+        return "student" as Kind;
+      }
 
       // A teaching fellow signs up as Faculty — there is no TF button, because
       // being a TF is a fact about the instructor's roster, not a choice the

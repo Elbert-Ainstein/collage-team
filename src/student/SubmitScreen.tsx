@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { Assignment, Enrolment } from "@/checkins/studentData";
 import { ensureMyResult, listMyQuestions } from "@/checkins/studentData";
+import { getSubmissionFile, listSubmissionPages, markSubmitted } from "@/checkins/submissions";
 import type { ActivityQuestion } from "@/checkins/types";
 import { PdfSubmit } from "./PdfSubmit";
 import { SIcon } from "./icons";
@@ -70,6 +71,50 @@ export function SubmitScreen({
   }, [load]);
 
   const locked = assignment.myResult?.status === "scored";
+  const handedIn = assignment.myResult?.status === "submitted"
+    || assignment.myResult?.status === "needs_review";
+
+  // Whether there is anything TO hand in, and whether every question has pages.
+  // Read here rather than inside PdfSubmit because the Submit button lives out
+  // here, above it, where a student looks for it.
+  const [hasFile, setHasFile] = useState(false);
+  const [mapped, setMapped] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+
+  const readState = useCallback(async () => {
+    if (!resultId) return;
+    try {
+      const [file, pages] = await Promise.all([
+        getSubmissionFile(resultId),
+        listSubmissionPages(resultId),
+      ]);
+      setHasFile(Boolean(file));
+      setMapped(new Set(pages.map((p) => p.question_id)));
+    } catch {
+      // The hand-in below reports its own failures; this only decides whether
+      // a button is pressable, and guessing "not yet" is the safe guess.
+    }
+  }, [resultId]);
+
+  useEffect(() => {
+    void readState();
+  }, [readState]);
+
+  const unmapped = questions.filter((q) => !mapped.has(q.id));
+
+  async function hand(inNow: boolean) {
+    if (!resultId) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await markSubmitted(resultId, inNow);
+      onChanged();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "That didn't save.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <section className="sv-screen">
@@ -88,11 +133,65 @@ export function SubmitScreen({
           }}
         >
           <h1 className="sv-h1">Hand in your work</h1>
-          <span className="sv-sub">
+          <span className="sv-sub" style={{ flex: 1, minWidth: 220 }}>
             One PDF, then mark which pages answer which question — so whoever grades it opens
             straight to the right page.
           </span>
+
+          {/* Handing in is a press, not a side effect of uploading. Uploading
+              used to submit by itself, so a student was "Turned in" while still
+              working out which page answered question 3. */}
+          {locked ? (
+            <span className="sv-badge success" style={{ flex: "none" }}>
+              Graded
+            </span>
+          ) : handedIn ? (
+            <span style={{ display: "flex", alignItems: "center", gap: 10, flex: "none" }}>
+              <span className="sv-badge sky">Turned in</span>
+              <button
+                type="button"
+                className="sv-btn outline"
+                disabled={busy}
+                onClick={() => void hand(false)}
+                title="Take it back so you can upload different work. Nothing is deleted."
+              >
+                {busy ? "Working…" : "Unsubmit"}
+              </button>
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="sv-btn primary"
+              style={{ flex: "none" }}
+              disabled={busy || !hasFile}
+              onClick={() => void hand(true)}
+              title={
+                !hasFile
+                  ? "Upload a PDF first"
+                  : unmapped.length
+                    ? `You can hand in now, but ${unmapped.length} question${
+                        unmapped.length === 1 ? " has" : "s have"
+                      } no pages yet.`
+                    : "Hand this in"
+              }
+            >
+              {busy ? "Submitting…" : "Submit"}
+            </button>
+          )}
         </div>
+
+        {/* Said, not enforced. A student who genuinely has nothing for question
+            4 must still be able to hand in what they do have — blocking that
+            would cost them the whole assignment over one blank. */}
+        {!handedIn && !locked && hasFile && unmapped.length ? (
+          <div
+            className="sv-sub"
+            style={{ marginTop: 6, color: "var(--amber-700)", fontSize: "var(--text-xs)" }}
+          >
+            No pages yet for {unmapped.map((q) => q.label).join(", ")}. You can still submit —
+            your marker will just see nothing for {unmapped.length === 1 ? "it" : "those"}.
+          </div>
+        ) : null}
       </div>
 
       <div className="sv-scroll">
@@ -139,7 +238,10 @@ export function SubmitScreen({
             activityId={activityId}
             questions={questions}
             locked={locked}
-            onChanged={onChanged}
+            onChanged={() => {
+              void readState();
+              onChanged();
+            }}
           />
         )}
       </div>

@@ -797,3 +797,55 @@ export async function restampReleased(activityId: string, completion: boolean): 
   }
   return scored.length;
 }
+
+// ------------------------------------------------------------- account type
+//
+// profiles.role is 'faculty' or 'student' and 0006 PINS it: the own-profile
+// UPDATE policy requires role to equal what it already is, so nobody writes it
+// through the table. That is right — role is what stands between a student
+// account and an instructor's gradebook. 0024 adds two narrow doors instead.
+
+export type AccountRole = "faculty" | "student";
+
+/**
+ * What account type each person on this course signed up with.
+ *
+ * A course owner cannot read anybody else's profile row (0006 is own-row only),
+ * so without this they cannot tell a mis-signed-up student from a correct one —
+ * which makes "fix the wrong ones" impossible to even see. 0024's function
+ * returns role and nothing else, for people on a course they own.
+ *
+ * Degrades to an empty map rather than throwing: knowing the account types is
+ * an enhancement on the roster screen, and a database without 0024 should show
+ * the roster rather than an error.
+ */
+export async function courseMemberRoles(courseId: string): Promise<Map<string, AccountRole>> {
+  const { data, error } = await db().rpc("course_member_roles", { cid: courseId });
+  if (error) {
+    if (/course_member_roles|0024/.test(error.message)) return new Map();
+    throw dbError(error);
+  }
+  const out = new Map<string, AccountRole>();
+  for (const r of (data as { user_id: string; role: AccountRole }[]) ?? []) {
+    out.set(r.user_id, r.role);
+  }
+  return out;
+}
+
+/**
+ * Fix somebody's account type. Only for people on a course you own — 0024's
+ * function enforces that, and refuses your own id, because an owner demoting
+ * themselves locks them out of the course from a button meant to fix somebody
+ * else's mistake.
+ */
+export async function setMemberRole(userId: string, role: AccountRole): Promise<void> {
+  const { error } = await db().rpc("set_member_role", { target: userId, next_role: role });
+  if (!error) return;
+  if (/set_member_role|0024/.test(error.message)) {
+    throw new Error(
+      "This project cannot change account types yet — run " +
+        "supabase/migrations/0024_not_complete_and_roles.sql in the Supabase SQL editor.",
+    );
+  }
+  throw dbError(error);
+}

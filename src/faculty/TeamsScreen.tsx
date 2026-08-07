@@ -12,7 +12,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { TeamsPillar } from "@/checkins/TeamsPillar";
 import { addStudents, removeStudent, setStudentEmail } from "@/checkins/data";
 import { deleteStudentStorage } from "@/checkins/purge";
-import { countWorkForStudent } from "@/faculty/facultyData";
+import {
+  countWorkForStudent,
+  courseMemberRoles,
+  setMemberRole,
+  type AccountRole,
+} from "@/faculty/facultyData";
 import {
   isSupportedRosterFile,
   parseRoster,
@@ -155,6 +160,43 @@ export function TeamsScreen(props: {
       fail(e);
     } finally {
       setBusy(false);
+    }
+  }
+
+  // What account type each signed-in person on this roster picked. A course
+  // owner cannot read anyone else's profile row, so this comes through 0024's
+  // scoped function; without it there is no way to SEE a wrong pick, let alone
+  // fix one.
+  const [roles, setRoles] = useState<Map<string, AccountRole>>(new Map());
+  const [roleBusy, setRoleBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    courseMemberRoles(data.course.id)
+      .then((m) => {
+        if (alive) setRoles(m);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [data.course.id, data.roster]);
+
+  async function fixRole(userId: string, role: AccountRole) {
+    setRoleBusy(userId);
+    setError(null);
+    try {
+      await setMemberRole(userId, role);
+      setRoles((prev) => new Map(prev).set(userId, role));
+      setNote(
+        role === "student"
+          ? "Switched to a student account. They will land in the course next time they sign in."
+          : "Switched to a faculty account.",
+      );
+    } catch (e) {
+      fail(e);
+    } finally {
+      setRoleBusy(null);
     }
   }
 
@@ -422,13 +464,34 @@ export function TeamsScreen(props: {
                   {/* The account only exists once the student signs up under
                       that address, so the row has to say which state it is in. */}
                   {s.user_id ? (
-                    <span
-                      className="fv-badge"
-                      style={{ flex: "none", color: "var(--fv-emerald)" }}
-                      title="This student has signed in and claimed their row."
-                    >
-                      signed in
-                    </span>
+                    roles.get(s.user_id) === "faculty" ? (
+                      // Their account says Faculty but they are on a student
+                      // roster: "Faculty" is the default button at sign-up, so
+                      // this is the common wrong pick and it strands them in an
+                      // empty gradebook. Say so where it is visible, and offer
+                      // the fix rather than a support conversation.
+                      <button
+                        type="button"
+                        className="fv-btn outline sm"
+                        style={{ flex: "none", color: "var(--fv-amber)" }}
+                        disabled={roleBusy === s.user_id}
+                        onClick={() => void fixRole(s.user_id as string, "student")}
+                        title={
+                          "This account signed up as Faculty, so it opens an empty gradebook " +
+                          "instead of this course. Switch it to a student account."
+                        }
+                      >
+                        {roleBusy === s.user_id ? "Switching…" : "Signed up as faculty — fix"}
+                      </button>
+                    ) : (
+                      <span
+                        className="fv-badge"
+                        style={{ flex: "none", color: "var(--fv-emerald)" }}
+                        title="This student has signed in and claimed their row."
+                      >
+                        signed in
+                      </span>
+                    )
                   ) : null}
 
                   <span

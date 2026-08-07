@@ -120,25 +120,26 @@ export async function uploadSubmissionPdf(
     throw dbError(rows.error);
   }
 
-  // The PDF IS the hand-in. Without this the result stayed "draft" — the row
-  // ensureMyResult creates just to have something to hang a file off — so a
-  // student who uploaded their work and mapped every page still read
-  // "Nothing submitted yet", and the instructor's list still said nobody had
-  // handed in. Ordered after the row so a failed insert cannot mark work
-  // submitted that is not there.
-  await markSubmitted(resultId, true);
-
+  // Deliberately NOT submitted here. Uploading used to hand the work in by
+  // itself, which meant a student was "Turned in" while still working out which
+  // page answered question 3 — and an instructor could open half-mapped work
+  // and think it was finished. Submit is its own press now.
   return (rows.data as SubmissionFile[])[0];
 }
 
 /**
- * Move the result between draft and submitted as the PDF comes and goes.
+ * Hand the work in, or take it back.
  *
  * Never touches a scored row: the guard in 0008 refuses it, and re-opening
- * graded work is the instructor's call rather than a side effect of a student
- * pressing Replace.
+ * graded work is the instructor's call rather than something a student can do
+ * by pressing Unsubmit after seeing their mark.
+ *
+ * Unsubmitting clears NOTHING but the status. The PDF stays, the page mapping
+ * stays, the marker's feedback stays — a student taking their work back to fix
+ * a page should not lose the twenty minutes they spent mapping it, and should
+ * not be able to erase a comment somebody wrote them.
  */
-async function markSubmitted(resultId: string, submitted: boolean): Promise<void> {
+export async function markSubmitted(resultId: string, submitted: boolean): Promise<void> {
   const rows = (unwrap(
     await db().from("check_in_results").select("status").eq("id", resultId).limit(1),
   ) as { status: string }[] | null) ?? [];
