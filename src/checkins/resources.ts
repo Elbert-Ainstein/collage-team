@@ -13,7 +13,15 @@ import { dbError } from "./data";
 import { put, remove, signedUrl, signedUrls } from "./storage";
 
 const BUCKET = "resources";
-const MAX_BYTES = 25 * 1024 * 1024;
+/**
+ * 100 MB, matching the bucket (0022).
+ *
+ * Nothing is compressed on the way in, so this has to fit whatever a phone
+ * actually wrote. Checked here as well as by the bucket because a rejection
+ * after the whole file has crossed a room's wifi wastes the upload; this one
+ * lands instantly.
+ */
+const MAX_BYTES = 100 * 1024 * 1024;
 
 export interface TeamResource {
   id: string;
@@ -59,8 +67,8 @@ function storageError(error: { message: string }, op: "upload" | "read" | "delet
   }
   if (/maximum allowed size|payload too large|entity too large|413/i.test(m)) {
     return new Error(
-      "That image is too big to upload — the limit is 25 MB. A photo taken on a phone is " +
-        "usually well under it.",
+      "That image is too big to upload — the limit is 100 MB. If your project is still on " +
+        "the Supabase free plan the real ceiling is 50 MB, whatever this bucket says.",
     );
   }
   if (/row-level security|not authorized|unauthorized|permission|403/i.test(m)) {
@@ -139,12 +147,9 @@ export async function uploadTeamResource(
         "or a HEIC straight off a phone.",
     );
   }
-  // Checked here as well as by the bucket: a 40 MB upload that fails after the
-  // whole thing has gone up the wire wastes a slow room's time.
   if (file.size > MAX_BYTES) {
     throw new Error(
-      "That image is too big to upload — the limit is 25 MB. A photo taken on a phone is " +
-        "usually well under it.",
+      `“${file.name}” is ${Math.round(file.size / (1024 * 1024))} MB, over the 100 MB limit.`,
     );
   }
 
