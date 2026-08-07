@@ -72,3 +72,19 @@ select '0020 team sets survive activity delete',
              and conname = 'team_sets_activity_id_fkey'),
          'NOT FOUND — no FK by that name; check 0020 ran cleanly')
 order by 1;
+
+-- ------------------------------------------------------- and the buckets
+--
+-- Run this second. A bucket's file_size_limit is only ever a CEILING BELOW the
+-- project-wide global limit (Storage → Settings → "Global file size limit"),
+-- which is 50 MB on Free whatever a bucket says. So a bucket reading 100 MB
+-- here does NOT prove a 100 MB upload will work — it proves the migration ran.
+-- The only way to know the rest is to upload something big.
+
+select id as bucket,
+       public as is_public,
+       round(file_size_limit / 1024.0 / 1024.0) || ' MB' as per_file_limit,
+       array_to_string(allowed_mime_types, ', ') as accepts
+  from storage.buckets
+ where id in ('recordings', 'submissions', 'resources', 'activity-files')
+ order by id;
