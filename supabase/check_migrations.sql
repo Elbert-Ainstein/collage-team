@@ -62,9 +62,11 @@ select '0020 team sets survive activity delete',
        coalesce(
          (select case confdeltype
                    when 'n' then 'applied'
-                   when 'c' then 'NOT APPLIED — deleting an activity still wipes '
-                                 || 'the course''s teams. Run 0020.'
-                   else 'unexpected ON DELETE rule: ' || confdeltype
+                   when 'c' then 'NOT APPLIED — deleting an activity still wipes the course''s teams. Run 0020.'
+                   -- confdeltype is Postgres's internal "char" type, not text.
+                   -- Concatenating it without a cast leaves || with no unique
+                   -- candidate operator and the whole query fails to plan.
+                   else 'unexpected ON DELETE rule: ' || confdeltype::text
                  end
             from pg_constraint
            where conrelid = 'public.team_sets'::regclass
@@ -83,7 +85,7 @@ order by 1;
 
 select id as bucket,
        public as is_public,
-       round(file_size_limit / 1024.0 / 1024.0) || ' MB' as per_file_limit,
+       round(file_size_limit / 1024.0 / 1024.0)::text || ' MB' as per_file_limit,
        array_to_string(allowed_mime_types, ', ') as accepts
   from storage.buckets
  where id in ('recordings', 'submissions', 'resources', 'activity-files')
