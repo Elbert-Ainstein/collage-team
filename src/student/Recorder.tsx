@@ -50,44 +50,6 @@ function stamp(iso: string): string {
   return `${day}, ${h}:${String(d.getMinutes()).padStart(2, "0")}${h24 >= 12 ? "pm" : "am"}`;
 }
 
-/**
- * How the microphone is captured, and how the take is encoded.
- *
- * A discussion recording is speech in a room, and it was being stored at
- * whatever the browser felt like — Chrome commonly picks ~128 kbps stereo,
- * which is four times what this needs and is the single largest thing this app
- * writes to storage. Opus at 32 kbps mono is transparent for voice; a fifteen
- * minute take goes from roughly 14 MB to roughly 3.5 MB.
- *
- * echoCancellation and noiseSuppression are on because the input is a laptop in
- * a room with several people talking, which is exactly what they are for — and
- * a cleaner signal also compresses smaller.
- */
-const MIC: MediaTrackConstraints = {
-  channelCount: 1,
-  echoCancellation: true,
-  noiseSuppression: true,
-  autoGainControl: true,
-};
-
-/** 32 kbps mono Opus. Speech, not music. */
-const AUDIO_BITS = 32_000;
-
-/**
- * The first container this browser will actually encode Opus into.
- *
- * Asked rather than assumed: Safari does not do audio/webm at all, and passing
- * a mimeType it refuses makes the MediaRecorder constructor throw — which would
- * turn a size optimisation into "recording is broken on iPhones".
- */
-function bestAudioType(): string | undefined {
-  if (typeof MediaRecorder === "undefined" || !MediaRecorder.isTypeSupported) return undefined;
-  for (const t of ["audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/webm", "audio/mp4"]) {
-    if (MediaRecorder.isTypeSupported(t)) return t;
-  }
-  return undefined;
-}
-
 const NO_RECORDER =
   "This browser can't record audio. Chrome, Edge, Firefox and recent Safari can — " +
   "and the page has to be on an https address, because browsers refuse the " +
@@ -340,7 +302,7 @@ export function Recorder({
     setPhase("starting");
     let stream: MediaStream;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: MIC });
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) {
       setPhase("idle");
       setRecordError(micTrouble(e));
@@ -353,25 +315,19 @@ export function Recorder({
 
     let rec: MediaRecorder;
     try {
-      const mimeType = bestAudioType();
-      rec = new MediaRecorder(stream, {
-        audioBitsPerSecond: AUDIO_BITS,
-        ...(mimeType ? { mimeType } : {}),
-      });
-    } catch {
-      // Fall back to the browser's own defaults rather than failing. A bigger
-      // file beats no recording of a discussion that only happened once.
-      try {
-        rec = new MediaRecorder(stream);
-      } catch (e) {
-        releaseStream(stream);
-        setPhase("idle");
-        setRecordError(
-          message(e, "This browser handed over the microphone but refused to record from it.") +
-            " Chrome or Firefox will.",
-        );
-        return;
-      }
+      // No bitrate, no container: the browser picks, and what it picks is the
+      // best it can do. A discussion is several people at different distances
+      // from one laptop mic, and the quiet one is exactly who gets lost first
+      // when this is turned down. Storage is the cheaper thing to spend.
+      rec = new MediaRecorder(stream);
+    } catch (e) {
+      releaseStream(stream);
+      setPhase("idle");
+      setRecordError(
+        message(e, "This browser handed over the microphone but refused to record from it.") +
+          " Chrome or Firefox will.",
+      );
+      return;
     }
 
     const chunks: Blob[] = [];

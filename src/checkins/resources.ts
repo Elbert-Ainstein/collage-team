@@ -120,68 +120,6 @@ function extensionFor(file: File): string {
   return (fromType ?? "img").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-/**
- * Shrink a photo before it goes up.
- *
- * A phone camera writes 3-5 MB for a shot of a whiteboard that is completely
- * legible at 1600px on the long edge and about 400 KB. Over a term, one class,
- * that difference is gigabytes — and it is bandwidth on a room's wifi as well
- * as storage.
- *
- * Returns the ORIGINAL untouched whenever it cannot do better:
- *  - the browser cannot decode it (HEIC off an iPhone, on a browser that is not
- *    Safari) — the bucket accepts heic, so it uploads as-is rather than failing
- *  - it is already small, so re-encoding would only lose detail
- *  - the re-encode came out no smaller, which happens with line art
- *
- * Never used for anything but images. A PDF is a document and re-encoding one
- * would destroy the text layer a marker reads.
- */
-const MAX_EDGE = 1600;
-const JPEG_QUALITY = 0.82;
-/** Below this, the saving is not worth a generation of loss. */
-const WORTH_SHRINKING = 600 * 1024;
-
-async function shrink(file: File): Promise<File> {
-  if (file.size <= WORTH_SHRINKING) return file;
-  if (typeof createImageBitmap !== "function" || typeof document === "undefined") return file;
-
-  let bitmap: ImageBitmap;
-  try {
-    bitmap = await createImageBitmap(file);
-  } catch {
-    // Undecodable here — most often HEIC away from Safari. The bucket takes it.
-    return file;
-  }
-
-  try {
-    const scale = Math.min(1, MAX_EDGE / Math.max(bitmap.width, bitmap.height));
-    const w = Math.max(1, Math.round(bitmap.width * scale));
-    const h = Math.max(1, Math.round(bitmap.height * scale));
-
-    const canvas = document.createElement("canvas");
-    canvas.width = w;
-    canvas.height = h;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return file;
-    ctx.drawImage(bitmap, 0, 0, w, h);
-
-    const blob = await new Promise<Blob | null>((resolve) =>
-      canvas.toBlob(resolve, "image/jpeg", JPEG_QUALITY),
-    );
-    if (!blob || blob.size >= file.size) return file;
-
-    // The name goes with the format. A .heic holding JPEG bytes is a file
-    // nothing downstream can reason about.
-    const base = file.name.replace(/\.[^.]+$/, "") || "photo";
-    return new File([blob], `${base}.jpg`, { type: "image/jpeg", lastModified: file.lastModified });
-  } catch {
-    return file;
-  } finally {
-    bitmap.close();
-  }
-}
-
 /** A sensible starting label: the file's own name without its extension. */
 export function defaultTitle(file: File): string {
   const base = file.name.replace(/\.[^.]+$/, "").trim();
@@ -210,15 +148,14 @@ export async function uploadTeamResource(
     );
   }
 
-  // Named from the ORIGINAL, before any re-encode renames it: the team called
-  // it what they called it, and "board.heic" becoming "board.jpg" in the label
-  // would be the compression leaking into what they see.
   const named = title.trim() || defaultTitle(file);
 
-  const sending = await shrink(file);
-  const path = `${courseId}/${activityId}/${teamId}/${crypto.randomUUID()}.${extensionFor(sending)}`;
+  // Uploaded exactly as the camera wrote it. A photo of a whiteboard is
+  // evidence a marker reads — a re-encode that saves bytes also softens the one
+  // faint line somebody needed, and there is no way to get it back afterwards.
+  const path = `${courseId}/${activityId}/${teamId}/${crypto.randomUUID()}.${extensionFor(file)}`;
 
-  const failed = await put(BUCKET, path, sending, sending.type);
+  const failed = await put(BUCKET, path, file, file.type);
   if (failed) throw storageError(failed, "upload");
 
   const rows = await db().from("team_resources").insert({
@@ -226,8 +163,8 @@ export async function uploadTeamResource(
     team_id: teamId,
     title: named,
     path,
-    mime: sending.type,
-    size_bytes: sending.size,
+    mime: file.type,
+    size_bytes: file.size,
   }).select();
 
   if (rows.error) {
