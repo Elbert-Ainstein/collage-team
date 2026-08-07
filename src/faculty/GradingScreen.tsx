@@ -32,6 +32,7 @@ import {
 import { pointsTotal, questionsFor } from "./model";
 import type { FacultyData } from "./FacultyApp";
 import { FAvatar, FIcon } from "./icons";
+import { ActivityTeamPanel } from "./ActivityTeamPanel";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -58,12 +59,15 @@ export function GradingScreen({
   data,
   activity,
   onBack,
+  onOpenCheckIn,
   onChanged,
   onError,
 }: {
   data: FacultyData;
   activity: Activity;
   onBack: () => void;
+  /** The Check-in sheet, where the team half is actually filled in. */
+  onOpenCheckIn: () => void;
   onChanged: () => void;
   onError: (e: unknown) => void;
 }) {
@@ -333,6 +337,27 @@ export function GradingScreen({
   // Grading is a course-wide permission. RLS and the guard trigger reject the
   // write anyway, but letting someone mark a whole submission and only then
   // discover they may not is the wrong way to find out.
+  // One definition, used by the main body and by the team-half early return —
+  // two copies would drift the moment either changed.
+  const halfToggle = (
+    <div className="fv-seg" style={{ padding: 2, alignSelf: "flex-start", marginBottom: 12 }}>
+      {(["individual", "team"] as const).map((k) => (
+        <button
+          key={k}
+          type="button"
+          className={half === k ? "on" : ""}
+          onClick={() => {
+            setHalf(k);
+            setStIdx(0);
+            setQIdx(0);
+          }}
+        >
+          {k === "individual" ? "Individual" : "Team"}
+        </button>
+      ))}
+    </div>
+  );
+
   if (!data.can.grade) {
     return (
       <div className="fv-panel">
@@ -350,10 +375,29 @@ export function GradingScreen({
     );
   }
 
+  // The TEAM half of an activity is not graded question-by-question — it is
+  // marked in the room, on the check-in sheet. So show that, the same table the
+  // activity page shows, rather than a per-question grader that has nothing to
+  // step through and a "nothing to grade yet" card that reads as a fault.
+  if (half === "team" && scope !== "indiv") {
+    return (
+      <div className="fv-panel">
+        {header}
+        {scope === "both" ? halfToggle : null}
+        <ActivityTeamPanel
+          activityId={activity.id}
+          teams={data.teams}
+          onOpenCheckIn={onOpenCheckIn}
+        />
+      </div>
+    );
+  }
+
   if (!subject) {
     return (
       <div className="fv-panel">
         {header}
+        {scope === "both" ? halfToggle : null}
         <div className="fv-card" style={{ padding: 26, maxWidth: 520 }}>
           <div style={{ fontFamily: "var(--fv-serif)", fontSize: "var(--fv-lg)", fontWeight: 700 }}>
             Nothing to grade yet

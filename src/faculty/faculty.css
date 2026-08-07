@@ -1452,12 +1452,52 @@ button.fv-steplabel:hover { color: var(--fv-navy); }
    criteria ladder to. */
 .fv-ciband {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
   border-bottom: 1px solid var(--fv-neutral-200);
   background: var(--fv-cream-300);
-  flex-wrap: wrap;
+}
+/* Two cards, side by side. Whichever is chosen is filled; the other is not,
+   and both say what they mean without being pressed. */
+.fv-cipick {
+  display: flex;
+  gap: 8px;
+}
+.fv-cichoice {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 9px 11px;
+  text-align: left;
+  border: 1px solid var(--fv-neutral-200);
+  border-radius: var(--fv-r-md);
+  background: var(--fv-cream-100);
+  font: inherit;
+  cursor: pointer;
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+.fv-cichoice:hover:not(:disabled) { border-color: var(--fv-navy-700); }
+.fv-cichoice:disabled { opacity: 0.6; cursor: default; }
+.fv-cichoice.on {
+  border-color: var(--fv-navy);
+  box-shadow: inset 0 0 0 1px var(--fv-navy);
+  background: var(--fv-cream-400);
+}
+.fv-cititle {
+  font-size: var(--fv-xs);
+  font-weight: 600;
+  color: var(--fv-navy);
+}
+.fv-cihint {
+  font-size: var(--fv-2xs);
+  color: var(--fv-muted);
+  line-height: 1.45;
+}
+@media (max-width: 700px) {
+  .fv-cipick { flex-direction: column; }
 }
 .fv-cirow {
   display: flex;

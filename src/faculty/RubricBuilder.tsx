@@ -801,27 +801,44 @@ export function RubricBuilder({
           {/* How it is marked, above the ladder it governs. A switch rather
               than two radio buttons: it is one question with a yes and a no,
               and the sentence under it changes to say what the answer means. */}
+          {/* Both answers on screen at once, side by side, each saying what it
+              means. A lone switch labelled "Marked for completion" makes you
+              work out what OFF is — and the two answers are not opposites in
+              any obvious way, so guessing is easy and wrong. */}
           <div className="fv-ciband">
-            <button
-              type="button"
-              className={`fv-switch${completion ? " on" : ""}`}
-              role="switch"
-              aria-checked={completion}
-              aria-label="Marked for completion"
-              disabled={!canEdit || ciBusy}
-              onClick={() => setCi(!completion)}
-            />
-            <span style={{ fontSize: "var(--fv-xs)", fontWeight: 600 }}>
-              {completion ? "Marked for completion" : "Marked out of points"}
+            <span className="fv-eyebrow" style={{ flex: "none" }}>
+              How is this marked?
             </span>
-            <span
-              className="fv-sub"
-              style={{ flex: 1, minWidth: 180, fontSize: "var(--fv-2xs)", lineHeight: 1.5 }}
-            >
-              {completion
-                ? "One Complete / Not complete for the whole assignment. Questions are still needed — they are what a student attaches pages to."
-                : `Each question carries criteria, and each criterion deducts from the ${total} this is out of.`}
-            </span>
+            <div className="fv-cipick" role="radiogroup" aria-label="How this activity is marked">
+              <button
+                type="button"
+                role="radio"
+                aria-checked={!completion}
+                className={`fv-cichoice${!completion ? " on" : ""}`}
+                disabled={!canEdit || ciBusy}
+                onClick={() => setCi(false)}
+              >
+                <span className="fv-cititle">Out of points</span>
+                <span className="fv-cihint">
+                  Each question carries criteria, and each criterion deducts from the {total} this
+                  is out of.
+                </span>
+              </button>
+              <button
+                type="button"
+                role="radio"
+                aria-checked={completion}
+                className={`fv-cichoice${completion ? " on" : ""}`}
+                disabled={!canEdit || ciBusy}
+                onClick={() => setCi(true)}
+              >
+                <span className="fv-cititle">Complete / Not complete</span>
+                <span className="fv-cihint">
+                  One answer for the whole assignment. Questions are still needed — they are what
+                  a student attaches pages to.
+                </span>
+              </button>
+            </div>
           </div>
 
           <div className="fv-panebody">

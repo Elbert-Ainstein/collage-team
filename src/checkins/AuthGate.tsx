@@ -339,7 +339,7 @@ function SignIn({ linkError }: { linkError: string | null }) {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@harvard.edu"
+                placeholder="you@college.harvard.edu"
               />
             </label>
           )}

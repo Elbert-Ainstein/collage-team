@@ -36,7 +36,12 @@ export const SCOPE_OF: Record<ActivityType, Scope> = {
   challenge: "both",
   combo: "indiv",
   skills: "indiv",
-  amplify: "team",
+  // Amplify used to be team-only. It is "both" now: students hand in their own
+  // work AND the team is checked in on it, exactly like a Challenge. Existing
+  // Amplify activities were given their missing individual check-in by 0023 —
+  // scope decides which check_ins must exist, and without that row the new
+  // Individual tab has nothing to hand in to.
+  amplify: "both",
 };
 
 export const TYPE_LABEL: Record<ActivityType, string> = {

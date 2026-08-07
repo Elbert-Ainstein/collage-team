@@ -385,6 +385,10 @@ export function FacultyApp({
             data={data}
             activity={selected}
             onBack={() => setScreen("detail")}
+            onOpenCheckIn={() => {
+              setFresh(null);
+              setScreen("checkin");
+            }}
             onChanged={() => refresh().catch(fail)}
             onError={fail}
           />

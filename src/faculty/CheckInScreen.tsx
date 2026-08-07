@@ -143,6 +143,46 @@ export function CheckInScreen({ data }: { data: FacultyData }): JSX.Element {
     }
   };
 
+  /**
+   * Pick a presenter at random for one slot.
+   *
+   * Excludes anyone marked absent — they were not in the room — and anyone who
+   * has already presented for this team on this activity, so a re-roll spreads
+   * the turns rather than landing on the same person twice. When everyone
+   * eligible has already gone it falls back to the whole present list, because
+   * a die that refuses to roll is worse than one that repeats.
+   *
+   * One call per press, per cell. A "roll every team" button would fire N
+   * writeMark calls that all close over the same `marks` snapshot, and one
+   * failure among them would restore that snapshot over every other team's
+   * roll — so this stays a single-cell action.
+   */
+  const roll = (team: TeamWithMembers, slot: number) => {
+    if (!canEdit) return;
+    const away = absentIn(team.id);
+    const present = team.members.filter((m) => !away.includes(m.id));
+    if (!present.length) return;
+
+    const spoken = new Set(
+      marks
+        .filter((m) => m.team_id === team.id && m.slot !== slot && m.presenter_id)
+        .map((m) => m.presenter_id as string),
+    );
+    const current = markFor(marks, team.id, slot)?.presenter_id ?? null;
+
+    let pool = present.filter((m) => !spoken.has(m.id));
+    // Re-rolling the same slot should MOVE, so exclude whoever is in it now —
+    // unless they are the only one left, in which case the roll is a no-op and
+    // pressing again should not clear the cell.
+    const moved = pool.filter((m) => m.id !== current);
+    if (moved.length) pool = moved;
+    if (!pool.length) pool = present.filter((m) => m.id !== current);
+    if (!pool.length) pool = present;
+
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    void writeMark(team.id, slot, { presenter_id: pick.id });
+  };
+
   const writeAbsences = async (teamId: string, studentIds: string[]) => {
     if (!selId || !canEdit) return;
     const before = absences;
@@ -357,15 +397,34 @@ export function CheckInScreen({ data }: { data: FacultyData }): JSX.Element {
                                     borderLeft: "1px solid var(--fv-neutral-200)",
                                   }}
                                 >
-                                  <PersonPicker
-                                    options={present}
-                                    value={mark?.presenter_id ?? ""}
-                                    placeholder="Pick one"
-                                    disabled={!canEdit}
-                                    onChange={(id) =>
-                                      void writeMark(team.id, n, { presenter_id: id || null })
-                                    }
-                                  />
+                                  <div
+                                    style={{ display: "flex", alignItems: "center", gap: 6 }}
+                                  >
+                                    <PersonPicker
+                                      options={present}
+                                      value={mark?.presenter_id ?? ""}
+                                      placeholder="Pick one"
+                                      disabled={!canEdit}
+                                      onChange={(id) =>
+                                        void writeMark(team.id, n, { presenter_id: id || null })
+                                      }
+                                    />
+                                    <button
+                                      type="button"
+                                      className="fv-iconbtn"
+                                      style={{ width: 26, height: 26, flex: "none" }}
+                                      disabled={!canEdit || present.length === 0}
+                                      onClick={() => roll(team, n)}
+                                      aria-label={`Pick a presenter at random for ${team.name}, check-in ${n}`}
+                                      title={
+                                        present.length === 0
+                                          ? "Everyone on this team is marked absent."
+                                          : "Roll a presenter — skips anyone absent or who has already presented. Press again to re-roll."
+                                      }
+                                    >
+                                      <FIcon name="die" size={15} />
+                                    </button>
+                                  </div>
                                 </td>
                                 <td style={{ padding: 6 }}>
                                   <Scale

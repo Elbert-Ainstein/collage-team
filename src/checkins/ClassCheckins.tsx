@@ -552,7 +552,7 @@ function RosterRow({
               type="email"
               autoFocus
               value={value}
-              placeholder="student@harvard.edu"
+              placeholder="student@college.harvard.edu"
               onChange={(e) => setValue(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter") void save();
@@ -977,7 +977,7 @@ function RosterEditor({
               padding: "7px 10px",
             }}
             value={names}
-            placeholder={"…or paste one per line\nAda Lovelace, ada@harvard.edu"}
+            placeholder={"…or paste one per line\nAda Lovelace, ada@college.harvard.edu"}
             onChange={(e) => setNames(e.target.value)}
           />
           <button className="t-btn primary" onClick={() => void add()} disabled={!names.trim() || busy}>

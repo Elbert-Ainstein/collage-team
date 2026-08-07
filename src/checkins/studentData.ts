@@ -9,6 +9,7 @@
 
 import { requireSupabase } from "@/lib/supabaseClient";
 import { dbError } from "./data";
+import { SCOPE_OF } from "./types";
 import type {
   Activity,
   ActivityQuestion,
@@ -232,8 +233,14 @@ export async function listAssignments(enrolment: Enrolment): Promise<Assignment[
         (r) => r.check_in_id === teamCheckIn?.id && r.team_id === enrolment.team?.id,
       ) ?? null;
 
-    const lead = activity.type === "amplify" ? teamResult : myResult;
-    const leadCheckIn = activity.type === "amplify" ? teamCheckIn : indivCheckIn;
+    // SCOPE, not type. This branched on `type === "amplify"` — which was a
+    // second, hidden definition of "this activity is team-only", and it stopped
+    // agreeing with SCOPE_OF the moment Amplify gained an individual half. A
+    // team-only activity leads with the team's result; anything with an
+    // individual half leads with the student's own.
+    const teamOnly = SCOPE_OF[activity.type] === "team";
+    const lead = teamOnly ? teamResult : myResult;
+    const leadCheckIn = teamOnly ? teamCheckIn : indivCheckIn;
 
     return {
       activity,
