@@ -849,7 +849,8 @@ function AssignmentDetail({
   tab: "indiv" | "team";
   onBack: () => void;
   onTabChange: (t: "indiv" | "team") => void;
-  onOpenWork: (id: string, mode: "indiv" | "team") => void;
+  /** The team answer screen. The individual half hands in on its own screen. */
+  onOpenWork: (id: string, mode: "team") => void;
   /** The PDF hand-in, on its own screen. */
   onOpenSubmit: (id: string) => void;
   onOpenResources: () => void;
@@ -1049,10 +1050,10 @@ function AssignmentDetail({
           {onIndiv ? (
             <div>
               <DescriptionCard a={a} questions={questions.length} />
-              {/* Handing the work in is the primary action, and it says so.
-                  The written box is a note to the marker, so it goes second —
-                  it used to be the only door, and the actual hand-in lived
-                  inside it as a 138px-wide sidebar. */}
+              {/* One door to the individual half: the hand-in. "Open my work"
+                  sat beside it and led to a second screen for a written note,
+                  which is two places to go for one piece of work and a question
+                  ("which one am I meant to press?") with no good answer. */}
               <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 14 }}>
                 <button
                   type="button"
@@ -1066,15 +1067,6 @@ function AssignmentDetail({
                   }
                 >
                   {arrivedIndiv ? "View submission" : "Submit assignment"}
-                </button>
-                <button
-                  type="button"
-                  className="sv-btn outline"
-                  onClick={() => onOpenWork(act.id, "indiv")}
-                  disabled={!a.indivCheckIn}
-                  title="Write a note to whoever marks this"
-                >
-                  Open my work
                 </button>
                 <span className="sv-sub">{savedLine}</span>
               </div>
@@ -1157,7 +1149,8 @@ export function Assignments(props: {
   onSelect: (id: string) => void;
   onBack: () => void;
   onTabChange: (t: "indiv" | "team") => void;
-  onOpenWork: (id: string, mode: "indiv" | "team") => void;
+  /** The team answer screen. The individual half hands in on its own screen. */
+  onOpenWork: (id: string, mode: "team") => void;
   /** The PDF hand-in, on its own screen. */
   onOpenSubmit: (id: string) => void;
   onOpenResources: () => void;
