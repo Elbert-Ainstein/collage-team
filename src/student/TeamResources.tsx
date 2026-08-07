@@ -16,7 +16,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { SIcon } from "./icons";
 import { TYPE_LABEL, type ActivityType } from "@/checkins/types";
 import type { Assignment, Enrolment } from "@/checkins/studentData";
-import { listKeptRecordings, recordingUrl, type Recording } from "@/checkins/audio";
+import { keepRecording, listKeptRecordings, recordingUrl, type Recording } from "@/checkins/audio";
+import { ConfirmDialog } from "./ConfirmDialog";
 import {
   countTeamResources,
   defaultTitle,
@@ -339,7 +340,10 @@ function Folder({
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [armedDelete, setArmedDelete] = useState<string | null>(null);
+  /** What is being asked about. One question at a time, named so the dialog can say what goes. */
+  const [pending, setPending] = useState<
+    { kind: "photo"; item: TeamResource } | { kind: "take"; item: Recording } | null
+  >(null);
   const [zoom, setZoom] = useState<TeamResource | null>(null);
   const picker = useRef<HTMLInputElement | null>(null);
   const live = useRef(true);
@@ -438,10 +442,33 @@ function Folder({
       await deleteTeamResource(r);
       if (!live.current) return;
       setItems((prev) => prev.filter((x) => x.id !== r.id));
-      setArmedDelete(null);
+      setPending(null);
       if (zoom?.id === r.id) setZoom(null);
     } catch (e) {
       if (live.current) setError(message(e, "That didn't delete."));
+    } finally {
+      if (live.current) setBusy(false);
+    }
+  }
+
+  /**
+   * Take a recording out of Team resources.
+   *
+   * NOT a delete. The audio belongs to the team's discussion and lives on the
+   * activity, where its own Delete is — this only un-keeps it, which is why the
+   * question says so. Making this destroy the take would mean two Delete
+   * buttons for one file in two places, and the wrong one is the easy press.
+   */
+  async function unkeep(t: Recording) {
+    setBusy(true);
+    setError(null);
+    try {
+      await keepRecording(t.id, false);
+      if (!live.current) return;
+      setTakes((prev) => prev.filter((x) => x.id !== t.id));
+      setPending(null);
+    } catch (e) {
+      if (live.current) setError(message(e, "That didn't save."));
     } finally {
       if (live.current) setBusy(false);
     }
@@ -579,6 +606,20 @@ function Folder({
                     {takeBusy === t.id ? "Opening…" : "Play"}
                   </button>
                 )}
+                {/* Un-keeps it. The audio itself lives on the activity, with
+                    its own Delete — this had no way out from here at all, so a
+                    take added by mistake could only be undone by going back. */}
+                <button
+                  type="button"
+                  className="sv-tr-icon"
+                  style={{ width: 24, height: 24 }}
+                  disabled={busy}
+                  aria-label={`Remove ${t.title || "this recording"} from Team resources`}
+                  title="Remove from Team resources. The recording itself stays on the activity."
+                  onClick={() => setPending({ kind: "take", item: t })}
+                >
+                  <SIcon name="close" size={14} />
+                </button>
               </div>
             ))}
           </div>
@@ -615,7 +656,6 @@ function Folder({
         <div className="sv-tr-grid">
           {items.map((r) => {
             const url = urls.get(r.path);
-            const armed = armedDelete === r.id;
             return (
               <div key={r.id} className="sv-tr-tile">
                 {url ? (
@@ -660,49 +700,29 @@ function Folder({
                       padding: "0 6px",
                     }}
                   >
-                    {armed ? (
-                      <button
-                        type="button"
-                        className="sv-btn link"
-                        style={{
-                          flex: 1,
-                          minWidth: 0,
-                          justifyContent: "flex-start",
-                          color: "var(--amber-700)",
-                          fontSize: "var(--text-2xs)",
-                        }}
-                        disabled={busy}
-                        onBlur={() => setArmedDelete(null)}
-                        onClick={() => void remove(r)}
-                      >
-                        Delete for the whole team?
-                      </button>
-                    ) : (
-                      <>
-                        <span
-                          className="sv-ellip"
-                          style={{
-                            flex: 1,
-                            minWidth: 0,
-                            fontSize: "var(--text-2xs)",
-                            color: "var(--muted-foreground)",
-                          }}
-                        >
-                          {stamp(r.created_at)}
-                          {r.size_bytes ? ` · ${sizeLabel(r.size_bytes)}` : ""}
-                        </span>
-                        <button
-                          type="button"
-                          className="sv-tr-icon"
-                          style={{ width: 22, height: 22 }}
-                          disabled={busy}
-                          aria-label={`Delete ${r.title}`}
-                          onClick={() => setArmedDelete(r.id)}
-                        >
-                          <SIcon name="close" size={14} />
-                        </button>
-                      </>
-                    )}
+                    <span
+                      className="sv-ellip"
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        fontSize: "var(--text-2xs)",
+                        color: "var(--muted-foreground)",
+                      }}
+                    >
+                      {stamp(r.created_at)}
+                      {r.size_bytes ? ` · ${sizeLabel(r.size_bytes)}` : ""}
+                    </span>
+                    <button
+                      type="button"
+                      className="sv-tr-icon"
+                      style={{ width: 22, height: 22 }}
+                      disabled={busy}
+                      aria-label={`Delete ${r.title}`}
+                      title={`Delete ${r.title}`}
+                      onClick={() => setPending({ kind: "photo", item: r })}
+                    >
+                      <SIcon name="trash" size={14} />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -711,6 +731,28 @@ function Folder({
         </div>
       )}
       </div>
+
+      {pending ? (
+        <ConfirmDialog
+          title={
+            pending.kind === "photo"
+              ? `Delete “${pending.item.title}”?`
+              : `Remove “${pending.item.title || "this recording"}”?`
+          }
+          body={
+            pending.kind === "photo"
+              ? "It goes for your whole team, and it cannot be undone. Nobody can get the photo back."
+              : "It comes out of Team resources. The recording itself stays on the activity, where your team can still play it."
+          }
+          confirmLabel={pending.kind === "photo" ? "Delete" : "Remove"}
+          busyLabel={pending.kind === "photo" ? "Deleting…" : "Removing…"}
+          busy={busy}
+          onCancel={() => setPending(null)}
+          onConfirm={() =>
+            pending.kind === "photo" ? void remove(pending.item) : void unkeep(pending.item)
+          }
+        />
+      ) : null}
 
       {zoom && urls.get(zoom.path) ? (
         <button

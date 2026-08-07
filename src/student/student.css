@@ -375,3 +375,65 @@
     padding-bottom: 10px;
   }
 }
+
+/* ------------------------------------------------------ the confirm dialog
+   window.confirm is suppressed here, so "are you sure?" has to be a real
+   element. Same shape as the faculty dialog; the student view has its own
+   tokens, so it has its own rules rather than sharing a class. */
+.sv-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 35, 65, 0.34);
+  animation: svFade 120ms ease;
+}
+.sv-dialog {
+  width: 100%;
+  max-width: 430px;
+  padding: 20px 22px 18px;
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-xl);
+  background: var(--cream-100);
+  box-shadow: 0 20px 48px rgba(0, 35, 65, 0.22);
+  animation: svRise 140ms ease;
+}
+.sv-dialogtitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-tight);
+  line-height: 1.25;
+}
+.sv-dialogbody {
+  margin-top: 8px;
+  font-size: var(--text-xs);
+  line-height: 1.6;
+  color: var(--muted-foreground);
+}
+.sv-dialogbtns {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+/* The destructive answer. Never the one that holds focus. */
+.sv-btn.danger {
+  background: var(--amber-700);
+  border-color: var(--amber-700);
+  color: var(--cream-100);
+}
+.sv-btn.danger:hover:not(:disabled) { filter: brightness(1.08); }
+
+@keyframes svFade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes svRise {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sv-overlay, .sv-dialog { animation: none; }
+}
