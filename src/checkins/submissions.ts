@@ -9,6 +9,7 @@
 
 import { requireSupabase } from "@/lib/supabaseClient";
 import { dbError } from "./data";
+import { put, remove, signedUrl } from "./storage";
 
 const BUCKET = "submissions";
 /** Long enough to read a scan without re-fetching, short enough that a copied link dies. */
@@ -96,18 +97,15 @@ export async function uploadSubmissionPdf(
   const { courseId, activityId, resultId } = where;
   const path = `${courseId}/${activityId}/${resultId}/${crypto.randomUUID()}.pdf`;
 
-  const uploaded = await db().storage.from(BUCKET).upload(path, file, {
-    contentType: "application/pdf",
-    upsert: false,
-  });
-  if (uploaded.error) throw storageError(uploaded.error, "upload");
+  const uploaded = await put(BUCKET, path, file, "application/pdf");
+  if (uploaded) throw storageError(uploaded, "upload");
 
   // Old first, so a failure here leaves the student with their previous
   // submission intact rather than nothing at all.
   try {
     await clearSubmission(resultId);
   } catch (e) {
-    await db().storage.from(BUCKET).remove([path]);
+    await remove(BUCKET, [path]);
     throw e;
   }
 
@@ -118,7 +116,7 @@ export async function uploadSubmissionPdf(
   if (rows.error) {
     // The row is what makes the object findable; without it the pdf is
     // unreachable and would sit in the bucket forever.
-    await db().storage.from(BUCKET).remove([path]);
+    await remove(BUCKET, [path]);
     throw dbError(rows.error);
   }
 
@@ -161,8 +159,8 @@ export async function clearSubmission(resultId: string): Promise<void> {
   const existing = await getSubmissionFile(resultId);
   if (!existing) return;
 
-  const removed = await db().storage.from(BUCKET).remove([existing.path]);
-  if (removed.error) throw storageError(removed.error, "delete");
+  const removed = await remove(BUCKET, [existing.path]);
+  if (removed) throw storageError(removed, "delete");
 
   // submission_pages cascades from the result, not from the file, so the
   // mapping has to go explicitly — page 3 of the replaced pdf is not page 3 of
@@ -180,9 +178,9 @@ export async function clearSubmission(resultId: string): Promise<void> {
 
 /** A short-lived URL the browser can render. The bucket is private. */
 export async function submissionUrl(path: string): Promise<string> {
-  const res = await db().storage.from(BUCKET).createSignedUrl(path, SIGNED_URL_SECONDS);
+  const res = await signedUrl(BUCKET, path, SIGNED_URL_SECONDS);
   if (res.error) throw storageError(res.error, "read");
-  const url = res.data?.signedUrl;
+  const url = res.url;
   if (!url) throw new Error("That submission's file is missing from storage.");
   return url;
 }

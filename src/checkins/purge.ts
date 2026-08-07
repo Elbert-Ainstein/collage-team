@@ -23,17 +23,15 @@
 
 import { requireSupabase } from "@/lib/supabaseClient";
 import { selectAll, selectAllIn } from "./data";
+import { remove, type Bucket } from "./storage";
 
 const db = () => requireSupabase();
 
-/** storage.remove takes a list; chunk it so a term's worth cannot blow the request. */
-async function removeAll(bucket: string, paths: string[]): Promise<number> {
-  for (let i = 0; i < paths.length; i += 100) {
-    const { error } = await db().storage.from(bucket).remove(paths.slice(i, i + 100));
-    // Loud, not silent. A half-swept activity is worth stopping for, and the
-    // caller has not deleted the row yet — so stopping here loses nothing.
-    if (error) throw new Error(error.message);
-  }
+async function removeAll(bucket: Bucket, paths: string[]): Promise<number> {
+  // Loud, not silent. A half-swept activity is worth stopping for, and the
+  // caller has not deleted the row yet — so stopping here loses nothing.
+  const failed = await remove(bucket, paths);
+  if (failed) throw new Error(failed.message);
   return paths.length;
 }
 

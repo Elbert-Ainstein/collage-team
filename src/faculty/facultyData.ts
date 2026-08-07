@@ -8,6 +8,7 @@
 
 import { requireSupabase } from "@/lib/supabaseClient";
 import { countAll, countAllIn, dbError, selectAll, selectAllIn, tintFor } from "@/checkins/data";
+import { put, remove, signedUrl } from "@/checkins/storage";
 import {
   type Activity,
   type ActivityQuestion,
@@ -479,10 +480,7 @@ function safeName(name: string): string {
  */
 export async function uploadActivityFile(activity: Activity, file: File): Promise<FileRef> {
   const path = `${activity.id}/${Date.now()}-${safeName(file.name)}`;
-  const { error } = await db().storage.from(BUCKET).upload(path, file, {
-    contentType: file.type || "application/octet-stream",
-    upsert: false,
-  });
+  const error = await put(BUCKET, path, file, file.type || "application/octet-stream");
   if (error) {
     throw new Error(
       `That file was not uploaded: ${error.message}. If this says the bucket is missing, run ` +
@@ -502,12 +500,12 @@ export async function uploadActivityFile(activity: Activity, file: File): Promis
     .eq("id", activity.id);
   if (e2) {
     // The row is the record; an object nothing points at is litter, not data.
-    await db().storage.from(BUCKET).remove([path]);
+    await remove(BUCKET, [path]);
     throw dbError(e2);
   }
 
   const stale = (activity.files ?? []).map((f) => f.path).filter((p): p is string => Boolean(p));
-  if (stale.length) await db().storage.from(BUCKET).remove(stale);
+  if (stale.length) await remove(BUCKET, stale);
   return ref;
 }
 
@@ -516,7 +514,7 @@ export async function removeActivityFile(activity: Activity): Promise<void> {
   const { error } = await db().from("activities").update({ files: [] }).eq("id", activity.id);
   if (error) throw dbError(error);
   const paths = (activity.files ?? []).map((f) => f.path).filter((p): p is string => Boolean(p));
-  if (paths.length) await db().storage.from(BUCKET).remove(paths);
+  if (paths.length) await remove(BUCKET, paths);
 }
 
 /**
@@ -528,9 +526,9 @@ export async function removeActivityFile(activity: Activity): Promise<void> {
  */
 export async function activityFileUrl(ref: FileRef | null | undefined): Promise<string | null> {
   if (!ref?.path) return null;
-  const { data, error } = await db().storage.from(BUCKET).createSignedUrl(ref.path, 60 * 60);
+  const { url, error } = await signedUrl(BUCKET, ref.path, 60 * 60);
   if (error) throw new Error(`That file could not be opened: ${error.message}`);
-  return data?.signedUrl ?? null;
+  return url;
 }
 
 // -------------------------------------------------------------------- marks

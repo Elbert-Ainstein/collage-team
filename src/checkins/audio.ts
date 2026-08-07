@@ -10,6 +10,7 @@
 
 import { requireSupabase } from "@/lib/supabaseClient";
 import { dbError, selectAll, selectAllIn } from "./data";
+import { put, remove, signedUrl } from "./storage";
 import type { Recording } from "./types";
 
 export type { Recording };
@@ -178,14 +179,11 @@ export async function uploadRecording(
   const { mime, ext } = containerOf(blob.type);
   const path = `${courseId}/${activityId}/${resultId}/${crypto.randomUUID()}.${ext}`;
 
-  const uploaded = await db().storage.from(BUCKET).upload(path, blob, {
-    contentType: mime,
-    // A fresh uuid per take, so there is nothing to overwrite. Leaving this on
-    // would make a repeated upload silently replace a take a team had already
-    // listened to and counted on.
-    upsert: false,
-  });
-  if (uploaded.error) throw storageError(uploaded.error);
+  // A fresh uuid per take, so there is nothing to overwrite — put() never
+  // upserts, which is what stops a repeated upload silently replacing a take a
+  // team had already listened to and counted on.
+  const uploaded = await put(BUCKET, path, blob, mime);
+  if (uploaded) throw storageError(uploaded);
 
   const inserted = await db().from("recordings")
     .insert({ result_id: resultId, path, duration_ms: durationFor(durationMs) })
@@ -195,7 +193,7 @@ export async function uploadRecording(
     // Best effort, and its own failure is deliberately not raised over the one
     // that matters: the caller needs to hear why the recording was not saved,
     // and an orphaned object appears on no screen and plays for nobody.
-    await db().storage.from(BUCKET).remove([path]).catch(() => undefined);
+    await remove(BUCKET, [path]).catch(() => undefined);
     throw dbError(inserted.error);
   }
 
@@ -229,9 +227,9 @@ export async function listRecordings(resultIds: string[]): Promise<Recording[]> 
 
 /** A short-lived signed URL for playback; the bucket is private. */
 export async function recordingUrl(path: string): Promise<string> {
-  const res = await db().storage.from(BUCKET).createSignedUrl(path, SIGNED_URL_SECONDS);
+  const res = await signedUrl(BUCKET, path, SIGNED_URL_SECONDS);
   if (res.error) throw storageError(res.error, "play");
-  const url = res.data?.signedUrl;
+  const url = res.url;
   if (!url) {
     // Storage answering with neither a URL nor an error means the object is gone
     // while its row survives — say that, rather than hand the page an empty src
@@ -293,12 +291,10 @@ export async function deleteActivityRecordings(activityId: string): Promise<numb
   // storage.remove takes a list; chunk it so a term's worth of takes cannot
   // blow the request.
   const paths = rows.map((r) => r.path);
-  for (let i = 0; i < paths.length; i += 100) {
-    const { error } = await db().storage.from(BUCKET).remove(paths.slice(i, i + 100));
-    // Loud, not silent: a half-deleted activity with audio still in the bucket
-    // is worth stopping for, and the caller has not deleted the activity yet.
-    if (error) throw storageError(error, "delete");
-  }
+  // Loud, not silent: a half-deleted activity with audio still in the bucket
+  // is worth stopping for, and the caller has not deleted the activity yet.
+  const failed = await remove(BUCKET, paths);
+  if (failed) throw storageError(failed, "delete");
   return paths.length;
 }
 
@@ -313,8 +309,8 @@ export async function deleteRecording(id: string): Promise<void> {
     return;
   }
 
-  const removed = await db().storage.from(BUCKET).remove([path]);
-  if (removed.error) throw storageError(removed.error, "delete");
+  const removed = await remove(BUCKET, [path]);
+  if (removed) throw storageError(removed, "delete");
 
   const { error } = await db().from("recordings").delete().eq("id", id);
   if (error) {
