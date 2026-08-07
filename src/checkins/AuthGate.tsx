@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
+import { Logo } from "./Logo";
 import { requireSupabase } from "@/lib/supabaseClient";
 import { Icon } from "./icons";
 
@@ -139,10 +140,15 @@ function Shell({ children }: { children: React.ReactNode }) {
 function Heading() {
   return (
     <div style={{ marginBottom: 22 }}>
-      <div style={{ fontFamily: "var(--serif)", fontSize: 27, fontWeight: 700 }}>
-        Class Check-ins
+      {/* The mark leads, because sign-in is the one screen with nothing else on
+          it to say what this is. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
+        <Logo size={34} />
+        <div style={{ fontFamily: "var(--serif)", fontSize: 27, fontWeight: 700 }}>
+          Class Check-ins
+        </div>
       </div>
-      <div style={{ fontSize: 13, color: "var(--ink2)", marginTop: 5 }}>
+      <div style={{ fontSize: 13, color: "var(--ink2)", marginTop: 7 }}>
         Weekly team-based learning check-ins.
       </div>
     </div>

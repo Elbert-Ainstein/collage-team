@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Class Check-ins">
+  <!--
+    Three teammates and a check: this team, checked in. Which is the product.
+
+    Not the plain checkmark-in-a-rounded-square every task app has — that reads
+    as "a thing got done", and what happens here is that a TEAM was marked in a
+    room. The three quiet dots are the team; the sand check is the mark.
+
+    Sand (#EFDFAD) is the app's own --cream-400, the colour every selected row
+    already uses, so the icon and the interface agree. The dots sit at 0.6 so
+    they read as present-but-not-the-subject rather than disabled.
+  -->
+  <rect width="32" height="32" rx="7.5" fill="#002341"/>
+  <circle cx="11.4" cy="11.4" r="3.4" fill="#FFFCF2" opacity=".6"/>
+  <circle cx="20.6" cy="11.4" r="3.4" fill="#FFFCF2" opacity=".6"/>
+  <circle cx="11.4" cy="20.6" r="3.4" fill="#FFFCF2" opacity=".6"/>
+  <path d="M17.4 20.9 L19.8 23.3 L24.5 17.6" fill="none" stroke="#EFDFAD"
+        stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
