@@ -596,12 +596,45 @@ export async function setFeedback(resultId: string, feedback: string): Promise<v
  * the row says so. Without it those two types were labelled "Completion" and
  * then reported as a raw point score.
  */
-export async function releaseMark(resultId: string, completion: boolean): Promise<void> {
+export async function releaseMark(
+  resultId: string,
+  completion: boolean,
+  /** Only read when `completion`. False releases a NOT complete (0024). */
+  met = true,
+): Promise<void> {
   const { error } = await db()
     .from("check_in_results")
-    .update({ status: "scored", is_ci: completion, updated_at: new Date().toISOString() })
+    .update({
+      status: "scored",
+      is_ci: completion,
+      // Always written, never left to drift: a row re-released from Not
+      // complete to Complete has to say so, and default-true would silently
+      // upgrade it.
+      ci_met: completion ? met : true,
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", resultId);
   if (error) throw dbError(error);
+}
+
+/** Release many at once. One call per row — see the note in GradingScreen. */
+export async function releaseMany(
+  rows: { id: string; met?: boolean }[],
+  completion: boolean,
+): Promise<{ released: number; failed: string[] }> {
+  const failed: string[] = [];
+  let released = 0;
+  for (const r of rows) {
+    try {
+      await releaseMark(r.id, completion, r.met ?? true);
+      released += 1;
+    } catch {
+      // Collected rather than thrown: one row refusing must not abandon the
+      // twenty after it, and the caller says which ones did not go.
+      failed.push(r.id);
+    }
+  }
+  return { released, failed };
 }
 
 // ---------------------------------------------------------------------- TFs

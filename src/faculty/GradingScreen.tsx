@@ -24,6 +24,7 @@ import {
   clearMark,
   ensureRubric,
   listMarks,
+  releaseMany,
   releaseMark,
   setFeedback,
   setMark,
@@ -283,11 +284,25 @@ export function GradingScreen({
     }
   }
 
-  async function release() {
+  /**
+   * The completion answer being offered for this subject.
+   *
+   * Held locally so the two buttons respond instantly and so a released mark
+   * can be changed and re-finalised without leaving the screen. Seeded from the
+   * row: a subject already released as Not complete must come back reading Not
+   * complete, not reset to the friendlier default.
+   */
+  const [met, setMet] = useState<boolean | null>(null);
+  useEffect(() => {
+    if (!subject) return;
+    setMet(subject.result.status === "scored" ? (subject.result.ci_met ?? true) : null);
+  }, [subject?.result.id, subject?.result.status, subject?.result.ci_met]);
+
+  async function release(metNow?: boolean) {
     if (!subject) return;
     setReleasing(true);
     try {
-      await releaseMark(subject.result.id, isCompletion(activity));
+      await releaseMark(subject.result.id, forCompletion, metNow ?? met ?? true);
       onChanged();
     } catch (e) {
       onError(e);
@@ -538,6 +553,51 @@ export function GradingScreen({
             </div>
           </div>
 
+          {forCompletion ? (
+            /* Marked complete / not complete: there is no ladder, no deduction
+               and no running total, so none of that is drawn. A criteria panel
+               reading "no deduction" over an activity that is not out of points
+               is a whole column of numbers that mean nothing. */
+            <div className="fv-card" style={{ padding: "14px 16px" }}>
+              <div className="fv-eyebrow" style={{ marginBottom: 8 }}>
+                Complete?
+              </div>
+              <div className="fv-cipick">
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={met === true}
+                  className={`fv-cichoice${met === true ? " on" : ""}`}
+                  onClick={() => setMet(true)}
+                  disabled={releasing}
+                >
+                  <span className="fv-cititle">Complete</span>
+                </button>
+                <button
+                  type="button"
+                  role="radio"
+                  aria-checked={met === false}
+                  className={`fv-cichoice${met === false ? " on" : ""}`}
+                  onClick={() => setMet(false)}
+                  disabled={releasing}
+                >
+                  <span className="fv-cititle">Not complete</span>
+                </button>
+              </div>
+              <p
+                style={{
+                  fontSize: "var(--fv-2xs)",
+                  color: "var(--fv-muted)",
+                  lineHeight: 1.5,
+                  margin: "10px 0 0",
+                }}
+              >
+                {subject.result.status === "scored"
+                  ? "Released. Pick the other answer and finalise again to change it."
+                  : "Pick one, then finalise. You can change it afterwards."}
+              </p>
+            </div>
+          ) : (
           <div className="fv-card" style={{ padding: "14px 16px" }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
               <span className="fv-eyebrow" style={{ flex: 1 }}>
@@ -607,6 +667,7 @@ export function GradingScreen({
               Submission so far · {runningTotal ?? "—"} / {pts(pointsTotal(activity))}
             </div>
           </div>
+          )}
 
           <div className="fv-card" style={{ padding: "12px 14px" }}>
             <div className="fv-eyebrow" style={{ marginBottom: 6 }}>
@@ -629,23 +690,47 @@ export function GradingScreen({
             type="button"
             className="fv-btn primary full"
             onClick={() => void release()}
-            disabled={!answeredAll || releasing || subject.result.status === "scored"}
+            // A completion mark stays finalisable AFTER release: changing the
+            // answer and finalising again is how it is corrected, and a button
+            // that greys out on "Released" would make the two buttons above it
+            // decorative.
+            disabled={
+              releasing ||
+              (forCompletion
+                ? met === null
+                : !answeredAll || subject.result.status === "scored")
+            }
             title={
-              subject.result.status === "scored"
-                ? "Already released"
-                : answeredAll
-                  ? "Release this mark"
-                  : `Pick a line for all ${qCount} questions first`
+              forCompletion
+                ? met === null
+                  ? "Pick Complete or Not complete first"
+                  : subject.result.status === "scored"
+                    ? "Finalise the change"
+                    : "Finalise this grade"
+                : subject.result.status === "scored"
+                  ? "Already released"
+                  : answeredAll
+                    ? "Release this mark"
+                    : `Pick a line for all ${qCount} questions first`
             }
           >
-            {subject.result.status === "scored"
-              ? "Released"
-              : releasing
-                ? "Releasing…"
-                : forCompletion
-                  ? "Mark complete"
+            {releasing
+              ? "Finalising…"
+              : forCompletion
+                ? "Finalize grade"
+                : subject.result.status === "scored"
+                  ? "Released"
                   : `Release ${runningTotal ?? 0} / ${pts(pointsTotal(activity))}`}
           </button>
+
+          {/* ------------------------------------------------ release in bulk */}
+          <ReleaseMany
+            subjects={subjects}
+            forCompletion={forCompletion}
+            noun={half === "team" ? "team" : "student"}
+            onDone={onChanged}
+            onError={onError}
+          />
 
           <div className="fv-card" style={{ padding: "12px 14px" }}>
             <Stepper
@@ -847,6 +932,187 @@ function RubricRow({
         >
           <FIcon name="edit" size={13} />
         </button>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Release a batch of marks, choosing who.
+ *
+ * Collapsed to one line until opened, because the common case is releasing the
+ * person in front of you and this must not compete with the button above it.
+ *
+ * Selection is a checkbox per subject rather than "release everything": a class
+ * is rarely all finished at once, and the honest shape of "these are done, those
+ * are not" is a list you tick. "All ungraded" is offered as a shortcut because
+ * it is what people mean most of the time, and it selects rather than acts — you
+ * still see who you are about to release before you do it.
+ *
+ * One write per row, not a batched update. releaseMany collects failures rather
+ * than throwing, so a row the database refuses does not abandon the twenty after
+ * it, and the count afterwards says exactly what happened.
+ */
+function ReleaseMany({
+  subjects,
+  forCompletion,
+  noun,
+  onDone,
+  onError,
+}: {
+  subjects: Subject[];
+  forCompletion: boolean;
+  noun: "student" | "team";
+  onDone: () => void;
+  onError: (e: unknown) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+
+  const ungraded = useMemo(
+    () => subjects.filter((s) => s.result.status !== "scored"),
+    [subjects],
+  );
+
+  const toggle = (id: string) =>
+    setPicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const go = async () => {
+    const rows = subjects.filter((s) => picked.has(s.result.id));
+    if (!rows.length) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      // Completion released in bulk is always COMPLETE. "Not complete" is a
+      // judgement about one person's work, and a checkbox list is the wrong
+      // place to make twenty of them at once.
+      const { released, failed } = await releaseMany(
+        rows.map((r) => ({ id: r.result.id, met: true })),
+        forCompletion,
+      );
+      setPicked(new Set());
+      setNote(
+        failed.length
+          ? `Released ${released}. ${failed.length} could not be released — reload and try those again.`
+          : `Released ${released}.`,
+      );
+      onDone();
+    } catch (e) {
+      onError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!subjects.length) return null;
+
+  return (
+    <div className="fv-card" style={{ padding: "10px 12px" }}>
+      <button
+        type="button"
+        className="fv-btn ghost sm full"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+        style={{ justifyContent: "space-between" }}
+      >
+        <span>Release several</span>
+        <span className="fv-sub fv-num" style={{ fontSize: "var(--fv-2xs)" }}>
+          {ungraded.length} ungraded
+        </span>
+      </button>
+
+      {open ? (
+        <>
+          <div style={{ display: "flex", gap: 8, margin: "10px 0 8px", flexWrap: "wrap" }}>
+            <button
+              type="button"
+              className="fv-btn outline sm"
+              disabled={busy || !ungraded.length}
+              onClick={() => setPicked(new Set(ungraded.map((s) => s.result.id)))}
+            >
+              Select all ungraded
+            </button>
+            <button
+              type="button"
+              className="fv-btn ghost sm"
+              disabled={busy || !picked.size}
+              onClick={() => setPicked(new Set())}
+            >
+              Clear
+            </button>
+          </div>
+
+          <div style={{ maxHeight: 220, overflowY: "auto", margin: "0 -4px" }}>
+            {subjects.map((s) => {
+              const done = s.result.status === "scored";
+              return (
+                <label
+                  key={s.result.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "5px 6px",
+                    borderRadius: "var(--fv-r-md)",
+                    fontSize: "var(--fv-xs)",
+                    cursor: busy ? "default" : "pointer",
+                    color: done ? "var(--fv-muted)" : "var(--fv-navy)",
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={picked.has(s.result.id)}
+                    disabled={busy}
+                    onChange={() => toggle(s.result.id)}
+                  />
+                  <FAvatar name={s.name} tint={s.tint} size={18} />
+                  <span className="fv-ellip" style={{ flex: 1, minWidth: 0 }}>
+                    {s.name}
+                  </span>
+                  {/* Already-released rows stay tickable: re-releasing is how a
+                      corrected mark goes out, and hiding them would make that
+                      impossible from here. */}
+                  {done ? (
+                    <span className="fv-sub" style={{ fontSize: "var(--fv-2xs)" }}>
+                      released
+                    </span>
+                  ) : null}
+                </label>
+              );
+            })}
+          </div>
+
+          <button
+            type="button"
+            className="fv-btn primary sm full"
+            style={{ marginTop: 10 }}
+            disabled={busy || !picked.size}
+            onClick={() => void go()}
+          >
+            {busy
+              ? "Releasing…"
+              : picked.size
+                ? `Release ${picked.size} ${picked.size === 1 ? noun : noun + "s"}`
+                : `Pick a ${noun} first`}
+          </button>
+
+          {note ? (
+            <div
+              role="status"
+              className="fv-sub"
+              style={{ marginTop: 8, fontSize: "var(--fv-2xs)", lineHeight: 1.5 }}
+            >
+              {note}
+            </div>
+          ) : null}
+        </>
       ) : null}
     </div>
   );

@@ -204,6 +204,13 @@ export interface CheckInResult {
   status: ResultStatus;
   score: number | null;
   is_ci: boolean;
+  /**
+   * Only meaningful when `is_ci`: true is Complete, false is Not complete
+   * (0024). Optional on the type because a client reading a database without
+   * 0024 gets undefined, which `?? true` reads as the old "is_ci means
+   * Complete" behaviour.
+   */
+  ci_met?: boolean | null;
   text: string | null;
   files: FileRef[];
   transcription: string | null;
