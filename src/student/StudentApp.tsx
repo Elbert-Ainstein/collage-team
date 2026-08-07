@@ -181,6 +181,55 @@ export function StudentApp({
   // Which half of a check-in the work screen is editing.
   const [workMode, setWorkMode] = useState<"indiv" | "team">("indiv");
 
+  // Where you were, kept across a reload.
+  //
+  // sessionStorage rather than localStorage: this is "I refreshed" memory, not
+  // a preference. Per-tab and cleared when the tab closes, so opening the app
+  // fresh tomorrow lands on the assignment list rather than on some activity
+  // from last week that you would have to work out how to leave.
+  //
+  // Restored AFTER the first render (not as useState's initial value) because
+  // this component server-renders, and reading a browser-only store during
+  // render makes the server and client markup disagree.
+  const restored = useRef(false);
+  useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem("sv-where");
+      if (!raw) return;
+      const at = JSON.parse(raw) as Partial<{
+        screen: Screen;
+        selId: string | null;
+        trId: string | null;
+        tab: "indiv" | "team";
+        workMode: "indiv" | "team";
+      }>;
+      if (at.screen) setScreen(at.screen);
+      if (at.selId !== undefined) setSelId(at.selId);
+      if (at.trId !== undefined) setTrId(at.trId);
+      if (at.tab) setTab(at.tab);
+      if (at.workMode) setWorkMode(at.workMode);
+    } catch {
+      // Unparseable or refused storage: start on the list, which is where the
+      // app started before any of this.
+    } finally {
+      restored.current = true;
+    }
+  }, []);
+
+  useEffect(() => {
+    // Not before the restore has run, or the initial "list" would overwrite
+    // what we are about to read back.
+    if (!restored.current) return;
+    try {
+      window.sessionStorage.setItem(
+        "sv-where",
+        JSON.stringify({ screen, selId, trId, tab, workMode }),
+      );
+    } catch {
+      // A browser refusing storage just means a reload starts at the list.
+    }
+  }, [screen, selId, trId, tab, workMode]);
+
   const [enrolment, setEnrolment] = useState<Enrolment | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [ready, setReady] = useState(false);

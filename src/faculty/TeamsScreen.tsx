@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TeamsPillar } from "@/checkins/TeamsPillar";
 import { addStudents, removeStudent, setStudentEmail } from "@/checkins/data";
+import { deleteStudentStorage } from "@/checkins/purge";
 import { countWorkForStudent } from "@/faculty/facultyData";
 import {
   isSupportedRosterFile,
@@ -162,6 +163,12 @@ export function TeamsScreen(props: {
     setBusy(true);
     setError(null);
     try {
+      // Their files first. check_in_results cascades from students and the
+      // storage rows cascade from that, and both delete policies authorise by
+      // reading the result row — so once it is gone, the PDFs and audio are
+      // unreachable by anyone. The confirm says the work goes; this is what
+      // makes that true.
+      await deleteStudentStorage(s.id);
       await removeStudent(s.id);
       setNote(`Removed ${s.name}.`);
       onChanged();

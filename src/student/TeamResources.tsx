@@ -16,6 +16,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { SIcon } from "./icons";
 import { TYPE_LABEL, type ActivityType } from "@/checkins/types";
 import type { Assignment, Enrolment } from "@/checkins/studentData";
+import { listKeptRecordings, recordingUrl, type Recording } from "@/checkins/audio";
 import {
   countTeamResources,
   defaultTitle,
@@ -51,6 +52,11 @@ function weekLabel(a: Assignment): string {
 }
 
 function countLabel(n: number): string {
+  return n === 0 ? "Nothing yet" : `${n} ${n === 1 ? "item" : "items"}`;
+}
+
+/** The index counts photos only — it has not loaded anyone's takes. */
+function photoCountLabel(n: number): string {
   return n === 0 ? "Nothing yet" : `${n} ${n === 1 ? "photo" : "photos"}`;
 }
 
@@ -293,7 +299,7 @@ export function TeamResources(props: {
                         marginTop: 2,
                       }}
                     >
-                      {weekLabel(a)} · {countLabel(n)}
+                      {weekLabel(a)} · {photoCountLabel(n)}
                     </span>
                   </span>
                 </button>
@@ -326,6 +332,9 @@ function Folder({
 }) {
   const activity = assignment.activity;
   const [items, setItems] = useState<TeamResource[]>([]);
+  const [takes, setTakes] = useState<Recording[]>([]);
+  const [takeUrls, setTakeUrls] = useState<Record<string, string>>({});
+  const [takeBusy, setTakeBusy] = useState<string | null>(null);
   const [urls, setUrls] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -347,6 +356,13 @@ function Folder({
     setLoading(true);
     setError(null);
     try {
+      // The takes the team chose to keep, beside their photos. Both are "what
+      // this team made for this activity", and looking in two places for that
+      // was the thing to fix — so they load together and count together.
+      const teamResultId = assignment.teamResult?.id ?? null;
+      const kept = teamResultId ? await listKeptRecordings([teamResultId]) : [];
+      if (live.current) setTakes(kept);
+
       const rows = await listTeamResources(activity.id, teamId);
       if (!live.current) return;
       setItems(rows);
@@ -359,7 +375,7 @@ function Folder({
     } finally {
       if (live.current) setLoading(false);
     }
-  }, [activity.id, teamId]);
+  }, [activity.id, teamId, assignment.teamResult?.id]);
 
   useEffect(() => {
     void load();
@@ -431,7 +447,7 @@ function Folder({
     }
   }
 
-  const total = items.length;
+  const total = items.length + takes.length;
 
   return (
     <section className="sv-screen">
@@ -508,11 +524,72 @@ function Folder({
         </div>
       ) : null}
 
+      {takes.length ? (
+        <div style={{ marginTop: 16 }}>
+          <div className="sv-eyebrow" style={{ marginBottom: 8 }}>
+            Recordings
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {takes.map((t) => (
+              <div
+                key={t.id}
+                className="sv-card"
+                style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px" }}
+              >
+                <span style={{ color: "var(--muted-foreground)", display: "flex" }}>
+                  <SIcon name="mic" size={16} />
+                </span>
+                <span
+                  className="sv-ellip"
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    fontSize: "var(--text-sm)",
+                    fontWeight: "var(--weight-semibold)",
+                  }}
+                >
+                  {t.title || "Recording"}
+                </span>
+                <span className="sv-sub" style={{ fontSize: "var(--text-2xs)" }}>
+                  {stamp(t.created_at)}
+                </span>
+                {takeUrls[t.id] ? (
+                  // eslint-disable-next-line jsx-a11y/media-has-caption
+                  <audio src={takeUrls[t.id]} controls style={{ height: 32, maxWidth: 260 }} />
+                ) : (
+                  <button
+                    type="button"
+                    className="sv-btn outline sm"
+                    disabled={takeBusy !== null}
+                    onClick={() => {
+                      setTakeBusy(t.id);
+                      recordingUrl(t.path)
+                        .then((url) => {
+                          if (live.current) setTakeUrls((prev) => ({ ...prev, [t.id]: url }));
+                        })
+                        .catch((e) => {
+                          if (live.current) setError(message(e, "That take could not be opened."));
+                        })
+                        .finally(() => {
+                          if (live.current) setTakeBusy(null);
+                        });
+                    }}
+                  >
+                    <SIcon name="play" size={14} />
+                    {takeBusy === t.id ? "Opening…" : "Play"}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {loading ? (
         <div className="sv-sub" style={{ marginTop: 18 }}>
           Loading…
         </div>
-      ) : total === 0 ? (
+      ) : items.length === 0 && takes.length === 0 ? (
         <button
           type="button"
           className="sv-dz"

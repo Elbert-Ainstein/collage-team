@@ -98,15 +98,57 @@ export async function deleteTeamResourceObjects(teamIds: string[]): Promise<numb
 }
 
 /**
+ * Everything one student's own result rows point at: their PDFs and their audio.
+ *
+ * check_in_results cascades from students, and recordings and submission_files
+ * cascade from that — so removing a student takes the rows and strands the
+ * objects. Worse than stranded: both delete policies (0013's
+ * can_remove_result_audio, 0015's) authorise by reading the result row that has
+ * just gone, so nobody can ever remove them.
+ *
+ * TEAM results are deliberately untouched. Those belong to the team, not to the
+ * person leaving it, and they survive the removal.
+ */
+export async function deleteStudentStorage(studentId: string): Promise<number> {
+  const results = await selectAll<{ id: string }>((from, to) =>
+    db().from("check_in_results").select("id")
+      .eq("student_id", studentId).eq("subject_type", "student")
+      .order("id").range(from, to),
+  );
+  if (!results.length) return 0;
+  const ids = results.map((r) => r.id);
+
+  const audio = await selectAllIn<{ path: string }>(ids, (chunk, from, to) =>
+    db().from("recordings").select("path").in("result_id", chunk).order("id").range(from, to),
+  );
+  const pdfs = await selectAllIn<{ path: string }>(ids, (chunk, from, to) =>
+    db().from("submission_files").select("path").in("result_id", chunk).order("id").range(from, to),
+  );
+
+  let n = 0;
+  n += await removeAll("recordings", audio.map((r) => r.path));
+  n += await removeAll("submissions", pdfs.map((r) => r.path));
+  return n;
+}
+
+/**
  * The assignment document on `activities.files`.
  *
- * Takes the paths rather than the id: after the row is gone there is nothing
- * left to read them from, and reading them first is the entire point.
+ * Reads the paths from the ROW, not from a caller's copy. A screen's `activity`
+ * is a snapshot: the document may have been replaced from another tab since it
+ * was fetched, and sweeping the stale path leaves the real object in a bucket
+ * whose delete policy joins back to the activity row — so once the row goes,
+ * nobody can ever remove it.
  */
-export async function deleteActivityFiles(paths: (string | null | undefined)[]): Promise<number> {
-  const real = paths.filter((p): p is string => Boolean(p));
-  if (!real.length) return 0;
-  return removeAll("activity-files", real);
+export async function deleteActivityFiles(activityId: string): Promise<number> {
+  const rows = await selectAll<{ files: { path?: string | null }[] | null }>((from, to) =>
+    db().from("activities").select("files").eq("id", activityId).order("id").range(from, to),
+  );
+  const paths = (rows[0]?.files ?? [])
+    .map((f) => f?.path)
+    .filter((p): p is string => Boolean(p));
+  if (!paths.length) return 0;
+  return removeAll("activity-files", paths);
 }
 
 export interface PurgeCount {
@@ -122,14 +164,11 @@ export interface PurgeCount {
  * and the delete sites call both. Splitting it would mean two answers to which
  * module removes a recording.
  */
-export async function purgeActivityStorage(
-  activityId: string,
-  filePaths: (string | null | undefined)[] = [],
-): Promise<PurgeCount> {
+export async function purgeActivityStorage(activityId: string): Promise<PurgeCount> {
   // Sequential, not Promise.all: if one throws, the ones before it are already
   // done and the row is still there, so a retry is safe and finishes the job.
   const submissions = await deleteActivitySubmissions(activityId);
   const resources = await deleteActivityResources(activityId);
-  const files = await deleteActivityFiles(filePaths);
+  const files = await deleteActivityFiles(activityId);
   return { submissions, resources, files };
 }

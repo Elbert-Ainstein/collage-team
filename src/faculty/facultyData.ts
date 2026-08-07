@@ -729,3 +729,40 @@ export async function ensureCheckIn(
   ) as CheckIn[];
   return rows[0];
 }
+
+/**
+ * Bring already-RELEASED marks into line when an activity's grading mode flips.
+ *
+ * is_ci is written per result at release time (releaseMark), from whatever the
+ * activity said then. Flipping completion afterwards left those rows behind: a
+ * student marked before the flip read "Complete" while one marked after read
+ * "7 / 10", off the same activity, with nothing on either screen to explain the
+ * difference.
+ *
+ * Only scored rows. A draft or a submission has no mark to restate, and the
+ * guard in 0008 refuses a student-side write to a scored row anyway — this runs
+ * as the owner, who may.
+ */
+export async function restampReleased(activityId: string, completion: boolean): Promise<number> {
+  const checkIns = await selectAll<{ id: string }>((from, to) =>
+    db().from("check_ins").select("id").eq("activity_id", activityId).order("id").range(from, to),
+  );
+  if (!checkIns.length) return 0;
+
+  const scored = await selectAllIn<{ id: string }>(
+    checkIns.map((c) => c.id),
+    (chunk, from, to) =>
+      db().from("check_in_results").select("id")
+        .in("check_in_id", chunk).eq("status", "scored").eq("is_ci", !completion)
+        .order("id").range(from, to),
+  );
+  if (!scored.length) return 0;
+
+  for (let i = 0; i < scored.length; i += 100) {
+    const chunk = scored.slice(i, i + 100).map((r) => r.id);
+    const { error } = await db().from("check_in_results")
+      .update({ is_ci: completion }).in("id", chunk);
+    if (error) throw dbError(error);
+  }
+  return scored.length;
+}

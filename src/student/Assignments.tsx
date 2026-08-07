@@ -902,28 +902,59 @@ function AssignmentDetail({
   const [marks, setMarks] = useState<TutorialMark[]>([]);
   const [marksLoading, setMarksLoading] = useState(false);
 
+  /**
+   * Poll while the team half is open.
+   *
+   * This is called LIVE grading and it was fetched exactly once, on mount — so a
+   * student watching the card during their own tutorial saw "nothing recorded
+   * yet" until they navigated away and back, while the instructor was marking
+   * them in the same room. Twenty seconds is the useful cadence there; the
+   * request is one row per team per slot, and it only runs while the card that
+   * shows it is actually on screen.
+   */
   useEffect(() => {
     if (!onTeam || !teamId) {
       setMarks([]);
       return;
     }
     let alive = true;
-    setMarksLoading(true);
-    getMyTeamMarks(act.id, teamId)
-      .then((rows) => {
-        if (alive) setMarks(rows);
-      })
-      .catch(() => {
-        // The rest of the activity is readable without it, and the card says
-        // "nothing recorded yet" — which is what a student sees anyway when the
-        // instructor has not marked them.
-        if (alive) setMarks([]);
-      })
-      .finally(() => {
-        if (alive) setMarksLoading(false);
-      });
+
+    const read = (showSpinner: boolean) => {
+      if (showSpinner) setMarksLoading(true);
+      return getMyTeamMarks(act.id, teamId)
+        .then((rows) => {
+          if (alive) setMarks(rows);
+        })
+        .catch(() => {
+          // The rest of the activity is readable without it, and the card says
+          // "nothing recorded yet" — which is what a student sees anyway when
+          // the instructor has not marked them. A failed POLL must not blank
+          // marks already on screen, so only the first read clears them.
+          if (alive && showSpinner) setMarks([]);
+        })
+        .finally(() => {
+          if (alive && showSpinner) setMarksLoading(false);
+        });
+    };
+
+    void read(true);
+
+    // A tab in the background is not being watched, so it does not need to ask.
+    const tick = window.setInterval(() => {
+      if (document.visibilityState === "visible") void read(false);
+    }, 20_000);
+    // ...and coming back to it should not wait out the rest of an interval.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void read(false);
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+
     return () => {
       alive = false;
+      window.clearInterval(tick);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
     };
   }, [onTeam, teamId, act.id]);
 

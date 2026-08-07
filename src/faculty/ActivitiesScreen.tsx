@@ -739,7 +739,7 @@ function RowView({
                           // See ActivityDetail: every bucket's objects must
                           // go before the rows naming them cascade away.
                           await deleteActivityRecordings(a.id);
-                          await purgeActivityStorage(a.id, (a.files ?? []).map((f) => f.path));
+                          await purgeActivityStorage(a.id);
                           await deleteActivity(a.id);
                         })
                       }

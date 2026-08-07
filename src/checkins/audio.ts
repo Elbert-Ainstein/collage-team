@@ -325,3 +325,49 @@ export async function deleteRecording(id: string): Promise<void> {
     );
   }
 }
+
+/**
+ * Keep a take in Team resources, or stop keeping it. Optionally name it.
+ *
+ * A rename and a keep are one write because they are one decision: the moment a
+ * team decides a take is worth keeping is the moment it needs a name that is
+ * not "Take 3".
+ *
+ * 0021 is what allows it; without that migration the columns do not exist and
+ * this reports which file to run rather than a column error nobody can read.
+ */
+export async function keepRecording(
+  id: string,
+  keep: boolean,
+  title?: string | null,
+): Promise<void> {
+  const patch: { in_resources: boolean; title?: string | null } = { in_resources: keep };
+  if (title !== undefined) patch.title = title?.trim() || null;
+
+  const { error } = await db().from("recordings").update(patch).eq("id", id);
+  if (!error) return;
+  if (/in_resources|title|0021/.test(error.message)) {
+    throw new Error(
+      "This project cannot keep recordings in Team resources yet — run " +
+        "supabase/migrations/0021_recordings_in_resources.sql in the Supabase SQL editor.",
+    );
+  }
+  throw dbError(error);
+}
+
+/** Every take this team has KEPT, across the activities they belong to. */
+export async function listKeptRecordings(resultIds: string[]): Promise<Recording[]> {
+  if (!resultIds.length) return [];
+  try {
+    return await selectAllIn<Recording>(resultIds, (chunk, from, to) =>
+      db().from("recordings").select("*")
+        .in("result_id", chunk).eq("in_resources", true)
+        .order("created_at").order("id").range(from, to),
+    );
+  } catch (e) {
+    // Pre-0021 the column does not exist. Team resources still has its photos,
+    // and a student should not get an error page over an absent enhancement.
+    if (/in_resources/.test(String((e as Error)?.message ?? e))) return [];
+    throw e;
+  }
+}

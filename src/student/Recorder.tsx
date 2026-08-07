@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   deleteRecording,
+  keepRecording,
   listRecordings,
   recordingUrl,
   uploadRecording,
@@ -166,6 +167,9 @@ export function Recorder({
   const [urlError, setUrlError] = useState<Record<string, string>>({});
 
   const [armedDelete, setArmedDelete] = useState<string | null>(null);
+  /** Which take is being kept/unkept, so only its own button says so. */
+  const [keeping, setKeeping] = useState<string | null>(null);
+  const [keepError, setKeepError] = useState<Record<string, string>>({});
   const [deleting, setDeleting] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<Record<string, string>>({});
 
@@ -389,6 +393,41 @@ export function Recorder({
       }
     } finally {
       if (liveRef.current) setUrlBusy(null);
+    }
+  }
+
+  /**
+   * Keep a take in Team resources, or stop keeping it.
+   *
+   * The take is not copied anywhere — it is already the team's, filed under
+   * this activity. Keeping it is a flag, so unkeeping cannot lose the audio and
+   * the two places can never disagree about what it is.
+   */
+  async function keep(r: Recording, n: number) {
+    const next = !r.in_resources;
+    setKeeping(r.id);
+    setKeepError((prev) => without(prev, r.id));
+    // Optimistic: it is a toggle, and the list it affects is on another screen.
+    setRecordings((prev) =>
+      prev.map((x) =>
+        x.id === r.id
+          ? { ...x, in_resources: next, title: next ? x.title ?? `Take ${n}` : x.title }
+          : x,
+      ),
+    );
+    try {
+      await keepRecording(r.id, next, next ? r.title ?? `Take ${n}` : undefined);
+    } catch (e) {
+      if (!liveRef.current) return;
+      setRecordings((prev) =>
+        prev.map((x) => (x.id === r.id ? { ...x, in_resources: r.in_resources } : x)),
+      );
+      setKeepError((prev) => ({
+        ...prev,
+        [r.id]: message(e, "That didn't save."),
+      }));
+    } finally {
+      if (liveRef.current) setKeeping(null);
     }
   }
 
@@ -709,6 +748,29 @@ export function Recorder({
                           {urlBusy === recording.id ? "Opening…" : "Play"}
                         </button>
                       )}
+                      {/* Kept takes show up in Team resources beside the
+                          team's photos — same kind of thing, one place to look
+                          for it. A flag rather than a copy, so unkeeping cannot
+                          lose the audio. */}
+                      <button
+                        type="button"
+                        className={recording.in_resources ? "sv-btn sm" : "sv-btn outline sm"}
+                        aria-pressed={Boolean(recording.in_resources)}
+                        disabled={keeping === recording.id || busy}
+                        onClick={() => void keep(recording, n)}
+                        title={
+                          recording.in_resources
+                            ? "Remove this take from Team resources. The audio stays here."
+                            : "Keep this take in Team resources, beside your team's photos"
+                        }
+                      >
+                        <SIcon name={recording.in_resources ? "check" : "folder"} size={14} />
+                        {keeping === recording.id
+                          ? "Saving…"
+                          : recording.in_resources
+                            ? "In resources"
+                            : "Add to resources"}
+                      </button>
                       <button
                         type="button"
                         className="sv-btn link sm"
@@ -793,6 +855,21 @@ export function Recorder({
                         }}
                       >
                         {deleteError[recording.id]}
+                      </div>
+                    ) : null}
+
+                    {keepError[recording.id] ? (
+                      <div
+                        role="alert"
+                        style={{
+                          marginTop: 8,
+                          fontSize: "var(--text-xs)",
+                          color: "var(--amber-700)",
+                          lineHeight: 1.5,
+                          maxWidth: "62ch",
+                        }}
+                      >
+                        {keepError[recording.id]}
                       </div>
                     ) : null}
                   </li>

@@ -15,6 +15,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Activity, ActivityQuestion, FileRef, RubricItem } from "@/checkins/types";
 import { isCompletion } from "@/checkins/types";
 import { updateActivity } from "@/checkins/data";
+import { restampReleased } from "./facultyData";
 import {
   activityFileUrl,
   addQuestion,
@@ -729,6 +730,11 @@ export function RubricBuilder({
       setCompletion(next);
       setCiBusy(true);
       updateActivity(activity.id, { completion: next })
+        // Already-released marks carry is_ci from whatever the rule was when
+        // they were released. Leaving them behind splits one activity into two
+        // grading regimes — half the class reading "Complete" and half reading
+        // "7 / 10" off the same column — so the flip carries them with it.
+        .then(() => restampReleased(activity.id, next))
         .then(() => onChanged())
         .catch((e) => {
           setCompletion(!next);

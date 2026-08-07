@@ -224,6 +224,10 @@ export interface Recording {
   path: string;
   /** Null when the browser could not tell us how long the take ran. */
   duration_ms: number | null;
+  /** The team kept this one in Team resources (0021). */
+  in_resources?: boolean | null;
+  /** What the team called it. Null means it is still just "Take N". */
+  title?: string | null;
   created_by: string | null;
   created_at: string;
 }

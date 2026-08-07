@@ -146,17 +146,27 @@ function visibilityOf(a: Activity): { text: string; open: boolean } {
  * faculty member needs here is how this kind of work is done and how it earns
  * its mark, and that is a property of the type.
  */
+/**
+ * The stand-in blurb for an activity with no brief.
+ *
+ * Says how the work is SHAPED, never how it is marked. It used to assert the
+ * marking mode from the type — "marked for completion, not for points" on a
+ * Challenge — which was true when the type decided that and became a
+ * contradiction the moment 0019 made it a choice: an instructor could set a
+ * Challenge to points and this paragraph would go on telling students the
+ * opposite. Marking is stated once, by the badge that reads the column.
+ */
 function describe(a: Activity): string {
   const t = a.title.trim().toLowerCase();
   switch (a.type) {
     case "combo":
-      return `Tutorial and challenge questions on ${t}. Students work alone and hand in before the deadline; every question is scored against the grading criteria, and the marks add up to the activity total.`;
+      return `Tutorial and challenge questions on ${t}. Students work alone and hand in before the deadline.`;
     case "skills":
-      return `Timed skills check on ${t}. One attempt each, worked individually, then scored question by question against the grading criteria.`;
+      return `Timed skills check on ${t}. One attempt each, worked individually.`;
     case "challenge":
-      return `Problem set on ${t}. Students work it alone first, then bring their answers to the team discussion — the individual half and the team half are marked for completion, not for points.`;
+      return `Problem set on ${t}. Students work it alone first, then bring their answers to the team discussion.`;
     case "amplify":
-      return `Team activity on ${t}. Worked away from Collage and marked once per team for completion at the check-in, so there is one mark per team rather than one per student.`;
+      return `Team activity on ${t}. Worked away from Collage and marked once per team at the check-in, so there is one mark per team rather than one per student.`;
   }
 }
 
@@ -1003,7 +1013,11 @@ export function ActivityDetail(props: {
                 // delete the object again. Loud on failure — better to stop
                 // than to half-delete.
                 await deleteActivityRecordings(activity.id);
-                await purgeActivityStorage(activity.id, (activity.files ?? []).map((f) => f.path));
+                // Paths read from the DB, not from this screen's copy: the row
+                // may have been re-uploaded elsewhere since it was fetched, and
+                // sweeping a stale path strands the real object in a bucket
+                // whose delete policy dies with the activity row.
+                await purgeActivityStorage(activity.id);
                 await deleteActivity(activity.id);
                 onChanged();
                 onBack();
