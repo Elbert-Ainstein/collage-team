@@ -58,6 +58,41 @@ union all
 --
 -- confdeltype is the FK's ON DELETE rule: 'c' = CASCADE (the bug), 'n' = SET
 -- NULL (fixed).
+select '0021 keep a take in resources',
+       case when exists (
+              select 1
+                from information_schema.columns
+               where table_schema = 'public'
+                 and table_name = 'recordings'
+                 and column_name = 'in_resources')
+            then 'applied'
+            else 'NOT APPLIED — run 0021_recordings_in_resources.sql' end
+union all
+select '0022 photos up to 100MB',
+       case when (select file_size_limit from storage.buckets where id = 'resources')
+                 >= 104857600
+            then 'applied'
+            else 'NOT APPLIED — run 0022_bigger_photos.sql' end
+union all
+-- Counts rather than a boolean: 0023 backfills one row per existing Amplify, so
+-- "how many are still missing theirs" is the only answer that means anything. A
+-- course with no Amplify activities correctly reads 0 and says applied.
+select '0023 amplify has an individual half',
+       case when (select count(*)
+                    from activities a
+                   where a.type = 'amplify'
+                     and not exists (select 1 from check_ins c
+                                      where c.activity_id = a.id
+                                        and c.kind = 'individual')) = 0
+            then 'applied'
+            else (select count(*)::text
+                    from activities a
+                   where a.type = 'amplify'
+                     and not exists (select 1 from check_ins c
+                                      where c.activity_id = a.id
+                                        and c.kind = 'individual'))
+                 || ' Amplify activities still have no individual check-in — run 0023' end
+union all
 select '0020 team sets survive activity delete',
        coalesce(
          (select case confdeltype
