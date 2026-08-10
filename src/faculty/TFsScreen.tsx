@@ -8,8 +8,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isSupportedRosterFile, parseRoster } from "@/checkins/rosterImport";
+import { removeStudentWithStorage } from "@/checkins/purge";
 import type { CourseTF } from "@/checkins/types";
-import { addTF, addTFs, removeTF, setTFPermissions } from "./facultyData";
+import { addTF, addTFs, countWorkForStudent, removeTF, setTFPermissions } from "./facultyData";
 import { FAvatar, FIcon } from "./icons";
 import { FacultyError, type FacultyData } from "./FacultyApp";
 
@@ -48,7 +49,7 @@ export function TFsScreen(props: {
   onError: (e: unknown) => void;
 }): JSX.Element {
   const { data, onChanged, onError } = props;
-  const { course, tfs } = data;
+  const { course, tfs, roster } = data;
 
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -86,6 +87,45 @@ export function TFsScreen(props: {
       mail && t.email ? t.email === mail.toLowerCase() : t.name.toLowerCase() === name.toLowerCase(),
     );
 
+  /**
+   * A TF must not also be a student on their own course — they would be marking
+   * their own work, and at sign-in the TF list wins anyway (RoleRouter claims
+   * the TF row and returns "tf" before it ever reaches claimStudentRows), so
+   * the student row would be left unclaimed on a team, ungraded, with nothing
+   * able to hand in against it. Adding them here is the moment to clear it.
+   *
+   * Work is the line, because removing a roster row is not reversible:
+   * check_in_results cascades from it and takes their PDFs and audio. An empty
+   * row is a mistyped name and goes quietly; a row with submissions is somebody
+   * doing the course, so that one is named and left for the instructor, who can
+   * remove it on Roster & teams where the cost is shown before the click.
+   *
+   * Matched on email only. That is the join key the claim functions use, and a
+   * shared name is not evidence of anything.
+   */
+  async function clearStudentRows(emails: (string | undefined)[]): Promise<string[]> {
+    const wanted = new Set(
+      emails.filter((e): e is string => Boolean(e)).map((e) => e.toLowerCase()),
+    );
+    if (!wanted.size) return [];
+
+    const said: string[] = [];
+    for (const s of roster) {
+      if (!s.email || !wanted.has(s.email.toLowerCase())) continue;
+      const work = await countWorkForStudent(s.id);
+      if (work > 0) {
+        said.push(
+          `${s.name} is on the student roster too, with ${plural(work, "submission", "submissions")} — ` +
+            `left alone. Remove that row on Roster & teams if it should go.`,
+        );
+        continue;
+      }
+      await removeStudentWithStorage(s.id);
+      said.push(`Took ${s.name} off the student roster — that row had no work on it.`);
+    }
+    return said;
+  }
+
   async function ingest(text: string) {
     setBusy(true);
     setError(null);
@@ -96,11 +136,13 @@ export function TFsScreen(props: {
         .filter((p) => !isKnown(p.name, p.email));
 
       if (people.length) await addTFs(course.id, people, nextPosition);
+      const cleared = people.length ? await clearStudentRows(people.map((p) => p.email)) : [];
 
       const skipped = parsed.students.length - people.length;
       const parts = [
         people.length ? `Added ${plural(people.length, "TF", "TFs")}.` : "No new TFs in that file.",
         skipped ? `${skipped} already on the roster.` : "",
+        ...cleared,
         ...parsed.warnings,
       ].filter(Boolean);
       setNote(parts.join(" "));
@@ -131,8 +173,14 @@ export function TFsScreen(props: {
     setBusy(true);
     setError(null);
     try {
-      // Reuse the roster parser so "Ada Lovelace <ada@x.edu>" works here too.
-      const one = parseRoster(raw).students[0];
+      // Reuse the roster parser so "Ada Lovelace <ada@x.edu>" works here too —
+      // but not for a bare address, which is the normal thing to put in a box
+      // labelled "Add one by email". parseRoster drops it ("Skipped 1 row with
+      // no name"), because for a STUDENT import a nameless row is a bad row;
+      // here the address is the whole point and nameFromEmail exists for it.
+      const one = EMAIL_ONLY.test(raw)
+        ? { name: nameFromEmail(raw), email: raw }
+        : parseRoster(raw).students[0];
       if (!one) {
         setNote("That did not look like a name or an email address.");
         return;
@@ -143,8 +191,11 @@ export function TFsScreen(props: {
         return;
       }
       await addTF(course.id, { name, email: one.email ?? null }, nextPosition);
+      const cleared = await clearStudentRows([one.email]);
       setEmail("");
-      setNote(one.email ? `Added ${name} (${one.email}).` : `Added ${name}.`);
+      setNote(
+        [one.email ? `Added ${name} (${one.email}).` : `Added ${name}.`, ...cleared].join(" "),
+      );
       onChanged();
     } catch (e) {
       fail(e);

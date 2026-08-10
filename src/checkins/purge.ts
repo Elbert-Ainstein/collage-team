@@ -22,7 +22,7 @@
 // supabase/migrations/0018_purge_on_delete.sql.
 
 import { requireSupabase } from "@/lib/supabaseClient";
-import { selectAll, selectAllIn } from "./data";
+import { removeStudent, selectAll, selectAllIn } from "./data";
 import { remove, type Bucket } from "./storage";
 
 const db = () => requireSupabase();
@@ -127,6 +127,22 @@ export async function deleteStudentStorage(studentId: string): Promise<number> {
   n += await removeAll("recordings", audio.map((r) => r.path));
   n += await removeAll("submissions", pdfs.map((r) => r.path));
   return n;
+}
+
+/**
+ * Remove a student and everything of theirs, in the order that works.
+ *
+ * Sweep, then the row — never the reverse, for the reason at the top of this
+ * file: both delete policies authorise by reading the result row, so once it has
+ * cascaded away nobody can ever remove the objects it named.
+ *
+ * Shared because there are two ways a roster row goes — removed by hand on
+ * Roster & teams, or cleared out by adding that person as a TF — and a second
+ * copy of this ordering is a second chance to write it backwards.
+ */
+export async function removeStudentWithStorage(studentId: string): Promise<void> {
+  await deleteStudentStorage(studentId);
+  await removeStudent(studentId);
 }
 
 /**

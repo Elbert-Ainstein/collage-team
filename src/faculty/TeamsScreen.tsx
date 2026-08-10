@@ -10,8 +10,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TeamsPillar } from "@/checkins/TeamsPillar";
-import { addStudents, removeStudent, setStudentEmail } from "@/checkins/data";
-import { deleteStudentStorage } from "@/checkins/purge";
+import { addStudents, setStudentEmail } from "@/checkins/data";
+import { removeStudentWithStorage } from "@/checkins/purge";
 import {
   countWorkForStudent,
   courseMemberRoles,
@@ -51,7 +51,7 @@ export function TeamsScreen(props: {
   onError: (e: unknown) => void;
 }): JSX.Element {
   const { data, onChanged, onError } = props;
-  const { course, roster, activities, teams } = data;
+  const { course, roster, activities, teams, tfs } = data;
 
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -91,6 +91,22 @@ export function TeamsScreen(props: {
     () => roster.reduce((n, s) => Math.max(n, s.position), -1) + 1,
     [roster],
   );
+
+  // A TF's address on a student row is a hazard, not a cosmetic clash — and the
+  // direction matters. At sign-in the TF list wins: RoleRouter calls
+  // claimTFRows() and returns "tf" in BOTH role branches before it ever reaches
+  // claimStudentRows() (app/ck/page.tsx), so whoever holds that address gets the
+  // teaching-fellow view of this course, and the student row is never claimed —
+  // it stays on a team and ungraded forever, with nothing able to hand in
+  // against it. Only the owner loads `tfs` (a TF may read just their own row),
+  // and the owner is also the only one who can act on it.
+  const tfByEmail = useMemo(() => {
+    const m = new Map<string, string>();
+    tfs.forEach((t) => {
+      if (t.email) m.set(t.email.toLowerCase(), t.name);
+    });
+    return m;
+  }, [tfs]);
 
   // The builder is the original app's component and follows the OS colour
   // scheme; the faculty view is always the cream one. Pin light while it is on
@@ -144,6 +160,18 @@ export function TeamsScreen(props: {
       );
       if (taken) {
         setNote(`${next} is already on ${taken.name}'s row.`);
+        return;
+      }
+      // A TF's address on a student row is refused outright: nothing about it
+      // looks wrong at the time, and the damage lands later at their sign-in.
+      const tf = tfByEmail.get(next.toLowerCase());
+      if (tf) {
+        setNote(
+          `${next} is ${tf}'s address on this course's TF roster. At sign-in the TF list wins, so ` +
+            `they would get the teaching-fellow view of this course and this row would never be ` +
+            `claimed — it would sit on a team, ungraded, with no way to hand anything in. Take ` +
+            `them off the TF roster first if they are really taking the course.`,
+        );
         return;
       }
     }
@@ -205,13 +233,9 @@ export function TeamsScreen(props: {
     setBusy(true);
     setError(null);
     try {
-      // Their files first. check_in_results cascades from students and the
-      // storage rows cascade from that, and both delete policies authorise by
-      // reading the result row — so once it is gone, the PDFs and audio are
-      // unreachable by anyone. The confirm says the work goes; this is what
-      // makes that true.
-      await deleteStudentStorage(s.id);
-      await removeStudent(s.id);
+      // Their files go with them, and in that order — the helper owns why. The
+      // confirm says the work goes; this is what makes that true.
+      await removeStudentWithStorage(s.id);
       setNote(`Removed ${s.name}.`);
       onChanged();
     } catch (e) {
@@ -238,13 +262,34 @@ export function TeamsScreen(props: {
       );
       return;
     }
+    // The same hazard as typing one in, caught before the write: a class list
+    // that happens to carry a TF's address would add a row nobody can ever
+    // claim. Said rather than blocked — this panel has a Cancel, and the roster
+    // is the instructor's to decide.
+    const tfHits = new Map<string, string>();
+    for (const email of [
+      ...rec.fresh.map((p) => p.email),
+      ...rec.emailFills.map((f) => f.email),
+    ]) {
+      const tf = email ? tfByEmail.get(email.toLowerCase()) : undefined;
+      if (email && tf) tfHits.set(email.toLowerCase(), tf);
+    }
+
     setNote(null);
     setPending({
       source,
       fresh: rec.fresh,
       emailFills: rec.emailFills,
       unchanged: rec.unchanged,
-      warnings: parsed.warnings,
+      warnings: [
+        ...parsed.warnings,
+        ...Array.from(
+          tfHits,
+          ([email, tf]) =>
+            `${email} is ${tf}'s address on this course's TF roster — at sign-in the TF list wins, ` +
+            `so a row here would never be claimed and would sit on a team, ungraded.`,
+        ),
+      ],
     });
   }
 
@@ -376,6 +421,9 @@ export function TeamsScreen(props: {
             {roster.map((s) => {
               const changed = dirty(s);
               const cleared = !draftFor(s).trim();
+              // Read from the saved address, not the draft: this is a fact about
+              // the row as it stands, and the write path refuses new ones.
+              const alsoTF = s.email ? tfByEmail.get(s.email.toLowerCase()) : undefined;
               return (
                 <div
                   key={s.id}
@@ -492,6 +540,26 @@ export function TeamsScreen(props: {
                         signed in
                       </span>
                     )
+                  ) : null}
+
+                  {/* Whichever screen made the overlap, it surfaces here: this
+                      compares the two rosters on render rather than guarding one
+                      write, so a row added from the TFs side shows it too. */}
+                  {alsoTF ? (
+                    <span
+                      className="fv-badge"
+                      style={{ flex: "none", color: "var(--fv-amber)" }}
+                      title={
+                        `${alsoTF} is on this course's TF roster under the same address. At sign-in ` +
+                        `the TF list wins: they get the teaching-fellow view of this course — ` +
+                        `everyone's submissions, and grading if TFs may grade — and this row is ` +
+                        `never claimed, so it sits on a team and counts as ungraded forever. If ` +
+                        `they are a student here, take them off the TF roster: that is what grants ` +
+                        `the access, and removing this row alone leaves it.`
+                      }
+                    >
+                      also a TF
+                    </span>
                   ) : null}
 
                   <span
@@ -727,12 +795,18 @@ export function TeamsScreen(props: {
             </div>
           ) : null}
 
+            </>
+          ) : null}
+
+          {/* Outside the import panel, not inside it: notes come from the email
+              field too, and every refusal from commitEmail — a malformed
+              address, one already on another row, a TF's — used to be set into
+              state and then never rendered, so pressing Enter looked like it
+              had simply done nothing. */}
           {note ? (
             <div className="fv-sub" style={{ marginTop: 10, lineHeight: 1.5 }}>
               {note}
             </div>
-          ) : null}
-            </>
           ) : null}
         </div>
       </div>
