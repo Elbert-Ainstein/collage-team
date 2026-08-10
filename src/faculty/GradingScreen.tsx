@@ -494,6 +494,19 @@ export function GradingScreen({
                 }}
               />
             </div>
+            {/* The missing fact. "1 of 12 marked" counts the whole class, while
+                everything below counts only the people who handed something in
+                — so the two disagree unless somebody says why. They do not
+                contradict: nine of twelve simply have nothing to mark yet. */}
+            {stat && stat.total > stat.submitted ? (
+              <div
+                className="fv-sub"
+                style={{ marginTop: 6, fontSize: "var(--fv-2xs)", lineHeight: 1.5 }}
+              >
+                {stat.total - stat.submitted} of {stat.total} haven&rsquo;t handed in yet, so there
+                is nothing to mark for them.
+              </div>
+            ) : null}
           </div>
 
           {forCompletion ? (
@@ -965,9 +978,16 @@ function ReleaseMany({
         onClick={() => setOpen((v) => !v)}
         style={{ justifyContent: "space-between" }}
       >
-        <span>Release several</span>
+        <span>Release in one go</span>
+        {/* Counts THIS list, which is only the people who handed in. "0
+            ungraded" beside "1 of 12 marked" read as a contradiction; it was
+            two different populations counted without saying so. */}
         <span className="fv-sub fv-num" style={{ fontSize: "var(--fv-2xs)" }}>
-          {ungraded.length} ungraded
+          {ungraded.length
+            ? `${ungraded.length} waiting`
+            : subjects.length === 1
+              ? "released"
+              : `all ${subjects.length} released`}
         </span>
       </button>
 
