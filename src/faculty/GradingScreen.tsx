@@ -34,6 +34,7 @@ import { pointsTotal, questionsFor } from "./model";
 import type { FacultyData } from "./FacultyApp";
 import { FAvatar, FIcon } from "./icons";
 import { ActivityTeamPanel } from "./ActivityTeamPanel";
+import { SubmissionPages } from "./SubmissionPages";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -461,75 +462,17 @@ export function GradingScreen({
             <span style={{ fontSize: "var(--fv-xs)", color: "var(--fv-muted)" }}>
               Question {qIdx + 1}
             </span>
-            <button
-              type="button"
-              className="fv-iconbtn"
-              style={{ width: 26, height: 26 }}
-              aria-label="Open the submission in a new tab"
-              title="Opening submissions in their own tab needs file storage, which is not wired yet"
-              disabled
-            >
-              <FIcon name="openInNew" size={15} />
-            </button>
           </div>
 
-          <div className="fv-viewer">
-            <div className="fv-sheet">
-              <div
-                className="fv-eyebrow"
-                style={{ fontFamily: "var(--fv-sans)" }}
-              >
-                Question {qIdx + 1}
-              </div>
-              <p className="fv-prompt">
-                {activity.source_text?.trim() ||
-                  `Question ${question?.label ?? qIdx + 1} of ${qCount} for ${activity.title}. The prompt is set on the activity; add one with “Edit activity”.`}
-              </p>
-              <div
-                style={{ height: 1, background: "var(--fv-neutral-200)", margin: "20px 0 0" }}
-              />
-              {subject.result.text?.trim() ? (
-                <p
-                  style={{
-                    fontSize: 15,
-                    lineHeight: 1.6,
-                    marginTop: 20,
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  {subject.result.text}
-                </p>
-              ) : (
-                <>
-                  {/* No file storage yet, so a handed-in-but-empty row is drawn
-                      as a page rather than pretending there is nothing here. */}
-                  <div className="fv-bars">
-                    {[92, 78, 86, 64, 90, 71, 83, 56, 74].map((w, i) => (
-                      <i
-                        key={w}
-                        style={{
-                          width: `${w}%`,
-                          background:
-                            i % 2 === 0 ? "var(--fv-neutral-200)" : "var(--fv-neutral-100)",
-                        }}
-                      />
-                    ))}
-                  </div>
-                  <div
-                    style={{
-                      textAlign: "center",
-                      marginTop: 26,
-                      fontSize: "var(--fv-2xs)",
-                      color: "var(--fv-muted)",
-                      fontFamily: "var(--fv-sans)",
-                    }}
-                  >
-                    Page {qIdx + 1} of {qCount} · assigned to Question {question?.label ?? qIdx + 1}
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
+          {/* The student's OWN pages, at the question being marked. This was a
+              placeholder — grey bars and "assigned to Question 1" — while the
+              real PDF and its page mapping sat one query away. Collecting the
+              mapping and then not using it is the whole feature not landing. */}
+          <SubmissionPages
+            resultId={subject.result.id}
+            questionId={question && !question.id.startsWith("synthetic-") ? question.id : null}
+            questionLabel={question?.label ?? String(qIdx + 1)}
+          />
         </div>
 
         {/* ----------------------------------------------------- the panel */}

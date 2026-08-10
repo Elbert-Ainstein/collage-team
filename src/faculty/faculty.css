@@ -1586,3 +1586,48 @@ button.fv-steplabel:hover { color: var(--fv-navy); }
   /* Already narrow; the rail is the only sensible state there. */
   .fv-sidebar.collapsed { width: 52px; flex: 0 0 52px; }
 }
+
+/* The document view fills the pane instead of centring a sheet in it: the page
+   IS the content here, and .fv-viewer's own padding would shrink a scan that
+   somebody is trying to read handwriting off. A modifier rather than a change
+   to .fv-viewer, which the empty and error states still want as it is. */
+.fv-viewer.fv-viewerdoc {
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 0;
+  overflow: hidden;
+}
+
+/* --------------------------------------------- the submission page viewer
+   The student's own PDF, at the pages they marked for the question being
+   graded. The bar stays put while the page scrolls: which question you are
+   looking at is the thing you must never lose track of while marking. */
+.fv-pagebar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--fv-neutral-200);
+  background: var(--fv-cream-200);
+  flex-wrap: wrap;
+}
+.fv-pagewrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 16px;
+}
+/* Width-fit, not height-fit: handwriting is read across, and a page scaled to
+   fit the pane's height is unreadable on a laptop. It scrolls instead. */
+.fv-page {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--fv-neutral-200);
+  border-radius: var(--fv-r-md);
+  background: #fff;
+  box-shadow: var(--fv-shadow);
+}
