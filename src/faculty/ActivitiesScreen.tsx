@@ -16,6 +16,7 @@ import {
   addWeek,
   countWorkForActivity,
   deleteWeek,
+  duplicateActivity,
   backfillWeeks,
   ensureCheckIn,
   setLiveWeek,
@@ -38,6 +39,7 @@ import {
 import {
   cellFor,
   groupByWeek,
+  nextPositionIn,
   pointsLabel,
   studentPercents,
   teamPercent,
@@ -283,6 +285,33 @@ export function ActivitiesScreen(props: {
       onOpen(created.id, { fresh: true });
     });
 
+  /**
+   * Duplicate one, and go straight into it.
+   *
+   * The copy lands in the SAME week as its original rather than guessing the
+   * next one — then hands over to the activity page, which is where the week is
+   * chosen and where it already knows how to reposition a row that arrives from
+   * somewhere else. Guessing here would mean two places deciding what week a
+   * copy belongs to, and one of them would be wrong the first time somebody
+   * duplicated an activity from the middle of term.
+   */
+  const duplicate = (a: Activity) =>
+    void run(async () => {
+      const week = a.week ?? weekNumbers[0];
+      if (week == null) return;
+
+      const { activity: copy } = await duplicateActivity(a, {
+        week,
+        position: nextPositionIn(data.activities, week),
+      });
+
+      // Refresh BEFORE navigating, for the reason startNewActivity gives: the
+      // detail screen looks the activity up in `data` and bounces if it is not
+      // there yet.
+      await onChanged();
+      onOpen(copy.id, { fresh: true });
+    });
+
   return (
     <div className="fv-panel">
       <div className="fv-head">
@@ -398,6 +427,7 @@ export function ActivitiesScreen(props: {
             highlight={announced}
             onOpen={onOpen}
             onAddTo={(w) => startNewActivity(w)}
+            onDuplicate={duplicate}
             onDates={saveDates}
             onLive={makeLive}
             run={run}
@@ -605,6 +635,7 @@ function RowView({
   highlight,
   onOpen,
   onAddTo,
+  onDuplicate,
   onDates,
   onLive,
   run,
@@ -617,6 +648,8 @@ function RowView({
   highlight: number | null;
   onOpen: (id: string) => void;
   onAddTo: (week: number) => void;
+  /** Copy one into the same week and open it — the parent owns both halves. */
+  onDuplicate: (a: Activity) => void;
   onDates: (id: string, label: string | null) => void;
   onLive: (week: number | null) => void;
   run: (job: () => Promise<void>) => Promise<void>;
@@ -730,6 +763,19 @@ function RowView({
                       <FIcon name="chevronRight" size={18} />
                     </span>
                   </button>
+                  {canAuthor ? (
+                    <button
+                      type="button"
+                      className="fv-iconbtn"
+                      style={{ width: 26, height: 26, flex: "none" }}
+                      aria-label={`Duplicate ${a.title}`}
+                      title="Duplicate this — its questions and rubric come with it"
+                      disabled={busy}
+                      onClick={() => onDuplicate(a)}
+                    >
+                      <FIcon name="copy" size={15} />
+                    </button>
+                  ) : null}
                   {canAuthor ? (
                     <RowDelete
                       activity={a}

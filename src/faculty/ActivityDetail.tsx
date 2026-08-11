@@ -185,6 +185,8 @@ export function ActivityDetail(props: {
   onGrade: () => void;
   /** The Check-in tab, where the team half is actually filled in. */
   onCheckIn: () => void;
+  /** Copy this activity into another week, questions and rubric included. */
+  onDuplicate: () => void;
   onChanged: () => void | Promise<void>;
   onError: (e: unknown) => void;
 }): JSX.Element {
@@ -196,6 +198,7 @@ export function ActivityDetail(props: {
     onRubric,
     onGrade,
     onCheckIn,
+    onDuplicate,
     onChanged,
     onError,
   } = props;
@@ -629,6 +632,24 @@ export function ActivityDetail(props: {
                     "Grading criteria" page editing the same rubric_items rows
                     from a screen that could not see the questions they belong
                     to — and two ways into one thing is how they drift. */}
+                {/* Here as well as on the list row, because THIS is where you
+                    are standing when you think "I want this again next week" —
+                    the row's copy icon is a 26px square beside a chevron, which
+                    is findable only if you already know it is there. Duplicating
+                    is the difference between rebuilding a rubric twelve times a
+                    term and once. */}
+                {data.can.author ? (
+                  <button
+                    type="button"
+                    className="fv-btn outline sm"
+                    disabled={saving}
+                    onClick={onDuplicate}
+                    title="Make a copy in another week — its questions and rubric come with it, hidden until you open it"
+                  >
+                    <FIcon name="copy" size={15} />
+                    Duplicate
+                  </button>
+                ) : null}
                 <button type="button" className="fv-btn outline sm" onClick={onRubric}>
                   <FIcon name="assignment" size={15} />
                   Rubric

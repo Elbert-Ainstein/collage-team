@@ -7,9 +7,20 @@
 // two things in step.
 
 import { requireSupabase } from "@/lib/supabaseClient";
-import { countAll, countAllIn, dbError, selectAll, selectAllIn, tintFor } from "@/checkins/data";
+import {
+  countAll,
+  countAllIn,
+  createActivity,
+  dbError,
+  listCheckIns,
+  selectAll,
+  selectAllIn,
+  tintFor,
+  updateActivity,
+} from "@/checkins/data";
 import { put, remove, signedUrl } from "@/checkins/storage";
 import {
+  HIDDEN_INSTANT,
   type Activity,
   type ActivityQuestion,
   type Course,
@@ -441,6 +452,157 @@ export async function setRubricQuestion(id: string, questionLabel: string | null
   }
 }
 
+// -------------------------------------------------- duplicating an activity
+//
+// The course runs the same shape of work every week. What takes the time is the
+// rubric — a ladder of criteria written per question — and rewriting it from
+// scratch each week is the whole cost this section removes.
+
+/** An activity's questions, as rows belonging to a different activity. */
+export function copiedQuestions(
+  activityId: string,
+  questions: ActivityQuestion[],
+): { activity_id: string; label: string; position: number }[] {
+  return [...questions]
+    .sort((a, b) => a.position - b.position)
+    .map((q) => ({ activity_id: activityId, label: q.label, position: q.position }));
+}
+
+/**
+ * A rubric, as rows belonging to a different activity.
+ *
+ * `question_label` is carried across verbatim, and that is the load-bearing
+ * part: a criterion belongs to a question by its LABEL, not by an id (0012), so
+ * the copied ladder only lines up with the copied questions because both keep
+ * the labels they had. `is_custom` comes too — it decides whether a row can be
+ * deleted again, and defaulting it would quietly freeze the copy's rubric.
+ */
+export function copiedRubric(
+  activityId: string,
+  rubric: RubricItem[],
+): {
+  activity_id: string;
+  row_index: number;
+  description: string;
+  deduction: number;
+  is_custom: boolean;
+  question_label: string | null;
+}[] {
+  return [...rubric]
+    .sort((a, b) => a.row_index - b.row_index)
+    .map((r) => ({
+      activity_id: activityId,
+      row_index: r.row_index,
+      description: r.description,
+      deduction: r.deduction,
+      is_custom: r.is_custom,
+      question_label: r.question_label,
+    }));
+}
+
+export interface DuplicatedActivity {
+  activity: Activity;
+  questions: number;
+  criteria: number;
+}
+
+/**
+ * Copy what an activity IS, and nothing about how it went.
+ *
+ * Carried over: the title and brief, its type, what it is out of, whether it is
+ * marked for completion, the resubmit mode, every question, the whole rubric,
+ * and its check-ins.
+ *
+ * Deliberately left behind:
+ *
+ *  - The dates. `dates_label`, `due_at` and the two per-scope due columns say
+ *    when THIS run happens, which is the one thing that is different about the
+ *    next one. A copied deadline in the past is worse than a blank one.
+ *  - The assignment document. `files` holds a storage PATH, and
+ *    purgeActivityStorage removes the object by that path when an activity is
+ *    deleted — so two rows naming one object means deleting either takes the
+ *    other's document with it, unrecoverably: the bucket's delete policy joins
+ *    back to the activity row, so once that row is gone nobody can ever remove
+ *    or replace the object. Copying the bytes instead is a real feature; naming
+ *    them twice is a trap. The week's document is a new file anyway.
+ *  - Submissions, marks and released results. Those are the students' work.
+ *
+ * Created hidden, exactly like a new activity: a copy is a draft until its week
+ * and dates are right, and the class must not see it in between.
+ */
+export async function duplicateActivity(
+  source: Activity,
+  into: { week: number; position: number },
+): Promise<DuplicatedActivity> {
+  const created = await createActivity({
+    courseId: source.course_id,
+    week: into.week,
+    title: source.title,
+    topic: source.topic ?? undefined,
+    resubmitMode: source.resubmit_mode,
+    sourceText: source.source_text ?? undefined,
+    position: into.position,
+    opensAt: HIDDEN_INSTANT,
+  });
+
+  // createActivity takes what a new activity needs; the rest of the shape is a
+  // patch, the same two-step the New activity button makes. question_count 0 is
+  // what stops anything seeding questions over the ones being copied in.
+  const patch: Partial<Activity> = {
+    type: source.type,
+    points_total: source.points_total,
+    question_count: 0,
+  };
+  // Only when the column answered: a client reading a database without 0019
+  // gets undefined, and writing that back would fail against the older schema.
+  if (source.completion != null) patch.completion = source.completion;
+  await updateActivity(created.id, patch);
+
+  const [questions, rubric, checkIns] = await Promise.all([
+    listQuestions(source.id),
+    listRubric(source.id),
+    listCheckIns([source.id]),
+  ]);
+
+  const questionRows = copiedQuestions(created.id, questions);
+  if (questionRows.length) {
+    const { error } = await db().from("activity_questions").insert(questionRows);
+    if (error) throw dbError(error);
+  }
+
+  const rubricRows = copiedRubric(created.id, rubric);
+  if (rubricRows.length) {
+    const { error } = await db().from("rubric_items").insert(rubricRows);
+    if (error) throw dbError(error);
+  }
+
+  // Unposted, whatever the source was: posting is what puts work in front of
+  // the class, and this copy is hidden.
+  if (checkIns.length) {
+    const { error } = await db()
+      .from("check_ins")
+      .insert(
+        checkIns.map((c) => ({
+          activity_id: created.id,
+          label: c.label,
+          kind: c.kind,
+          phase: c.phase,
+          scale: c.scale,
+          max_points: c.max_points,
+          position: c.position,
+          posted: false,
+        })),
+      );
+    if (error) throw dbError(error);
+  }
+
+  return {
+    activity: { ...created, ...patch },
+    questions: questionRows.length,
+    criteria: rubricRows.length,
+  };
+}
+
 // ------------------------------------------------------- the activity's file
 //
 // 0012's `activity-files` bucket. Objects are named `<activity_id>/<file>` and
@@ -849,3 +1011,4 @@ export async function setMemberRole(userId: string, role: AccountRole): Promise<
   }
   throw dbError(error);
 }
+

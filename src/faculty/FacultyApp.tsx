@@ -30,8 +30,8 @@ import type {
   Student,
   TeamWithMembers,
 } from "@/checkins/types";
-import { listQuestionsFor, listTFs, listWeeks, myTFCourses } from "./facultyData";
-import { statFor, type ActivityStat } from "./model";
+import { duplicateActivity, listQuestionsFor, listTFs, listWeeks, myTFCourses } from "./facultyData";
+import { nextPositionIn, statFor, type ActivityStat } from "./model";
 import { FIcon } from "./icons";
 import { ActivitiesScreen } from "./ActivitiesScreen";
 import { ActivityDetail } from "./ActivityDetail";
@@ -358,6 +358,28 @@ export function FacultyApp({
               setFresh(null);
               setScreen("checkin");
             }}
+            onDuplicate={() =>
+              void (async () => {
+                try {
+                  const { activity: copy } = await duplicateActivity(selected, {
+                    // The same week to begin with, and the copy lands on its own
+                    // page with the week picker right there — which is where
+                    // the choice belongs, and the only place that knows how to
+                    // reposition a row that moves. Guessing "next week" here
+                    // would be a second opinion about something one screen
+                    // already owns.
+                    week: selected.week ?? data.weeks[0]?.week ?? 1,
+                    position: nextPositionIn(data.activities, selected.week ?? null),
+                  });
+                  // Before navigating: the detail screen looks the activity up
+                  // in `data` and bounces if it is not there yet.
+                  await refresh();
+                  openActivity(copy.id, { fresh: true });
+                } catch (e) {
+                  fail(e);
+                }
+              })()
+            }
             onChanged={() => refresh().catch(fail)}
             onError={fail}
           />
