@@ -5,6 +5,7 @@
 // THE SAME NUMBER, so they come from one function. Computing them separately is
 // how they came to disagree in an earlier pass.
 
+import { isCompletionMet } from "@/checkins/studentData";
 import {
   isCompletion,
   SCOPE_OF,
@@ -206,6 +207,8 @@ export type CellState =
   | "turned_in"
   | "late"
   | "complete"
+  /** Marked, and the answer was no — not the same cell as an unmarked one. */
+  | "not_complete"
   | "not_started"
   | "excused"
   | "discussing"
@@ -271,7 +274,8 @@ function stateOf(
   }
   switch (r.status) {
     case "scored":
-      return r.is_ci ? "complete" : "graded";
+      if (!r.is_ci) return "graded";
+      return isCompletionMet(r) ? "complete" : "not_complete";
     case "submitted":
       return "turned_in";
     case "needs_review":
@@ -310,13 +314,17 @@ export function studentPercents(
       if (!ci) continue;
       const r = results.find((x) => x.check_in_id === ci.id && x.student_id === s.id);
       if (!r || r.status !== "scored") continue;
-      // A completion mark carries no points, so it cannot move a percentage.
-      if (r.is_ci) continue;
-      earned += r.score ?? 0;
       // What the check-in is out of, which the data layer keeps equal to the
       // sum of the activity's questions. Reading the activity's own count x
       // points here would disagree with it the moment a question is re-pointed,
       // and max_points is also the number the student was shown.
+      // A completion mark carries no points, so it cannot move a percentage.
+      // Not even a Not complete: this figure is out of the points on offer, and
+      // a completion check-in puts none on offer. Whether a missed completion
+      // SHOULD cost a student here is a real question, but it is a change to
+      // how everyone's total reads, not a bug — so it is not made in passing.
+      if (r.is_ci) continue;
+      earned += r.score ?? 0;
       possible += ci.max_points ?? pointsTotal(a);
     }
     out.set(s.id, possible > 0 ? Math.round((earned / possible) * 100) : null);

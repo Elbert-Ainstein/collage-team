@@ -83,6 +83,15 @@ function unwrap<T>(res: { data: T | null; error: { message: string } | null }): 
 const PAGE_SIZE = 1000;
 
 /**
+ * The widest page this server has actually handed back, learned as we read and
+ * shared by every call — the first read of the session pays to measure it and
+ * the rest are spared a round trip. It only ever takes a length the server
+ * really returned, so it can never exceed the server's true window, which is
+ * what makes the short-page test below safe to trust.
+ */
+let observedWindow = 0;
+
+/**
  * Longest id list allowed in one `.in(...)`. The filter travels in the URL and a
  * uuid costs ~39 bytes there, so 100 keeps a request near 4 KB — well inside the
  * 8 KB request-line limit that proxies in front of PostgREST commonly enforce.
@@ -119,14 +128,21 @@ export async function selectAll<Row>(
     if (res.error) throw dbError(res.error);
     const rows = res.data ?? [];
     out.push(...rows);
-    // Stop on an EMPTY page, not a short one. Supabase's per-project "Max rows"
-    // is not pinned in this repo, and if it is ever set below PAGE_SIZE the
-    // very first page comes back short — a short-page test would then return
-    // early and silently truncate again, which is the bug this exists to kill.
     if (rows.length === 0) return out;
     // A server that ignores the range entirely would loop forever; it cannot
-    // return more than it was asked for, so this only fires on a broken server.
+    // return more than it was asked for, so this only fires on a broken server —
+    // and it comes first so a length like that never becomes the window.
     if (rows.length > PAGE_SIZE) return out;
+    // Do NOT stop merely because a page is shorter than PAGE_SIZE. Supabase's
+    // per-project "Max rows" is not pinned in this repo, and if it is ever set
+    // below PAGE_SIZE then EVERY page comes back short, first one included — so
+    // that test would hand back a fraction of the table and call it the whole
+    // thing, which is the bug this exists to kill. Compare against a width the
+    // server has proved it will fill instead: a page narrower than one we have
+    // already been given is one the server could have filled and didn't, and
+    // that only happens when the rows have run out.
+    if (rows.length < observedWindow) return out;
+    observedWindow = rows.length;
   }
 }
 

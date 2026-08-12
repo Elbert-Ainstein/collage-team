@@ -108,6 +108,30 @@ select '0020 team sets survive activity delete',
              and contype = 'f'
              and conname = 'team_sets_activity_id_fkey'),
          'NOT FOUND — no FK by that name; check 0020 ran cleanly')
+union all
+select '0024 a mark can say not complete',
+       case when exists (
+              select 1
+                from information_schema.columns
+               where table_schema = 'public'
+                 and table_name = 'check_in_results'
+                 and column_name = 'ci_met')
+            then 'applied'
+            else 'NOT APPLIED — run 0024_not_complete_and_roles.sql' end
+union all
+-- guard_student_grading() has existed since 0006, so "is the function there"
+-- proves nothing: 0024 replaced its body and dropped the flagged branch out of
+-- it. The only honest test is to read the body back and look for the branch.
+select '0025 students cannot clear their own flag',
+       case when exists (
+              select 1
+                from pg_proc p
+                join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'public'
+                 and p.proname = 'guard_student_grading'
+                 and pg_get_functiondef(p.oid) like '%flagged%')
+            then 'applied'
+            else 'NOT APPLIED — run 0025_restore_flagged_guard.sql' end
 order by 1;
 
 -- ------------------------------------------------------- and the buckets

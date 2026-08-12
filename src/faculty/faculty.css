@@ -669,6 +669,13 @@
   background: rgba(5, 150, 105, 0.1);
   color: var(--fv-emerald);
 }
+/* Amber, not red. A missed completion check is a thing to go and fix, not a
+   failure — and it has to be unmistakable against `complete`'s green, because
+   the two sit in the same column one row apart. */
+.fv-cell.not_complete {
+  background: var(--fv-cream-400);
+  color: var(--fv-amber);
+}
 .fv-cell.not_started,
 .fv-cell.excused {
   color: var(--fv-muted);

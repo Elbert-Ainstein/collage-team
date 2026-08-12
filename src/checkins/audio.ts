@@ -36,6 +36,39 @@ const BUCKET = "recordings";
  */
 const SIGNED_URL_SECONDS = 60 * 60;
 
+/** 50 MB — the recordings bucket's file_size_limit in 0013. Change both together. */
+const MAX_BYTES = 50 * 1024 * 1024;
+
+/**
+ * What the recorder is told to encode at, and the reason the sentence about the
+ * 50 MB limit is true.
+ *
+ * Left to itself Chrome records speech at about 128 kbps, which puts the ceiling
+ * at roughly 52 minutes — so a team recording a 90-minute discussion was being
+ * told they had headroom and then hard-failing on upload with the take already
+ * made. At 32 kbps the same 50 MB is over three hours, and a term of audio costs
+ * the bucket about a quarter of what it did.
+ *
+ * The cost is real and worth naming rather than burying: 32 kbps is well past
+ * transparent for a voice in a room, but it is a floor, not a luxury, and the
+ * person it would fail first is the quiet one sitting furthest from the laptop.
+ * If that turns out to matter more than the ceiling does, raise this — the limit
+ * students are shown is computed from it, so the two cannot drift apart.
+ */
+export const AUDIO_BITS_PER_SECOND = 32000;
+
+/**
+ * How much talk fits in MAX_BYTES at that bitrate, in words rather than digits.
+ * Rounded DOWN, because this number is a promise made before the recording
+ * starts and is only ever read by someone deciding whether to press Record.
+ */
+function talkTime(): string {
+  const hours = (MAX_BYTES * 8) / AUDIO_BITS_PER_SECOND / 3600;
+  if (hours < 1) return `about ${Math.floor(hours * 60)} minutes`;
+  const half = Math.floor(hours * 2) / 2;
+  return `about ${half} ${half === 1 ? "hour" : "hours"}`;
+}
+
 /**
  * The container the browser actually recorded in.
  *
@@ -78,8 +111,8 @@ function storageError(error: { message: string }, op: Op = "upload"): Error {
   }
   if (/maximum allowed size|payload too large|entity too large|413/i.test(m)) {
     return new Error(
-      "That recording is too big to upload — the limit is 50 MB, a few hours of " +
-        "talk. Record the discussion in shorter takes.",
+      `That recording is too big to upload — the limit is ${MAX_BYTES / 1024 / 1024} MB, ` +
+        `${talkTime()} of talk. Record the discussion in shorter takes.`,
     );
   }
   if (/row-level security|not authorized|unauthorized|permission|403/i.test(m)) {

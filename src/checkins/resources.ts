@@ -9,7 +9,7 @@
 // Needs supabase/migrations/0017_team_resources.sql.
 
 import { requireSupabase } from "@/lib/supabaseClient";
-import { dbError } from "./data";
+import { countAllIn, dbError } from "./data";
 import { put, remove, signedUrl, signedUrls } from "./storage";
 
 const BUCKET = "resources";
@@ -116,6 +116,29 @@ export async function countTeamResources(teamId: string): Promise<Map<string, nu
     // The index is readable without counts; a folder simply shows none. Better
     // than an error page over a number.
     if (missing(e)) return new Map();
+    throw e;
+  }
+}
+
+/**
+ * How many photos these teams hold in total — what deleting them would destroy.
+ *
+ * Set-wide and across every activity, unlike the folder counts above, because
+ * that is what the delete does: team_resources cascades from teams, so dropping
+ * a team takes its photos from all twelve weeks and not just the one on screen.
+ * Chunked, because a term of teams is more ids than a URL will carry.
+ */
+export async function countResourcesForTeams(teamIds: string[]): Promise<number> {
+  if (!teamIds.length) return 0;
+  try {
+    return await countAllIn(teamIds, (chunk) =>
+      db().from("team_resources").select("id", { count: "exact", head: true }).in("team_id", chunk),
+    );
+  } catch (e) {
+    // No table means no photos, which is the true answer. Anything else has to
+    // reach the caller: this number gates a destructive confirm, and a guess
+    // there tells someone they have nothing to lose.
+    if (missing(e)) return 0;
     throw e;
   }
 }

@@ -16,7 +16,8 @@ import {
   setTeamSetLocked,
   setTeamSetSize,
 } from "./data";
-import { deleteTeamResourceObjects } from "./purge";
+import { deleteTeamResourceObjects, deleteTeamStorage } from "./purge";
+import { countResourcesForTeams } from "./resources";
 import type { Activity, Student, TeamSet, TeamWithMembers } from "./types";
 import { Avatar, EmptyState, ErrorBanner, weekLabel, type PillarProps } from "./ui";
 
@@ -30,6 +31,28 @@ function msg(e: unknown): string {
 function clampSize(n: number): number {
   if (!Number.isFinite(n)) return DEFAULT_SIZE;
   return Math.max(2, Math.min(8, Math.round(n)));
+}
+
+/**
+ * What a team delete takes, named.
+ *
+ * Photos are counted apart from scores because neither implies the other: a
+ * photo needs no result row to exist, so the set with a term of whiteboards on
+ * it and nothing yet recorded reads as costless unless this says otherwise.
+ */
+function costPhrase(scores: number, photos: number): string {
+  const parts: string[] = [];
+  if (scores > 0) parts.push(`${scores} recorded team score${scores === 1 ? "" : "s"}`);
+  if (photos > 0) parts.push(`${photos} whiteboard photo${photos === 1 ? "" : "s"}`);
+  return parts.join(" and ");
+}
+
+/** The same counts with the nouns clipped, for a button sharing a card header. */
+function shortCostPhrase(scores: number, photos: number): string {
+  const parts: string[] = [];
+  if (scores > 0) parts.push(`${scores} score${scores === 1 ? "" : "s"}`);
+  if (photos > 0) parts.push(`${photos} photo${photos === 1 ? "" : "s"}`);
+  return parts.join(" and ");
 }
 
 /** Label for a team set: its own name, else the activity it belongs to. */
@@ -55,10 +78,14 @@ export function TeamsPillar(props: PillarProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDeleteSet, setConfirmDeleteSet] = useState(false);
+  /** What deleting the whole set would cost, once we have been and asked. */
+  const [setCost, setSetCost] = useState<string | null>(null);
   const [armedTeam, setArmedTeam] = useState<string | null>(null);
-  const [teamCost, setTeamCost] = useState<string | null>(null);
-  /** A pending re-form that would destroy recorded team scores. */
-  const [confirmReform, setConfirmReform] = useState<{ n: number; scores: number } | null>(null);
+  const [teamCost, setTeamCost] = useState<{ label: string; title: string } | null>(null);
+  /** A pending re-form that would destroy recorded team scores, or photos. */
+  const [confirmReform, setConfirmReform] = useState<
+    { n: number; scores: number; photos: number; counted: boolean } | null
+  >(null);
 
   /** Last name we know the DB holds for each team, so blur only writes real edits. */
   const savedNames = useRef<Record<string, string>>({});
@@ -251,12 +278,28 @@ export function TeamsPillar(props: PillarProps) {
   };
 
   /** Re-forming deletes the teams, cascading away any scores recorded against
-   *  them — so ask first when there is something to lose. */
+   *  them and every photo they hold — so ask first when there is something to
+   *  lose. */
   const reformOrConfirm = async (n: number) => {
     if (!activeSet) return;
-    const scores = await countTeamResults(activeSet.id).catch(() => 0);
-    if (scores > 0) {
-      setConfirmReform({ n, scores });
+    // Photos as well as scores. Gating on scores alone waved through the exact
+    // case that hurts: nudging the size box from 4 to 5 on a set nobody has
+    // graded yet, which still holds every whiteboard the teams ever filed.
+    // A count that FAILED must not read as a count of zero. Both of these gate
+    // an irreversible delete, so the safe direction is to ask anyway and say we
+    // could not tell — treating a network blip as "nothing to lose" is how the
+    // dialog goes missing on exactly the set that needed it.
+    let counted = true;
+    const scores = await countTeamResults(activeSet.id).catch(() => {
+      counted = false;
+      return 0;
+    });
+    const photos = await countResourcesForTeams(teams.map((t) => t.id)).catch(() => {
+      counted = false;
+      return 0;
+    });
+    if (!counted || scores > 0 || photos > 0) {
+      setConfirmReform({ n, scores, photos, counted });
       return;
     }
     await doReform(n);
@@ -270,12 +313,14 @@ export function TeamsPillar(props: PillarProps) {
     // as nudging a number. Without this, changing the team size from 4 to 5
     // destroyed the whole set's whiteboard photos: the rows cascade, the
     // objects do not, and 0018 authorises removal by joining back through the
-    // team that no longer exists.
+    // team that no longer exists. The team's audio goes the same way, through
+    // its own subject_type='team' result row.
     const doomedTeams = teams.map((t) => t.id);
     setConfirmReform(null);
     setSel(new Set());
     await run(async () => {
       await deleteTeamResourceObjects(doomedTeams);
+      await deleteTeamStorage(doomedTeams);
       if (n !== activeSetSize) {
         setSets((prev) => prev.map((s) => (s.id === setIdNow ? { ...s, team_size: n } : s)));
         await setTeamSetSize(setIdNow, n);
@@ -325,11 +370,12 @@ export function TeamsPillar(props: PillarProps) {
     const setIdNow = activeSetId;
     setTeams((prev) => prev.filter((t) => t.id !== teamId));
     await run(async () => {
-      // The team's photos first. team_resources cascades from teams, and the
-      // cascade does not reach storage — so the objects would be left behind,
-      // and 0018 only lets the course owner remove them WHILE the team row is
-      // still there to authorise against.
+      // The team's files first — photos, and the audio hanging off its own team
+      // result. Both cascade from teams as ROWS, and neither cascade reaches
+      // storage, so the objects would be left behind; 0018 and 0013 only let
+      // anyone remove them WHILE the rows are still there to authorise against.
       await deleteTeamResourceObjects([teamId]);
+      await deleteTeamStorage([teamId]);
       await deleteTeam(teamId);
       await reload(setIdNow);
     });
@@ -351,7 +397,28 @@ export function TeamsPillar(props: PillarProps) {
     });
   };
 
-  /** Deleting a set takes its teams — and any team scores recorded against them. */
+  /** Arm the set delete, then go and find out what it would actually cost. */
+  const armDeleteSet = () => {
+    setConfirmDeleteSet(true);
+    setSetCost(null);
+    if (!activeSet) return;
+    void Promise.all([
+      countTeamResults(activeSet.id),
+      countResourcesForTeams(teams.map((t) => t.id)),
+    ])
+      .then(([scores, photos]) => {
+        const cost = costPhrase(scores, photos);
+        setSetCost(cost ? `${cost} go with them.` : "Nothing is recorded against them.");
+      })
+      .catch(() =>
+        setSetCost(
+          "Any team scores and whiteboard photos go with them — we couldn't reach the " +
+            "database to count how many.",
+        ),
+      );
+  };
+
+  /** Deleting a set takes its teams — their scores, their photos, their audio. */
   const onDeleteSet = async () => {
     if (!activeSetId) return;
     const doomed = activeSetId;
@@ -359,10 +426,12 @@ export function TeamsPillar(props: PillarProps) {
     await run(async () => {
       // Same reason as onDeleteTeam, for every team in the set.
       await deleteTeamResourceObjects(doomedTeams);
+      await deleteTeamStorage(doomedTeams);
       await deleteTeamSet(doomed);
       const remaining = sets.filter((s) => s.id !== doomed);
       setSets(remaining);
       setConfirmDeleteSet(false);
+      setSetCost(null);
       setSel(new Set());
       const next = remaining[0]?.id ?? null;
       setActiveSetId(next);
@@ -595,8 +664,14 @@ export function TeamsPillar(props: PillarProps) {
             }}
           >
             <span style={{ fontSize: 11.5, color: "var(--amber)" }}>
-              Re-forming teams deletes the current ones — {confirmReform.scores} recorded team
-              score{confirmReform.scores === 1 ? "" : "s"} would go with them.
+              {confirmReform.counted
+                ? `Re-forming teams deletes the current ones — ${costPhrase(
+                    confirmReform.scores,
+                    confirmReform.photos,
+                  )} would go with them, from every week, for good.`
+                : "Re-forming teams deletes the current ones, and every score and photo they " +
+                  "hold, from every week, for good. We could not reach the database to say how " +
+                  "much that is — so check before you go ahead."}
             </span>
             <button
               className="t-btn amber"
@@ -631,16 +706,26 @@ export function TeamsPillar(props: PillarProps) {
             }}
           >
             <span style={{ fontSize: 11.5, color: "var(--amber)" }}>
-              Delete this set — its {teams.length} team{teams.length === 1 ? "" : "s"} and any team
-              scores recorded against them go too. Students stay on the roster.
+              Delete this set and its {teams.length} team{teams.length === 1 ? "" : "s"}.{" "}
+              {setCost ?? "Checking what would go with them…"} Students stay on the roster.
             </span>
-            <button className="t-btn amber" onClick={onDeleteSet} disabled={busy}>
+            {/* Disabled until the count lands: the whole point of this bar is
+                the number in it, and a click that beats it is the unwarned
+                delete all over again. */}
+            <button
+              className="t-btn amber"
+              onClick={onDeleteSet}
+              disabled={busy || setCost === null}
+            >
               {busy ? "Deleting…" : "Delete set"}
             </button>
             <button
               className="t-btn ghost"
               style={{ border: "1px solid var(--line)" }}
-              onClick={() => setConfirmDeleteSet(false)}
+              onClick={() => {
+                setConfirmDeleteSet(false);
+                setSetCost(null);
+              }}
               disabled={busy}
             >
               Cancel
@@ -650,7 +735,7 @@ export function TeamsPillar(props: PillarProps) {
           <button
             className="t-btn ghost"
             style={{ border: "1px solid var(--line)", color: "var(--amber)" }}
-            onClick={() => setConfirmDeleteSet(true)}
+            onClick={armDeleteSet}
             disabled={busy}
           >
             Delete set
@@ -776,13 +861,14 @@ export function TeamsPillar(props: PillarProps) {
                   <span className={"t-chip" + (under ? " amber" : "")}>
                     {t.members.length} / {activeSetSize}
                   </span>
-                  {/* Deleting a team cascades away every tRAT that team wrote
-                      and every mark on it, across all weeks. It used to be one
-                      unguarded click. Arm first, and say what goes. */}
+                  {/* Deleting a team cascades away every tRAT that team wrote,
+                      every mark on it and every photo it filed, across all
+                      weeks. It used to be one unguarded click. Arm first, and
+                      say what goes — short on the button, in full on hover. */}
                   {armedTeam === t.id ? (
                     <button
                       className="t-btn sm danger"
-                      title={teamCost ?? "Click to delete this team"}
+                      title={teamCost?.title ?? "Click to delete this team"}
                       onBlur={() => {
                         setArmedTeam(null);
                         setTeamCost(null);
@@ -793,7 +879,7 @@ export function TeamsPillar(props: PillarProps) {
                         void onDeleteTeam(t.id);
                       }}
                     >
-                      {teamCost ?? "Delete team?"}
+                      {teamCost?.label ?? "Delete team?"}
                     </button>
                   ) : (
                     <button
@@ -802,15 +888,28 @@ export function TeamsPillar(props: PillarProps) {
                       onClick={() => {
                         setArmedTeam(t.id);
                         setTeamCost(null);
-                        void countOneTeamResults(t.id)
-                          .then((n) =>
-                            setTeamCost(
-                              n === 0
-                                ? "Delete team?"
-                                : `Delete team and ${n} recorded ${n === 1 ? "score" : "scores"}?`,
-                            ),
-                          )
-                          .catch(() => setTeamCost("Delete team? (could not check its scores)"));
+                        void Promise.all([
+                          countOneTeamResults(t.id),
+                          countResourcesForTeams([t.id]),
+                        ])
+                          .then(([scores, photos]) => {
+                            const short = shortCostPhrase(scores, photos);
+                            setTeamCost({
+                              label: short ? `Delete team and ${short}?` : "Delete team?",
+                              title: short
+                                ? `Deleting this team also deletes ${costPhrase(scores, photos)}, ` +
+                                  "from every week. There is no undo."
+                                : "Nothing is recorded against this team.",
+                            });
+                          })
+                          .catch(() =>
+                            setTeamCost({
+                              label: "Delete team? (could not check what goes with it)",
+                              title:
+                                "We couldn't reach the database to count them — any scores, " +
+                                "photos and recordings on this team go too.",
+                            }),
+                          );
                       }}
                     >
                       ✕

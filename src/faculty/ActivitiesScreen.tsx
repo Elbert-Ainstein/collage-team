@@ -57,6 +57,7 @@ const GLYPH: Record<CellState, string> = {
   turned_in: "●",
   late: "⏱",
   complete: "✓",
+  not_complete: "✗",
   not_started: "—",
   excused: "–",
   discussing: "●",
@@ -68,6 +69,7 @@ const STATE_LABEL: Record<CellState, string> = {
   turned_in: "Turned in · not graded",
   late: "Late",
   complete: "Complete",
+  not_complete: "Not complete",
   not_started: "Not started",
   excused: "Excused",
   discussing: "Discussing",
@@ -85,10 +87,19 @@ const KEY_INK: Partial<Record<CellState, CSSProperties>> = {
   late: { color: "var(--fv-amber)", background: "var(--fv-cream-400)" },
   graded: { color: "var(--fv-navy)" },
   complete: { color: "var(--fv-emerald)", background: "rgba(5, 150, 105, 0.1)" },
+  not_complete: { color: "var(--fv-amber)", background: "var(--fv-cream-400)" },
   excused: { color: "var(--fv-muted)" },
 };
 
-const KEY_ORDER: CellState[] = ["not_started", "turned_in", "late", "graded", "complete", "excused"];
+const KEY_ORDER: CellState[] = [
+  "not_started",
+  "turned_in",
+  "late",
+  "graded",
+  "complete",
+  "not_complete",
+  "excused",
+];
 
 // The design draws a hairline down the inside of each frozen column; the
 // stylesheet only owns the sticking itself.
@@ -200,15 +211,17 @@ export function ActivitiesScreen(props: {
     return data.roster.filter((s) => !seen.has(s.id));
   }, [data.teams, data.roster]);
 
-  const run = async (job: () => Promise<void>) => {
+  const run = async (job: () => Promise<void | boolean>) => {
     if (busy) return;
     setBusy(true);
     try {
-      // The job may have refreshed and navigated already (creating an activity
-      // has to, so the detail screen finds it). Awaiting here rather than
-      // firing and forgetting keeps a second refresh from racing the first.
-      await job();
-      await onChanged();
+      // A job that had to refresh itself says so by returning true — creating
+      // an activity has to, so the detail screen finds it. Refreshing again on
+      // its behalf is neither free nor deduplicated: refresh's busy guard
+      // clears before it returns, so the second call re-runs the whole chain of
+      // reads and the press just sits there.
+      const refreshed = await job();
+      if (!refreshed) await onChanged();
     } catch (e) {
       onError(e);
     } finally {
@@ -283,6 +296,7 @@ export function ActivitiesScreen(props: {
       // back to the list — which read as the button doing nothing at all.
       await onChanged();
       onOpen(created.id, { fresh: true });
+      return true;
     });
 
   /**
@@ -310,6 +324,7 @@ export function ActivitiesScreen(props: {
       // there yet.
       await onChanged();
       onOpen(copy.id, { fresh: true });
+      return true;
     });
 
   return (

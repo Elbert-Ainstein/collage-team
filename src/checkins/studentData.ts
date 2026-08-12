@@ -159,9 +159,24 @@ export function statusOf(r: CheckInResult | null, stage: number): AssignmentStat
   }
 }
 
+/**
+ * Whether a completion mark came back as Complete. Only meaningful on a result
+ * that carries `is_ci`.
+ *
+ * The default is the whole reason this is a function. Every row released before
+ * 0024 has no ci_met at all, and all of them were Complete — "Not complete" did
+ * not exist to record. Deciding that once, here, is deliberate: spelled inline
+ * on each screen it would eventually be spelled differently on one of them, and
+ * two screens disagreeing about whether a student passed is the failure this
+ * exists to prevent.
+ */
+export function isCompletionMet(r: Pick<CheckInResult, "ci_met">): boolean {
+  return r.ci_met ?? true;
+}
+
 function gradeOf(r: CheckInResult | null, ci: CheckIn | null): string {
   if (!r || r.status !== "scored") return "—";
-  if (r.is_ci) return "Complete";
+  if (r.is_ci) return isCompletionMet(r) ? "Complete" : "Not complete";
   if (r.score == null) return "—";
   return ci?.max_points ? `${r.score} / ${ci.max_points}` : String(r.score);
 }

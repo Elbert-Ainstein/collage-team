@@ -15,6 +15,7 @@ import {
   clearSubmission,
   getSubmissionFile,
   listSubmissionPages,
+  MAX_BYTES,
   setQuestionPages,
   submissionUrl,
   uploadSubmissionPdf,
@@ -141,6 +142,16 @@ export function PdfSubmit({
     if (!chosen || !resultId) return;
     if (chosen.type !== "application/pdf" && !/\.pdf$/i.test(chosen.name)) {
       setError(`“${chosen.name}” isn't a PDF. Export or print your work to PDF and try again.`);
+      return;
+    }
+    // Refused before the bytes move. The bucket rejects it too, but only after a
+    // room's worth of wifi has carried the whole scan and thrown it away.
+    if (chosen.size > MAX_BYTES) {
+      setError(
+        `“${chosen.name}” is ${Math.round(chosen.size / (1024 * 1024))} MB, over the ` +
+          `${MAX_BYTES / (1024 * 1024)} MB limit. Scanning in black and white, or at a lower ` +
+          "resolution, usually brings a scan well under it.",
+      );
       return;
     }
     setBusy("uploading");

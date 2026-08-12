@@ -14,6 +14,8 @@ import { put, remove, signedUrl } from "./storage";
 const BUCKET = "submissions";
 /** Long enough to read a scan without re-fetching, short enough that a copied link dies. */
 const SIGNED_URL_SECONDS = 60 * 60;
+/** 50 MB — the submissions bucket's file_size_limit in 0015. Change both together. */
+export const MAX_BYTES = 50 * 1024 * 1024;
 
 export interface SubmissionFile {
   id: string;

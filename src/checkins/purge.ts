@@ -84,7 +84,14 @@ export async function deleteActivityResources(activityId: string): Promise<numbe
   return removeAll("resources", rows.map((r) => r.path));
 }
 
-/** Every team photo belonging to a team — for when a team or its set is removed. */
+/**
+ * Every team photo belonging to a team — for when a team or its set is removed.
+ *
+ * Every ACTIVITY's, deliberately: team_resources cascades from teams, so the
+ * rows go whatever week they were filed under, and a sweep narrowed to the
+ * activity on screen would strand the rest. Whatever warns before calling this
+ * has to count the same way, or it promises less than it takes.
+ */
 export async function deleteTeamResourceObjects(teamIds: string[]): Promise<number> {
   if (!teamIds.length) return 0;
   const rows = await selectAllIn<{ path: string }>(teamIds, (chunk, from, to) =>
@@ -93,6 +100,40 @@ export async function deleteTeamResourceObjects(teamIds: string[]): Promise<numb
   if (!rows.length) return 0;
 
   return removeAll("resources", rows.map((r) => r.path));
+}
+
+/**
+ * Everything a team's own result rows point at: its audio and any PDFs.
+ *
+ * Easy to miss, because a team looks like it only owns photos. It does not:
+ * ensureTeamResult gives the team a check_in_results row with
+ * subject_type='team' for the Recorder to hang takes on, teams cascades into
+ * that row, and recordings cascades out of it. So deleting a team takes all
+ * three tables and leaves the audio objects behind — and 0013's
+ * can_remove_result_audio authorises by joining back to the result row that has
+ * just gone, so after the delete nobody can ever remove them. Sweep first.
+ */
+export async function deleteTeamStorage(teamIds: string[]): Promise<number> {
+  if (!teamIds.length) return 0;
+  const results = await selectAllIn<{ id: string }>(teamIds, (chunk, from, to) =>
+    db().from("check_in_results").select("id")
+      .in("team_id", chunk).eq("subject_type", "team")
+      .order("id").range(from, to),
+  );
+  if (!results.length) return 0;
+  const ids = results.map((r) => r.id);
+
+  const audio = await selectAllIn<{ path: string }>(ids, (chunk, from, to) =>
+    db().from("recordings").select("path").in("result_id", chunk).order("id").range(from, to),
+  );
+  const pdfs = await selectAllIn<{ path: string }>(ids, (chunk, from, to) =>
+    db().from("submission_files").select("path").in("result_id", chunk).order("id").range(from, to),
+  );
+
+  let n = 0;
+  n += await removeAll("recordings", audio.map((r) => r.path));
+  n += await removeAll("submissions", pdfs.map((r) => r.path));
+  return n;
 }
 
 /**

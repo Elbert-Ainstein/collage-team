@@ -186,15 +186,15 @@ export function FacultyApp({
     try {
       const isOwner = mode === "owner";
 
-      // Re-read the course row on every refresh. It used to come only from the
-      // `courses` array, which loadCourses fills once at mount — so every write
-      // to the courses table (the live week, both TF permission switches) landed
-      // in the database and then appeared to do nothing until a full reload.
-      // Deliberately NOT written back into `courses` state: that array is what
-      // refresh depends on, and updating it here would re-trigger this effect
-      // in a loop. The switcher only needs the code, which does not change.
-      const course = (await listCourses()).find((c) => c.id === courseId) ?? known;
-      const [roster, activities, weeks, sets, tfs] = await Promise.all([
+      const [allCourses, roster, activities, weeks, sets, tfs] = await Promise.all([
+        // Re-read the course row on every refresh. It used to come only from the
+        // `courses` array, which loadCourses fills once at mount — so every write
+        // to the courses table (the live week, both TF permission switches) landed
+        // in the database and then appeared to do nothing until a full reload.
+        // Deliberately NOT written back into `courses` state: that array is what
+        // refresh depends on, and updating it here would re-trigger this effect
+        // in a loop. The switcher only needs the code, which does not change.
+        listCourses(),
         listStudents(courseId),
         listActivities(courseId),
         listWeeks(courseId),
@@ -203,21 +203,32 @@ export function FacultyApp({
         // back as just them and read like the roster had been emptied.
         isOwner ? listTFs(courseId) : Promise.resolve([] as CourseTF[]),
       ]);
-      const checkIns = activities.length ? await listCheckIns(activities.map((a) => a.id)) : [];
-      const results = checkIns.length ? await listResults(checkIns.map((c) => c.id)) : [];
-      // Loaded here rather than per screen: the activity page prints what an
-      // activity is out of, and so does the gradebook, and those two numbers
-      // disagreeing is the failure this whole module is written to avoid.
-      const questions = activities.length
-        ? await listQuestionsFor(activities.map((a) => a.id))
-        : [];
+      const course = allCourses.find((c) => c.id === courseId) ?? known;
 
       // The gradebook needs ONE set of teams. Our team sets are per-activity, so
       // prefer a course-wide set and fall back to the most recent — the design
       // assumes a single stable roster of teams and this is the closest honest
       // reading of it.
       const set = sets.find((s) => s.activity_id == null) ?? sets[sets.length - 1] ?? null;
-      const teams = set ? await listTeams(set.id, roster) : [];
+
+      // Only results genuinely waits on check-ins, so that pair stays chained
+      // inside its own branch; questions and teams need nothing the first wave
+      // did not already return. These used to run one after another, four round
+      // trips deep, and every write in the app paid for all four.
+      const [[checkIns, results], questions, teams] = await Promise.all([
+        (async (): Promise<[CheckIn[], CheckInResult[]]> => {
+          const cs = activities.length ? await listCheckIns(activities.map((a) => a.id)) : [];
+          const rs = cs.length ? await listResults(cs.map((c) => c.id)) : [];
+          return [cs, rs];
+        })(),
+        // Loaded here rather than per screen: the activity page prints what an
+        // activity is out of, and so does the gradebook, and those two numbers
+        // disagreeing is the failure this whole module is written to avoid.
+        activities.length
+          ? listQuestionsFor(activities.map((a) => a.id))
+          : Promise.resolve([] as ActivityQuestion[]),
+        set ? listTeams(set.id, roster) : Promise.resolve([] as TeamWithMembers[]),
+      ]);
 
       const stats = new Map<string, ActivityStat>();
       for (const a of activities) {

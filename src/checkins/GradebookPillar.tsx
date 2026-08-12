@@ -10,6 +10,7 @@ import {
   saveResult,
 } from "./data";
 import { Icon } from "./icons";
+import { isCompletionMet } from "./studentData";
 import type {
   Activity,
   CheckIn,
@@ -37,6 +38,7 @@ const LEGEND: readonly { g: string; label: string; color: string; bg: string }[]
   { g: "4", label: "scored", color: "var(--ink)", bg: "transparent" },
   { g: "·", label: "excused / absent", color: "var(--ink3)", bg: "transparent" },
   { g: "✓", label: "team submitted + scored", color: "var(--green)", bg: "var(--greenBg)" },
+  { g: "✗", label: "marked not complete", color: "var(--amber)", bg: "var(--amberBg)" },
   { g: "··", label: "team not submitted", color: "var(--ink3)", bg: "transparent" },
   { g: "●", label: "team discussing (pulsing)", color: "var(--amber)", bg: "var(--amberBg)" },
 ];
@@ -111,15 +113,22 @@ function cellVM(c: CheckIn, r: CheckInResult | undefined, isTeamRow: boolean): C
     pulse = true;
     title = `Team discussion in progress · ${round}`;
   } else if (status === "scored") {
-    if (r?.is_ci) {
+    const notComplete = r != null && r.is_ci && !isCompletionMet(r);
+    if (notComplete) {
+      glyph = "✗";
+    } else if (r?.is_ci) {
       glyph = "✓";
     } else {
       num = r?.score != null ? String(r.score) : "";
       glyph = isTeamRow || !num ? "✓" : "";
     }
-    color = "var(--ink)";
-    if (isTeamRow) bg = "var(--greenBg)";
-    title = `Scored · ${round}`;
+    // A ✗ carries its own colour past this point. The three lines below are the
+    // look of a mark that went well — ink, and green behind a team row — and a
+    // completion that was not met wearing them is how it read as Complete.
+    color = notComplete ? "var(--amber)" : "var(--ink)";
+    if (notComplete) bg = "var(--amberBg)";
+    else if (isTeamRow) bg = "var(--greenBg)";
+    title = notComplete ? `Not complete · ${round}` : `Scored · ${round}`;
   }
   const glyphColor = glyph === "" ? "transparent" : color;
   return { glyph, num, color, bg, glyphColor, pulse, title };

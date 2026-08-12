@@ -16,6 +16,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
+  AUDIO_BITS_PER_SECOND,
   deleteRecording,
   keepRecording,
   listRecordings,
@@ -315,11 +316,13 @@ export function Recorder({
 
     let rec: MediaRecorder;
     try {
-      // No bitrate, no container: the browser picks, and what it picks is the
-      // best it can do. A discussion is several people at different distances
-      // from one laptop mic, and the quiet one is exactly who gets lost first
-      // when this is turned down. Storage is the cheaper thing to spend.
-      rec = new MediaRecorder(stream);
+      // The container is still the browser's to pick; the bitrate is not. Left
+      // alone Chrome records at around 128 kbps, and the 50 MB the upload will
+      // accept is then about 52 minutes — which a team recording a full session
+      // hits with the discussion already over and nothing to re-record. See
+      // AUDIO_BITS_PER_SECOND in @/checkins/audio for what 32 kbps buys and what
+      // it costs; the limit students are shown is computed from the same number.
+      rec = new MediaRecorder(stream, { audioBitsPerSecond: AUDIO_BITS_PER_SECOND });
     } catch (e) {
       releaseStream(stream);
       setPhase("idle");
