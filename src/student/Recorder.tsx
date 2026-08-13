@@ -183,8 +183,9 @@ export function Recorder({
 
   // On unmount the microphone is released immediately, but the take is KEPT.
   // The handlers stay attached so `onstop` still fires and hands the finished
-  // blob to `unsaved`; nulling them was throwing away everything captured so
-  // far, and one click on a sidebar item was enough to do it.
+  // blob to `save`; nulling them, or bailing out of `onstop` before the blob is
+  // built, was throwing away everything captured so far, and one click on a
+  // sidebar item was enough to do it.
   useEffect(() => {
     liveRef.current = true;
     return () => {
@@ -344,9 +345,13 @@ export function Recorder({
       releaseStream(streamRef.current);
       streamRef.current = null;
       recorderRef.current = null;
-      if (!liveRef.current) return;
+      // Built before the liveRef check, because an unmount stops the recorder
+      // too and that take is the one the copy above promises to keep. `chunks`
+      // is complete by now — onstop only fires after the last ondataavailable —
+      // so releasing the stream first costs nothing.
       const blob = new Blob(chunks, { type: rec.mimeType || "audio/webm" });
       if (blob.size === 0) {
+        if (!liveRef.current) return;
         setPhase("idle");
         setRecordError(
           "That take came back with no audio at all — the microphone was muted, or the " +
@@ -354,6 +359,9 @@ export function Recorder({
         );
         return;
       }
+      // Same path either way: save() stores the take if the upload lands, and
+      // stashes it in `unsaved` if it does not. Both survive the card going
+      // away, which returning to it is enough to find.
       void save(blob, Date.now() - startedAtRef.current);
     };
 

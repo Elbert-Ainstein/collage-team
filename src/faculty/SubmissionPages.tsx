@@ -13,6 +13,7 @@
 // PdfSubmit uses on the student side.
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { PDFDocumentProxy } from "pdfjs-dist";
 import {
   getSubmissionFile,
   listSubmissionPages,
@@ -22,34 +23,62 @@ import {
 import { FIcon } from "./icons";
 
 interface Loaded {
-  /** Rendered pages, 1-based: images[0] is page 1. */
-  images: string[];
+  /** Rendered pages, 1-based: images[0] is page 1. Null until that page has been rasterised. */
+  images: (string | null)[];
   pageCount: number;
 }
 
-/** Render every page once, at grading width. Sequential: a 40-page scan at once stalls the tab. */
-async function renderAll(url: string): Promise<Loaded> {
+/**
+ * How many students' rendered scans to keep.
+ *
+ * Stepping back to the student before this one is an ordinary move — a marker
+ * second-guessing a mark — and it should not re-pay a download and a full
+ * rasterise. But these are full-width JPEGs, a few hundred KB a page, so a
+ * section of 40-page scans held forever would run the tab out of memory by the
+ * end of a grading session. Four is as far back as anyone steps.
+ */
+const KEEP = 4;
+
+async function openPdf(url: string): Promise<PDFDocumentProxy> {
   const pdfjs = await import("pdfjs-dist");
   pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+  return pdfjs.getDocument({ url }).promise;
+}
 
-  const doc = await pdfjs.getDocument({ url }).promise;
-  const images: string[] = [];
-  for (let n = 1; n <= doc.numPages; n++) {
-    const page = await doc.getPage(n);
-    const base = page.getViewport({ scale: 1 });
-    // Wide enough to read handwriting; the pane scales it down to fit.
-    const viewport = page.getViewport({ scale: 1100 / base.width });
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.ceil(viewport.width);
-    canvas.height = Math.ceil(viewport.height);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) break;
-    await page.render({ canvasContext: ctx, viewport }).promise;
-    images.push(canvas.toDataURL("image/jpeg", 0.82));
-  }
-  const pageCount = doc.numPages;
-  await doc.destroy();
-  return { images, pageCount };
+/**
+ * One page, at grading width, as an object URL.
+ *
+ * toBlob rather than toDataURL: toDataURL encodes the JPEG synchronously on the
+ * main thread, so rendering a scan froze paint and the arrow keys with it, and
+ * every one of those base64 strings then sat on the JS heap for as long as the
+ * page was held. The URLs this mints are owned by the cache, which revokes them
+ * on eviction and on unmount — nothing else may drop one on the floor.
+ */
+async function rasterise(doc: PDFDocumentProxy, n: number): Promise<string> {
+  const page = await doc.getPage(n);
+  const base = page.getViewport({ scale: 1 });
+  // Wide enough to read handwriting; the pane scales it down to fit.
+  const viewport = page.getViewport({ scale: 1100 / base.width });
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.ceil(viewport.width);
+  canvas.height = Math.ceil(viewport.height);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("This browser would not give the page a canvas to draw on.");
+  await page.render({ canvasContext: ctx, viewport }).promise;
+  return new Promise<string>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (blob) resolve(URL.createObjectURL(blob));
+        else reject(new Error("That page could not be rendered."));
+      },
+      "image/jpeg",
+      0.82,
+    );
+  });
+}
+
+function revoke(entry: Loaded): void {
+  for (const src of entry.images) if (src) URL.revokeObjectURL(src);
 }
 
 export function SubmissionPages({
@@ -71,22 +100,46 @@ export function SubmissionPages({
   /** Which of THIS question's pages is on screen. Index into `mine`, not a page number. */
   const [at, setAt] = useState(0);
   const live = useRef(true);
+  /** Bumped on every load. A load whose id is no longer the current one writes nothing. */
+  const loadId = useRef(0);
+  /** Rendered scans, keyed by submission file id, least recently used first. */
+  const cache = useRef(new Map<string, Loaded>());
+  /** Read inside load without re-running it — stepping question must not reload the PDF. */
+  const marking = useRef(questionId);
+
+  useEffect(() => {
+    marking.current = questionId;
+  }, [questionId]);
 
   useEffect(() => {
     live.current = true;
+    const held = cache.current;
     return () => {
       live.current = false;
+      for (const entry of held.values()) revoke(entry);
+      held.clear();
     };
   }, []);
 
   const load = useCallback(async () => {
+    // Two loads are in flight whenever the marker steps to the next student
+    // before this one has finished rasterising, and both write to the same
+    // state. `live` only answers "is this component still mounted" — it cannot
+    // tell the stale load from the current one, and nothing remounts this
+    // between students. Without a per-load token the slower load repaints its
+    // images and its page map under the newer student's name, and every rubric
+    // click after that lands on the wrong row.
+    const id = ++loadId.current;
+    const current = () => live.current && loadId.current === id;
+    let ready = false;
+
     setState("loading");
     setMessage(null);
-    setLoaded(null);
     try {
       const file = await getSubmissionFile(resultId);
-      if (!live.current) return;
+      if (!current()) return;
       if (!file) {
+        setLoaded(null);
         setState("none");
         return;
       }
@@ -94,15 +147,76 @@ export function SubmissionPages({
         listSubmissionPages(resultId),
         submissionUrl(file.path),
       ]);
-      if (!live.current) return;
+      if (!current()) return;
+
+      // Keyed on the file, not the result: replacing a submission writes a new
+      // file row, so a re-uploaded scan misses the cache instead of showing the
+      // pages of the PDF it replaced.
+      const key = file.id;
+
+      const keep = (entry: Loaded) => {
+        cache.current.delete(key);
+        cache.current.set(key, entry);
+        for (const [old, held] of cache.current) {
+          if (cache.current.size <= KEEP) break;
+          if (old === key) continue;
+          revoke(held);
+          cache.current.delete(old);
+        }
+      };
+      const publish = (entry: Loaded) => {
+        // A fresh object every time: `images` is filled in place as pages land,
+        // so React would otherwise be handed the same reference and skip it.
+        setLoaded({ images: entry.images.slice(), pageCount: entry.pageCount });
+        setState("ready");
+        ready = true;
+      };
+
       setPages(rows);
       setFileUrl(url);
-      const rendered = await renderAll(url);
-      if (!live.current) return;
-      setLoaded(rendered);
-      setState("ready");
+
+      // The page the marker is about to be shown, rendered ahead of the rest so
+      // they can start reading while the others fill in behind it.
+      const wanted =
+        rows
+          .filter((p) => p.question_id === marking.current)
+          .map((p) => p.page)
+          .sort((a, b) => a - b)[0] ?? 1;
+
+      const cached = cache.current.get(key);
+      if (cached) {
+        keep(cached);
+        if (cached.images[wanted - 1]) publish(cached);
+        if (cached.images.every((src) => src !== null)) return;
+      }
+
+      const doc = await openPdf(url);
+      try {
+        if (!current()) return;
+        const entry = cached ?? {
+          images: new Array<string | null>(doc.numPages).fill(null),
+          pageCount: doc.numPages,
+        };
+        if (!cached) keep(entry);
+
+        for (const n of [wanted, ...entry.images.map((_, i) => i + 1)]) {
+          if (n < 1 || n > entry.pageCount || entry.images[n - 1]) continue;
+          const src = await rasterise(doc, n);
+          // Into the cache even when this load is stale: the page belongs to
+          // this student either way, and the cache is what revokes its URL.
+          entry.images[n - 1] = src;
+          if (!current()) return;
+          publish(entry);
+        }
+      } finally {
+        await doc.destroy();
+      }
     } catch (e) {
-      if (!live.current) return;
+      if (!current()) return;
+      // Failing part-way through the fill leaves the remaining pages blank
+      // rather than pulling a pane the marker is already reading out from under
+      // them; the whole-PDF link in the bar still works.
+      if (ready) return;
       setMessage(e instanceof Error ? e.message : "That submission could not be opened.");
       setState("error");
     }
@@ -233,8 +347,16 @@ export function SubmissionPages({
       </div>
 
       <div className="fv-pagewrap">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={src} alt={`Page ${page} of the submission`} className="fv-page" />
+        {src ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={src} alt={`Page ${page} of the submission`} className="fv-page" />
+        ) : (
+          // Reachable only by stepping ahead of the fill, which is chasing this
+          // page already — the pane opens on the first page of this question.
+          <div className="fv-sub" style={{ padding: 26 }}>
+            Rendering page {page}…
+          </div>
+        )}
       </div>
     </div>
   );

@@ -267,7 +267,7 @@ export interface ActivityQuestion {
   activity_id: string;
   /** "1", "2", "2a" — a sub-question is a naming convention, not a second table. */
   label: string;
-  /** Ordering, and the question_index a submission mark records against. */
+  /** Ordering. Renumbered on every add and delete, so nothing may key off it. */
   position: number;
   created_at: string;
 }
@@ -299,7 +299,19 @@ export interface RubricItem {
 export interface SubmissionMark {
   id: string;
   result_id: string;
+  /**
+   * The question's POSITION when the mark was made. Kept written, but never
+   * key off it: positions are renumbered every time a question is added or
+   * deleted, so an index points at whichever question later inherited it.
+   */
   question_index: number;
+  /**
+   * Which question this is a mark on (0026). Null for a mark on an activity
+   * with no activity_questions rows — the grading screen synthesises questions
+   * for those, and a synthesised one has no row to point at — and for a mark
+   * 0026's backfill could not place.
+   */
+  question_id: string | null;
   rubric_item_id: string;
   created_at: string;
 }

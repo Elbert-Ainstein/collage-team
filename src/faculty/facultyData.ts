@@ -231,8 +231,10 @@ export async function ensureQuestions(
  * Add a question, or a sub-question of one.
  *
  * `after` places it: a sub-question goes directly under its parent rather than
- * at the end, and everything below shifts down. Position is what
- * submission_marks records against, so this renumbers rather than leaving gaps.
+ * at the end, and everything below shifts down, so this renumbers rather than
+ * leaving gaps. Marks survive that because 0026 keys them to the question's id;
+ * while they were keyed to the position, adding a question mid-grading moved
+ * every mark below it onto its neighbour.
  */
 export async function addQuestion(
   activityId: string,
@@ -280,6 +282,11 @@ export async function updateQuestion(id: string, patch: { label?: string }): Pro
  * would show them under a heading nobody can reach. Deleting a criterion
  * cascades its marks, which re-scores the submissions it was taken from — the
  * caller counts that first.
+ *
+ * Any mark left on this question — one picked from the shared ladder, which no
+ * criterion delete reaches — goes with the question row itself, by 0026's
+ * cascade. That delete fires the rescore trigger, so the points come back
+ * rather than staying deducted for a question nobody can see.
  */
 export async function deleteQuestion(
   activityId: string,
@@ -705,7 +712,71 @@ export async function listMarks(resultIds: string[]): Promise<SubmissionMark[]> 
 }
 
 /**
+ * True when a write failed only because 0026 has not been run here.
+ *
+ * Keying marks by question is a fix, not a feature: a project still on 0025
+ * has to keep grading — by position, with the shifting 0026 exists to stop —
+ * rather than have every pick throw. Anything else is a real error.
+ */
+function needs0026(e: unknown): boolean {
+  // Narrow on purpose: the column being MISSING is the only thing worth
+  // retrying. A foreign key or duplicate that happens to name the column is a
+  // real failure, and swallowing it would write the mark without its question.
+  const m = String((e as Error)?.message ?? e);
+  return /question_id/.test(m) && /does not exist|schema cache|could not find/i.test(m);
+}
+
+/**
+ * The row a pick on this question already has, if any.
+ *
+ * Two lookups, because a mark can be older than the question's id. 0026
+ * backfilled what it could, but a submission graded while its activity had NO
+ * question rows was marked against a question the grading screen synthesised —
+ * position, no id — and opening the rubric later writes those questions down
+ * for real (ensureQuestions). Adopting that row instead of inserting beside it
+ * is what stops one question deducting twice.
+ */
+async function markRowId(
+  resultId: string,
+  questionIndex: number,
+  questionId: string,
+): Promise<string | null> {
+  const byQuestion = unwrap(
+    await db()
+      .from("submission_marks")
+      .select("id")
+      .eq("result_id", resultId)
+      .eq("question_id", questionId)
+      .limit(1),
+  ) as { id: string }[] ?? [];
+  if (byQuestion.length) return byQuestion[0].id;
+
+  const byPosition = unwrap(
+    await db()
+      .from("submission_marks")
+      .select("id")
+      .eq("result_id", resultId)
+      .is("question_id", null)
+      .eq("question_index", questionIndex)
+      .limit(1),
+  ) as { id: string }[] ?? [];
+  return byPosition.length ? byPosition[0].id : null;
+}
+
+/**
  * Pick a ladder row for one question of one submission.
+ *
+ * Keyed on the question's IDENTITY, because its POSITION moves: renumber()
+ * above rewrites every position on an add or a delete, so a mark addressed by
+ * index ends up under whichever question inherited that slot — deducting from a
+ * question nobody marked, and invisible on the screen that made it.
+ * question_index is still written so the two agree and so 0026's fallback stays
+ * usable.
+ *
+ * `questionId` is null only where there is no question row to point at: the
+ * grading screen synthesises questions for an activity that has none, and those
+ * fall back to the index. That is safe for exactly the reason the index is not
+ * safe elsewhere — an activity with no question rows has nothing to renumber.
  *
  * The score is NOT written here — a trigger recomputes it from every mark on
  * the row (0007). One writer, so the score cannot disagree with the marks.
@@ -714,7 +785,35 @@ export async function setMark(
   resultId: string,
   questionIndex: number,
   rubricItemId: string,
+  questionId: string | null = null,
 ): Promise<void> {
+  if (questionId) {
+    try {
+      const existing = await markRowId(resultId, questionIndex, questionId);
+      const { error } = existing
+        ? await db()
+            .from("submission_marks")
+            // question_id written on the way past: the row may be one that was
+            // keyed by position alone, and this is where it stops being.
+            .update({
+              rubric_item_id: rubricItemId,
+              question_id: questionId,
+              question_index: questionIndex,
+            })
+            .eq("id", existing)
+        : await db().from("submission_marks").insert({
+            result_id: resultId,
+            question_index: questionIndex,
+            question_id: questionId,
+            rubric_item_id: rubricItemId,
+          });
+      if (error) throw dbError(error);
+      return;
+    } catch (e) {
+      if (!needs0026(e)) throw e;
+    }
+  }
+
   const existing = unwrap(
     await db()
       .from("submission_marks")
@@ -732,7 +831,36 @@ export async function setMark(
   if (error) throw dbError(error);
 }
 
-export async function clearMark(resultId: string, questionIndex: number): Promise<void> {
+export async function clearMark(
+  resultId: string,
+  questionIndex: number,
+  questionId: string | null = null,
+): Promise<void> {
+  if (questionId) {
+    const { error } = await db()
+      .from("submission_marks")
+      .delete()
+      .eq("result_id", resultId)
+      .eq("question_id", questionId);
+    if (error && !needs0026(error)) throw dbError(error);
+
+    if (!error) {
+      // And any row still keyed by position alone — the one markRowId adopts.
+      // Left behind, it would go on deducting from a question the grader has
+      // just cleared, with no tick anywhere to explain the missing points.
+      const { error: e2 } = await db()
+        .from("submission_marks")
+        .delete()
+        .eq("result_id", resultId)
+        .is("question_id", null)
+        .eq("question_index", questionIndex);
+      if (e2) throw dbError(e2);
+      return;
+    }
+  }
+
+  // By index: the synthesised-question case, and every mark on a database that
+  // has not had 0026 run, where there is no other key to delete by.
   const { error } = await db()
     .from("submission_marks")
     .delete()

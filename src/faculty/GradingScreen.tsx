@@ -18,6 +18,7 @@ import {
   type ActivityQuestion,
   type CheckInResult,
   type RubricItem,
+  type SubmissionMark,
 } from "@/checkins/types";
 import {
   addRubricItem,
@@ -49,6 +50,40 @@ function stamp(iso: string | null): string {
 
 const pts = (n: number) => `${n} ${n === 1 ? "pt" : "pts"}`;
 
+/**
+ * An activity with no question rows still has to be gradeable, so `questions`
+ * below invents one per legacy question_count. They exist only in this screen:
+ * there is no row behind them and so no id anything can be stored against.
+ */
+const isSynthetic = (q: ActivityQuestion) => q.id.startsWith("synthetic-");
+
+/**
+ * Where a mark is filed on this screen.
+ *
+ * The question's own id, because a position MOVES: adding or deleting a
+ * question renumbers every one below it, and a mark filed by position ends up
+ * under whichever question inherits the slot — deducting from a question that
+ * was never marked, and often not even visible, since the criteria are filtered
+ * by the question's label. `#n` is only for the synthesised questions, which
+ * belong to an activity that has no questions to renumber.
+ */
+const keyOf = (q: ActivityQuestion) => (isSynthetic(q) ? `#${q.position}` : q.id);
+
+const markKey = (m: SubmissionMark) => m.question_id ?? `#${m.question_index}`;
+
+/**
+ * The row picked for one question, if any.
+ *
+ * Falls back to the position for a real question because a mark written before
+ * 0026 carries no question_id — on a database where that migration has not been
+ * run yet, this is the only thing that finds it, and grading has to keep
+ * working there.
+ */
+function pickOf(picks: Map<string, string>, q: ActivityQuestion | undefined): string | null {
+  if (!q) return null;
+  return picks.get(keyOf(q)) ?? (isSynthetic(q) ? null : picks.get(`#${q.position}`)) ?? null;
+}
+
 /** One person or team to be graded, with the result row that holds their work. */
 interface Subject {
   id: string;
@@ -75,7 +110,10 @@ export function GradingScreen({
 }) {
   const scope = SCOPE_OF[activity.type];
   const stat = data.stats.get(activity.id);
-  /** Which question is being marked — its POSITION, which is what a mark records. */
+  /**
+   * Which question is being marked — an index into `questions` below, and only
+   * that. What a mark is FILED under is the question itself; see keyOf.
+   */
   const [qIdx, setQIdx] = useState(0);
   // Questions are rows (0014), in the order the rubric puts them. An activity
   // that has none yet still grades the old way — N questions of equal value —
@@ -96,8 +134,8 @@ export function GradingScreen({
   const question = questions[Math.min(qIdx, qCount - 1)] ?? questions[0];
 
   const [ladder, setLadder] = useState<RubricItem[] | null>(null);
-  // resultId -> questionIndex -> rubric_item_id
-  const [marks, setMarks] = useState<Map<string, Map<number, string>>>(new Map());
+  // resultId -> markKey -> rubric_item_id
+  const [marks, setMarks] = useState<Map<string, Map<string, string>>>(new Map());
   const [stIdx, setStIdx] = useState(0);
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [note, setNote] = useState("");
@@ -166,10 +204,10 @@ export function GradingScreen({
     const ids = subjects.map((s) => s.result.id);
     if (!ids.length) return;
     const rows = await listMarks(ids);
-    const next = new Map<string, Map<number, string>>();
+    const next = new Map<string, Map<string, string>>();
     for (const m of rows) {
-      const inner = next.get(m.result_id) ?? new Map<number, string>();
-      inner.set(m.question_index, m.rubric_item_id);
+      const inner = next.get(m.result_id) ?? new Map<string, string>();
+      inner.set(markKey(m), m.rubric_item_id);
       next.set(m.result_id, inner);
     }
     setMarks(next);
@@ -199,8 +237,10 @@ export function GradingScreen({
     return () => window.removeEventListener("keydown", onKey);
   }, [qCount]);
 
-  const picks = subject ? (marks.get(subject.result.id) ?? new Map<number, string>()) : new Map();
-  const pickedId = picks.get(qIdx) ?? null;
+  const picks: Map<string, string> = subject
+    ? (marks.get(subject.result.id) ?? new Map<string, string>())
+    : new Map<string, string>();
+  const pickedId = pickOf(picks, question);
 
   /**
    * The lines that may be picked for the question on screen.
@@ -233,25 +273,35 @@ export function GradingScreen({
   // question left Release permanently disabled with no control anywhere that
   // could enable it. Completion is the instructor's judgement, not a sum.
   const forCompletion = isCompletion(activity);
-  const answeredAll = subject != null && (forCompletion || picks.size >= qCount);
+  // Counted question by question, not by how many marks the row carries. A mark
+  // left behind by a question deleted before 0026 still sits on the submission,
+  // and counting rows let Release light up — and a grade go out — with a
+  // question nobody had marked.
+  const answered = questions.reduce((n, q) => (pickOf(picks, q) ? n + 1 : n), 0);
+  const answeredAll = subject != null && (forCompletion || answered >= qCount);
 
   async function pick(item: RubricItem) {
-    if (!subject) return;
+    if (!subject || !question) return;
     setEditIdx(null);
     const already = pickedId === item.id;
+    const key = keyOf(question);
+    const qid = isSynthetic(question) ? null : question.id;
     // Optimistic: the ladder is the fastest thing on this screen and waiting on
     // a round-trip to show a checkmark makes grading feel broken.
     setMarks((prev) => {
       const next = new Map(prev);
       const inner = new Map(next.get(subject.result.id) ?? []);
-      if (already) inner.delete(qIdx);
-      else inner.set(qIdx, item.id);
+      // Both keys, because a mark written before 0026 is filed by position:
+      // leaving that entry behind would keep the tick on a line just cleared.
+      inner.delete(key);
+      inner.delete(`#${question.position}`);
+      if (!already) inner.set(key, item.id);
       next.set(subject.result.id, inner);
       return next;
     });
     try {
-      if (already) await clearMark(subject.result.id, qIdx);
-      else await setMark(subject.result.id, qIdx, item.id);
+      if (already) await clearMark(subject.result.id, question.position, qid);
+      else await setMark(subject.result.id, question.position, item.id, qid);
       onChanged();
     } catch (e) {
       onError(e);
