@@ -164,6 +164,48 @@ export function FacultyApp({
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [courseId, setCourseId] = useState<string | null>(null);
+
+  // Where you were, kept across a reload.
+  //
+  // Same arrangement as the student app: sessionStorage, because this is "I
+  // refreshed" memory rather than a preference. Per-tab, and gone when the tab
+  // closes, so opening the app tomorrow starts at the week list rather than
+  // halfway through marking an activity from last term.
+  //
+  // Restored after the first render, never as useState's initial value: this
+  // component server-renders, and reading a browser-only store during render
+  // makes the server and client markup disagree.
+  const restored = useRef(false);
+  useEffect(() => {
+    try {
+      const raw = window.sessionStorage.getItem("fv-where");
+      if (!raw) return;
+      const at = JSON.parse(raw) as Partial<{
+        screen: Screen;
+        selId: string | null;
+        courseId: string | null;
+      }>;
+      if (at.screen) setScreen(at.screen);
+      if (at.selId !== undefined) setSelId(at.selId);
+      if (at.courseId) setCourseId(at.courseId);
+    } catch {
+      // Unparseable or refused storage: start where the app started before any
+      // of this, which is the week list.
+    } finally {
+      restored.current = true;
+    }
+  }, []);
+
+  useEffect(() => {
+    // Not until the restore has run, or the initial "activities" overwrites the
+    // thing we are about to read back.
+    if (!restored.current) return;
+    try {
+      window.sessionStorage.setItem("fv-where", JSON.stringify({ screen, selId, courseId }));
+    } catch {
+      // A browser refusing storage just means a reload starts at the list.
+    }
+  }, [screen, selId, courseId]);
   const [data, setData] = useState<FacultyData | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -282,6 +324,11 @@ export function FacultyApp({
   // exists; we are the ones who made it.
   useEffect(() => {
     if (fresh && fresh === selId) return;
+    // Not until the restore has run either. A reload lands here with `screen`
+    // already back on "detail" and `data` still loading, and bouncing on that
+    // would undo the restore in the same tick it happened — the reload would
+    // still dump you on the list, just for a different reason.
+    if (!restored.current) return;
     if (FULL_SCREEN.includes(screen) && data && !selected) setScreen("activities");
   }, [screen, data, selected, fresh, selId]);
 
