@@ -97,8 +97,8 @@ export function SubmissionPages({
   /** The signed URL, kept so the whole PDF can be opened in its own tab. */
   const [fileUrl, setFileUrl] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  /** Which of THIS question's pages is on screen. Index into `mine`, not a page number. */
-  const [at, setAt] = useState(0);
+  /** The scrolling column, so stepping question can send it back to the top. */
+  const wrap = useRef<HTMLDivElement | null>(null);
   const live = useRef(true);
   /** Bumped on every load. A load whose id is no longer the current one writes nothing. */
   const loadId = useRef(0);
@@ -175,18 +175,19 @@ export function SubmissionPages({
       setPages(rows);
       setFileUrl(url);
 
-      // The page the marker is about to be shown, rendered ahead of the rest so
-      // they can start reading while the others fill in behind it.
-      const wanted =
-        rows
-          .filter((p) => p.question_id === marking.current)
-          .map((p) => p.page)
-          .sort((a, b) => a - b)[0] ?? 1;
+      // Every page of the answer being marked, in order, rendered ahead of the
+      // rest — the whole set is on screen at once, so rendering only the first
+      // would leave the marker scrolling into placeholders.
+      const wanted = rows
+        .filter((p) => p.question_id === marking.current)
+        .map((p) => p.page)
+        .sort((a, b) => a - b);
+      const first = wanted[0] ?? 1;
 
       const cached = cache.current.get(key);
       if (cached) {
         keep(cached);
-        if (cached.images[wanted - 1]) publish(cached);
+        if (cached.images[first - 1]) publish(cached);
         if (cached.images.every((src) => src !== null)) return;
       }
 
@@ -199,7 +200,7 @@ export function SubmissionPages({
         };
         if (!cached) keep(entry);
 
-        for (const n of [wanted, ...entry.images.map((_, i) => i + 1)]) {
+        for (const n of [...wanted, ...entry.images.map((_, i) => i + 1)]) {
           if (n < 1 || n > entry.pageCount || entry.images[n - 1]) continue;
           const src = await rasterise(doc, n);
           // Into the cache even when this load is stale: the page belongs to
@@ -233,8 +234,11 @@ export function SubmissionPages({
     .map((p) => p.page)
     .sort((a, b) => a - b);
 
+  // Question 3 starts at question 3's first page. Without this the column keeps
+  // whatever offset the last answer was read at, which on a long scan can open
+  // the next question already scrolled past it.
   useEffect(() => {
-    setAt(0);
+    if (wrap.current) wrap.current.scrollTop = 0;
   }, [questionId]);
 
   if (state === "loading") {
@@ -287,8 +291,6 @@ export function SubmissionPages({
   // would make an unmapped submission ungradeable.
   const showing = mine.length ? mine : loaded.images.map((_, i) => i + 1);
   const unmapped = mine.length === 0;
-  const page = showing[Math.min(at, showing.length - 1)] ?? 1;
-  const src = loaded.images[page - 1];
 
   return (
     <div className="fv-viewer fv-viewerdoc">
@@ -300,33 +302,8 @@ export function SubmissionPages({
                 showing.length === 1 ? "1 page" : `${showing.length} pages`
               }`}
         </span>
-        {showing.length > 1 ? (
-          <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-            <button
-              type="button"
-              className="fv-arrow"
-              disabled={at <= 0}
-              aria-label="Previous page for this question"
-              onClick={() => setAt((i) => Math.max(0, i - 1))}
-            >
-              <FIcon name="chevronLeft" size={15} />
-            </button>
-            <span className="fv-num" style={{ fontSize: "var(--fv-2xs)", color: "var(--fv-muted)" }}>
-              {at + 1} / {showing.length}
-            </span>
-            <button
-              type="button"
-              className="fv-arrow"
-              disabled={at >= showing.length - 1}
-              aria-label="Next page for this question"
-              onClick={() => setAt((i) => Math.min(showing.length - 1, i + 1))}
-            >
-              <FIcon name="chevronRight" size={15} />
-            </button>
-          </span>
-        ) : null}
         <span className="fv-num" style={{ fontSize: "var(--fv-2xs)", color: "var(--fv-muted)" }}>
-          p{page} of {loaded.pageCount}
+          {loaded.pageCount === 1 ? "1 page in all" : `${loaded.pageCount} pages in all`}
         </span>
         {/* The whole file, for when the mapped pages are not enough — a marker
             checking whether something was answered somewhere else entirely.
@@ -346,17 +323,34 @@ export function SubmissionPages({
         ) : null}
       </div>
 
-      <div className="fv-pagewrap">
-        {src ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={src} alt={`Page ${page} of the submission`} className="fv-page" />
-        ) : (
-          // Reachable only by stepping ahead of the fill, which is chasing this
-          // page already — the pane opens on the first page of this question.
-          <div className="fv-sub" style={{ padding: 26 }}>
-            Rendering page {page}…
-          </div>
-        )}
+      {/* Every page of this answer, stacked and scrolled — not one at a time
+          behind arrows. An answer that runs over three pages is READ, and a
+          marker who has to click between them cannot see the working on one
+          page beside the conclusion on the next. Stepping question re-stacks. */}
+      <div className="fv-pagewrap" ref={wrap}>
+        {showing.map((n) => {
+          const src = loaded.images[n - 1];
+          return (
+            <figure className="fv-pagefig" key={n}>
+              <figcaption className="fv-pagenum">
+                p{n} of {loaded.pageCount}
+              </figcaption>
+              {src ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={src}
+                  alt={`Page ${n} of the submission`}
+                  className="fv-page"
+                  // The whole set is in the DOM; a 40-page unmapped scan should
+                  // not decode all of it to show the top of the first page.
+                  loading="lazy"
+                />
+              ) : (
+                <div className="fv-pageskel">Rendering page {n}…</div>
+              )}
+            </figure>
+          );
+        })}
       </div>
     </div>
   );

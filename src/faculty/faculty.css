@@ -1619,14 +1619,49 @@ button.fv-steplabel:hover { color: var(--fv-navy); }
   background: var(--fv-cream-200);
   flex-wrap: wrap;
 }
+/* A column, not a slot. Every page the student marked for this question is
+   here at once and read by scrolling — stepping between them behind arrows
+   meant you could never see the working on one page beside the answer on the
+   next, which is exactly what marking a multi-page answer requires. */
 .fv-pagewrap {
   flex: 1;
   min-height: 0;
   overflow: auto;
   display: flex;
-  justify-content: center;
-  align-items: flex-start;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
   padding: 16px;
+}
+.fv-pagefig {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  width: 100%;
+}
+/* Which page of the whole document this is. It rides with the page rather than
+   sitting in the bar, because with several on screen a single number in the
+   header could only ever be right about one of them. */
+.fv-pagenum {
+  font-size: var(--fv-2xs);
+  color: var(--fv-muted);
+  font-variant-numeric: tabular-nums;
+}
+/* Holds the column's shape while a page is still rasterising, so the pages
+   below it do not jump upward as each one lands. */
+.fv-pageskel {
+  width: 100%;
+  max-width: 1100px;
+  aspect-ratio: 8.5 / 11;
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--fv-neutral-200);
+  border-radius: var(--fv-r-md);
+  background: var(--fv-cream-200);
+  color: var(--fv-muted);
+  font-size: var(--fv-2xs);
 }
 /* Width-fit, not height-fit: handwriting is read across, and a page scaled to
    fit the pane's height is unreadable on a laptop. It scrolls instead. */
