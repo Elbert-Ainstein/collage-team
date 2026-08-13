@@ -13,6 +13,17 @@ const P: Record<string, string> = {
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
   die: '<rect x="4" y="4" width="16" height="16" rx="3.5"/><circle cx="8.6" cy="8.6" r="1.2" fill="currentColor" stroke="none"/><circle cx="15.4" cy="8.6" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="8.6" cy="15.4" r="1.2" fill="currentColor" stroke="none"/><circle cx="15.4" cy="15.4" r="1.2" fill="currentColor" stroke="none"/>',
   check: '<path d="M4.5 12.5l5 5L20 6.5"/>',
+  // The sidebar toggle. A bare chevron here read as "back" — it is the same
+  // glyph every back button in the app uses, sitting in the top-left corner
+  // where a back button lives. These draw the PANEL instead, so the button
+  // names what it acts on rather than which way it points, and the filled
+  // column says which state you are in: solid when the sidebar is there,
+  // hollow when it has gone. Legible at 16px, which a chevron-inside-a-rect
+  // is not.
+  panelLeft:
+    '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M10 4.5v15"/>' +
+    '<rect x="3.5" y="4.5" width="6.5" height="15" rx="2.5" fill="currentColor" stroke="none" opacity=".35"/>',
+  panelLeftClosed: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M10 4.5v15"/>',
   chevronLeft: '<path d="M14.5 6l-6 6 6 6"/>',
   chevronRight: '<path d="M9.5 6l6 6-6 6"/>',
   moreVert:

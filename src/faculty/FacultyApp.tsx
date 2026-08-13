@@ -514,7 +514,7 @@ export function FacultyApp({
               title={railed ? "Expand the sidebar" : "Collapse the sidebar"}
               onClick={toggleRail}
             >
-              <FIcon name={railed ? "chevronRight" : "chevronLeft"} size={16} />
+              <FIcon name={railed ? "panelLeftClosed" : "panelLeft"} size={17} />
             </button>
           </div>
           {/* The course name is the way home. It reads like a masthead and people
