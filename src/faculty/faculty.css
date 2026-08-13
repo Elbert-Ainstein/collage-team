@@ -289,7 +289,33 @@
   min-height: 0;
   overflow-y: auto;
 }
+/* The masthead is a button. It has to look exactly like the heading it replaced
+   at rest — a course name that advertises itself as a control reads as clutter —
+   and say it is one on hover and on focus, which is where somebody is when they
+   are wondering whether it does anything. */
+.fv-coursehome {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  border-radius: var(--fv-r-md);
+  color: inherit;
+  cursor: pointer;
+}
+.fv-coursehome:hover .fv-coursetitle {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+.fv-coursehome:focus-visible {
+  outline: 2px solid var(--fv-navy);
+  outline-offset: 2px;
+}
 .fv-coursetitle {
+  display: block;
   font-family: var(--fv-serif);
   font-size: var(--fv-xl);
   line-height: 1.18;

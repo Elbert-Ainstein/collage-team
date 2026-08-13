@@ -10,7 +10,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteActivity, tintFor, updateActivity } from "@/checkins/data";
 import { deleteActivityRecordings } from "@/checkins/audio";
 import { purgeActivityStorage } from "@/checkins/purge";
-import { isOpenToStudents } from "@/checkins/studentData";
+import { isCompletionMet, isOpenToStudents } from "@/checkins/studentData";
 import {
   HIDDEN_INSTANT,
   isCompletion,
@@ -59,6 +59,8 @@ interface Subject {
   name: string;
   tint: string | null;
   stamp: string | null;
+  /** What they got, on the graded list. Null everywhere else. */
+  grade?: string | null;
 }
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -246,19 +248,22 @@ export function ActivityDetail(props: {
   // it, but rows written elsewhere can still carry "".
   const blurb = activity.source_text?.trim() || describe(activity);
 
-  const { submitted, missing } = useMemo(() => {
+  const { graded, submitted, missing } = useMemo(() => {
     // A `both` activity owns two check-ins; its individual half is the one the
     // stat counts, so the lists have to read the same half.
     const kind = scope === "team" ? "team" : "individual";
     const ids = new Set(
       data.checkIns.filter((c) => c.activity_id === activity.id && c.kind === kind).map((c) => c.id),
     );
+    const outOf =
+      data.checkIns.find((c) => c.activity_id === activity.id && c.kind === kind)?.max_points ??
+      pointsTotal(activity);
 
-    const stamps = new Map<string, string | null>();
+    const found = new Map<string, CheckInResult>();
     for (const r of data.results) {
       if (!ids.has(r.check_in_id) || !isIn(r)) continue;
       const subjectId = kind === "team" ? r.team_id : r.student_id;
-      if (subjectId) stamps.set(subjectId, r.submitted_at);
+      if (subjectId) found.set(subjectId, r);
     }
 
     const people: Subject[] =
@@ -266,15 +271,43 @@ export function ActivityDetail(props: {
         ? data.teams.map((t) => ({ id: t.id, name: t.name, tint: tintFor(t.name), stamp: null }))
         : data.roster.map((s) => ({ id: s.id, name: s.name, tint: s.avatar_tint, stamp: null }));
 
+    const doneList: Subject[] = [];
     const inList: Subject[] = [];
     const outList: Subject[] = [];
     for (const p of people) {
-      if (stamps.has(p.id)) inList.push({ ...p, stamp: fmtStamp(stamps.get(p.id) ?? null) });
-      else outList.push(p);
+      const r = found.get(p.id);
+      if (!r) {
+        outList.push(p);
+        continue;
+      }
+      const stamp = fmtStamp(r.submitted_at);
+      // Graded means RELEASED — status 'scored' is the same state the student's
+      // own screen reads to show them a number. So somebody on this list can see
+      // their grade, which is the only reading of "graded" that is useful to the
+      // person deciding whether they still owe the class something.
+      if (r.status === "scored") {
+        doneList.push({
+          ...p,
+          stamp,
+          grade: r.is_ci
+            ? isCompletionMet(r)
+              ? "Complete"
+              : "Not complete"
+            : outOf
+              ? `${r.score ?? 0} / ${outOf}`
+              : String(r.score ?? 0),
+        });
+      } else {
+        inList.push({ ...p, stamp });
+      }
     }
-    return { submitted: inList, missing: outList };
-  }, [data.checkIns, data.results, data.roster, data.teams, activity.id, scope]);
+    // Three lists, no overlap: a graded student is not also counted as waiting.
+    // The bar above still reads handed-in-at-all, which is a different question
+    // and the right one for it.
+    return { graded: doneList, submitted: inList, missing: outList };
+  }, [data.checkIns, data.results, data.roster, data.teams, activity, scope]);
 
+  const [gradedOpen, setGradedOpen] = useState(true);
   const [subOpen, setSubOpen] = useState(true);
   const [notOpen, setNotOpen] = useState(false);
 
@@ -479,12 +512,19 @@ export function ActivityDetail(props: {
 
       <div className={`fv-split${onTeamHalf ? " fv-teamhalf" : ""}`}>
         <div className="fv-left23" style={{ paddingRight: 4 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <span className="fv-type" style={{ width: "auto", color: accent }}>
-              {TYPE_LABEL[activity.type]}
-            </span>
-            <span className="fv-badge">{SCOPE_LABEL[scope]}</span>
-          </div>
+          {/* Hidden while editing: the Type dropdown three fields down says
+              "Combo · Individual" and is the control that CHANGES it, so the
+              eyebrow above the title is the same words twice — once where they
+              cannot be acted on. On a saved activity there is no dropdown and
+              this is the only place the type is stated, so it stays. */}
+          {editing ? null : (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <span className="fv-type" style={{ width: "auto", color: accent }}>
+                {TYPE_LABEL[activity.type]}
+              </span>
+              <span className="fv-badge">{SCOPE_LABEL[scope]}</span>
+            </div>
+          )}
 
           {/* The title IS the field. Editing does not swap the page for a form
               and does not put a box around the heading — you type where the
@@ -872,16 +912,80 @@ export function ActivityDetail(props: {
               <i style={{ width: `${pct}%`, background: "var(--fv-emerald)" }} />
             </div>
 
+            {/* Graded sits first because it is the pile that is DONE. Its count
+                is the list's own length, not stat.graded — the bar above counts
+                everyone who handed in at all, which is a different question and
+                the right one for a bar. */}
             <button
               type="button"
               className="fv-group"
               style={{ marginTop: 18 }}
+              aria-expanded={gradedOpen}
+              onClick={() => setGradedOpen((v) => !v)}
+            >
+              <span className="fv-dot" style={{ background: "var(--fv-navy)" }} />
+              <span style={{ flex: 1, textAlign: "left", fontWeight: 600 }}>Graded</span>
+              <span className="fv-sub fv-num">{graded.length}</span>
+              <span
+                className={`fv-chev${gradedOpen ? " open" : ""}`}
+                style={{ color: "var(--fv-muted)" }}
+              >
+                <FIcon name="chevronRight" size={16} />
+              </span>
+            </button>
+            {gradedOpen ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 1, paddingLeft: 2 }}>
+                {graded.length === 0 ? (
+                  <div className="fv-sub" style={{ padding: "4px 8px" }}>
+                    Nothing released yet. Marking is not the same as releasing — a grade reaches
+                    the student when you release it.
+                  </div>
+                ) : (
+                  graded.map((s) => (
+                    <div key={s.id} className="fv-person">
+                      <FAvatar name={s.name} tint={s.tint} size={22} />
+                      <span
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {s.name}
+                      </span>
+                      {/* The grade itself, because "who is done" and "what did they
+                          get" are the two things anyone opens this list to learn. */}
+                      <span
+                        className="fv-num"
+                        style={{
+                          fontSize: "var(--fv-2xs)",
+                          color: "var(--fv-navy)",
+                          fontWeight: 600,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {s.grade}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+            ) : null}
+
+            <button
+              type="button"
+              className="fv-group"
+              style={{ marginTop: 12, borderTop: "1px solid var(--fv-neutral-200)" }}
               aria-expanded={subOpen}
               onClick={() => setSubOpen((v) => !v)}
             >
               <span className="fv-dot" style={{ background: "var(--fv-emerald)" }} />
-              <span style={{ flex: 1, textAlign: "left", fontWeight: 600 }}>Submitted</span>
-              <span className="fv-sub fv-num">{stat.submitted}</span>
+              <span style={{ flex: 1, textAlign: "left", fontWeight: 600 }}>
+                Handed in, not graded
+              </span>
+              <span className="fv-sub fv-num">{submitted.length}</span>
               <span className={`fv-chev${subOpen ? " open" : ""}`} style={{ color: "var(--fv-muted)" }}>
                 <FIcon name="chevronRight" size={16} />
               </span>
@@ -890,7 +994,7 @@ export function ActivityDetail(props: {
               <div style={{ display: "flex", flexDirection: "column", gap: 1, paddingLeft: 2 }}>
                 {submitted.length === 0 ? (
                   <div className="fv-sub" style={{ padding: "4px 8px" }}>
-                    Nothing handed in yet.
+                    Nothing waiting to be graded.
                   </div>
                 ) : (
                   submitted.map((s) => (

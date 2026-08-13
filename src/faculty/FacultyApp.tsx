@@ -470,11 +470,24 @@ export function FacultyApp({
               <FIcon name={railed ? "chevronRight" : "chevronLeft"} size={16} />
             </button>
           </div>
-          <div className="fv-coursetitle">{data?.course.name ?? "Applied Physics 50"}</div>
-          <div className="fv-meta">
-            <span>{data ? `${data.roster.length} students` : "—"}</span>
-            {data?.course.term ? <span>· {data.course.term}</span> : null}
-          </div>
+          {/* The course name is the way home. It reads like a masthead and people
+              click it like one — from four screens deep in grading there was
+              otherwise no single control that meant "back to the class". */}
+          <button
+            type="button"
+            className="fv-coursehome"
+            title="Back to the class"
+            onClick={() => {
+              setScreen("activities");
+              setSelId(null);
+            }}
+          >
+            <span className="fv-coursetitle">{data?.course.name ?? "Applied Physics 50"}</span>
+            <span className="fv-meta">
+              <span>{data ? `${data.roster.length} students` : "—"}</span>
+              {data?.course.term ? <span>· {data.course.term}</span> : null}
+            </span>
+          </button>
 
           {courses.length > 1 ? (
             <div className="fv-seg" style={{ marginTop: 12 }}>
