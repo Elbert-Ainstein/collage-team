@@ -52,20 +52,71 @@ export async function put(
   return error ? { message: error.message } : null;
 }
 
+export interface RemoveOutcome {
+  /** The paths the SERVER says went. Not the ones that were asked for. */
+  deleted: string[];
+  failure: StorageFailure | null;
+}
+
 /**
- * Remove objects, in chunks.
+ * Remove objects, in chunks, and report which ones actually went.
  *
  * Chunked because a term's worth of paths in one request blows the URL, and
  * because a partial failure should stop rather than silently skip: the caller
  * is about to delete the rows that name these, and after that nothing can find
  * them again.
+ *
+ * Reporting because "no error" is not "deleted". The DELETE endpoint runs an
+ * RLS-FILTERED delete and answers 200 with the list of objects it removed — a
+ * path the policy refuses is simply absent from that list, with nothing raised
+ * anywhere. A caller that is about to delete the rows naming these objects has
+ * to read the list; reading only the error tells it the request succeeded,
+ * which was never the question.
+ */
+export async function removeReturningDeleted(
+  bucket: Bucket,
+  paths: string[],
+): Promise<RemoveOutcome> {
+  const deleted: string[] = [];
+  for (let i = 0; i < paths.length; i += 100) {
+    const { data, error } = await db().storage.from(bucket).remove(paths.slice(i, i + 100));
+    if (error) return { deleted, failure: { message: error.message } };
+    // `name` here is the whole path inside the bucket — this endpoint returns
+    // the object rows it deleted, not the leaf names that list() reports.
+    for (const object of data ?? []) deleted.push(object.name);
+  }
+  return { deleted, failure: null };
+}
+
+/**
+ * Remove objects and say only whether the request failed.
+ *
+ * Kept because every caller outside the course-clearing sweep deletes ONE path
+ * belonging to a row it is holding, and there is nothing they could do with the
+ * list that they do not already know. Anything deleting in bulk before deleting
+ * rows wants removeReturningDeleted.
  */
 export async function remove(bucket: Bucket, paths: string[]): Promise<StorageFailure | null> {
-  for (let i = 0; i < paths.length; i += 100) {
-    const { error } = await db().storage.from(bucket).remove(paths.slice(i, i + 100));
-    if (error) return { message: error.message };
+  return (await removeReturningDeleted(bucket, paths)).failure;
+}
+
+/**
+ * Is this object still in the bucket?
+ *
+ * The question a delete response cannot answer: a path missing from it was
+ * either refused or already gone, and both look identical. This asks the bucket
+ * itself, and fails CLOSED — a network drop or a 5xx reads as "still there",
+ * because the expensive mistake is deciding an object went when it did not.
+ */
+export async function stillThere(bucket: Bucket, path: string): Promise<boolean> {
+  try {
+    const { data } = await db().storage.from(bucket).exists(path);
+    return data;
+  } catch {
+    // exists() only swallows the 400/404 that means "not there". Everything
+    // else lands here, and none of it is evidence of anything.
+    return true;
   }
-  return null;
 }
 
 /** A short-lived URL for one object. Every bucket in this app is private. */

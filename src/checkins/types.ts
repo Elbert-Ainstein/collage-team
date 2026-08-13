@@ -12,6 +12,12 @@ export interface Course {
   /** Course-wide, not per person — every TF on the course gets the same. */
   tf_can_grade: boolean;
   tf_can_checkin: boolean;
+  /**
+   * When this course's uploaded media was cleared, if it ever was (0027).
+   * Optional because a database without 0027 has no column at all, and
+   * undefined reads as "not cleared", which is the truth there.
+   */
+  artifacts_cleared_at?: string | null;
   created_at: string;
 }
 

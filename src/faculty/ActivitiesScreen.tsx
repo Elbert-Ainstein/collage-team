@@ -11,6 +11,7 @@ import { createActivity, deleteActivity, updateActivity } from "@/checkins/data"
 import { deleteActivityRecordings } from "@/checkins/audio";
 import { purgeActivityStorage } from "@/checkins/purge";
 import { isOpenToStudents } from "@/checkins/studentData";
+import { ClearArtifacts } from "./ClearArtifacts";
 import { ConfirmDialog } from "./ConfirmDialog";
 import {
   addWeek,
@@ -463,6 +464,25 @@ export function ActivitiesScreen(props: {
             onOpen={onOpen}
           />
         )}
+
+        {/* Under the last week, in both views: a course's year ends here, and
+            this is the one thing you do to a course once its year has ended.
+            Absent entirely until the newest activity is months behind. */}
+        <ClearArtifacts
+          course={data.course}
+          activities={data.activities}
+          canClear={data.can.isOwner}
+          onCleared={() => void onChanged()}
+          // The rest of the course, so the manifest can name whose file each
+          // object was, the gradebook can come off the same panel, and "has
+          // this course gone quiet" can be answered from the last hand-in
+          // rather than from when somebody typed the week in.
+          roster={data.roster}
+          teams={data.teams}
+          checkIns={data.checkIns}
+          results={data.results}
+          questions={data.questions}
+        />
       </div>
 
       <div className="fv-toggle">
