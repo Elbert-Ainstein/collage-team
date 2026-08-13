@@ -677,16 +677,29 @@ export function GradingScreen({
 
           <div className="fv-card" style={{ padding: "12px 14px" }}>
             <div className="fv-eyebrow" style={{ marginBottom: 6 }}>
-              Additional comments
+              Comments
             </div>
             <textarea
               className="fv-ta"
               rows={3}
-              placeholder="Comments for this student…"
+              // Says the audience, because the audience is the whole question
+              // about a box like this — and because these were written for a
+              // year into a box no student screen read.
+              placeholder={`What you want this ${half === "team" ? "team" : "student"} to know…`}
               value={note}
               onChange={(e) => setNote(e.target.value)}
               onBlur={() => void saveNote()}
             />
+            <div
+              className="fv-sub"
+              style={{ marginTop: 6, fontSize: "var(--fv-2xs)", lineHeight: 1.5 }}
+            >
+              {/* The same gate the grade itself passes through: a note is often
+                  typed days before release and edited in between, and a
+                  half-finished judgement must not reach the person it is about
+                  ahead of the mark it explains. */}
+              Shown to {half === "team" ? "the team" : "them"} with their grade, once it is released.
+            </div>
           </div>
 
           {/* The design never draws a "done" control — it only implies one via
@@ -734,6 +747,10 @@ export function GradingScreen({
             subjects={subjects}
             forCompletion={forCompletion}
             noun={half === "team" ? "team" : "student"}
+            // The same marks the rubric card reads, so "ready" here and a lit
+            // Release button there can never disagree about one submission.
+            marks={marks}
+            questions={questions}
             onDone={onChanged}
             onError={onError}
           />
@@ -959,16 +976,23 @@ function RubricRow({
  * than throwing, so a row the database refuses does not abandon the twenty after
  * it, and the count afterwards says exactly what happened.
  */
+/** Where one submission stands, for the list that decides what may go out. */
+type Readiness = "released" | "ready" | "partial" | "none";
+
 function ReleaseMany({
   subjects,
   forCompletion,
   noun,
+  marks,
+  questions,
   onDone,
   onError,
 }: {
   subjects: Subject[];
   forCompletion: boolean;
-  noun: "student" | "team";
+  noun: string;
+  marks: Map<string, Map<string, string>>;
+  questions: ActivityQuestion[];
   onDone: () => void;
   onError: (e: unknown) => void;
 }) {
@@ -977,28 +1001,79 @@ function ReleaseMany({
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
 
-  const ungraded = useMemo(
-    () => subjects.filter((s) => s.result.status !== "scored"),
-    [subjects],
+  const qCount = questions.length;
+
+  /**
+   * How far each submission has been marked.
+   *
+   * Counted question by question through the same `pickOf` the rubric card
+   * uses, never by how many mark rows the submission carries: a mark left
+   * behind by a question deleted before 0026 still sits there, and counting
+   * rows was what let a grade go out with a question nobody had looked at.
+   *
+   * A completion activity has nothing to be part-way through — Finalise is
+   * both the mark and the release — so every unreleased row is `ready` and
+   * the button says out loud what releasing them writes.
+   */
+  const state = useMemo(() => {
+    const out = new Map<string, { at: Readiness; answered: number }>();
+    for (const s of subjects) {
+      if (s.result.status === "scored") {
+        out.set(s.result.id, { at: "released", answered: qCount });
+        continue;
+      }
+      if (forCompletion) {
+        out.set(s.result.id, { at: "ready", answered: 0 });
+        continue;
+      }
+      const picks = marks.get(s.result.id) ?? new Map<string, string>();
+      const answered = questions.reduce((n, q) => (pickOf(picks, q) ? n + 1 : n), 0);
+      out.set(s.result.id, {
+        at: answered >= qCount && qCount > 0 ? "ready" : answered > 0 ? "partial" : "none",
+        answered,
+      });
+    }
+    return out;
+  }, [subjects, marks, questions, qCount, forCompletion]);
+
+  const atOf = (id: string): Readiness => state.get(id)?.at ?? "none";
+
+  // Released rows stay tickable: re-releasing is how a corrected mark reaches a
+  // student, and locking them would make that impossible from here. What is NOT
+  // tickable is work nobody has finished marking — that is the whole point.
+  const canPick = (id: string) => {
+    const at = atOf(id);
+    return at === "ready" || at === "released";
+  };
+
+  const ready = useMemo(
+    () => subjects.filter((s) => atOf(s.result.id) === "ready"),
+    [subjects, state],
+  );
+  const unready = useMemo(
+    () => subjects.filter((s) => { const a = atOf(s.result.id); return a === "partial" || a === "none"; }),
+    [subjects, state],
   );
 
-  const toggle = (id: string) =>
+  const toggle = (id: string) => {
+    if (!canPick(id)) return;
     setPicked((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+  };
 
-  const go = async () => {
-    const rows = subjects.filter((s) => picked.has(s.result.id));
+  const release = async (rows: Subject[]) => {
     if (!rows.length) return;
     setBusy(true);
     setNote(null);
     try {
       // Completion released in bulk is always COMPLETE. "Not complete" is a
       // judgement about one person's work, and a checkbox list is the wrong
-      // place to make twenty of them at once.
+      // place to make twenty of them at once — so the button says so rather
+      // than leaving it to be discovered.
       const { released, failed } = await releaseMany(
         rows.map((r) => ({ id: r.result.id, met: true })),
         forCompletion,
@@ -1006,7 +1081,7 @@ function ReleaseMany({
       setPicked(new Set());
       setNote(
         failed.length
-          ? `Released ${released}. ${failed.length} could not be released — reload and try those again.`
+          ? `Released ${released}. ${failed.length} did not go — reload and try those again.`
           : `Released ${released}.`,
       );
       onDone();
@@ -1019,6 +1094,8 @@ function ReleaseMany({
 
   if (!subjects.length) return null;
 
+  const pickedRows = subjects.filter((s) => picked.has(s.result.id));
+
   return (
     <div className="fv-card" style={{ padding: "10px 12px" }}>
       <button
@@ -1028,46 +1105,92 @@ function ReleaseMany({
         onClick={() => setOpen((v) => !v)}
         style={{ justifyContent: "space-between" }}
       >
-        <span>Release in one go</span>
-        {/* Counts THIS list, which is only the people who handed in. "0
-            ungraded" beside "1 of 12 marked" read as a contradiction; it was
-            two different populations counted without saying so. */}
+        <span>Release grades</span>
+        {/* Counts THIS list, which is only the people who handed in. */}
         <span className="fv-sub fv-num" style={{ fontSize: "var(--fv-2xs)" }}>
-          {ungraded.length
-            ? `${ungraded.length} waiting`
-            : subjects.length === 1
-              ? "released"
-              : `all ${subjects.length} released`}
+          {ready.length
+            ? `${ready.length} ready`
+            : unready.length
+              ? `${unready.length} not marked`
+              : "all released"}
         </span>
       </button>
 
       {open ? (
         <>
-          <div style={{ display: "flex", gap: 8, margin: "10px 0 8px", flexWrap: "wrap" }}>
-            <button
-              type="button"
-              className="fv-btn outline sm"
-              disabled={busy || !ungraded.length}
-              onClick={() => setPicked(new Set(ungraded.map((s) => s.result.id)))}
+          {/* One press for the ordinary case. The number is in the label because
+              a button that releases "all" of something must say how many that
+              is before it is pressed, not after. */}
+          <button
+            type="button"
+            className="fv-btn primary sm full"
+            style={{ marginTop: 10 }}
+            disabled={busy || !ready.length}
+            onClick={() => void release(ready)}
+          >
+            {busy
+              ? "Releasing…"
+              : !ready.length
+                ? "Nothing is ready to release"
+                : forCompletion
+                  ? `Mark all ${ready.length} Complete and release`
+                  : `Release all ${ready.length} graded`}
+          </button>
+
+          {unready.length && !forCompletion ? (
+            <div
+              className="fv-sub"
+              style={{ marginTop: 6, fontSize: "var(--fv-2xs)", lineHeight: 1.5 }}
             >
-              Select all ungraded
-            </button>
-            <button
-              type="button"
-              className="fv-btn ghost sm"
-              disabled={busy || !picked.size}
-              onClick={() => setPicked(new Set())}
-            >
-              Clear
-            </button>
+              {unready.length} {unready.length === 1 ? noun : `${noun}s`} left out — their marking
+              is not finished, so there is no grade to send.
+            </div>
+          ) : null}
+
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              margin: "12px 0 4px",
+              borderTop: "1px solid var(--fv-neutral-200)",
+              paddingTop: 10,
+            }}
+          >
+            <span className="fv-eyebrow" style={{ flex: 1 }}>
+              Or pick who goes
+            </span>
+            {picked.size ? (
+              <button
+                type="button"
+                className="fv-btn ghost sm"
+                disabled={busy}
+                onClick={() => setPicked(new Set())}
+              >
+                Clear
+              </button>
+            ) : null}
           </div>
 
           <div style={{ maxHeight: 220, overflowY: "auto", margin: "0 -4px" }}>
             {subjects.map((s) => {
-              const done = s.result.status === "scored";
+              const at = atOf(s.result.id);
+              const answered = state.get(s.result.id)?.answered ?? 0;
+              const pickable = canPick(s.result.id);
+              const why =
+                at === "released"
+                  ? "released"
+                  : at === "ready"
+                    ? forCompletion
+                      ? "ready"
+                      : "marked"
+                    : at === "partial"
+                      ? `${answered} of ${qCount} marked`
+                      : "not marked";
               return (
                 <label
                   key={s.result.id}
+                  title={pickable ? undefined : "Finish marking this one before releasing it"}
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -1075,28 +1198,31 @@ function ReleaseMany({
                     padding: "5px 6px",
                     borderRadius: "var(--fv-r-md)",
                     fontSize: "var(--fv-xs)",
-                    cursor: busy ? "default" : "pointer",
-                    color: done ? "var(--fv-muted)" : "var(--fv-navy)",
+                    cursor: busy || !pickable ? "default" : "pointer",
+                    opacity: pickable ? 1 : 0.55,
+                    color: at === "released" ? "var(--fv-muted)" : "var(--fv-navy)",
                   }}
                 >
                   <input
                     type="checkbox"
                     checked={picked.has(s.result.id)}
-                    disabled={busy}
+                    disabled={busy || !pickable}
                     onChange={() => toggle(s.result.id)}
                   />
                   <FAvatar name={s.name} tint={s.tint} size={18} />
                   <span className="fv-ellip" style={{ flex: 1, minWidth: 0 }}>
                     {s.name}
                   </span>
-                  {/* Already-released rows stay tickable: re-releasing is how a
-                      corrected mark goes out, and hiding them would make that
-                      impossible from here. */}
-                  {done ? (
-                    <span className="fv-sub" style={{ fontSize: "var(--fv-2xs)" }}>
-                      released
-                    </span>
-                  ) : null}
+                  <span
+                    className="fv-sub"
+                    style={{
+                      fontSize: "var(--fv-2xs)",
+                      whiteSpace: "nowrap",
+                      color: at === "none" || at === "partial" ? "var(--fv-amber)" : undefined,
+                    }}
+                  >
+                    {why}
+                  </span>
                 </label>
               );
             })}
@@ -1104,16 +1230,16 @@ function ReleaseMany({
 
           <button
             type="button"
-            className="fv-btn primary sm full"
+            className="fv-btn outline sm full"
             style={{ marginTop: 10 }}
             disabled={busy || !picked.size}
-            onClick={() => void go()}
+            onClick={() => void release(pickedRows)}
           >
             {busy
               ? "Releasing…"
               : picked.size
                 ? `Release ${picked.size} ${picked.size === 1 ? noun : noun + "s"}`
-                : `Pick a ${noun} first`}
+                : `Tick a ${noun} first`}
           </button>
 
           {note ? (
@@ -1130,3 +1256,4 @@ function ReleaseMany({
     </div>
   );
 }
+

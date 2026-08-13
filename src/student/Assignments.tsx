@@ -22,7 +22,13 @@ import { getMyTeamMarks, type TutorialMark } from "@/checkins/tutorial";
 import { listTeamResources, resourceUrls, type TeamResource } from "@/checkins/resources";
 import { listMyQuestions } from "@/checkins/studentData";
 import type { Assignment, AssignmentStatus, Enrolment } from "@/checkins/studentData";
-import type { ActivityQuestion, ActivityType, Scope, Student } from "@/checkins/types";
+import type {
+  ActivityQuestion,
+  ActivityType,
+  CheckInResult,
+  Scope,
+  Student,
+} from "@/checkins/types";
 import { SCOPE_LABEL, SCOPE_OF, TYPE_LABEL } from "@/checkins/types";
 import { SIcon } from "./icons";
 import { Recorder } from "./Recorder";
@@ -52,6 +58,47 @@ const STATUS_BADGE: Record<AssignmentStatus, string> = {
   Discussing: "warning",
   Excused: "secondary",
 };
+
+/**
+ * What the marker wrote back, if anything, and only once it is theirs to read.
+ *
+ * Gated on `status === "scored"` — the same condition gradeOf uses to stop
+ * returning "—". A note is written while marking, often days before release and
+ * often edited in between, so showing it any earlier would put a half-finished
+ * judgement in front of the person it is about and break the rule that a grade
+ * reaches a student when it is RELEASED, not when it is typed.
+ *
+ * Faculty had been writing these into a box labelled "Comments for this
+ * student" that no student-facing screen read.
+ */
+function MarkerNote({ result }: { result: CheckInResult | null }): JSX.Element | null {
+  const note = result?.status === "scored" ? result.feedback?.trim() : null;
+  if (!note) return null;
+  return (
+    <div
+      style={{
+        marginTop: 12,
+        padding: "10px 12px",
+        borderRadius: 10,
+        background: "var(--cream-200)",
+        border: "1px solid var(--cream-500)",
+      }}
+    >
+      <Eyebrow>From your instructor</Eyebrow>
+      <p
+        style={{
+          margin: "6px 0 0",
+          fontSize: "var(--text-xs)",
+          lineHeight: 1.6,
+          // Their line breaks are theirs; a marker's note is often a short list.
+          whiteSpace: "pre-wrap",
+        }}
+      >
+        {note}
+      </p>
+    </div>
+  );
+}
 
 const GRADE_NOTE: Record<Scope, string> = {
   team: "Team mark",
@@ -662,6 +709,8 @@ function StatusCard({ a, scope }: { a: Assignment; scope: Scope }) {
             {GRADE_NOTE[scope]}
           </div>
 
+          <MarkerNote result={a.myResult} />
+
           {when ? (
             <div
               style={{
@@ -1118,6 +1167,11 @@ function AssignmentDetail({
                   <span className="sv-sub">{teamSavedLine}</span>
                 </div>
               ) : null}
+
+              {/* The team's mark is written on the team's row, so its note is a
+                  different one from the individual half's and belongs here
+                  rather than beside a grade it was not about. */}
+              <MarkerNote result={a.teamResult} />
 
               <ResourceStrip
                 activityId={act.id}
