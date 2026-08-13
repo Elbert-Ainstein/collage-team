@@ -149,7 +149,7 @@ function Heading() {
         </div>
       </div>
       <div style={{ fontSize: 13, color: "var(--ink2)", marginTop: 7 }}>
-        Weekly team-based learning check-ins.
+        Team-based learning prototype.
       </div>
     </div>
   );
