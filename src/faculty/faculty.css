@@ -264,6 +264,11 @@
   color: var(--fv-cream-100);
   font-weight: 600;
 }
+/* The sidebar's course switcher. Only here so the strip below 700px can drop
+   the margin without fighting an inline style. */
+.fv-courseswitch {
+  margin-top: 12px;
+}
 
 .fv-card {
   border: 1px solid var(--fv-neutral-200);
@@ -368,12 +373,36 @@
   color: var(--fv-amber);
   font-variant-numeric: tabular-nums;
 }
+/* What a teaching fellow is allowed to do here. A class rather than an inline
+   style object because the strip layout below 700px has to reposition it, and a
+   media query cannot reach an inline style. */
+.fv-tfnote {
+  margin: 14px 0 0;
+  padding: 9px 10px;
+  border: 1px solid var(--fv-neutral-200);
+  border-radius: var(--fv-r-md);
+  background: var(--fv-cream-100);
+  font-size: var(--fv-2xs);
+  color: var(--fv-muted);
+  line-height: 1.5;
+}
 .fv-sidefoot {
   border-top: 1px solid var(--fv-neutral-200);
   padding-top: 10px;
   display: flex;
   align-items: center;
   gap: 8px;
+}
+.fv-btn.fv-signout {
+  height: 26px;
+  padding: 0 10px;
+  font-size: var(--fv-2xs);
+}
+/* Keeps the panel's inset on the three full-screen views, where the sidebar is
+   not rendered at all. */
+.fv-gutter {
+  width: 12px;
+  flex: 0 0 12px;
 }
 .fv-email {
   flex: 1;
@@ -1396,6 +1425,81 @@
   overflow-y: auto;
 }
 
+/* The cells of the sheet. Every one of these was an inline style object, which
+   is fine until the thing being marked is held in one hand in a lecture hall —
+   no media query can reach an inline style, so none of it could grow. The
+   values here are the ones that shipped; the phone sizes are at the bottom of
+   the file. */
+.fv-tbl td.fv-ckcell {
+  padding: 6px;
+}
+.fv-ckslot {
+  border-left: 1px solid var(--fv-neutral-200);
+}
+.fv-tbl td.fv-ckabs {
+  min-width: 150px;
+}
+.fv-ckpres {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.fv-ckpick {
+  min-width: 116px;
+  height: 28px;
+  padding: 0 6px;
+}
+.fv-ckdie {
+  width: 26px;
+  height: 26px;
+  flex: none;
+}
+.fv-absent {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.fv-absentrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fv-2xs);
+  color: var(--fv-muted);
+  cursor: pointer;
+}
+.fv-absentrow.away {
+  color: var(--fv-amber);
+}
+.fv-absentrow.ro {
+  cursor: default;
+}
+.fv-scale {
+  display: flex;
+  gap: 2px;
+}
+/* Deliberately no font-family: these buttons have always rendered in the
+   browser's own button face, and inheriting the sans here would be a redesign
+   of the sheet on a laptop, which is not what this pass is. */
+.fv-scalebtn {
+  width: 24px;
+  height: 26px;
+  border: 1px solid var(--fv-neutral-200);
+  border-radius: var(--fv-r-md);
+  background: var(--fv-cream-100);
+  color: var(--fv-muted);
+  font-size: var(--fv-xs);
+  font-weight: 400;
+  cursor: pointer;
+}
+.fv-scalebtn.on {
+  background: var(--fv-navy);
+  color: var(--fv-cream-100);
+  font-weight: 600;
+}
+.fv-scalebtn:disabled {
+  cursor: default;
+}
+
 @media (max-width: 900px) {
   /* Stacked: the picker above the sheet, each keeping its own scroll. */
   .fv-cksplit {
@@ -1603,8 +1707,12 @@ button.fv-steplabel:hover { color: var(--fv-navy); }
 .fv-sidebar.collapsed .fv-railtop {
   justify-content: center;
 }
-/* A dot on the rail when there is grading waiting, since the count is hidden. */
+/* "There is grading waiting" for the two layouts with no room for the count:
+   the rail, and the top strip on a phone. Rendered always and swapped by CSS
+   rather than by a prop — display:none takes the hidden one out of the
+   accessibility tree, so only one of the pair is ever announced. */
 .fv-navdot {
+  display: none;
   position: absolute;
   top: 7px;
   right: 9px;
@@ -1614,6 +1722,7 @@ button.fv-steplabel:hover { color: var(--fv-navy); }
   background: var(--fv-amber);
 }
 .fv-sidebar.collapsed .fv-navbtn { position: relative; }
+.fv-sidebar.collapsed .fv-navdot { display: block; }
 
 @media (max-width: 900px) {
   /* Already narrow; the rail is the only sensible state there. */
@@ -1698,4 +1807,276 @@ button.fv-steplabel:hover { color: var(--fv-navy); }
   border-radius: var(--fv-r-md);
   background: #fff;
   box-shadow: var(--fv-shadow);
+}
+
+/* ----------------------------------------------------- the shell on a phone
+   Below 700px the sidebar stops taking a column. Narrowing it to 190px, which
+   is what used to happen, leaves 141px of content pane at 375px — that is not
+   a layout, it is a gutter with a table in it, and the only escape was an
+   unlabelled chevron.
+
+   A strip across the top rather than a drawer: there are four destinations and
+   they are all still on screen and still labelled. Hidden navigation costs more
+   discoverability than the width it buys back, and every one of these pixels is
+   horizontal, which is the axis a drawer would have given back anyway.
+
+   Everything below is inside the query. The laptop shell is untouched. */
+@media (max-width: 700px) {
+  .fv {
+    flex-direction: column;
+  }
+
+  /* `railed` is a preference about a column that no longer exists here, so the
+     strip ignores it rather than shipping a second, worse version of itself. */
+  .fv-sidebar,
+  .fv-sidebar.collapsed {
+    width: auto;
+    flex: 0 0 auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--fv-neutral-200);
+  }
+  /* The scroll box exists to pin Sign out to the bottom of a tall window. It
+     has nothing to do on a strip, and dissolving it lets the account row share
+     the first line with the course name instead of costing a third one. */
+  .fv-sidetop {
+    display: contents;
+  }
+  /* A 26px unlabelled chevron that collapses a column there is no longer a
+     column to collapse. */
+  .fv-railtop {
+    display: none;
+  }
+  .fv-sidebar.collapsed .fv-coursetitle,
+  .fv-sidebar.collapsed .fv-tfnote {
+    display: block;
+  }
+  .fv-sidebar.collapsed .fv-seg {
+    display: flex;
+  }
+  .fv-sidebar.collapsed .fv-navlbl {
+    display: inline;
+  }
+
+  .fv-coursehome {
+    order: 1;
+    flex: 1 1 140px;
+    width: auto;
+    min-width: 0;
+  }
+  .fv-coursetitle {
+    font-size: var(--fv-base);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* Headcount and term are reference, not navigation, and they cost a line the
+     sheet underneath needs more than they do. */
+  .fv-meta {
+    display: none;
+  }
+
+  .fv-sidefoot {
+    order: 2;
+    flex: 0 0 auto;
+    border-top: 0;
+    padding-top: 0;
+  }
+  .fv-email {
+    display: none;
+  }
+  .fv-btn.fv-signout {
+    height: 40px;
+    padding: 0 14px;
+    font-size: var(--fv-xs);
+  }
+
+  .fv-courseswitch {
+    order: 3;
+    flex: 1 1 100%;
+    margin-top: 0;
+  }
+
+  .fv-nav,
+  .fv-sidebar.collapsed .fv-nav {
+    order: 4;
+    flex: 1 1 100%;
+    flex-direction: row;
+    gap: 6px;
+    margin-top: 0;
+    /* The four labels fit across 320px with the icons dropped. This is the
+       backstop for a longer word or a fifth destination — a scroll inside the
+       strip, not the page going two-dimensional, and never a clip. */
+    overflow-x: auto;
+  }
+  .fv-navbtn,
+  .fv-sidebar.collapsed .fv-navbtn {
+    position: relative;
+    flex: 0 0 auto;
+    justify-content: flex-start;
+    height: 44px;
+    gap: 0;
+    padding: 0 10px;
+  }
+  /* Icon or label, not both: all four together are 100px wider than a 320px
+     phone, and the label is the half that says where it goes. A destination
+     you have to scroll to find is the cost the strip exists to avoid. */
+  .fv-navbtn > svg {
+    display: none;
+  }
+  /* "12 to grade" does not fit beside four tabs; the dot carries the part that
+     matters when you are standing up. */
+  .fv-navcount {
+    display: none;
+  }
+  .fv-navdot {
+    display: block;
+  }
+
+  .fv-tfnote {
+    order: 5;
+    flex: 1 1 100%;
+    margin-top: 0;
+  }
+
+  .fv-gutter {
+    display: none;
+  }
+  .fv-main {
+    min-height: 0;
+    padding: 8px;
+  }
+  .fv-panel {
+    padding: 14px 12px 12px;
+    border-radius: var(--fv-r-lg);
+  }
+  .fv-scroll {
+    margin: 0 -12px;
+    padding: 0 12px 6px;
+  }
+}
+
+/* ------------------------------------------------ the check-in sheet, standing
+   This is the one faculty screen with a real phone case: a TF walking between
+   teams while the tutorial runs. Everything here is about being able to hit the
+   right cell without looking twice. */
+@media (max-width: 700px) {
+  .fv-cknav {
+    max-height: 22vh;
+  }
+  .fv-ckitem {
+    min-height: 44px;
+    font-size: var(--fv-sm);
+  }
+
+  /* The sheet becomes its own two-axis scroller instead of stretching the page.
+     A marking table is the case WCAG 1.4.10 leaves alone — ten score columns
+     cannot reflow to 320px without losing which row they belong to — so the
+     deal is that it scrolls sideways INSIDE this box, the page never does, and
+     both the header and the team name stay put while it does. */
+  .fv-cksheet {
+    display: flex;
+    flex-direction: column;
+  }
+  .fv-cksheet .fv-tblwrap {
+    flex: 1 1 auto;
+    min-height: 220px;
+    overflow: auto;
+    overscroll-behavior: contain;
+  }
+  /* Sticky on the th, not on thead: thead only started sticking in Safari 16
+     and this is an iPhone screen. The second row's offset is the first row's
+     height, which is why that row's padding and line-height are pinned here
+     rather than left to the type. */
+  .fv-cksheet .fv-tbl thead th {
+    position: sticky;
+    z-index: 3;
+    padding: 6px 10px;
+    line-height: 18px;
+  }
+  .fv-cksheet .fv-tbl thead tr:first-child th {
+    top: 0;
+  }
+  .fv-cksheet .fv-tbl thead tr:nth-child(2) th {
+    top: 31px;
+  }
+  .fv-cksheet .fv-tbl thead .fv-sticky-l {
+    z-index: 4;
+  }
+  /* 206px of a 320px scrollport is most of the sheet. The team name and its
+     present count fit in 132. Scoped to the check-in sheet: the gradebook uses
+     the same class and is a laptop surface. */
+  .fv-cksheet .fv-sticky-l {
+    min-width: 132px;
+  }
+
+  .fv-tbl td.fv-ckcell {
+    padding: 5px 6px;
+  }
+  .fv-tbl td.fv-ckabs {
+    min-width: 136px;
+  }
+  .fv-ckpick {
+    min-width: 132px;
+    height: 40px;
+  }
+  .fv-ckdie {
+    width: 40px;
+    height: 40px;
+  }
+  .fv-absent {
+    gap: 2px;
+  }
+  .fv-absentrow {
+    min-height: 36px;
+    gap: 8px;
+    font-size: var(--fv-xs);
+  }
+  .fv-absentrow input {
+    flex: none;
+    width: 20px;
+    height: 20px;
+  }
+
+  /* 38x44 of target from a 34x40 button, so the sheet does not become taller
+     than the room it is used in. The 4px gap is exactly twice the 2px each
+     button reaches past itself — the targets meet and never overlap, because
+     two overlapping targets on this screen is the mis-tap it is trying to
+     prevent. */
+  .fv-scale {
+    gap: 4px;
+  }
+  .fv-scalebtn {
+    position: relative;
+    width: 34px;
+    height: 40px;
+    font-size: var(--fv-sm);
+  }
+  .fv-scalebtn::after {
+    content: "";
+    position: absolute;
+    inset: -2px;
+  }
+
+  /* Accuracy and Quality of discussion sit side by side, render identically,
+     and a mis-tap writes a wrong score to a named student — the worst thing
+     this screen can do. Three cues, because colour on its own is not one:
+     Quality is round where Accuracy is square, it fills lavender where Accuracy
+     fills navy, and its column is fenced off by a dashed rule that runs up into
+     the header, where the eyebrow is lavender too. */
+  .fv-cksheet .fv-ckdisc {
+    border-left: 1px dashed var(--fv-neutral-300);
+  }
+  .fv-cksheet th.fv-ckdisc .fv-eyebrow {
+    color: var(--fv-lavender);
+  }
+  .fv-scale.disc .fv-scalebtn {
+    border-radius: 999px;
+  }
+  .fv-scale.disc .fv-scalebtn.on {
+    background: var(--fv-lavender);
+  }
 }

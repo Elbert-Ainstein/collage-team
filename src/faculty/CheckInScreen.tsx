@@ -324,11 +324,7 @@ export function CheckInScreen({ data }: { data: FacultyData }): JSX.Element {
                         <span className="fv-eyebrow">Absent</span>
                       </th>
                       {SLOTS.map((n) => (
-                        <th
-                          key={n}
-                          colSpan={3}
-                          style={{ borderLeft: "1px solid var(--fv-neutral-200)" }}
-                        >
+                        <th key={n} colSpan={3} className="fv-ckslot">
                           <span style={{ fontWeight: 600, color: "var(--fv-navy)" }}>
                             Tutorial check-in {n}
                           </span>
@@ -340,13 +336,13 @@ export function CheckInScreen({ data }: { data: FacultyData }): JSX.Element {
                       <th />
                       {SLOTS.map((n) => (
                         <Cells key={n}>
-                          <th style={{ borderLeft: "1px solid var(--fv-neutral-200)" }}>
+                          <th className="fv-ckslot">
                             <span className="fv-eyebrow">Presenter</span>
                           </th>
                           <th>
                             <span className="fv-eyebrow">Accuracy 1–5</span>
                           </th>
-                          <th>
+                          <th className="fv-ckdisc">
                             <span className="fv-eyebrow">Quality of discussion 1–5</span>
                           </th>
                         </Cells>
@@ -374,7 +370,7 @@ export function CheckInScreen({ data }: { data: FacultyData }): JSX.Element {
                             </div>
                           </td>
 
-                          <td style={{ padding: 6, minWidth: 150 }}>
+                          <td className="fv-ckcell fv-ckabs">
                             <AbsentPicker
                               team={team}
                               away={away}
@@ -391,15 +387,8 @@ export function CheckInScreen({ data }: { data: FacultyData }): JSX.Element {
                             const present = team.members.filter((m) => !away.includes(m.id));
                             return (
                               <Cells key={n}>
-                                <td
-                                  style={{
-                                    padding: 6,
-                                    borderLeft: "1px solid var(--fv-neutral-200)",
-                                  }}
-                                >
-                                  <div
-                                    style={{ display: "flex", alignItems: "center", gap: 6 }}
-                                  >
+                                <td className="fv-ckcell fv-ckslot">
+                                  <div className="fv-ckpres">
                                     <PersonPicker
                                       options={present}
                                       value={mark?.presenter_id ?? ""}
@@ -411,8 +400,7 @@ export function CheckInScreen({ data }: { data: FacultyData }): JSX.Element {
                                     />
                                     <button
                                       type="button"
-                                      className="fv-iconbtn"
-                                      style={{ width: 26, height: 26, flex: "none" }}
+                                      className="fv-iconbtn fv-ckdie"
                                       disabled={!canEdit || present.length === 0}
                                       onClick={() => roll(team, n)}
                                       aria-label={`Pick a presenter at random for ${team.name}, check-in ${n}`}
@@ -426,7 +414,7 @@ export function CheckInScreen({ data }: { data: FacultyData }): JSX.Element {
                                     </button>
                                   </div>
                                 </td>
-                                <td style={{ padding: 6 }}>
+                                <td className="fv-ckcell">
                                   <Scale
                                     label={`Accuracy, check-in ${n}, ${team.name}`}
                                     value={mark?.accuracy ?? null}
@@ -434,8 +422,9 @@ export function CheckInScreen({ data }: { data: FacultyData }): JSX.Element {
                                     onChange={(v) => void writeMark(team.id, n, { accuracy: v })}
                                   />
                                 </td>
-                                <td style={{ padding: 6 }}>
+                                <td className="fv-ckcell fv-ckdisc">
                                   <Scale
+                                    tone="disc"
                                     label={`Quality of discussion, check-in ${n}, ${team.name}`}
                                     value={mark?.discussion ?? null}
                                     disabled={!canEdit}
@@ -477,20 +466,13 @@ function AbsentPicker({
   onChange: (studentIds: string[]) => void;
 }) {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+    <div className="fv-absent">
       {team.members.map((m) => {
         const on = away.includes(m.id);
         return (
           <label
             key={m.id}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              fontSize: "var(--fv-2xs)",
-              color: on ? "var(--fv-amber)" : "var(--fv-muted)",
-              cursor: disabled ? "default" : "pointer",
-            }}
+            className={`fv-absentrow${on ? " away" : ""}${disabled ? " ro" : ""}`}
           >
             <input
               type="checkbox"
@@ -524,11 +506,10 @@ function PersonPicker({
 }) {
   const picked = options.find((m) => m.id === value) ?? null;
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+    <div className="fv-ckpres">
       {picked ? <FAvatar name={picked.name} tint={picked.avatar_tint} size={20} /> : null}
       <select
-        className="fv-in"
-        style={{ minWidth: 116, height: 28, padding: "0 6px" }}
+        className="fv-in fv-ckpick"
         value={value}
         disabled={disabled}
         aria-label={placeholder}
@@ -550,43 +531,42 @@ function PersonPicker({
   );
 }
 
-/** 1–5 as five buttons — faster to hit during a live session than a dropdown. */
+/**
+ * 1–5 as five buttons — faster to hit during a live session than a dropdown.
+ *
+ * `tone` is which of the two scales this is. They sit side by side in every
+ * slot and used to render identically, so a mis-tap put a wrong score on a
+ * named student and said nothing; the discussion column is round and lavender
+ * where accuracy is square and navy. Shape as well as colour, because a room
+ * lit for a lecture is not where you want to be telling two hues apart.
+ */
 function Scale({
   label,
+  tone,
   value,
   disabled,
   onChange,
 }: {
   label: string;
+  tone?: "disc";
   value: number | null;
   disabled: boolean;
   onChange: (v: number | null) => void;
 }) {
   return (
-    <div role="group" aria-label={label} style={{ display: "flex", gap: 2 }}>
+    <div role="group" aria-label={label} className={`fv-scale${tone ? ` ${tone}` : ""}`}>
       {SCALE.map((n) => {
         const on = value === n;
         return (
           <button
             key={n}
             type="button"
-            className="fv-num"
+            className={`fv-num fv-scalebtn${on ? " on" : ""}`}
             aria-pressed={on}
             disabled={disabled}
             // Pressing the current value clears it — otherwise a mis-tap is
             // permanent and there is nowhere to put "not marked".
             onClick={() => onChange(on ? null : n)}
-            style={{
-              width: 24,
-              height: 26,
-              border: "1px solid var(--fv-neutral-200)",
-              borderRadius: "var(--fv-r-md)",
-              background: on ? "var(--fv-navy)" : "var(--fv-cream-100)",
-              color: on ? "var(--fv-cream-100)" : "var(--fv-muted)",
-              fontWeight: on ? 600 : 400,
-              fontSize: "var(--fv-xs)",
-              cursor: disabled ? "default" : "pointer",
-            }}
           >
             {n}
           </button>

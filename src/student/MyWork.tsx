@@ -133,6 +133,39 @@ interface Conflict {
   resolved: "mine" | "theirs" | null;
 }
 
+/* -------------------------------------------------------------------- css */
+
+// Rules rather than inline styles because a media query cannot reach a style
+// object. student.css belongs to the view as a whole; these three classes exist
+// for this screen only, so they travel with it.
+const CSS = `
+.sv-mw-cols { display:flex; gap:20px; align-items:flex-start; }
+/* Compound, so the padding beats .sv-card's on specificity rather than on
+   whichever stylesheet the bundler happens to put last. */
+.sv-card.sv-mw-qs { width:204px; flex:none; padding:12px; }
+.sv-mw-main { flex:1; min-width:0; }
+.sv-mw-pages { display:grid; gap:12px;
+  grid-template-columns:repeat(auto-fill, minmax(240px, 1fr)); }
+
+/* A 204px fixed column beside a flexible one leaves the answer box about 93px
+   wide on a phone — seven characters a line, for the one thing on this screen
+   that gets graded. Stacked, both columns get the whole width, and the page
+   grid stops asking for 240px inside a column that no longer has it. */
+@media (max-width: 760px) {
+  .sv-mw-cols { flex-direction:column; align-items:stretch; }
+  .sv-card.sv-mw-qs { width:auto; }
+  .sv-mw-pages { grid-template-columns:minmax(0, 1fr); }
+}
+`;
+
+/**
+ * The back control is 12px type with no padding — a 17px tall target, and the
+ * only way off this screen, since nothing here is routed through history. The
+ * padding buys a 45px one; the matching negative margin hands the space back,
+ * so the margin box is the size it always was and the row lays out unchanged.
+ */
+const BACK_HIT = { padding: "14px 0", margin: "-14px 0" };
+
 /* -------------------------------------------------------------- component */
 
 export function MyWork(props: {
@@ -410,6 +443,7 @@ export function MyWork(props: {
 
   return (
     <section className="sv-screen">
+      <style dangerouslySetInnerHTML={{ __html: CSS }} />
       {/* ---------------------------------------------------------- header */}
       <div className="sv-head">
       <div
@@ -421,7 +455,7 @@ export function MyWork(props: {
           marginBottom: 16,
         }}
       >
-        <button type="button" className="sv-btn link" onClick={onBack}>
+        <button type="button" className="sv-btn link" onClick={onBack} style={BACK_HIT}>
           <SIcon name="chevronLeft" size={15} />
           {assignment.activity.title}
         </button>
@@ -449,9 +483,9 @@ export function MyWork(props: {
       </div>
 
       {/* ------------------------------------------------------------ body */}
-      <div className="sv-scroll" style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+      <div className="sv-scroll sv-mw-cols">
         {/* ------------------------------------------------ question list */}
-        <div className="sv-card" style={{ width: 204, flex: "none", padding: 12 }}>
+        <div className="sv-card sv-mw-qs">
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "0 4px 8px" }}>
             <span className="sv-eyebrow" style={{ flex: 1 }}>
               Questions
@@ -543,7 +577,7 @@ export function MyWork(props: {
         </div>
 
         {/* ------------------------------------------------- right column */}
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div className="sv-mw-main">
           {/* the one genuinely wired part of this screen */}
           <div className="sv-card" style={{ marginBottom: 14 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -774,13 +808,7 @@ export function MyWork(props: {
             </span>
           </div>
 
-          <div
-            style={{
-              display: "grid",
-              gap: 12,
-              gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))",
-            }}
-          >
+          <div className="sv-mw-pages">
             {PAGES.map((p) => (
               <div
                 key={p.id}

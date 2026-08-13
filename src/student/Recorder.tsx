@@ -102,6 +102,16 @@ function recorderTrouble(event: Event): string {
   );
 }
 
+/**
+ * Delete is the smallest control in a take's row and the only one that cannot
+ * be undone. `sm` pins the height at 28px, which padding alone cannot grow
+ * past, so the height goes back to auto and the padding builds a 45px box
+ * around the same 12px ink. The negative margin gives the height back to the
+ * row, which is laid out by the 28px buttons beside it either way — the ink,
+ * the row and every other target in it stay exactly where they are.
+ */
+const DELETE_HIT = { height: "auto", padding: "14px 10px", margin: "-14px 0" };
+
 function releaseStream(stream: MediaStream | null): void {
   if (!stream) return;
   for (const track of stream.getTracks()) track.stop();
@@ -789,7 +799,7 @@ export function Recorder({
                       <button
                         type="button"
                         className="sv-btn link sm"
-                        style={{ color: armed ? "var(--amber-700)" : undefined }}
+                        style={{ ...DELETE_HIT, color: armed ? "var(--amber-700)" : undefined }}
                         onClick={() => {
                           if (!armed) {
                             setArmedDelete(recording.id);

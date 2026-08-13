@@ -15,9 +15,69 @@ body {
   padding: 0;
 }
 
+html {
+  /* Without this, iOS Safari inflates the type in wide blocks when the phone
+     turns to landscape and leaves it inflated coming back — a text-only reflow
+     nobody asked for. 100% means "render the size I asked for", not "no zoom":
+     pinch-zoom is untouched. */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* iOS Safari zooms the whole page when you focus a field whose font-size is
+   under 16px, and it never zooms back — you are left scrolled sideways for the
+   rest of the session. Sign-in is 13px and it is the first thing all 80 students
+   touch, so this has to be a floor, not a per-field fix.
+
+   Scoped to a width query, not applied everywhere: 16px inputs would visibly
+   fatten Kelly's dense faculty forms on her laptop, and desktop must not change.
+   760px is the breakpoint student.css already uses for its phone rules and sits
+   below every faculty rule (900px and up), so nothing on a laptop is reached.
+
+   !important because two of the offenders — the team answer textarea and the
+   photo-rename field — carry their font-size in an inline style object, which no
+   selector can outrank. It stays correct after those get refactored into
+   classes; it just stops being the thing doing the work.
+
+   Checkbox, radio and file are excluded: they never trigger the zoom and their
+   rendered size does follow font-size. */
+@media (max-width: 760px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* Backstop for sideways scroll on phones. This is a net, not a fix: anything it
+   catches is content the reader can no longer reach, which is worse than an ugly
+   horizontal scrollbar. Surfaces that genuinely overflow at 320px still have to
+   reflow — and anything meant to scroll sideways (the gradebook) must keep doing
+   it inside its own overflow container, where this rule cannot touch it.
+
+   On body, never on html as well. With html left visible the overflow value
+   propagates from body up to the viewport and body's own used value stays
+   visible — so body does not become a scroll container and every position:sticky
+   header and fixed lightbox behaves exactly as it does now. Set it on both and
+   body does become the scroller, which is the version that breaks sticky.
+
+   clip over hidden where it is supported: it creates no scroll container at all
+   and leaves overflow-y alone, where hidden silently forces overflow-y to auto.
+   Older iOS falls back to the hidden line above it.
+
+   A wrapper element would be the tidier home for this, but the app renders
+   straight into body — there is no wrapper to hang it on without a component
+   change. */
+@media (max-width: 760px) {
+  body {
+    overflow-x: hidden;
+    overflow-x: clip;
+  }
 }
 
 /* Respect a user's reduced-motion preference across the app. */

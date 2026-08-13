@@ -20,6 +20,14 @@ import type { ActivityQuestion } from "@/checkins/types";
 import { PdfSubmit } from "./PdfSubmit";
 import { SIcon } from "./icons";
 
+/**
+ * The back control is 12px type with no padding — a 17px tall target, and the
+ * only way off this screen, since nothing here is routed through history. The
+ * padding buys a 45px one; the matching negative margin hands the space back,
+ * so the margin box is the size it always was and the row lays out unchanged.
+ */
+const BACK_HIT = { padding: "14px 0", margin: "-14px 0" };
+
 export function SubmitScreen({
   assignment,
   enrolment,
@@ -119,7 +127,12 @@ export function SubmitScreen({
   return (
     <section className="sv-screen">
       <div className="sv-head">
-        <button type="button" className="sv-btn link" onClick={onBack} style={{ gap: 4 }}>
+        <button
+          type="button"
+          className="sv-btn link"
+          onClick={onBack}
+          style={{ ...BACK_HIT, gap: 4 }}
+        >
           <SIcon name="chevronLeft" size={15} />
           {activity.title}
         </button>

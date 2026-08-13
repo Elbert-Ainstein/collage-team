@@ -498,7 +498,7 @@ export function FacultyApp({
   return (
     <div className="fv">
       {full ? (
-        <div style={{ width: 12, flex: "0 0 12px" }} />
+        <div className="fv-gutter" />
       ) : (
         <aside className={`fv-sidebar${railed ? " collapsed" : ""}`}>
           {/* Everything above the account row lives in here so it can scroll on
@@ -537,7 +537,7 @@ export function FacultyApp({
           </button>
 
           {courses.length > 1 ? (
-            <div className="fv-seg" style={{ marginTop: 12 }}>
+            <div className="fv-seg fv-courseswitch">
               {courses.map((c) => (
                 <button
                   key={c.id}
@@ -585,32 +585,22 @@ export function FacultyApp({
                 <FIcon name={t.icon} size={18} />
                 <span className="fv-navlbl">{t.label}</span>
                 {t.id === "activities" && toGrade > 0 ? (
-                  railed ? (
-                    // The count has nowhere to go on the rail, but "there is
-                    // work waiting" is the part worth keeping.
-                    <span className="fv-navdot" aria-label={`${toGrade} to grade`} />
-                  ) : (
+                  <>
                     <span className="fv-navcount">{toGrade} to grade</span>
-                  )
+                    {/* The count has nowhere to go on the rail, or on the top
+                        strip a phone gets, but "there is work waiting" is the
+                        part worth keeping. Both ship and CSS picks — the hidden
+                        one is display:none, so it leaves the accessibility tree
+                        with the pixels and nothing is announced twice. */}
+                    <span className="fv-navdot" aria-label={`${toGrade} to grade`} />
+                  </>
                 ) : null}
               </button>
             ))}
           </nav>
 
           {data && !data.can.isOwner ? (
-            <div
-              style={{
-                margin: "14px 0 0",
-                padding: "9px 10px",
-                border: "1px solid var(--fv-neutral-200)",
-                borderRadius: "var(--fv-r-md)",
-                background: "var(--fv-cream-100)",
-                fontSize: "var(--fv-2xs)",
-                color: "var(--fv-muted)",
-                lineHeight: 1.5,
-              }}
-              className="fv-tfnote"
-            >
+            <div className="fv-tfnote">
               You are a teaching fellow on this course. {tfNote(data.can)}
             </div>
           ) : null}
@@ -624,8 +614,7 @@ export function FacultyApp({
             {onSignOut ? (
               <button
                 type="button"
-                className="fv-btn outline sm"
-                style={{ height: 26, padding: "0 10px", fontSize: "var(--fv-2xs)" }}
+                className="fv-btn outline sm fv-signout"
                 onClick={() => void onSignOut()}
                 title={account ?? "Sign out"}
               >

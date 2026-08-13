@@ -197,6 +197,19 @@
 .sv-badge.sky { background: var(--sky-100); color: var(--sky-700); }
 .sv-badge.orange { background: #ffe9dc; color: var(--orange-500); }
 .sv-badge.lavender { background: #f4e4fd; color: var(--lavender-600); }
+/* For a badge carrying a sentence rather than a word. The due pill on the
+   activity card says "Due Thu 9:00am · discussion Thu 5:00pm", which is wider
+   than the card holding it once the phone is 320px — and nowrap with nowhere to
+   go is exactly how a pill ends up painted over its neighbour. Costs nothing at
+   desktop: one line of 10px text still floors at min-height. */
+.sv-badge.wrap {
+  white-space: normal;
+  height: auto;
+  min-height: 20px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  max-width: 100%;
+}
 
 .sv-avatar {
   display: inline-flex; align-items: center; justify-content: center; flex: none;
@@ -283,10 +296,139 @@
   /* Stacked, so the document scrolls and pinning a head inside a panel that is
      itself scrolling away would only trap the content. */
   .sv-screen { display: block; }
-  .sv-scroll { overflow-y: visible; margin: 0 -16px; padding: 0 16px 8px; }
+  /* Both axes, not just y. overflow-y:visible beside an overflow-x:hidden it
+     never cleared computes back to auto — so this was still a scroll container,
+     still clipping sideways, and the clipped pixels were unreachable rather than
+     merely ugly. */
+  .sv-scroll { overflow: visible; margin: 0 -16px; padding: 0 16px 8px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .sv * { transition: none !important; }
+}
+
+/* --------------------------------------------------------- assignment row
+   This was one inline style object, which is why it could not be fixed: no
+   media query reaches an inline style. At 375px the two fixed columns, the
+   chevron and four 16px gaps claimed 238px of a 281px content box, so the title
+   block resolved to a NEGATIVE width, the scope pill painted through the status
+   badge and "No due date set" came out one word per line. The rules below are
+   the old object transcribed property for property — the row is byte-identical
+   above 760px — and the phone shape lives in the media query underneath.
+   The accent is the one thing still set inline, as a custom property, because
+   it varies per activity type. */
+.sv-row {
+  display: flex; align-items: center; gap: 16px;
+  width: 100%; padding: 13px 16px;
+  border: 1px solid var(--neutral-200);
+  border-left: 3px solid var(--row-accent);
+  background: var(--cream-100);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow);
+  font: inherit; color: var(--navy);
+  text-align: left; cursor: pointer;
+  transition: background 140ms ease, box-shadow 140ms ease;
+}
+.sv-rowtype {
+  flex: none; width: 82px;
+  font-size: var(--text-2xs); letter-spacing: var(--tracking-wide);
+  text-transform: uppercase; font-weight: var(--weight-semibold);
+  color: var(--row-accent);
+}
+.sv-rowmain { flex: 1; min-width: 0; }
+.sv-rowhead { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
+.sv-rowtitle {
+  font-family: var(--font-serif); font-size: var(--text-base);
+  font-weight: var(--weight-bold); letter-spacing: var(--tracking-tight);
+}
+.sv-rowdue {
+  display: block; margin-top: 3px;
+  font-size: var(--text-xs); color: var(--muted-foreground);
+}
+.sv-rowgrade {
+  width: 74px; flex: none; text-align: right;
+  font-size: var(--text-xs); color: var(--navy);
+}
+.sv-rowchev { color: var(--muted-foreground); display: flex; align-items: center; }
+
+/* ------------------------------------------------------ the activity detail
+   The brief was flex:1 with min-width:420px in a pane 317px wide, inside a
+   .sv-scroll that clips sideways — so a phone lost the right ~100px of every
+   line of it, the submit button's status line included, with nothing to scroll
+   to reach it. 420px is still the width this column WANTS, so it becomes the
+   flex BASIS instead of a floor: above 420px the arithmetic is unchanged and
+   the side column wraps below at exactly the pixel it does today, and under it
+   the brief now shrinks rather than running off the edge. */
+.sv-detailgrid {
+  display: flex; gap: 22px; align-items: flex-start; flex-wrap: wrap;
+  padding-top: 10px;
+}
+.sv-detailmain { flex: 1 1 420px; min-width: 0; }
+.sv-detailside {
+  width: 270px; max-width: 100%; flex: none;
+  display: flex; flex-direction: column; gap: 12px;
+}
+
+@media (max-width: 760px) {
+  /* The row goes to three lines: type, then title with its grade, then the
+     metadata. .sv-rowmain and .sv-rowhead dissolve into the row's own flex
+     lines so their children can be ordered against the status badge and the
+     grade, which have always been the row's own children.
+
+     ::after is the line break. A flex container breaks a line wherever the
+     items stop fitting, which for a title of unknown length is anywhere, so a
+     zero-height item forced to a full line is the only way to say "the metadata
+     starts HERE" — and it costs no element in the markup. For the same reason
+     the title takes flex-basis 0 rather than auto: on auto, a long title's
+     max-content size fills the line by itself and shoves the grade down a row.
+
+     Type does not repeat down the metadata line: the 3px accent border already
+     encodes it, and the eyebrow says it in words once. */
+  .sv-row {
+    flex-wrap: wrap;
+    align-items: baseline;
+    column-gap: 10px;
+    row-gap: 0;
+    padding: 12px 14px;
+  }
+  .sv-rowmain,
+  .sv-rowhead { display: contents; }
+  .sv-row::after { content: ""; order: 4; flex: 0 0 100%; height: 0; }
+
+  .sv-rowtype { order: 1; flex: 0 0 100%; width: auto; }
+  .sv-rowtitle {
+    order: 2; flex: 1 1 0%; min-width: 0; margin-top: 4px;
+    /* Truncated on purpose, and visibly: the row is a scan target and the whole
+       title is one tap away. Six lines of serif would bury the next activity. */
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+  .sv-rowgrade { order: 3; flex: none; width: auto; margin-top: 4px; }
+  .sv-rowstatus { order: 5; margin-top: 7px; }
+  .sv-rowscope { order: 6; margin-top: 7px; }
+  .sv-rowdue { order: 7; flex: 1 1 auto; min-width: 0; margin-top: 7px; }
+  /* The whole row is the target and it is 140px tall — a chevron pointing at
+     nothing else costs 18px of title width to say so again. */
+  .sv-rowchev { display: none; }
+
+  /* Four tabs with two-digit counts measured 311.78px against 317px of pane and
+     had no strategy at all if one more assignment landed — no wrap, no scroll.
+     Wrapping rather than scrolling because a filter the reader cannot see is a
+     filter they will not use, and there are only ever four. */
+  .sv-tabs { flex-wrap: wrap; gap: 8px; }
+  .sv-tab { position: relative; padding: 10px 12px; }
+  /* 37px of visible tab, 44px of target. The overhang stays inside the 8px gap,
+     so no tab reaches into the one beside or below it. */
+  .sv-tab::after {
+    content: "";
+    position: absolute;
+    left: -4px; right: -4px;
+    top: 50%; height: 44px;
+    transform: translateY(-50%);
+  }
+
+  /* Wrapped below the brief, so it is a band across the pane, not a column. */
+  .sv-detailside { width: 100%; }
 }
 
 /* Drop zone — the PDF hand-in. Same shape as the faculty roster dropzone so the

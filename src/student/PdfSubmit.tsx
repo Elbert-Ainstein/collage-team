@@ -9,7 +9,7 @@
 // imported dynamically so it never reaches the server bundle, and its worker is
 // served from /public rather than a CDN.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import type { ActivityQuestion } from "@/checkins/types";
 import {
   clearSubmission,
@@ -22,6 +22,33 @@ import {
   type SubmissionFile,
 } from "@/checkins/submissions";
 import { SIcon } from "./icons";
+
+// Below 760px student.css takes the question list out of `position: sticky` and
+// puts it above the grid, which on a phone is the only shape that fits. A
+// twenty-page scan is around 1850px of tiles, though, so by page eleven the
+// question every tap is filing under is a thousand pixels off the top of the
+// screen with nothing left saying what it is. These restate it inside the grid
+// every few pages and offer the way back to the list. Off at desktop widths,
+// where the list is pinned and this would be noise.
+const CSS = `
+.sv-pdfnow { display:none; }
+
+@media (max-width: 760px) {
+  .sv-pdfnow { grid-column:1 / -1; display:flex; align-items:center; gap:8px;
+    padding:7px 10px; border:1px solid var(--cream-500);
+    background:var(--cream-300); border-radius:var(--radius-md); }
+  .sv-pdfnowlbl { flex:none; }
+  .sv-pdfnowq { min-width:0; overflow:hidden; text-overflow:ellipsis;
+    white-space:nowrap; font-size:var(--text-xs);
+    font-weight:var(--weight-semibold); color:var(--navy); }
+  /* 44px of target around 12px of ink: the negative margin keeps the bar the
+     height of its own line rather than the height of the button in it. */
+  .sv-pdfnowgo { flex:none; margin:-13px 0 -13px auto; padding:0 2px;
+    display:inline-flex; align-items:center; min-height:44px;
+    border:0; background:transparent; font:inherit; font-size:var(--text-xs);
+    color:var(--navy-700); text-decoration:underline; cursor:pointer; }
+}
+`;
 
 interface Loaded {
   /** Object URLs for each rendered page, 1-based: thumbs[0] is page 1. */
@@ -84,6 +111,7 @@ export function PdfSubmit({
   const [error, setError] = useState<string | null>(null);
   const [armedReplace, setArmedReplace] = useState(false);
   const picker = useRef<HTMLInputElement | null>(null);
+  const qlist = useRef<HTMLDivElement | null>(null);
   const live = useRef(true);
 
   useEffect(() => {
@@ -312,8 +340,24 @@ export function PdfSubmit({
     );
   }
 
+  const active = questions.find((q) => q.id === activeQ) ?? null;
+  const anchor = active ? (
+    <div className="sv-pdfnow">
+      <span className="sv-eyebrow sv-pdfnowlbl">Filing into</span>
+      <span className="sv-pdfnowq">{active.label}</span>
+      <button
+        type="button"
+        className="sv-pdfnowgo"
+        onClick={() => qlist.current?.scrollIntoView({ block: "start" })}
+      >
+        Change
+      </button>
+    </div>
+  ) : null;
+
   return (
     <div className="sv-card" style={{ marginTop: 12 }}>
+      <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <div className="sv-eyebrow" style={{ flex: 1 }}>
           Step 2 of 2 · Which pages answer which question
@@ -400,7 +444,7 @@ export function PdfSubmit({
           you needed it. */}
       <div className="sv-pdfsplit">
         {questions.length ? (
-          <div className="sv-pdfq">
+          <div className="sv-pdfq" ref={qlist}>
             <div className="sv-eyebrow" style={{ padding: "0 2px 8px" }}>
               Questions
             </div>
@@ -466,49 +510,53 @@ export function PdfSubmit({
                 const mine = activeQ ? (pages.get(activeQ)?.has(page) ?? false) : false;
                 const labels = assignedTo(page);
                 return (
-                  <button
-                    key={page}
-                    type="button"
-                    onClick={() => void togglePage(page)}
-                    disabled={locked || !activeQ}
-                    aria-pressed={mine}
-                    aria-label={`Page ${page}${labels.length ? `, answers ${labels.join(", ")}` : ""}`}
-                    style={{
-                      padding: 4,
-                      border: `2px solid ${mine ? "var(--navy)" : "var(--neutral-200)"}`,
-                      borderRadius: 8,
-                      background: mine ? "var(--cream-400)" : "var(--cream-100)",
-                      cursor: locked || !activeQ ? "default" : "pointer",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 4,
-                    }}
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={src}
-                      alt=""
-                      style={{ width: "100%", display: "block", borderRadius: 4 }}
-                    />
-                    <span
-                      className="sv-num"
+                  <Fragment key={page}>
+                    {/* Four tiles apart: two rows on a phone, so the question
+                        being filed into is never more than a screen away. */}
+                    {i > 0 && i % 4 === 0 ? anchor : null}
+                    <button
+                      type="button"
+                      onClick={() => void togglePage(page)}
+                      disabled={locked || !activeQ}
+                      aria-pressed={mine}
+                      aria-label={`Page ${page}${labels.length ? `, answers ${labels.join(", ")}` : ""}`}
                       style={{
-                        fontSize: "var(--text-2xs)",
-                        color: "var(--muted-foreground)",
+                        padding: 4,
+                        border: `2px solid ${mine ? "var(--navy)" : "var(--neutral-200)"}`,
+                        borderRadius: 8,
+                        background: mine ? "var(--cream-400)" : "var(--cream-100)",
+                        cursor: locked || !activeQ ? "default" : "pointer",
                         display: "flex",
+                        flexDirection: "column",
                         gap: 4,
-                        justifyContent: "center",
-                        flexWrap: "wrap",
                       }}
                     >
-                      <span>p{page}</span>
-                      {labels.length ? (
-                        <span style={{ color: "var(--navy)", fontWeight: 600 }}>
-                          {labels.join(" ")}
-                        </span>
-                      ) : null}
-                    </span>
-                  </button>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={src}
+                        alt=""
+                        style={{ width: "100%", display: "block", borderRadius: 4 }}
+                      />
+                      <span
+                        className="sv-num"
+                        style={{
+                          fontSize: "var(--text-2xs)",
+                          color: "var(--muted-foreground)",
+                          display: "flex",
+                          gap: 4,
+                          justifyContent: "center",
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <span>p{page}</span>
+                        {labels.length ? (
+                          <span style={{ color: "var(--navy)", fontWeight: 600 }}>
+                            {labels.join(" ")}
+                          </span>
+                        ) : null}
+                      </span>
+                    </button>
+                  </Fragment>
                 );
               })
             : busy === "loading"

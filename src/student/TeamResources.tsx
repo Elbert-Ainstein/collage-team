@@ -80,15 +80,30 @@ function sizeLabel(bytes: number | null): string {
 const message = (e: unknown, fallback: string) =>
   e instanceof Error && e.message ? e.message : fallback;
 
+/**
+ * The back control is 12px type with no padding — a 17px tall target, and the
+ * only way out of a folder, since nothing here is routed through history. The
+ * padding buys a 45px one; the matching negative margin hands the space back,
+ * so the margin box is the size it always was and the line lays out unchanged.
+ */
+const BACK_HIT = { padding: "14px 0", margin: "-14px 0" };
+
 const CSS = `
 .sv-tr-hit { display:flex; align-items:flex-start; gap:11px; flex:1; min-width:0;
   padding:0; border:0; background:transparent; color:inherit; font:inherit;
   text-align:left; cursor:pointer; }
 .sv-tr-folder { transition: background 140ms ease, border-color 140ms ease; }
 .sv-tr-folder:hover { background: var(--cream-300); }
-.sv-tr-icon { display:flex; align-items:center; justify-content:center; flex:none;
+.sv-tr-icon { position:relative;
+  display:flex; align-items:center; justify-content:center; flex:none;
   border:0; padding:0; background:transparent; border-radius:999px;
   color:var(--neutral-400); transition: background 140ms ease, color 140ms ease; }
+/* A 22px visual box is under the 24px floor and nowhere near a thumb. The halo
+   is a pseudo-element, so the target grows and nothing in the row moves. It
+   reaches down and out rather than up on a tile: the name field, which is the
+   other thing anyone taps there, sits 4px above. */
+.sv-tr-take .sv-tr-icon::after { content:""; position:absolute; inset:-10px; }
+.sv-tr-tile .sv-tr-icon::after { content:""; position:absolute; inset:-4px -9px -12px -9px; }
 .sv-tr-icon:disabled { opacity:.55; cursor:default; }
 .sv-tr-icon:not(:disabled) { cursor:pointer; }
 .sv-tr-icon:not(:disabled):hover { background: var(--neutral-100); color: var(--amber-700); }
@@ -108,6 +123,18 @@ const CSS = `
   align-items:center; justify-content:center; padding:28px; border:0;
   background:rgba(0,35,65,.72); cursor:zoom-out; }
 .sv-tr-lightbox img { max-width:100%; max-height:100%; border-radius:var(--radius-lg); }
+.sv-tr-audio { height:32px; max-width:260px; }
+
+@media (max-width: 760px) {
+  /* An <audio> is replaced content with a 300px intrinsic width and will not
+     shrink past it, so beside a title and a stamp it pushed the ✕ off the
+     screen — a recording added by mistake could not be taken back out at all.
+     The player takes a line of its own; the calc leaves room for the ✕ and the
+     gap beside it, and is also what guarantees the break, since a line holding
+     anything else can never fit something this wide. */
+  .sv-tr-take { flex-wrap:wrap; }
+  .sv-tr-audio { flex:1 1 calc(100% - 36px); min-width:0; max-width:none; }
+}
 `;
 
 /* ===================================================================== view */
@@ -480,7 +507,7 @@ function Folder({
     <section className="sv-screen">
       {style}
       <div className="sv-head">
-      <button type="button" className="sv-btn link" onClick={onBack}>
+      <button type="button" className="sv-btn link" onClick={onBack} style={BACK_HIT}>
         <SIcon name="chevronLeft" size={15} />
         Team resources
       </button>
@@ -560,7 +587,7 @@ function Folder({
             {takes.map((t) => (
               <div
                 key={t.id}
-                className="sv-card"
+                className="sv-card sv-tr-take"
                 style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px" }}
               >
                 <span style={{ color: "var(--muted-foreground)", display: "flex" }}>
@@ -582,7 +609,7 @@ function Folder({
                 </span>
                 {takeUrls[t.id] ? (
                   // eslint-disable-next-line jsx-a11y/media-has-caption
-                  <audio src={takeUrls[t.id]} controls style={{ height: 32, maxWidth: 260 }} />
+                  <audio src={takeUrls[t.id]} controls className="sv-tr-audio" />
                 ) : (
                   <button
                     type="button"

@@ -263,74 +263,27 @@ function ActivityRow({ a, onSelect }: { a: Assignment; onSelect: (id: string) =>
     <button
       type="button"
       onClick={() => onSelect(act.id)}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 16,
-        width: "100%",
-        padding: "13px 16px",
-        border: "1px solid var(--neutral-200)",
-        borderLeft: `3px solid ${ACCENT[act.type]}`,
-        background: "var(--cream-100)",
-        borderRadius: "var(--radius-lg)",
-        boxShadow: "var(--shadow)",
-        font: "inherit",
-        color: "var(--navy)",
-        textAlign: "left",
-        cursor: "pointer",
-        transition: "background 140ms ease, box-shadow 140ms ease",
-      }}
+      className="sv-row"
+      // The row's layout is in student.css, because a phone has to restack it
+      // and no media query can reach an inline style object. Type is the only
+      // thing left here: it varies per row, so it travels as a custom property.
+      style={{ "--row-accent": ACCENT[act.type] } as CSSProperties}
     >
-      <span
-        style={{
-          flex: "none",
-          width: 82,
-          fontSize: "var(--text-2xs)",
-          letterSpacing: "var(--tracking-wide)",
-          textTransform: "uppercase",
-          fontWeight: "var(--weight-semibold)",
-          color: ACCENT[act.type],
-        }}
-      >
-        {TYPE_LABEL[act.type]}
-      </span>
+      <span className="sv-rowtype">{TYPE_LABEL[act.type]}</span>
 
-      <span style={{ flex: 1, minWidth: 0 }}>
-        <span style={{ display: "flex", alignItems: "center", gap: 9, flexWrap: "wrap" }}>
-          <span
-            style={{
-              fontFamily: "var(--font-serif)",
-              fontSize: "var(--text-base)",
-              fontWeight: "var(--weight-bold)",
-              letterSpacing: "var(--tracking-tight)",
-            }}
-          >
-            {act.title}
-          </span>
-          <span className="sv-badge outline">{SCOPE_LABEL[scope]}</span>
+      <span className="sv-rowmain">
+        <span className="sv-rowhead">
+          <span className="sv-rowtitle">{act.title}</span>
+          <span className="sv-badge outline sv-rowscope">{SCOPE_LABEL[scope]}</span>
         </span>
-        <span
-          style={{
-            display: "block",
-            fontSize: "var(--text-xs)",
-            color: "var(--muted-foreground)",
-            marginTop: 3,
-          }}
-        >
-          {dueLine(a)}
-        </span>
+        <span className="sv-rowdue">{dueLine(a)}</span>
       </span>
 
-      <span className={`sv-badge ${STATUS_BADGE[a.status]}`}>{a.status}</span>
+      <span className={`sv-badge ${STATUS_BADGE[a.status]} sv-rowstatus`}>{a.status}</span>
 
-      <span
-        className="sv-num"
-        style={{ width: 74, flex: "none", textAlign: "right", fontSize: "var(--text-xs)", color: "var(--navy)" }}
-      >
-        {a.grade}
-      </span>
+      <span className="sv-num sv-rowgrade">{a.grade}</span>
 
-      <span style={{ color: "var(--muted-foreground)", display: "flex", alignItems: "center" }}>
+      <span className="sv-rowchev">
         <SIcon name="chevronRight" size={18} />
       </span>
     </button>
@@ -484,7 +437,7 @@ function DescriptionCard({ a, questions }: { a: Assignment; questions: number })
             {questions} {questions === 1 ? "question" : "questions"}
           </span>
         ) : null}
-        <span className="sv-badge warning">{dueLine(a)}</span>
+        <span className="sv-badge warning wrap">{dueLine(a)}</span>
       </div>
     </div>
   );
@@ -1061,11 +1014,8 @@ function AssignmentDetail({
         </button>
       </div>
 
-      <div
-        className="sv-scroll"
-        style={{ display: "flex", gap: 22, alignItems: "flex-start", flexWrap: "wrap", paddingTop: 10 }}
-      >
-        <div style={{ flex: 1, minWidth: 420 }}>
+      <div className="sv-scroll sv-detailgrid">
+        <div className="sv-detailmain">
           <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <span className={`sv-badge ${TYPE_BADGE[act.type]}`}>{TYPE_LABEL[act.type]}</span>
             <h1 className="sv-h1">{act.title}</h1>
@@ -1182,7 +1132,7 @@ function AssignmentDetail({
           ) : null}
         </div>
 
-        <div style={{ width: 270, flex: "none", display: "flex", flexDirection: "column", gap: 12 }}>
+        <div className="sv-detailside">
           {onIndiv ? <StatusCard a={a} scope={scope} /> : null}
           {onTeam && showLiveGrading ? (
             <LiveGrading marks={marks} members={enrolment.teammates} loading={marksLoading} />
