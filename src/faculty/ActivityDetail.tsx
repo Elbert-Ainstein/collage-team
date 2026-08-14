@@ -242,7 +242,28 @@ export function ActivityDetail(props: {
   // Scheduling is the check-in permission, not authoring: a TF trusted to run
   // check-ins is trusted to decide when the class sees the work.
   const canSchedule = data.can.runCheckIns;
-  const visibility = visibilityOf(activity);
+  // The switch answers the moment it is pressed, not when the reload behind it
+  // finishes.
+  //
+  // The write itself is one fast round trip, but what the switch DISPLAYS came
+  // from `data`, and `data` only moves when onChanged's whole-course refresh
+  // lands — seven round trips including every result row on the course. So the
+  // press did nothing visible for about a second, which reads as a dead
+  // control, and the second press people give it writes the value back.
+  //
+  // Undefined means "no press outstanding": null is a real opens_at meaning
+  // visible, so it cannot double as the empty case.
+  const [pendingOpensAt, setPendingOpensAt] = useState<string | null | undefined>(undefined);
+  // Cleared when the refresh catches up. Keyed on the value rather than on a
+  // timer, so the optimistic state survives exactly as long as it is still
+  // ahead of the server and no longer.
+  useEffect(() => {
+    setPendingOpensAt(undefined);
+  }, [activity.opens_at]);
+
+  const visibility = visibilityOf(
+    pendingOpensAt === undefined ? activity : { ...activity, opens_at: pendingOpensAt },
+  );
 
   // Whitespace-only source text is not a description; the editor writes null for
   // it, but rows written elsewhere can still carry "".
@@ -399,10 +420,14 @@ export function ActivityDetail(props: {
   /** The visibility switch writes this one column and nothing else. */
   const setOpensAt = async (next: string | null) => {
     setVisBusy(true);
+    // Before the await, so the switch has already moved by the time the browser
+    // has finished sending the request.
+    setPendingOpensAt(next);
     try {
       await updateActivity(activity.id, { opens_at: next });
       onChanged();
     } catch (e) {
+      setPendingOpensAt(undefined);
       onError(e);
     } finally {
       setVisBusy(false);
@@ -620,7 +645,11 @@ export function ActivityDetail(props: {
               className="fv-sub"
               style={{ color: visibility.open ? "var(--fv-muted)" : "var(--fv-amber)" }}
             >
-              {visBusy ? "Saving…" : visibility.text}
+              {/* No "Saving…" — the switch has already moved, and the write it
+                  is waiting on is one fast round trip. A word that appears for
+                  fifty milliseconds and leaves is noise, not feedback. A
+                  failure puts the switch back and says so through onError. */}
+              {visibility.text}
             </span>
           </div>
 
