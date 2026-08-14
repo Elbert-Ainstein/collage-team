@@ -59,97 +59,60 @@ function RoleRouter({
     setReady(false);
 
     (async () => {
-      let role: Role;
-      try {
-        role = (await getRole()) ?? "faculty";
-      } catch {
-        // A missing profile shouldn't lock anyone out; fall back to faculty,
-        // which is what every pre-roles account already was.
-        role = "faculty";
-      }
-      if (role === "student") {
-        // ...unless they are also on somebody's TF list. "Faculty" is the
-        // default button at sign-up, so a TF who picked Student was sent
-        // straight to the student app and could never reach the course they
-        // were listed on — the role short-circuited before anything asked.
-        //
-        // Being on an instructor's TF list is a fact the instructor asserted,
-        // not a claim this account made, so honouring it grants nothing the
-        // owner did not already hand out. Their own course is excluded for the
-        // same reason it is below: owning it is the stronger signal.
-        try {
-          const tfCourses = await myTFCourses();
-          if (tfCourses.length && !tfCourses.some((c) => c.owner_id === uid)) {
-            return "tf" as Kind;
-          }
-        } catch {
-          // Not a TF, or the lookup failed — carry on into the student app.
-        }
-        return "student" as Kind;
+      // ONE WAVE, not four. These used to run strictly in series — role, then
+      // TF list, then enrolment, then courses — and only the first is a real
+      // dependency: the other three are asked of every account regardless and
+      // none of them reads another's answer. Four chained round trips before
+      // the app could decide which app to be, with "Loading…" on screen for all
+      // of it.
+      //
+      // Each carries its own fallback so one refusal cannot sink the wave, and
+      // the fallbacks are the same ones the sequential version used: a missing
+      // profile means faculty, a failed lookup means "carry on".
+      const [role, tfCourses, enrolment, owned] = await Promise.all([
+        getRole().then((r) => r ?? "faculty").catch((): Role => "faculty"),
+        myTFCourses().catch(() => []),
+        getEnrolment().catch(() => null),
+        listCourses().catch(() => null),
+      ]);
+
+      // Being on an instructor's TF list is a fact the instructor asserted, not
+      // a claim this account made, so honouring it grants nothing the owner did
+      // not already hand out. Their own course is excluded because owning it is
+      // the stronger signal. This is checked for BOTH roles: a TF who left the
+      // picker on Student was otherwise sent to the student app and could never
+      // reach the course they were listed on.
+      if (tfCourses.length && !tfCourses.some((c) => c.owner_id === uid)) {
+        return "tf" as Kind;
       }
 
-      // A teaching fellow signs up as Faculty — there is no TF button, because
-      // being a TF is a fact about the instructor's roster, not a choice the
-      // person makes. Claim by email, then ask whether they are on anyone's
-      // list. This has to happen BEFORE ensureSessions: that call reads courses
-      // through RLS, and a TF can see the instructor's, so it would conclude
-      // nothing was missing and hand them the authoring UI for a course they
-      // cannot write to.
-      try {
-        const tfCourses = await myTFCourses();
-        if (tfCourses.length && !tfCourses.some((c) => c.owner_id === uid)) {
-          return "tf" as Kind;
-        }
-      } catch {
-        // Not fatal: an account that is not a TF simply carries on as faculty.
-      }
+      if (role === "student") return "student" as Kind;
 
       // Self-heal a wrong pick. "Faculty" is the default button, so a student
-      // who signs up without noticing it would otherwise be stranded in an empty
-      // gradebook forever — the role is write-once by design, so there is no way
-      // back from inside the app.
+      // who signs up without noticing would otherwise be stranded in an empty
+      // gradebook — the role is write-once by design, so there is no way back
+      // from inside the app.
       //
-      // But ONLY for an account that owns no course. An instructor who put their
-      // own address on their own roster — to see what students see, which is a
-      // normal thing to do — would otherwise be thrown into the student app and
-      // locked out of their own gradebook, with the same no-way-back problem
-      // this is meant to solve. Owning a course is the stronger signal.
-      // Ask about the roster FIRST, and unconditionally.
-      //
-      // This used to be gated on "owns no course", which was a trap: a student
-      // who left the picker on Faculty was sent to the faculty app, which
-      // provisions AP50A/AP50B owned by them — so from their second sign-in
-      // they owned courses, the gate was false forever, and there was no way
-      // back from inside the app.
-      //
-      // Being on somebody ELSE's roster is the signal. An instructor who put
-      // their own address on their own roster — a normal thing to do, to see
-      // what students see — is enrolled only on a course they own, so they
-      // stay in the faculty app.
-      try {
-        const enrolment = await getEnrolment();
-        if (enrolment && enrolment.course.owner_id !== uid) return "student" as Kind;
-      } catch {
-        // No roster row, or the lookup failed — carry on as faculty.
-      }
+      // Being on somebody ELSE's roster is the signal, not "owns no course".
+      // That older gate was a trap: a student who left the picker on Faculty was
+      // sent to the faculty app, which provisions AP50A/AP50B owned by them, so
+      // from their second sign-in they owned courses, the gate was false
+      // forever, and there was no way back. An instructor who put their own
+      // address on their own roster — a normal thing to do, to see what students
+      // see — is enrolled only on a course they own, and stays put.
+      if (enrolment && enrolment.course.owner_id !== uid) return "student" as Kind;
 
-      // Last stop before the faculty app: does this account have a course at
-      // all? An account that says it teaches and owns nothing is either an
-      // instructor about to be handed AP50A/AP50B, or a student who picked the
-      // wrong side at sign-up — and those two want opposite things. Ask, once,
-      // at the only moment it is still free: ensureSessions runs inside
-      // FacultyApp, so a moment later they own courses and the question stops
-      // being askable. Post-0028 a student cannot create one anyway, and what
-      // they would meet instead is "no AP 50 sessions came back — check that
-      // migrations 0003-0005 have been run", which is neither true nor theirs
-      // to fix.
-      try {
-        const owned = await listCourses();
-        if (!owned.some((c) => c.owner_id === uid)) return "choose" as Kind;
-      } catch {
-        // Cannot tell. Go to the faculty app rather than stranding an
-        // instructor on a question because one select failed.
-      }
+      // Last stop: does this account have a course at all? One that says it
+      // teaches and owns nothing is either an instructor about to be handed
+      // AP50A/AP50B, or a student who picked the wrong side — and those two want
+      // opposite things. Ask at the only moment it is still free: ensureSessions
+      // runs inside FacultyApp, so a moment later they own courses and the
+      // question stops being askable.
+      //
+      // A null here means the select failed, not that they own nothing — go to
+      // the faculty app rather than stranding an instructor on a question
+      // because one read timed out.
+      if (owned && !owned.some((c) => c.owner_id === uid)) return "choose" as Kind;
 
       return "faculty" as Kind;
     })()

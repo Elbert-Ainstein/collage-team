@@ -254,8 +254,16 @@ export async function ensureSessions(term = "Fall"): Promise<Course[]> {
   if (sessionsInFlight) return sessionsInFlight;
   sessionsInFlight = (async () => {
     const sb = db();
-    const { data: auth } = await sb.auth.getUser();
-    const ownerId = auth.user?.id;
+    // getSession, not getUser. getUser() is a NETWORK CALL — auth-js issues
+    // GET /user on every invocation with no cache (GoTrueClient _getUser) — and
+    // four of them sat in series on the cold path, each returning a user the app
+    // was already holding. getSession() reads local storage.
+    //
+    // Safe because the uid here only SHAPES a query, never authorises one. Every
+    // request carries the JWT and Postgres re-derives auth.uid() from it, so a
+    // tampered local session buys nothing: it just builds a query RLS refuses.
+    const { data: auth } = await sb.auth.getSession();
+    const ownerId = auth.session?.user.id;
     if (!ownerId) throw new Error("Not signed in.");
 
     // RLS already limits reads to this account; owner_id is set explicitly so
