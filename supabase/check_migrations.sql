@@ -132,6 +132,17 @@ select '0025 students cannot clear their own flag',
                  and pg_get_functiondef(p.oid) like '%flagged%')
             then 'applied'
             else 'NOT APPLIED — run 0025_restore_flagged_guard.sql' end
+union all
+-- The one that is a live security hole until it runs: without it any signed-in
+-- account can create a course, and a course is all you need to intercept a
+-- classmate's work through the email claim.
+select '0028 only staff can make a course',
+       case when exists (
+              select 1 from pg_policies
+               where schemaname = 'public' and tablename = 'courses'
+                 and policyname = 'make a course if allowed')
+            then 'applied'
+            else 'NOT APPLIED — run 0028_only_staff_make_courses.sql' end
 order by 1;
 
 -- ------------------------------------------------------- and the buckets
