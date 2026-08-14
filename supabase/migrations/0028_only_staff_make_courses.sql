@@ -32,10 +32,17 @@
 -- of it tested — Postgres refuses to drop a column a policy depends on.
 drop policy if exists "make a course if allowed" on courses;
 
-drop function if exists may_make_courses();
+drop function if exists may_make_courses() cascade;
 drop trigger if exists trg_normalise_creator_email on course_creators;
-drop function if exists normalise_creator_email();
-drop table if exists course_creators;
+drop function if exists normalise_creator_email() cascade;
+
+-- CASCADE because three different cuts of this file existed and a database may
+-- carry any of their leftovers — a policy on this table keyed on user_id, a
+-- policy keyed on email, a function reading it. Naming each one would mean
+-- guessing which cut ran, and guessing wrong leaves the drop refused. Nothing
+-- outside this allow-list has ever referenced the table, so the blast radius of
+-- CASCADE here is exactly the thing being removed.
+drop table if exists course_creators cascade;
 
 -- 0003 had ONE policy on courses; the allow-list split it into four so INSERT
 -- could carry an extra test. With the test gone, four statements that all have
