@@ -2,13 +2,16 @@
 
 // The invite code, as the person who hands it out sees it.
 //
-// Two facts have to arrive together or this card is worse than nothing: the code
-// names the course, and whoever presents it must ALSO already be on that
-// course's roster. Show the code alone and the instructor's first support
-// conversation is with somebody she never imported, being told — correctly and
-// uselessly — to go and ask her. So the roster half is not a tooltip. It sits
-// under the code, and each card is placed on the screen that owns the roster it
-// depends on, which is why there are two of these and not one.
+// The two codes stopped being the same kind of thing in 0030, so the card can no
+// longer say one sentence about both. A STUDENT code is now the whole of
+// enrolment: whoever presents it gets a roster row written for them, so the
+// roster below is the code's OUTPUT and not its gate, and rotating is the only
+// way to take the door off anyone. BOTH codes work that way now, by decision —
+// but they are not equally cheap to leak. A student code buys a seat, a TF code
+// buys
+// eighty people's gradebook. Each card has to name which one it is showing, or
+// she reasons about the strict one from the loose one and hands the wrong string
+// to a lecture hall.
 //
 // OWNER ONLY, and not because of this file. course_invites has a single RLS
 // policy, owns_course(), and no student or TF read at all — a teaching fellow
@@ -38,9 +41,12 @@ export function InviteCodeCard({
   courseName: string;
   kind: InviteKind;
   /**
-   * People on the roster this code admits who have not signed in yet — which is
-   * exactly the population a rotation costs, so it is asked for rather than
-   * counted here. Only the screen holding that roster knows it.
+   * Rows on the roster this code admits that nobody has claimed yet, asked for
+   * rather than counted here because only the screen holding that roster knows
+   * it. For the TF card that is exactly who a rotation costs. For the student
+   * card it is a floor, not the count — the code now admits people who are on
+   * no list at all, and she is the only one who knows how many of those she
+   * gave the old one to.
    */
   waiting: number;
 }): JSX.Element {
@@ -118,11 +124,23 @@ export function InviteCodeCard({
     }
   }
 
-  const cost =
+  // `waiting` bounded the whole cost of a rotation while the roster bounded who
+  // could get in. It does not any more: the student code went to a lecture hall
+  // and nothing here knows who wrote it down. So the student zero case must not
+  // read as "this is free" — the one thing it can honestly promise is that the
+  // people already in stay in.
+  const studentCost =
+    waiting === 0
+      ? "The old code stops working the moment you replace it, for everyone holding it — not only the people on the roster below. Anyone already in stays in; anyone else needs the new one from you."
+      : `${waiting} ${waiting === 1 ? `${one} you added by hand has` : `${many} you added by hand have`} not joined yet and would need the new code — so would anyone else holding the old one, on the roster or not. It stops working immediately. Anyone already in stays in.`;
+
+  const tfCost =
     waiting === 0
       ? `Everyone on the ${rosterName} has already joined, so nobody is left needing a code — but the old one stops working the moment you replace it.`
       : `${waiting} ${waiting === 1 ? `${one} has` : `${many} have`} not joined yet, and every one of them needs the new code. ` +
         `The old one stops working immediately. Anyone already signed in stays in.`;
+
+  const cost = student ? studentCost : tfCost;
 
   return (
     <div className="fv-card" style={{ padding: 16, marginBottom: 14 }}>
@@ -153,21 +171,26 @@ export function InviteCodeCard({
         </div>
       )}
 
-      {/* The half that is not the code. A leaked code lets nobody in on its own,
-          and someone who was never imported is stopped by name — which is a
-          feature until you hand the code to them not knowing it. */}
+      {/* The half that is not the code, and it says opposite things on the two
+          cards. Whoever holds a student code is in, so the sentence has to point
+          her at the only control she has left — replacing it — rather than at a
+          roster that no longer stops anyone. */}
       <div className="fv-sub" style={{ maxWidth: "68ch", lineHeight: 1.55 }}>
         {student ? (
           <>
-            Read it out or send it on. It admits a student to {courseName} only if the address they
-            sign in with is <strong>already on the roster below</strong> — anyone you have not
-            imported is turned away and told to ask you, however they came by the code.
+            Read it out or send it on. Anyone who enters it joins {courseName} as a student and
+            appears on the roster below — you do not add them first, the code does it. So the code
+            is the door: <strong>everyone you give it to can walk in</strong>, and replacing it is
+            how you shut it.
           </>
         ) : (
           <>
-            Send it to your teaching fellows privately — this one is not for the lecture hall. It
-            admits someone to {courseName} as a TF, with the permissions set on this screen, only if
-            their address is <strong>already on the TF roster</strong>.
+            Hand this to your teaching fellows in person — never read it out, and do not put it
+            anywhere it can be screenshotted. Anyone who enters it becomes a TF on {courseName}{" "}
+            with the permissions set on this screen, which means they can{" "}
+            <strong>read every student&rsquo;s work and change any grade</strong>. Removing them
+            afterwards does not undo what they read or re-mark. Once your teaching fellows are in,
+            replace this code — that is what shuts the door.
           </>
         )}
       </div>
@@ -189,14 +212,18 @@ export function InviteCodeCard({
               className="fv-btn outline sm"
               disabled={busy}
               // The link is the app's front door, not a code-specific route:
-              // redemption happens after signing in, because the roster is
-              // matched against the address on the account. Built at click time
-              // — this component server-renders, and reading window during that
+              // the code is redeemed from inside an account, so the message has
+              // to walk them through making one first. Built at click time —
+              // this component server-renders, and reading window during that
               // makes the two passes disagree.
               onClick={() =>
                 void copy(
-                  `Join ${courseName} at ${window.location.origin}/ck — sign in with your school ` +
-                    `email address, then enter ${student ? "the code" : "the teaching fellow code"} ${shown}.`,
+                  student
+                    ? `Join ${courseName} at ${window.location.origin}/ck — create an account with ` +
+                        `your name and your school email address, then enter the class code ${shown}. ` +
+                        `That puts you on the roster; there is nothing to do beforehand.`
+                    : `Join ${courseName} at ${window.location.origin}/ck — sign in with the email ` +
+                        `address I have for you on the TF list, then enter the teaching fellow code ${shown}.`,
                   "Message copied — paste it into your email.",
                 )
               }

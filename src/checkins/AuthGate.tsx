@@ -5,6 +5,7 @@ import type { Session } from "@supabase/supabase-js";
 import { Logo } from "./Logo";
 import { requireSupabase } from "@/lib/supabaseClient";
 import { Icon } from "./icons";
+import { redeemInviteCode, type JoinedCourse } from "./invites";
 
 // The client is created with detectSessionInUrl, so it consumes the recovery
 // fragment itself and can announce PASSWORD_RECOVERY before React's first
@@ -13,12 +14,45 @@ import { Icon } from "./icons";
 const initialHash = typeof window === "undefined" ? "" : window.location.hash;
 
 // A class link (?join=…) lands here first, because a code can only be redeemed
-// as somebody. Nothing on this screen touches the code — it is still on the URL
-// afterwards, and the join screen picks it up — but arriving at a bare password
-// box after clicking "join my class" needs a sentence, or it reads as the wrong
+// as somebody. Read once at module load, for the same reason as the fragment
+// above: sign-up fills the code field from it, and arriving at a bare password
+// box after clicking "join my class" needs a sentence or it reads as the wrong
 // page.
-const cameByClassLink =
-  typeof window !== "undefined" && /[?&](join|code)=[^&\s]/.test(window.location.search);
+function codeOnUrl(): string {
+  if (typeof window === "undefined") return "";
+  const q = new URLSearchParams(window.location.search);
+  return (q.get("join") ?? q.get("code") ?? "").trim();
+}
+const linkedCode = codeOnUrl();
+const cameByClassLink = linkedCode !== "";
+
+/**
+ * Leave the code on the URL, or take it off once it has been spent.
+ *
+ * Where a code waits matters. When the project requires email confirmation,
+ * sign-up returns no session, so there is nothing to redeem as — and by the
+ * time there is, this component has been through a link, a new tab and at
+ * least one reload, which React state does not survive. The query string does,
+ * and the join screen already reads ?join= on mount (StudentApp.tsx:224), so
+ * parking it there hands the code to something downstream that was going to
+ * look for it anyway.
+ *
+ * `code` is dropped alongside because the join screen accepts either spelling,
+ * and two params disagreeing about which code you meant is worse than one.
+ */
+function parkCode(code: string | null) {
+  if (typeof window === "undefined") return;
+  const q = new URLSearchParams(window.location.search);
+  q.delete("join");
+  q.delete("code");
+  if (code) q.set("join", code);
+  const qs = q.toString();
+  window.history.replaceState(
+    window.history.state,
+    "",
+    window.location.pathname + (qs ? "?" + qs : ""),
+  );
+}
 
 function hashParams(hash: string): URLSearchParams {
   return new URLSearchParams(hash.replace(/^#/, ""));
@@ -47,6 +81,10 @@ export function AuthGate({
   const [ready, setReady] = useState(false);
   const [recovering, setRecovering] = useState(false);
   const [linkError, setLinkError] = useState<string | null>(null);
+  // A code collected at sign-up, waiting for a session to be redeemed as. It
+  // lives up here rather than in the form because signUp() returning a session
+  // makes the gate render its children on the spot, and the form goes with it.
+  const [pendingCode, setPendingCode] = useState<string | null>(null);
 
   useEffect(() => {
     const params = hashParams(initialHash);
@@ -130,7 +168,14 @@ export function AuthGate({
     );
   }
 
-  if (!session) return <SignIn linkError={linkError} />;
+  if (!session) return <SignIn linkError={linkError} onCodeCollected={setPendingCode} />;
+
+  // Before the children, so the roster row exists before anything asks which
+  // app this account gets: app/ck resolves that on mount from what the account
+  // is enrolled in, and redeeming underneath it would race the answer.
+  if (pendingCode !== null) {
+    return <RedeemCollectedCode code={pendingCode} onDone={() => setPendingCode(null)} />;
+  }
 
   return <>{children(session, async () => void (await requireSupabase().auth.signOut()))}</>;
 }
@@ -187,7 +232,14 @@ function NoticeLine({ text }: { text: string }) {
 type Mode = "in" | "up" | "forgot";
 type Role = "faculty" | "student";
 
-function SignIn({ linkError }: { linkError: string | null }) {
+function SignIn({
+  linkError,
+  onCodeCollected,
+}: {
+  linkError: string | null;
+  /** Hands a sign-up code to the gate, which outlives this form. */
+  onCodeCollected: (code: string) => void;
+}) {
   const [mode, setMode] = useState<Mode>("in");
   // The fork is about what happens NEXT, not about what you are called. Naming
   // the roles — Faculty / Teaching fellow / Student — asked people to classify
@@ -207,6 +259,11 @@ function SignIn({ linkError }: { linkError: string | null }) {
   const role: Role = pick === "join" ? "student" : "faculty";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  // Seeded from the link that brought them here. Safe to read a module const
+  // computed from `window` — the gate renders "Loading…" until an effect has
+  // run, so this form never server-renders and there is nothing to mismatch.
+  const [classCode, setClassCode] = useState(linkedCode);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -254,12 +311,28 @@ function SignIn({ linkError }: { linkError: string | null }) {
         const { error } = await sb.auth.signInWithPassword({ email, password });
         if (error) throw error;
       } else {
-        // The role travels in user metadata; a database trigger turns it into a
-        // profiles row (see migration 0006).
+        const wanted = pick === "join" ? classCode.trim() : "";
+        // Handed over BEFORE the account exists, and deliberately. If signUp
+        // comes back with a session it announces it on the way, and the gate
+        // replaces this form mid-await; anything passed up afterwards is passed
+        // up by a component that is already gone. Handing it over early costs
+        // nothing when sign-up then fails: a code is only ever spent once there
+        // is a session, and join_with_code enrols auth.uid() and nobody else,
+        // so the worst a leftover does is enrol the next account to sign in on
+        // this browser — which is the account of the person who typed it.
+        if (wanted) {
+          parkCode(wanted);
+          onCodeCollected(wanted);
+        }
+
+        // Role and name both travel in user metadata; handle_new_user() turns
+        // them into the profiles row (0006). full_name is the name 0030 writes
+        // onto the roster when the code is redeemed, so this field and that
+        // insert are the same feature.
         const { data, error } = await sb.auth.signUp({
           email,
           password,
-          options: { data: { role } },
+          options: { data: { role, full_name: fullName.trim() } },
         });
         if (error) throw error;
         // With email-enumeration protection on (the default), signing up with an
@@ -270,8 +343,14 @@ function SignIn({ linkError }: { linkError: string | null }) {
           setError("That email already has an account — sign in instead.");
           setMode("in");
         } else if (!data.session) {
-          // Genuine new signup, email confirmation required.
-          setNotice("Account created. Check your email for the confirmation link, then sign in.");
+          // Genuine new signup, email confirmation required. There is no
+          // session, so there is nothing to redeem the code as yet — it stays
+          // parked on the URL and the join screen picks it up on the far side
+          // of the confirmation link.
+          setNotice(
+            "Account created. Check your email for the confirmation link, then sign in." +
+              (wanted ? " Your class code is saved for when you get back." : ""),
+          );
           setMode("in");
         }
       }
@@ -303,7 +382,7 @@ function SignIn({ linkError }: { linkError: string | null }) {
           {mode === "in"
             ? "Your sessions, rosters and grades are private to your account."
             : mode === "up"
-              ? "Sign up with the address your instructor has for you — that is what a class code is checked against."
+              ? "Your name and email go on your instructor's roster when you enter their class code."
               : "We'll email you a link that lets you set a new password."}
         </div>
 
@@ -321,9 +400,9 @@ function SignIn({ linkError }: { linkError: string | null }) {
               background: "var(--paper3)",
             }}
           >
-            You followed a class link. The code it carries is still here — sign in, or create an
-            account with the address your instructor has for you, and it will be filled in for you
-            to confirm.
+            You followed a class link. Creating an account? The code it carries is filled in below
+            — check it matches the one you were given. Signing in? It&rsquo;s waiting for you on the
+            join screen.
           </div>
         )}
 
@@ -353,10 +432,30 @@ function SignIn({ linkError }: { linkError: string | null }) {
                   created in their name. Change one and change the other. */}
               <span style={{ fontSize: 11.5, color: "var(--ink3)", marginTop: 4 }}>
                 {pick === "join"
-                  ? "Students and teaching fellows. Your instructor hands out the code; sign up with the address they have for you and enter it on the next screen."
+                  ? "Students and teaching fellows. Enter the code your instructor handed out and you are on their roster — or leave it blank and enter one on the next screen."
                   : "Sets up a course of your own: rosters, teams, weeks and grading. Taking the course, or a TF on it? Pick the other one — and if you pick this by mistake, the next screen still offers the code box."}
               </span>
             </div>
+          )}
+
+          {mode === "up" && (
+            <label className="t-fld">
+              Your name
+              {/* Required, because this is the name that goes on the roster —
+                  0030 reads profiles.full_name and only falls back to the email
+                  address, and there is no rename-a-student screen anywhere in
+                  the app for Kelly to fix it with afterwards. */}
+              <input
+                className="t-in"
+                type="text"
+                autoComplete="name"
+                autoCapitalize="words"
+                required
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="How your instructor should see you"
+              />
+            </label>
           )}
 
           {!sent && (
@@ -387,6 +486,37 @@ function SignIn({ linkError }: { linkError: string | null }) {
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder={mode === "up" ? "at least 6 characters" : ""}
               />
+            </label>
+          )}
+
+          {mode === "up" && pick === "join" && (
+            <label className="t-fld">
+              Class code (optional)
+              {/* Typed on a phone off a whiteboard. The alphabet mixes letters
+                  and digits, so a numeric keypad would be the wrong one;
+                  autocorrect would try to make eight consonants into a word;
+                  autocapitalize costs nothing because normalise_invite_code()
+                  upper-cases whatever arrives. The value is left exactly as
+                  typed — upper-casing it on every keystroke sends the caret to
+                  the end on some phone keyboards, which turns fixing the third
+                  character of eight into a fight. */}
+              <input
+                className="t-in"
+                type="text"
+                inputMode="text"
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
+                autoComplete="off"
+                value={classCode}
+                onChange={(e) => setClassCode(e.target.value)}
+                placeholder="ABCD-EFGH"
+                style={{ textTransform: "uppercase", letterSpacing: "0.1em" }}
+              />
+              <span style={{ fontSize: 11.5, color: "var(--ink3)", marginTop: 4 }}>
+                Eight characters, from the board or an email. Don&rsquo;t have it yet? Leave this
+                empty — you can enter one any time, and your account is made either way.
+              </span>
             </label>
           )}
 
@@ -439,6 +569,84 @@ function SignIn({ linkError }: { linkError: string | null }) {
           {mode === "in" ? "Create one" : "Sign in"}
         </button>
       </div>
+    </Shell>
+  );
+}
+
+/**
+ * The code from the sign-up form, spent now that there is a session to spend it
+ * as.
+ *
+ * A separate screen, and separate from sign-up's try block, because of the one
+ * rule this path has: a bad code must never cost somebody the account they just
+ * made. By the time this renders the account exists and they are signed in, so
+ * a typo, a rotated string or a dropped connection is a sentence to read and a
+ * button to press — not a failed sign-up, which is what it would look like if
+ * the redeem threw where the signUp call could catch it.
+ *
+ * Both outcomes leave by the same button, into an app whose first screen is a
+ * box for a class code.
+ */
+function RedeemCollectedCode({ code, onDone }: { code: string; onDone: () => void }) {
+  const [joined, setJoined] = useState<JoinedCourse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    // Raw, not trimmed to some other shape: normalise_invite_code() already
+    // strips case, spaces and hyphens, and a second definition of what a code
+    // looks like is a second thing to drift.
+    redeemInviteCode(code)
+      .then((j) => {
+        if (!alive) return;
+        // Spent. Leaving it on the URL would prefill the join box with a code
+        // this account has already redeemed, and make the next visit to this
+        // tab announce a class link that is no longer going anywhere.
+        parkCode(null);
+        setJoined(j);
+      })
+      .catch((err: unknown) => alive && setError(String((err as Error)?.message ?? err)));
+    return () => {
+      alive = false;
+    };
+  }, [code]);
+
+  if (!joined && !error) {
+    return (
+      <Shell>
+        <div style={{ color: "var(--ink2)" }}>Joining your course…</div>
+      </Shell>
+    );
+  }
+
+  return (
+    <Shell>
+      <div style={{ fontFamily: "var(--serif)", fontSize: 19, fontWeight: 700 }}>
+        {joined
+          ? `You're on ${joined.course_name}${joined.course_code ? ` · ${joined.course_code}` : ""}`
+          : "Your account is ready"}
+      </div>
+      <div style={{ fontSize: 13, color: "var(--ink2)", marginTop: 6, lineHeight: 1.55 }}>
+        {joined ? (
+          joined.kind === "tf" ? (
+            "You joined as a teaching fellow."
+          ) : (
+            "Your name and email are on the roster."
+          )
+        ) : (
+          // The database keeps its refusals apart on purpose — no such code, a
+          // code that has been replaced, a TF address nobody listed — and each
+          // sends you somewhere different. Shown as-is, then the part only this
+          // screen knows: the account survived.
+          <>
+            {error} Your account is made and you are signed in — you can enter a code on the next
+            screen.
+          </>
+        )}
+      </div>
+      <button className="t-btn primary" style={{ marginTop: 14 }} onClick={onDone}>
+        Continue
+      </button>
     </Shell>
   );
 }

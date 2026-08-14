@@ -188,13 +188,17 @@ export function JoinScreen({ children }: { children: React.ReactNode }) {
  * Entering a class code — the only way onto a roster now, so it is the first
  * screen most people meet.
  *
+ * For a student the code is now the whole of it: join_with_code (0030) WRITES
+ * the roster row rather than hunting for one, so there is no list to be missing
+ * from and nothing to have been done before you got here. A TF code is still
+ * matched against an address the instructor entered, which is why exactly one
+ * of the failures below is about an address at all.
+ *
  * The failure sentences come straight from join_with_code() and are shown
- * as-is on purpose. The database keeps three cases apart — no such code, a code
- * that has been replaced, and a good code paired with an address that is not on
- * that roster — and only the third sends you to your instructor rather than
- * back to the board. Folding them into "that didn't work" would leave the
- * student whose address was typed wrong retyping a code that was never the
- * problem.
+ * as-is on purpose. No such code and a code that has been replaced send a
+ * person to two different places — back to the board, or back to whoever handed
+ * it out — and folding them into "that didn't work" would leave someone
+ * retyping a code that was never the problem.
  */
 export function JoinPanel({
   account,
@@ -275,10 +279,10 @@ export function JoinPanel({
     );
   }
 
-  // The roster misses are the only failures where the fix is a conversation
-  // rather than a retype, so they get the extra line about signing in under a
-  // different address.
-  const rosterMiss = error !== null && /roster|listed as a TF/i.test(error);
+  // A TF code is the only one left that is checked against an address somebody
+  // typed, so it is the only failure here whose fix is a conversation rather
+  // than a retype. There is no student equivalent any more: a student code that
+  // is live cannot be refused for who is holding it.
 
   return (
     <form className="sv-card" style={{ maxWidth: 620 }} onSubmit={submit}>
@@ -294,12 +298,12 @@ export function JoinPanel({
           maxWidth: "62ch",
         }}
       >
-        There is nothing on this account yet. Your instructor hands out a class code — eight
-        characters, on the board or in an email. Enter it and you&rsquo;re on their roster.
+        Your instructor hands out a class code — eight characters, on the board or in an email.
+        Entering it puts you on their roster. There is no list you have to be on first.
       </p>
       <p id={noteId} className="sv-sub" style={{ lineHeight: 1.6, marginTop: 6, maxWidth: "62ch" }}>
-        The code only works alongside the address on their list. You&rsquo;re signed in as{" "}
-        <strong style={{ color: "var(--navy)" }}>{account}</strong>.
+        You&rsquo;ll appear on the roster under the name and address on this account. You&rsquo;re
+        signed in as <strong style={{ color: "var(--navy)" }}>{account}</strong>.
       </p>
 
       <label
@@ -364,12 +368,7 @@ export function JoinPanel({
           }}
         >
           {error}
-          {rosterMiss && (
-            <>
-              {" "}
-              If they have a different address for you, sign out and sign in with that one instead.
-            </>
-          )}
+
         </p>
       )}
 
@@ -464,23 +463,15 @@ export function StudentApp({
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [claimError, setClaimError] = useState<string | null>(null);
+  /** The code box, opened from the sidebar rather than only by having nothing. */
+  const [joining, setJoining] = useState(false);
 
   // Returns the enrolment it found, because redeeming a code has to know
   // whether this app now has anything to show — a TF code leaves it null and
   // needs the router, not a re-render.
   const load = useCallback(async (): Promise<Enrolment | null> => {
-    // Claim any roster rows carrying this address first — a student who signs
-    // up before the instructor imports them would otherwise be stranded.
-    try {
-      setClaimError(null);
-    } catch (err) {
-      // Not fatal on its own: an unclaimed account simply has no enrolment yet.
-      // But if the claim FAILED rather than matched nothing, that is the reason
-      // this student is stuck, and swallowing it leaves them reloading forever
-      // with nothing to tell their instructor.
-      setClaimError(String((err as Error)?.message ?? err));
-    }
+    // Nothing to claim before reading: an address sweep used to run here, and
+    // redeeming a code is the only thing that enrols anyone now.
     const e = await getEnrolment();
     setEnrolment(e);
     setAssignments(e ? await listAssignments(e) : []);
@@ -586,6 +577,23 @@ export function StudentApp({
         </nav>
 
         <div className="sv-spacer" />
+        {/* The code box used to live only on the empty state, which meant it
+            vanished the moment you got in — so a student in a second course, or
+            one handed a corrected code after their instructor rotated it, had
+            nowhere to type it. It is a door, not a greeting. */}
+        <button
+          type="button"
+          className="sv-btn link"
+          style={{
+            justifyContent: "flex-start",
+            padding: "8px 10px",
+            margin: "0 0 4px",
+            fontSize: "var(--text-xs)",
+          }}
+          onClick={() => setJoining(true)}
+        >
+          Join another class
+        </button>
         <div className="sv-foot">
           <span
             className="sv-ellip"
@@ -643,40 +651,57 @@ export function StudentApp({
             if (!e) onRerouted?.();
           }}
           footer={
-            <>
-              {claimError ? (
-                <p className="sv-sub" style={{ lineHeight: 1.6, marginTop: 14, maxWidth: "62ch" }}>
-                  Matching your address against the class lists also reported an error, which your
-                  instructor may need: <span style={{ color: "var(--navy)" }}>{claimError}</span>
-                </p>
-              ) : null}
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: 14,
-                  alignItems: "center",
-                  marginTop: 18,
-                  paddingTop: 14,
-                  borderTop: "1px solid var(--neutral-200)",
-                }}
-              >
-                {/* Your instructor can also add you by address, and that lands
-                    without a code — worth a button for the student sitting
-                    there while she fixes the spreadsheet. */}
-                <button className="sv-btn link" type="button" onClick={() => location.reload()}>
-                  No code? Check again
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 14,
+                alignItems: "center",
+                marginTop: 18,
+                paddingTop: 14,
+                borderTop: "1px solid var(--neutral-200)",
+              }}
+            >
+              {/* Not a way in without a code — there is no longer one. It
+                  re-reads the account for something that landed elsewhere: a
+                  code redeemed in another tab, or an instructor switching a
+                  wrongly-picked faculty account back to a student one. */}
+              <button className="sv-btn link" type="button" onClick={() => location.reload()}>
+                Check again
+              </button>
+              {onTeachInstead && (
+                <button className="sv-btn link" type="button" onClick={onTeachInstead}>
+                  I&rsquo;m teaching a course, not taking one
                 </button>
-                {onTeachInstead && (
-                  <button className="sv-btn link" type="button" onClick={onTeachInstead}>
-                    I&rsquo;m teaching a course, not taking one
-                  </button>
-                )}
-                <button className="sv-btn link" type="button" onClick={() => void onSignOut()}>
-                  Sign out
-                </button>
-              </div>
-            </>
+              )}
+              <button className="sv-btn link" type="button" onClick={() => void onSignOut()}>
+                Sign out
+              </button>
+            </div>
+          }
+        />
+      </JoinScreen>
+    );
+  }
+
+  // Opened from the sidebar by somebody who is already in a course. Same panel,
+  // because a second code is the same act as a first one — the only difference
+  // is that this time there is something to go back to.
+  if (joining) {
+    return (
+      <JoinScreen>
+        <JoinPanel
+          account={account}
+          onJoined={async () => {
+            await load();
+            setJoining(false);
+          }}
+          footer={
+            <div style={{ marginTop: 18, paddingTop: 14, borderTop: "1px solid var(--neutral-200)" }}>
+              <button className="sv-btn link" type="button" onClick={() => setJoining(false)}>
+                Back to {enrolment.course.name}
+              </button>
+            </div>
           }
         />
       </JoinScreen>

@@ -143,15 +143,15 @@ export function TeamsScreen(props: {
     if (next === (s.email ?? "")) return;
 
     if (!next) {
-      // Clearing an address revokes the student's route into the course, so it
-      // is armed first and only cleared on the second click.
+      // Clearing an address leaves an unclaimed row with nothing a join can
+      // match, so it is armed first and only cleared on the second click.
       if (armedClear !== s.id) {
         setArmedClear(s.id);
         return;
       }
     } else if (!EMAIL_RE.test(next)) {
       setNote(
-        `"${next}" is not an email address — a student signs in with it, so it has to be exact.`,
+        `"${next}" is not an email address — it is what matches this row to the account they join with, so it has to be exact.`,
       );
       return;
     } else {
@@ -183,7 +183,9 @@ export function TeamsScreen(props: {
       await setStudentEmail(s.id, next || null);
       setArmedClear(null);
       dropDraft(s.id);
-      setNote(next ? `${s.name} signs in as ${next}.` : `Cleared ${s.name}'s address.`);
+      setNote(
+        next ? `${s.name}'s row now matches ${next}.` : `Cleared ${s.name}'s address.`,
+      );
       onChanged();
     } catch (e) {
       fail(e);
@@ -379,7 +381,11 @@ export function TeamsScreen(props: {
   // ---------------- roster ----------------
 
   const withoutEmail = roster.filter((s) => !s.email).length;
-  /** Everyone the code is still for — and everyone a rotation would strand mid-term. */
+  /**
+   * Imported rows nobody has claimed. No longer everyone the student code is
+   * for — it now admits people who are on no list at all — but still the people
+   * a rotation would strand holding a dead code, which is what the card wants.
+   */
   const notJoined = roster.filter((s) => !s.user_id).length;
 
   // A teaching fellow sees who is in the class, and nothing they can change:
@@ -405,7 +411,7 @@ export function TeamsScreen(props: {
               disabled={roster.length === 0}
               title={
                 roster.length === 0
-                  ? "Add students first — teams are formed from the roster."
+                  ? "Nobody has joined yet — teams are formed from the roster, and the roster fills as students enter the code."
                   : undefined
               }
             >
@@ -419,10 +425,10 @@ export function TeamsScreen(props: {
       <FacultyError error={error} onClear={() => setError(null)} />
 
       <div className="fv-scroll">
-        {/* Above the roster because the roster is the other half of it: the code
-            names the course, the row underneath is what says this person was
-            expected. A TF gets this screen too and must not see it — and would
-            not anyway, since course_invites has no read policy but the owner's. */}
+        {/* Above the roster because the roster is what it produces: the code
+            goes out, the rows underneath are who used it. A TF gets this screen
+            too and must not see it — and would not anyway, since course_invites
+            has no read policy but the owner's. */}
         {data.can.isOwner ? (
           <InviteCodeCard
             courseId={course.id}
@@ -478,7 +484,7 @@ export function TeamsScreen(props: {
                         whiteSpace: "nowrap",
                       }}
                     >
-                      {s.email ?? "no address — cannot sign in"}
+                      {s.email ?? "no address — cannot be matched"}
                     </span>
                   ) : (
                   <input
@@ -491,7 +497,7 @@ export function TeamsScreen(props: {
                       fontSize: "var(--fv-2xs)",
                     }}
                     type="email"
-                    placeholder="no address — cannot sign in"
+                    placeholder="no address — cannot be matched"
                     aria-label={`Email for ${s.name}`}
                     value={draftFor(s)}
                     disabled={busy}
@@ -635,17 +641,26 @@ export function TeamsScreen(props: {
                 </div>
               );
             })}
+            {/* An empty roster used to mean "you have not done the import yet",
+                and Kelly would sit waiting on herself. Names now arrive on
+                their own, so the first thing this says is that there is nothing
+                to wait for; the import is offered second, as the thing it now
+                is. */}
             {roster.length === 0 ? (
-              <div className="fv-sub" style={{ padding: "10px 4px" }}>
-                No students yet — drop a class list below.
+              <div className="fv-sub" style={{ padding: "10px 4px", lineHeight: 1.5 }}>
+                {canEdit
+                  ? "No students yet. Names appear here as students enter the class code — you do not have to add anyone first. Paste or drop a class list below only if you want the names in place before they join."
+                  : "No students yet. Names appear here as students enter the class code."}
               </div>
             ) : null}
           </div>
 
           {withoutEmail > 0 ? (
             <div className="fv-sub" style={{ margin: "0 4px 12px", lineHeight: 1.5 }}>
-              {plural(withoutEmail, "student has", "students have")} no address yet. A student can
-              only reach the course once their address is on their row.
+              {plural(withoutEmail, "student has", "students have")} no address — a row added by
+              name only. The class code still gets them in, but nothing ties their account to this
+              row, so they arrive as a second one and this stays here unclaimed. Fill the address
+              in, or delete the row and let their own join make it.
             </div>
           ) : null}
 
@@ -715,7 +730,7 @@ export function TeamsScreen(props: {
                 color: "var(--fv-navy)",
               }}
             >
-              Add more students
+              {roster.length === 0 ? "Add students in advance" : "Add more students"}
             </span>
             <span
               style={{
