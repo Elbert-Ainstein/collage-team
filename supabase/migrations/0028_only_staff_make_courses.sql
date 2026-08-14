@@ -44,35 +44,93 @@
 -- ---------------------------------------------------------------------------
 -- 1. WHO MAY CREATE A COURSE.
 --
--- An allow-list, seeded from the people who already own one. That keeps every
--- real instructor working — including ensureSessions, which creates AP50A and
--- AP50B on first sign-in — and stops everybody else. Adding somebody is a
--- deliberate act in the SQL editor, which is the correct weight for "this
--- person may stand up a course".
+-- An allow-list of ADDRESSES. Seeded from whoever already owns a course, so
+-- nothing that works today stops working — ensureSessions included, which is
+-- what creates AP50A and AP50B on a first sign-in. Everybody else is refused.
+--
+-- Addresses rather than accounts because the people this course belongs to do
+-- not have accounts yet. An instructor is authorised weeks before she first
+-- signs in, and a list you could only add somebody to AFTER they signed up
+-- would make her first visit the broken one.
 
+-- Keyed on EMAIL, not on a user id. The people who will run this course do not
+-- have accounts yet — an instructor is authorised weeks before she first signs
+-- in — and a list you can only add somebody to AFTER they have signed up would
+-- mean her first visit is a broken one.
 create table if not exists course_creators (
-  user_id    uuid primary key references auth.users(id) on delete cascade,
+  email      text primary key,
   note       text,
   created_at timestamptz not null default now()
 );
 
+-- Stored lowercase so the check does not turn on how somebody typed their
+-- address into the sign-up form.
+create or replace function normalise_creator_email() returns trigger
+language plpgsql set search_path = public as $$
+begin
+  new.email := lower(btrim(new.email));
+  if new.email = '' then raise exception 'A creator needs an email'; end if;
+  return new;
+end $$;
+
+drop trigger if exists trg_normalise_creator_email on course_creators;
+create trigger trg_normalise_creator_email
+  before insert or update on course_creators
+  for each row execute function normalise_creator_email();
+
 alter table course_creators enable row level security;
 
--- Deliberately NO insert/update/delete policy: with RLS on and no policy, the
--- anon key cannot write this table at all. It is edited here, by a human, or
--- not at all — an allow-list the app could add itself to would not be one.
+-- Deliberately NO POLICY AT ALL. With RLS on and nothing granting access, the
+-- anon key can neither read nor write this table — an allow-list the app can
+-- add itself to would not be one, and there is no reason for a browser to know
+-- who is on it. The only consumer is may_make_courses() below, which is
+-- security definer and so reads it regardless.
 drop policy if exists "read own creator row" on course_creators;
-create policy "read own creator row" on course_creators
-  for select to authenticated using (user_id = auth.uid());
+
+/**
+ * May the caller stand up a course?
+ *
+ * Security definer because the policy has to read auth.users to learn the
+ * caller's address, and an ordinary policy predicate may not. It answers only
+ * yes or no about the CALLER — it takes no argument, so there is nothing to
+ * point at somebody else.
+ */
+create or replace function may_make_courses() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1
+      from course_creators cc
+      join auth.users u on lower(u.email) = cc.email
+     where u.id = auth.uid());
+$$;
+
+grant execute on function may_make_courses() to authenticated;
 
 -- Everyone who already owns a course keeps the right to make another. Runs
 -- before the new policy exists, so it cannot lock the real instructor out, and
 -- `on conflict do nothing` makes a re-run a no-op.
-insert into course_creators (user_id, note)
-select distinct c.owner_id, 'owned a course before 0028'
-  from courses c
- where c.owner_id is not null
-on conflict (user_id) do nothing;
+insert into course_creators (email, note)
+select distinct lower(u.email), 'owned a course before 0028'
+  from courses c join auth.users u on u.id = c.owner_id
+ where c.owner_id is not null and u.email is not null
+on conflict (email) do nothing;
+
+-- ADD THE PEOPLE WHO WILL ACTUALLY RUN THE COURSE. They do not need accounts
+-- yet; the address is enough, and it starts working the moment they sign up
+-- with it. Edit this list and re-run the file, or insert straight into the
+-- table — both are the same deliberate act in the SQL editor, which is the
+-- right weight for "this person may stand up a course".
+-- Uncomment, put the real addresses in, and run:
+--
+-- insert into course_creators (email, note) values
+--   ('kelly@fas.harvard.edu', 'AP 50 instructor'),
+--   ('headtf@fas.harvard.edu', 'AP 50 head TF')
+-- on conflict (email) do nothing;
+--
+-- To see who is on the list:   select email, note from course_creators;
+-- To take somebody off:        delete from course_creators where email = '...';
+-- Removing somebody does NOT touch the courses they already own; it only stops
+-- them starting new ones.
 
 -- 0003's single FOR ALL policy has to be split: INSERT is the only verb that
 -- needs the extra test, and folding it into the others would stop an instructor
@@ -97,7 +155,7 @@ create policy "make a course if allowed" on courses
   for insert to authenticated
   with check (
     owner_id = auth.uid()
-    and exists (select 1 from course_creators cc where cc.user_id = auth.uid())
+    and may_make_courses()
   );
 
 -- ---------------------------------------------------------------------------
