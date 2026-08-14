@@ -295,6 +295,7 @@ export function TFsScreen(props: {
         <InviteCodeCard
           courseId={course.id}
           courseName={course.name}
+          section={course.code}
           kind="tf"
           waiting={tfs.filter((t) => !t.user_id).length}
         />

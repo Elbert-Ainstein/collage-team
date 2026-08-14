@@ -433,6 +433,7 @@ export function TeamsScreen(props: {
           <InviteCodeCard
             courseId={course.id}
             courseName={course.name}
+            section={course.code}
             kind="student"
             waiting={notJoined}
           />

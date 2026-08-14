@@ -34,11 +34,19 @@ const MONO = 'ui-monospace, SFMono-Regular, Menlo, "Courier New", monospace';
 export function InviteCodeCard({
   courseId,
   courseName,
+  section,
   kind,
   waiting,
 }: {
   courseId: string;
   courseName: string;
+  /**
+   * The section label — "AP50A". Load-bearing, not decoration: every section of
+   * a course carries the SAME name (ensureSessions writes one COURSE_NAME for
+   * both), so without this the two cards are identical apart from the code
+   * itself, and the one mistake that matters is handing 50B's code to 50A.
+   */
+  section?: string | null;
   kind: InviteKind;
   /**
    * Rows on the roster this code admits that nobody has claimed yet, asked for
@@ -59,6 +67,11 @@ export function InviteCodeCard({
   const [armed, setArmed] = useState(false);
 
   const student = kind === "student";
+  // Named once, used everywhere the course is spoken about — including the
+  // message a student receives, where "Applied Physics 50" alone would leave
+  // them unable to tell whether they were sent the right section's code.
+  const where = section?.trim() ? `${courseName} · ${section.trim()}` : courseName;
+
   const one = student ? "student" : "teaching fellow";
   const many = student ? "students" : "teaching fellows";
   const rosterName = student ? "roster" : "TF roster";
@@ -165,6 +178,11 @@ export function InviteCodeCard({
         >
           {shown}
         </div>
+      ) : null}
+      {invite && section?.trim() ? (
+        <div className="fv-sub" style={{ fontSize: "var(--fv-2xs)", marginTop: -2 }}>
+          for {section.trim()}
+        </div>
       ) : (
         <div className="fv-sub" style={{ marginTop: 8, lineHeight: 1.5 }}>
           This course has no {student ? "student" : "TF"} code yet.
@@ -178,7 +196,7 @@ export function InviteCodeCard({
       <div className="fv-sub" style={{ maxWidth: "68ch", lineHeight: 1.55 }}>
         {student ? (
           <>
-            Read it out or send it on. Anyone who enters it joins {courseName} as a student and
+            Read it out or send it on. Anyone who enters it joins {where} as a student and
             appears on the roster below — you do not add them first, the code does it. So the code
             is the door: <strong>everyone you give it to can walk in</strong>, and replacing it is
             how you shut it.
@@ -186,7 +204,7 @@ export function InviteCodeCard({
         ) : (
           <>
             Hand this to your teaching fellows in person — never read it out, and do not put it
-            anywhere it can be screenshotted. Anyone who enters it becomes a TF on {courseName}{" "}
+            anywhere it can be screenshotted. Anyone who enters it becomes a TF on {where}{" "}
             with the permissions set on this screen, which means they can{" "}
             <strong>read every student&rsquo;s work and change any grade</strong>. Removing them
             afterwards does not undo what they read or re-mark. Once your teaching fellows are in,
@@ -219,10 +237,10 @@ export function InviteCodeCard({
               onClick={() =>
                 void copy(
                   student
-                    ? `Join ${courseName} at ${window.location.origin}/ck — create an account with ` +
+                    ? `Join ${where} at ${window.location.origin}/ck — create an account with ` +
                         `your name and your school email address, then enter the class code ${shown}. ` +
                         `That puts you on the roster; there is nothing to do beforehand.`
-                    : `Join ${courseName} at ${window.location.origin}/ck — sign in with the email ` +
+                    : `Join ${where} at ${window.location.origin}/ck — sign in with the email ` +
                         `address I have for you on the TF list, then enter the teaching fellow code ${shown}.`,
                   "Message copied — paste it into your email.",
                 )
