@@ -25,6 +25,7 @@ import {
 } from "@/checkins/rosterImport";
 import { reconcileRoster } from "@/checkins/rosterReconcile";
 import type { Student } from "@/checkins/types";
+import { InviteCodeCard } from "./InviteCodeCard";
 import { FAvatar, FIcon } from "./icons";
 import { FacultyError, type FacultyData } from "./FacultyApp";
 import "@/checkins/checkins.css";
@@ -378,6 +379,8 @@ export function TeamsScreen(props: {
   // ---------------- roster ----------------
 
   const withoutEmail = roster.filter((s) => !s.email).length;
+  /** Everyone the code is still for — and everyone a rotation would strand mid-term. */
+  const notJoined = roster.filter((s) => !s.user_id).length;
 
   // A teaching fellow sees who is in the class, and nothing they can change:
   // every roster write is owner-only in RLS, so the controls would only ever
@@ -416,6 +419,19 @@ export function TeamsScreen(props: {
       <FacultyError error={error} onClear={() => setError(null)} />
 
       <div className="fv-scroll">
+        {/* Above the roster because the roster is the other half of it: the code
+            names the course, the row underneath is what says this person was
+            expected. A TF gets this screen too and must not see it — and would
+            not anyway, since course_invites has no read policy but the owner's. */}
+        {data.can.isOwner ? (
+          <InviteCodeCard
+            courseId={course.id}
+            courseName={course.name}
+            kind="student"
+            waiting={notJoined}
+          />
+        ) : null}
+
         <div className="fv-card" style={{ padding: 16 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 14 }}>
             {roster.map((s) => {

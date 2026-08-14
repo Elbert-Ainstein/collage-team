@@ -12,6 +12,14 @@ import { Icon } from "./icons";
 // the client can strip it, and use that as the backstop.
 const initialHash = typeof window === "undefined" ? "" : window.location.hash;
 
+// A class link (?join=…) lands here first, because a code can only be redeemed
+// as somebody. Nothing on this screen touches the code — it is still on the URL
+// afterwards, and the join screen picks it up — but arriving at a bare password
+// box after clicking "join my class" needs a sentence, or it reads as the wrong
+// page.
+const cameByClassLink =
+  typeof window !== "undefined" && /[?&](join|code)=[^&\s]/.test(window.location.search);
+
 function hashParams(hash: string): URLSearchParams {
   return new URLSearchParams(hash.replace(/^#/, ""));
 }
@@ -181,16 +189,22 @@ type Role = "faculty" | "student";
 
 function SignIn({ linkError }: { linkError: string | null }) {
   const [mode, setMode] = useState<Mode>("in");
-  // What the person says they are. A teaching fellow becomes a faculty account
-  // — the TF roster is what actually grants them anything — so this is three
-  // buttons over two roles.
-  // Defaults to Student. In a sixteen-person course the students outnumber
-  // everyone else, and getting this wrong used to be unrecoverable: a student
-  // who left it on Faculty was routed into the faculty app, which provisions
-  // AP50A/AP50B owned by THEM, and the routing self-heal only fires for an
-  // account that owns no course — so from the second sign-in it never could.
-  const [pick, setPick] = useState<"faculty" | "tf" | "student">("student");
-  const role: Role = pick === "student" ? "student" : "faculty";
+  // The fork is about what happens NEXT, not about what you are called. Naming
+  // the roles — Faculty / Teaching fellow / Student — asked people to classify
+  // themselves and then decided nothing they could see: a student who read
+  // "Faculty" as "I go to a faculty" landed in an empty gradebook with no
+  // sentence anywhere explaining it. So the two buttons are the two things that
+  // actually happen: you present a code somebody gave you, or you stand up a
+  // course of your own.
+  //
+  // A teaching fellow belongs on the code side. Their instructor's TF code is
+  // what makes them a TF, and redeeming it routes them into her course — which
+  // is the same journey a student takes, so it is the same button.
+  //
+  // Defaults to the code side: in a course of eighty there is one of her and
+  // eighty of them.
+  const [pick, setPick] = useState<"join" | "teach">("join");
+  const role: Role = pick === "join" ? "student" : "faculty";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -289,48 +303,58 @@ function SignIn({ linkError }: { linkError: string | null }) {
           {mode === "in"
             ? "Your sessions, rosters and grades are private to your account."
             : mode === "up"
-              ? "A new account starts empty — useful as a sandbox for placeholder data."
+              ? "Sign up with the address your instructor has for you — that is what a class code is checked against."
               : "We'll email you a link that lets you set a new password."}
         </div>
+
+        {cameByClassLink && mode !== "forgot" && (
+          <div
+            style={{
+              fontSize: 12.5,
+              color: "var(--ink2)",
+              lineHeight: 1.55,
+              marginTop: -6,
+              marginBottom: 14,
+              padding: "9px 11px",
+              border: "1px solid var(--line)",
+              borderRadius: 10,
+              background: "var(--paper3)",
+            }}
+          >
+            You followed a class link. The code it carries is still here — sign in, or create an
+            account with the address your instructor has for you, and it will be filled in for you
+            to confirm.
+          </div>
+        )}
 
         <div style={{ display: "grid", gap: 10 }}>
           {mode === "up" && (
             <div className="t-fld">
-              I am
+              Which one are you?
               <div className="t-seg2" style={{ marginTop: 0 }}>
                 <button
                   type="button"
-                  className={"t-segbtn" + (pick === "faculty" ? " on" : "")}
-                  onClick={() => setPick("faculty")}
+                  className={"t-segbtn" + (pick === "join" ? " on" : "")}
+                  onClick={() => setPick("join")}
                 >
-                  Faculty
-                </button>
-                {/* A teaching fellow is a faculty ACCOUNT — what makes them a TF
-                    is being on the instructor's list, not this button. But
-                    nothing told them that, and the Faculty copy ("you run the
-                    sessions") reads like the wrong answer, so they need a button
-                    of their own. */}
-                <button
-                  type="button"
-                  className={"t-segbtn" + (pick === "tf" ? " on" : "")}
-                  onClick={() => setPick("tf")}
-                >
-                  Teaching fellow
+                  I have a class code
                 </button>
                 <button
                   type="button"
-                  className={"t-segbtn" + (pick === "student" ? " on" : "")}
-                  onClick={() => setPick("student")}
+                  className={"t-segbtn" + (pick === "teach" ? " on" : "")}
+                  onClick={() => setPick("teach")}
                 >
-                  Student
+                  I&rsquo;m teaching a course
                 </button>
               </div>
+              {/* The second sentence on the teaching side is a promise the app
+                  has to keep — app/ck/page.tsx offers the code box to a
+                  teaching account that owns no course, before anything is
+                  created in their name. Change one and change the other. */}
               <span style={{ fontSize: 11.5, color: "var(--ink3)", marginTop: 4 }}>
-                {pick === "faculty"
-                  ? "You run the sessions: rosters, teams, weeks and grading."
-                  : pick === "tf"
-                    ? "Use the address your instructor added you under — that is what links you to their course."
-                    : "Use the email address your instructor has on the roster, so we can find you."}
+                {pick === "join"
+                  ? "Students and teaching fellows. Your instructor hands out the code; sign up with the address they have for you and enter it on the next screen."
+                  : "Sets up a course of your own: rosters, teams, weeks and grading. Taking the course, or a TF on it? Pick the other one — and if you pick this by mistake, the next screen still offers the code box."}
               </span>
             </div>
           )}

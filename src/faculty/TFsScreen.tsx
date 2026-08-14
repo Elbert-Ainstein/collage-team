@@ -11,6 +11,7 @@ import { isSupportedRosterFile, parseRoster } from "@/checkins/rosterImport";
 import { removeStudentWithStorage } from "@/checkins/purge";
 import type { CourseTF } from "@/checkins/types";
 import { addTF, addTFs, countWorkForStudent, removeTF, setTFPermissions } from "./facultyData";
+import { InviteCodeCard } from "./InviteCodeCard";
 import { FAvatar, FIcon } from "./icons";
 import { FacultyError, type FacultyData } from "./FacultyApp";
 
@@ -286,6 +287,18 @@ export function TFsScreen(props: {
       <FacultyError error={error} onClear={() => setError(null)} />
 
       <div className="fv-scroll">
+        {/* The TF roster and the TF permissions are both on this screen, which
+            is what the card has to point at: the code admits somebody already on
+            that list, to exactly what those two switches allow. This whole
+            screen is owner-only (FacultyApp gates it on can.manageTFs), so there
+            is no second audience to hide it from here. */}
+        <InviteCodeCard
+          courseId={course.id}
+          courseName={course.name}
+          kind="tf"
+          waiting={tfs.filter((t) => !t.user_id).length}
+        />
+
         <div style={{ display: "flex", gap: 20, alignItems: "flex-start", flexWrap: "wrap" }}>
           <div className="fv-card" style={{ flex: 1, minWidth: 340, padding: 14 }}>
             <div className="fv-eyebrow" style={{ padding: "0 4px 9px" }}>

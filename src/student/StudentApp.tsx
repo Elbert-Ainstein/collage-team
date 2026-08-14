@@ -10,6 +10,7 @@ import {
   type Assignment,
   type Enrolment,
 } from "@/checkins/studentData";
+import { redeemInviteCode, type JoinedCourse } from "@/checkins/invites";
 import { initials, tintFor } from "@/checkins/data";
 import { SCOPE_OF, type Student } from "@/checkins/types";
 import { SIcon } from "./icons";
@@ -164,15 +165,245 @@ function TeamStack({ enrolment }: { enrolment: Enrolment }) {
 }
 
 /**
+ * A page with nothing on it but the code box.
+ *
+ * Not the app shell: that sidebar names a course and offers Assignments and
+ * Team resources, and rendering it around somebody who has joined nothing puts
+ * them inside a course they are not in — with "Applied Physics 50" in the
+ * corner, which is only the fallback string. `.sv` is what carries the design
+ * tokens, so the wrapper is doing work, not decoration.
+ */
+export function JoinScreen({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="sv" style={{ display: "block", overflowY: "auto" }}>
+      <div
+        style={{ maxWidth: 660, margin: "0 auto", padding: "clamp(24px, 7vh, 72px) 20px 40px" }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Entering a class code — the only way onto a roster now, so it is the first
+ * screen most people meet.
+ *
+ * The failure sentences come straight from join_with_code() and are shown
+ * as-is on purpose. The database keeps three cases apart — no such code, a code
+ * that has been replaced, and a good code paired with an address that is not on
+ * that roster — and only the third sends you to your instructor rather than
+ * back to the board. Folding them into "that didn't work" would leave the
+ * student whose address was typed wrong retyping a code that was never the
+ * problem.
+ */
+export function JoinPanel({
+  account,
+  onJoined,
+  footer,
+}: {
+  account: string;
+  /** Runs after a successful redeem; the caller decides where the person lands. */
+  onJoined: (joined: JoinedCourse) => Promise<void> | void;
+  /** The other way out of this screen, which differs by where the panel is used. */
+  footer?: React.ReactNode;
+}) {
+  const [code, setCode] = useState("");
+  const [fromLink, setFromLink] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [joined, setJoined] = useState<JoinedCourse | null>(null);
+  const fieldId = useId();
+  const noteId = useId();
+
+  // A code can arrive in a link (?join=…). Prefill it, and say where it came
+  // from so the filled box is not a mystery — but never redeem on load. A link
+  // that enrols you the moment you open it is a link somebody else can send
+  // you, and the press is the only thing standing between the two.
+  //
+  // After the first render, like the sessionStorage restore below: this
+  // component server-renders and window does not exist there.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const linked = params.get("join") ?? params.get("code");
+    if (!linked) return;
+    setCode(linked);
+    setFromLink(true);
+  }, []);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      // The raw field value, not a trimmed one. normalise_invite_code() already
+      // strips whitespace, hyphens and case; doing it again here would give
+      // "what a code looks like" two definitions that could drift apart.
+      const j = await redeemInviteCode(code);
+      setJoined(j);
+      await onJoined(j);
+    } catch (err: unknown) {
+      setError(String((err as Error)?.message ?? err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (joined) {
+    // Deliberately the same words whether this call enrolled them or they were
+    // already on the roster: join_with_code is idempotent and cannot tell those
+    // apart, and to the person who pressed the button they are one event.
+    return (
+      <div className="sv-card" style={{ maxWidth: 620 }}>
+        <div className="sv-h1" style={{ fontSize: "var(--text-xl)" }}>
+          You&rsquo;re on {joined.course_name}
+          {joined.course_code ? ` · ${joined.course_code}` : ""}
+        </div>
+        <p
+          style={{
+            fontSize: "var(--text-sm)",
+            color: "var(--muted-foreground)",
+            lineHeight: 1.6,
+            marginTop: 8,
+          }}
+        >
+          {joined.kind === "tf"
+            ? "You joined as a teaching fellow. Opening the course…"
+            : "Opening your assignments…"}
+        </p>
+      </div>
+    );
+  }
+
+  // The roster misses are the only failures where the fix is a conversation
+  // rather than a retype, so they get the extra line about signing in under a
+  // different address.
+  const rosterMiss = error !== null && /roster|listed as a TF/i.test(error);
+
+  return (
+    <form className="sv-card" style={{ maxWidth: 620 }} onSubmit={submit}>
+      <div className="sv-h1" style={{ fontSize: "var(--text-xl)" }}>
+        Join your course
+      </div>
+      <p
+        style={{
+          fontSize: "var(--text-sm)",
+          color: "var(--muted-foreground)",
+          lineHeight: 1.6,
+          marginTop: 8,
+          maxWidth: "62ch",
+        }}
+      >
+        There is nothing on this account yet. Your instructor hands out a class code — eight
+        characters, on the board or in an email. Enter it and you&rsquo;re on their roster.
+      </p>
+      <p id={noteId} className="sv-sub" style={{ lineHeight: 1.6, marginTop: 6, maxWidth: "62ch" }}>
+        The code only works alongside the address on their list. You&rsquo;re signed in as{" "}
+        <strong style={{ color: "var(--navy)" }}>{account}</strong>.
+      </p>
+
+      <label
+        htmlFor={fieldId}
+        className="sv-eyebrow"
+        style={{ display: "block", marginTop: 16, marginBottom: 6 }}
+      >
+        Class code
+      </label>
+      {/* Typed on a phone, in a hurry, off a whiteboard. The alphabet has
+          letters AND digits so a numeric keypad would be the wrong keyboard;
+          autocorrect and spellcheck would try to make eight consonants into a
+          word; autocapitalize costs nothing, since the database upper-cases
+          what arrives either way. */}
+      <input
+        id={fieldId}
+        inputMode="text"
+        autoCapitalize="characters"
+        autoCorrect="off"
+        spellCheck={false}
+        autoComplete="off"
+        enterKeyHint="go"
+        aria-describedby={noteId}
+        value={code}
+        onChange={(e) => setCode(e.target.value)}
+        disabled={busy}
+        placeholder="ABCD-EFGH"
+        style={{
+          width: "100%",
+          maxWidth: 320,
+          padding: "11px 13px",
+          border: "1px solid var(--neutral-200)",
+          borderRadius: "var(--radius-md)",
+          background: "var(--cream-100)",
+          color: "var(--navy)",
+          font: "inherit",
+          fontFamily: "var(--font-mono)",
+          fontSize: "var(--text-lg)",
+          letterSpacing: "0.14em",
+          // Display only. Upper-casing the VALUE on every keystroke moves the
+          // caret to the end on some phone keyboards, which makes fixing the
+          // third character of eight a fight.
+          textTransform: "uppercase",
+        }}
+      />
+
+      {fromLink && (
+        <p className="sv-sub" style={{ marginTop: 8, maxWidth: "62ch" }}>
+          This came from the link you opened. Check it matches the code you were given, then join.
+        </p>
+      )}
+
+      {error && (
+        <p
+          role="alert"
+          style={{
+            fontSize: "var(--text-sm)",
+            color: "var(--amber-700)",
+            lineHeight: 1.6,
+            marginTop: 12,
+            maxWidth: "62ch",
+          }}
+        >
+          {error}
+          {rosterMiss && (
+            <>
+              {" "}
+              If they have a different address for you, sign out and sign in with that one instead.
+            </>
+          )}
+        </p>
+      )}
+
+      <button
+        className="sv-btn primary"
+        type="submit"
+        style={{ marginTop: 16 }}
+        disabled={busy || !code.trim()}
+      >
+        {busy ? "Joining…" : "Join course"}
+      </button>
+
+      {footer}
+    </form>
+  );
+}
+
+/**
  * The student half of the app. The shell is persistent; a single `screen` value
  * drives which panel shows, exactly as the handoff specifies.
  */
 export function StudentApp({
   account,
   onSignOut,
+  onRerouted,
+  onTeachInstead,
 }: {
   account: string;
   onSignOut: () => Promise<void>;
+  /** A code was redeemed that this app cannot show — a TF code — so ask the router again. */
+  onRerouted?: () => void;
+  /** They are here by a wrong pick at sign-up and want the other side. */
+  onTeachInstead?: () => void;
 }) {
   const [screen, setScreen] = useState<Screen>("list");
   const [selId, setSelId] = useState<string | null>(null);
@@ -236,7 +467,10 @@ export function StudentApp({
   const [error, setError] = useState<string | null>(null);
   const [claimError, setClaimError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  // Returns the enrolment it found, because redeeming a code has to know
+  // whether this app now has anything to show — a TF code leaves it null and
+  // needs the router, not a re-render.
+  const load = useCallback(async (): Promise<Enrolment | null> => {
     // Claim any roster rows carrying this address first — a student who signs
     // up before the instructor imports them would otherwise be stranded.
     try {
@@ -252,6 +486,7 @@ export function StudentApp({
     const e = await getEnrolment();
     setEnrolment(e);
     setAssignments(e ? await listAssignments(e) : []);
+    return e;
   }, []);
 
   useEffect(() => {
@@ -395,45 +630,58 @@ export function StudentApp({
     );
   }
 
-  // Signed in, but no roster row carries this address.
+  // Signed in and on nobody's roster. This used to be a dead end that told them
+  // to go and ask, then reload; it is now where they present the code.
   if (!enrolment) {
-    return shell(
-      <div className="sv-card" style={{ maxWidth: 620 }}>
-        <div className="sv-h1" style={{ fontSize: "var(--text-xl)" }}>
-          You&rsquo;re not on a roster yet
-        </div>
-        <p
-          style={{
-            fontSize: "var(--text-sm)",
-            color: "var(--muted-foreground)",
-            lineHeight: 1.6,
-            marginTop: 8,
-            maxWidth: "62ch",
+    return (
+      <JoinScreen>
+        <JoinPanel
+          account={account}
+          onJoined={async () => {
+            const e = await load();
+            // A TF code enrols them somewhere this app has nothing to show, and
+            // so does a student row that has not landed by the time we look.
+            // Either way the router, not a re-render, decides where they go.
+            if (!e) onRerouted?.();
           }}
-        >
-          We matched your account to the class list by email, and{" "}
-          <strong style={{ color: "var(--navy)" }}>{account}</strong> isn&rsquo;t on it. Ask your
-          instructor to add that exact address to the roster — once they do, reload this page and
-          your assignments will appear.
-        </p>
-        {claimError ? (
-          <p
-            style={{
-              fontSize: "var(--text-sm)",
-              color: "var(--muted-foreground)",
-              lineHeight: 1.6,
-              marginTop: 12,
-              maxWidth: "62ch",
-            }}
-          >
-            Matching also reported an error, which your instructor may need:{" "}
-            <span style={{ color: "var(--navy)" }}>{claimError}</span>
-          </p>
-        ) : null}
-        <button className="sv-btn outline" style={{ marginTop: 16 }} onClick={() => location.reload()}>
-          Check again
-        </button>
-      </div>,
+          footer={
+            <>
+              {claimError ? (
+                <p className="sv-sub" style={{ lineHeight: 1.6, marginTop: 14, maxWidth: "62ch" }}>
+                  Matching your address against the class lists also reported an error, which your
+                  instructor may need: <span style={{ color: "var(--navy)" }}>{claimError}</span>
+                </p>
+              ) : null}
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: 14,
+                  alignItems: "center",
+                  marginTop: 18,
+                  paddingTop: 14,
+                  borderTop: "1px solid var(--neutral-200)",
+                }}
+              >
+                {/* Your instructor can also add you by address, and that lands
+                    without a code — worth a button for the student sitting
+                    there while she fixes the spreadsheet. */}
+                <button className="sv-btn link" type="button" onClick={() => location.reload()}>
+                  No code? Check again
+                </button>
+                {onTeachInstead && (
+                  <button className="sv-btn link" type="button" onClick={onTeachInstead}>
+                    I&rsquo;m teaching a course, not taking one
+                  </button>
+                )}
+                <button className="sv-btn link" type="button" onClick={() => void onSignOut()}>
+                  Sign out
+                </button>
+              </div>
+            </>
+          }
+        />
+      </JoinScreen>
     );
   }
 

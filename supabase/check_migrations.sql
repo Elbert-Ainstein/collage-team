@@ -143,6 +143,15 @@ select '0028 only staff can make a course',
                  and policyname = 'make a course if allowed')
             then 'applied'
             else 'NOT APPLIED — run 0028_only_staff_make_courses.sql' end
+union all
+-- 0029 hard-depends on 0028: it joins course_creators, which 0028 creates. Run
+-- them in order or 0029 fails on a missing relation.
+select '0029 join a course by invite code',
+       case when exists (
+              select 1 from information_schema.tables
+               where table_schema = 'public' and table_name = 'course_invites')
+            then 'applied'
+            else 'NOT APPLIED — run 0028 first, then 0029_invite_codes.sql' end
 order by 1;
 
 -- ------------------------------------------------------- and the buckets

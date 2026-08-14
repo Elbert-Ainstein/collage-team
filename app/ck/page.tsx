@@ -3,14 +3,20 @@
 import { useEffect, useState } from "react";
 import { AuthGate } from "@/checkins/AuthGate";
 import { FacultyApp } from "@/faculty/FacultyApp";
-import { StudentApp } from "@/student/StudentApp";
+import { StudentApp, JoinPanel, JoinScreen } from "@/student/StudentApp";
 import { claimStudentRows, getEnrolment, getRole } from "@/checkins/studentData";
 import { claimTFRows, myTFCourses } from "@/faculty/facultyData";
+import { listCourses } from "@/checkins/data";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
 import type { Role } from "@/checkins/types";
 
-/** Which app this account gets. A TF is a faculty account on someone else's course. */
-type Kind = "faculty" | "tf" | "student";
+/**
+ * Which app this account gets. A TF is a faculty account on someone else's
+ * course. "choose" is the one that is not an app: an account that said it was
+ * teaching and has nothing to teach yet, which is what a student looks like
+ * after picking the wrong side at sign-up.
+ */
+type Kind = "faculty" | "tf" | "student" | "choose";
 
 // Class Check-ins, behind a sign-in wall. The account's role decides which app
 // it is: faculty run the sessions, students see their own work.
@@ -43,9 +49,14 @@ function RoleRouter({
 }) {
   const [kind, setKind] = useState<Kind | null>(null);
   const [ready, setReady] = useState(false);
+  // Redeeming a code changes the answer to every question below it — a TF code
+  // in particular turns a student-app account into a TF one — so the whole
+  // resolution runs again rather than the join screen guessing where to go.
+  const [pass, setPass] = useState(0);
 
   useEffect(() => {
     let alive = true;
+    setReady(false);
 
     (async () => {
       let role: Role;
@@ -125,6 +136,24 @@ function RoleRouter({
         // No roster row, or the lookup failed — carry on as faculty.
       }
 
+      // Last stop before the faculty app: does this account have a course at
+      // all? An account that says it teaches and owns nothing is either an
+      // instructor about to be handed AP50A/AP50B, or a student who picked the
+      // wrong side at sign-up — and those two want opposite things. Ask, once,
+      // at the only moment it is still free: ensureSessions runs inside
+      // FacultyApp, so a moment later they own courses and the question stops
+      // being askable. Post-0028 a student cannot create one anyway, and what
+      // they would meet instead is "no AP 50 sessions came back — check that
+      // migrations 0003-0005 have been run", which is neither true nor theirs
+      // to fix.
+      try {
+        const owned = await listCourses();
+        if (!owned.some((c) => c.owner_id === uid)) return "choose" as Kind;
+      } catch {
+        // Cannot tell. Go to the faculty app rather than stranding an
+        // instructor on a question because one select failed.
+      }
+
       return "faculty" as Kind;
     })()
       .then((k) => alive && setKind(k))
@@ -134,7 +163,7 @@ function RoleRouter({
     return () => {
       alive = false;
     };
-  }, [uid]);
+  }, [uid, pass]);
 
   if (!ready) {
     return (
@@ -144,7 +173,36 @@ function RoleRouter({
     );
   }
 
-  if (kind === "student") return <StudentApp account={account} onSignOut={onSignOut} />;
+  if (kind === "choose") {
+    return (
+      <ChooseSide
+        account={account}
+        onSignOut={onSignOut}
+        onJoined={() => setPass((p) => p + 1)}
+        onTeach={() => setKind("faculty")}
+      />
+    );
+  }
+
+  // onTeachInstead is the mirror of the question above, for the account that
+  // answered the other way: an instructor who read "I have a class code" as the
+  // way in has no code to present and nothing else on that screen to press.
+  //
+  // It routes for THIS VISIT only. Nothing here writes profiles.role — 0024's
+  // set_my_role would, but it has no client wrapper and studentData.ts is not
+  // this change's to edit — so she lands back in the student app tomorrow and
+  // presses it again. Annoying, and still the difference between friction and a
+  // locked door.
+  if (kind === "student") {
+    return (
+      <StudentApp
+        account={account}
+        onSignOut={onSignOut}
+        onRerouted={() => setPass((p) => p + 1)}
+        onTeachInstead={() => setKind("faculty")}
+      />
+    );
+  }
 
   // The previous faculty app used to be reachable at /ck?classic=1 as a way back
   // if the new screens met a schema that had not caught up. Every migration is
@@ -159,5 +217,68 @@ function RoleRouter({
   // behind "Form teams", because the redesign has no replacement for it.
   return (
     <FacultyApp account={account} onSignOut={onSignOut} mode={kind === "tf" ? "tf" : "owner"} />
+  );
+}
+
+/**
+ * The promise the sign-up form makes ("if you pick this by mistake, the next
+ * screen still offers the code box"), kept.
+ *
+ * It borrows the student view's screen and card because that is where JoinPanel
+ * lives, and because most of the people who see this are on their way there.
+ */
+function ChooseSide({
+  account,
+  onSignOut,
+  onJoined,
+  onTeach,
+}: {
+  account: string;
+  onSignOut: () => Promise<void>;
+  onJoined: () => void;
+  onTeach: () => void;
+}) {
+  return (
+    <JoinScreen>
+      <div className="sv-card" style={{ maxWidth: 620, marginBottom: 14 }}>
+        <div className="sv-h1" style={{ fontSize: "var(--text-xl)" }}>
+          Before we set up a course
+        </div>
+        <p
+          style={{
+            fontSize: "var(--text-sm)",
+            color: "var(--muted-foreground)",
+            lineHeight: 1.6,
+            marginTop: 8,
+            maxWidth: "62ch",
+          }}
+        >
+          You signed up as someone teaching a course, and this account doesn&rsquo;t have one yet.
+          If you&rsquo;re taking the course, or you&rsquo;re a teaching fellow on it, enter your
+          instructor&rsquo;s code instead — that puts your work in her course rather than in a
+          second one carrying the same name.
+        </p>
+      </div>
+
+      <JoinPanel
+        account={account}
+        onJoined={onJoined}
+        footer={
+          <div style={{ marginTop: 18, paddingTop: 14, borderTop: "1px solid var(--neutral-200)" }}>
+            <p className="sv-sub" style={{ marginBottom: 8 }}>
+              Running the course yourself? Then you don&rsquo;t need a code.
+            </p>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center" }}>
+              <button className="sv-btn outline" type="button" onClick={onTeach}>
+                Set up my course
+              </button>
+              <button className="sv-btn link" type="button" onClick={() => void onSignOut()}>
+                Sign out
+              </button>
+            </div>
+          </div>
+        }
+      />
+    </JoinScreen>
   );
 }
