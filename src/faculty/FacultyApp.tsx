@@ -238,6 +238,8 @@ export function FacultyApp({
   // where those differ, and re-running the stale one would reload the course
   // you just left.
   const refreshRef = useRef<(() => Promise<void>) | null>(null);
+  /** The data on screen, readable without making every callback depend on it. */
+  const dataRef = useRef<FacultyData | null>(null);
 
   const refresh = useCallback(async () => {
     if (!courseId) return;
@@ -326,10 +328,43 @@ export function FacultyApp({
     }
   }, [courseId, courses, mode]);
 
+  /**
+   * Re-read only what a MARK can have changed.
+   *
+   * Grading is the one screen where a write happens every few seconds — a
+   * rubric pick, a release, a note — and each was calling the full refresh:
+   * eleven reads across eight tables, re-fetching the roster, the weeks, the
+   * team sets, the TF list, the questions and the teams, none of which a mark
+   * can touch. Two reads instead, and it patches what it read into the data
+   * already on screen rather than rebuilding it.
+   *
+   * Stats are recomputed because they are derived from results and would
+   * otherwise keep counting the old ones — the whole point of the round trip is
+   * the number in the progress card moving.
+   *
+   * The `busy` flag is deliberately NOT taken. This is cheap, it overlaps a
+   * full refresh harmlessly (both write the same rows from the same source),
+   * and making a mark wait on a course reload is the thing being removed.
+   */
+  const refreshResults = useCallback(async () => {
+    const cur = dataRef.current;
+    if (!cur) return;
+    const checkIns = cur.activities.length
+      ? await listCheckIns(cur.activities.map((a) => a.id))
+      : [];
+    const results = checkIns.length ? await listResults(checkIns.map((c) => c.id)) : [];
+    const stats = new Map<string, ActivityStat>();
+    for (const a of cur.activities) {
+      stats.set(a.id, statFor(a, checkIns, results, cur.roster, cur.teams));
+    }
+    setData((d) => (d ? { ...d, checkIns, results, stats } : d));
+  }, []);
+
   // Kept pointing at the latest refresh, so a queued re-run picks up the course
   // that is selected NOW rather than the one that was selected when the run it
   // is following started.
   refreshRef.current = refresh;
+  dataRef.current = data;
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -505,7 +540,11 @@ export function FacultyApp({
               setFresh(null);
               setScreen("checkin");
             }}
-            onChanged={() => refresh().catch(fail)}
+            // A mark, a release and a note can change results and nothing else,
+            // so this screen re-reads results and nothing else. Every other
+            // screen keeps the full refresh, because what they write really can
+            // move the roster, the weeks, the teams or the questions.
+            onChanged={() => refreshResults().catch(fail)}
             onError={fail}
           />
         ) : null;
