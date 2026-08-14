@@ -24,7 +24,9 @@
 // docs/backup-runbook.md — and it is a thing a person runs, not a button.
 
 import { requireSupabase } from "@/lib/supabaseClient";
-import { selectAll, selectAllIn } from "@/checkins/data";
+import { selectAll, selectAllIn,
+  type ResultRow,
+} from "@/checkins/data";
 import { isCompletionMet } from "@/checkins/studentData";
 import type {
   Activity,
@@ -76,7 +78,7 @@ function gradeCell(
   activity: Activity,
   student: Student,
   checkIns: CheckIn[],
-  results: CheckInResult[],
+  results: ResultRow[],
 ): string {
   const cell = cellFor(activity, { kind: "student", id: student.id }, checkIns, results, null);
   const r = cell.result;
@@ -96,7 +98,7 @@ export interface GradesInput {
   students: Student[];
   activities: Activity[];
   checkIns: CheckIn[];
-  results: CheckInResult[];
+  results: ResultRow[];
   questions: ActivityQuestion[];
 }
 

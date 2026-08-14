@@ -23,13 +23,13 @@ import type {
   Activity,
   ActivityQuestion,
   CheckIn,
-  CheckInResult,
   Course,
   CourseTF,
   CourseWeek,
   Student,
   TeamWithMembers,
 } from "@/checkins/types";
+import type { ResultRow } from "@/checkins/data";
 import { duplicateActivity, listQuestionsFor, listTFs, listWeeks, myTFCourses } from "./facultyData";
 import { nextPositionIn, statFor, type ActivityStat } from "./model";
 import { FIcon } from "./icons";
@@ -113,7 +113,14 @@ export interface FacultyData {
   /** Every activity's questions (0014). Empty for one that has none yet. */
   questions: ActivityQuestion[];
   checkIns: CheckIn[];
-  results: CheckInResult[];
+  /**
+   * Narrow rows: no `text`, no `transcription`, no `files`. Nothing on the
+   * faculty side reads a student's words off this list — it reads status,
+   * score, whose it is and when — and this list is re-read after every write,
+   * so carrying a term of written answers through it was the widest thing the
+   * app did. A screen that shows somebody's words fetches that one submission.
+   */
+  results: ResultRow[];
   teams: TeamWithMembers[];
   tfs: CourseTF[];
   /** Keyed by activity id — the one derived object both views read. */
@@ -258,7 +265,7 @@ export function FacultyApp({
       // did not already return. These used to run one after another, four round
       // trips deep, and every write in the app paid for all four.
       const [[checkIns, results], questions, teams] = await Promise.all([
-        (async (): Promise<[CheckIn[], CheckInResult[]]> => {
+        (async (): Promise<[CheckIn[], ResultRow[]]> => {
           const cs = activities.length ? await listCheckIns(activities.map((a) => a.id)) : [];
           const rs = cs.length ? await listResults(cs.map((c) => c.id)) : [];
           return [cs, rs];

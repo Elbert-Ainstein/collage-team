@@ -5,6 +5,7 @@
 // THE SAME NUMBER, so they come from one function. Computing them separately is
 // how they came to disagree in an earlier pass.
 
+import type { ResultRow } from "@/checkins/data";
 import { isCompletionMet } from "@/checkins/studentData";
 import {
   isCompletion,
@@ -12,7 +13,6 @@ import {
   type Activity,
   type ActivityQuestion,
   type CheckIn,
-  type CheckInResult,
   type CourseWeek,
   type Scope,
   type Student,
@@ -87,8 +87,8 @@ export interface ActivityStat {
   caption: string;
 }
 
-const isScored = (r: CheckInResult) => r.status === "scored";
-const isIn = (r: CheckInResult) =>
+const isScored = (r: Pick<ResultRow, "status">) => r.status === "scored";
+const isIn = (r: Pick<ResultRow, "status">) =>
   r.status === "submitted" || r.status === "needs_review" || r.status === "scored";
 
 /**
@@ -98,7 +98,7 @@ const isIn = (r: CheckInResult) =>
 export function statFor(
   activity: Activity,
   checkIns: CheckIn[],
-  results: CheckInResult[],
+  results: ResultRow[],
   roster: Student[],
   teams: Team[],
 ): ActivityStat {
@@ -218,7 +218,7 @@ export interface Cell {
   state: CellState;
   /** The score to print, when the state is `graded`. */
   score: number | null;
-  result: CheckInResult | null;
+  result: ResultRow | null;
   checkIn: CheckIn | null;
 }
 
@@ -234,7 +234,7 @@ export function cellFor(
   activity: Activity,
   subject: { kind: "student" | "team"; id: string },
   checkIns: CheckIn[],
-  results: CheckInResult[],
+  results: ResultRow[],
   liveWeek: number | null,
 ): Cell {
   const scope = SCOPE_OF[activity.type];
@@ -263,7 +263,7 @@ export function cellFor(
 }
 
 function stateOf(
-  r: CheckInResult | null,
+  r: ResultRow | null,
   activity: Activity,
   liveWeek: number | null,
 ): CellState {
@@ -302,7 +302,7 @@ export function studentPercents(
   activities: Activity[],
   roster: Student[],
   checkIns: CheckIn[],
-  results: CheckInResult[],
+  results: ResultRow[],
 ): Map<string, number | null> {
   const out = new Map<string, number | null>();
   for (const s of roster) {

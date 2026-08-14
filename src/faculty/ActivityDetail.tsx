@@ -6,6 +6,7 @@
 // Everything on the right is keyed off SCOPE, so a team activity lists teams and
 // counts out of the number of teams — type only picks the label and the accent.
 
+import type { ResultRow } from "@/checkins/data";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteActivity, tintFor, updateActivity } from "@/checkins/data";
 import { deleteActivityRecordings } from "@/checkins/audio";
@@ -20,7 +21,6 @@ import {
   TYPE_LABEL,
   type Activity,
   type ActivityType,
-  type CheckInResult,
 } from "@/checkins/types";
 import { countWorkForActivity, ensureCheckIn, setActivityPoints } from "./facultyData";
 import { pointsLabel, nextPositionIn, pointsTotal, questionCount, questionsFor, statFor } from "./model";
@@ -173,7 +173,7 @@ function describe(a: Activity): string {
 }
 
 /** Mirrors model.statFor's notion of "handed in", so the lists and the counts agree. */
-const isIn = (r: CheckInResult) =>
+const isIn = (r: Pick<ResultRow, "status">) =>
   r.status === "submitted" || r.status === "needs_review" || r.status === "scored";
 
 export function ActivityDetail(props: {
@@ -280,7 +280,7 @@ export function ActivityDetail(props: {
       data.checkIns.find((c) => c.activity_id === activity.id && c.kind === kind)?.max_points ??
       pointsTotal(activity);
 
-    const found = new Map<string, CheckInResult>();
+    const found = new Map<string, ResultRow>();
     for (const r of data.results) {
       if (!ids.has(r.check_in_id) || !isIn(r)) continue;
       const subjectId = kind === "team" ? r.team_id : r.student_id;

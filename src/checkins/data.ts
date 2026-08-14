@@ -549,12 +549,45 @@ export async function setCheckInsPosted(ids: string[], posted: boolean): Promise
 }
 
 // ---------------- results (gradebook cells) ----------------
-export async function listResults(checkInIds: string[]): Promise<CheckInResult[]> {
+/**
+ * Everything about a result EXCEPT the bulk text.
+ *
+ * `text` is a student's whole written answer, `transcription` is a whole
+ * recording turned into words, and `files` is a JSON blob. Together they are
+ * nearly all of a row's width — and the faculty app reads none of them off this
+ * list. It reads status, score, whose it is, and when.
+ *
+ * That matters because this list is re-read by FacultyApp.refresh(), which is
+ * wired to onChanged and so fires after every rubric pick, every release, every
+ * note save and every visibility toggle. Sending a term of written answers down
+ * the wire so a screen can count how many people have handed in is the widest
+ * thing this app does, and it did it on a keystroke's worth of provocation.
+ *
+ * Anything that genuinely needs a student's words fetches that one submission
+ * when it opens it, which is the only moment it could display them anyway.
+ */
+const RESULT_COLS =
+  "id,check_in_id,subject_type,student_id,team_id,status,score,is_ci,ci_met," +
+  "flagged,feedback,submitted_at,updated_at,transcription_state";
+
+export type ResultRow = Omit<CheckInResult, "text" | "transcription" | "files">;
+
+export async function listResults(checkInIds: string[]): Promise<ResultRow[]> {
+  if (!checkInIds.length) return [];
+  return selectAllIn<ResultRow>(checkInIds, (chunk, from, to) =>
+    // Cast because select() with a runtime string cannot be typed from the
+    // literal; RESULT_COLS above is the definition of what comes back.
+    db().from("check_in_results").select(RESULT_COLS).in("check_in_id", chunk)
+      .order("id")
+      .range(from, to) as unknown as PagedRead<ResultRow>,
+  );
+}
+
+/** The full row, text and all, for the one caller that renders a person's words. */
+export async function listResultsFull(checkInIds: string[]): Promise<CheckInResult[]> {
   if (!checkInIds.length) return [];
   return selectAllIn<CheckInResult>(checkInIds, (chunk, from, to) =>
-    db().from("check_in_results").select("*").in("check_in_id", chunk)
-      .order("id")
-      .range(from, to),
+    db().from("check_in_results").select("*").in("check_in_id", chunk).order("id").range(from, to),
   );
 }
 /**

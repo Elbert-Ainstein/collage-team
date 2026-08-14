@@ -6,7 +6,7 @@ import {
   createActivity,
   createCheckIn,
   listCheckIns,
-  listResults,
+  listResultsFull as listResults,
   listTeamSets,
   listTeams,
   saveResult,

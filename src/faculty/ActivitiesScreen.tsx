@@ -32,7 +32,6 @@ import {
   type Activity,
   type ActivityType,
   type CheckIn,
-  type CheckInResult,
   type ResultStatus,
   type Student,
   type TeamWithMembers,
@@ -50,6 +49,7 @@ import {
   type WeekGroup,
 } from "./model";
 import { FAvatar, FIcon } from "./icons";
+import type { ResultRow } from "@/checkins/data";
 import type { FacultyData } from "./FacultyApp";
 
 
@@ -133,7 +133,7 @@ function membersIn(
   team: TeamWithMembers,
   weekActivities: Activity[],
   checkIns: CheckIn[],
-  results: CheckInResult[],
+  results: ResultRow[],
 ): number {
   const ids = new Set(
     checkIns

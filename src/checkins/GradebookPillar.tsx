@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createCheckIn,
   listCheckIns,
-  listResults,
+  listResultsFull as listResults,
   listTeamSets,
   listTeams,
   saveResult,

@@ -10,13 +10,13 @@
 // recomputes it from the marks (migration 0007), so there is one writer and the
 // number can't drift from what produced it.
 
+import type { ResultRow } from "@/checkins/data";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   isCompletion,
   SCOPE_OF,
   type Activity,
   type ActivityQuestion,
-  type CheckInResult,
   type RubricItem,
   type SubmissionMark,
 } from "@/checkins/types";
@@ -89,7 +89,7 @@ interface Subject {
   id: string;
   name: string;
   tint: string | null;
-  result: CheckInResult;
+  result: ResultRow;
 }
 
 export function GradingScreen({
@@ -158,7 +158,7 @@ export function GradingScreen({
     const checkIn = data.checkIns.find((c) => c.activity_id === activity.id && c.kind === kind);
     if (!checkIn) return [];
 
-    const handedIn = (r: CheckInResult) =>
+    const handedIn = (r: Pick<ResultRow, "status">) =>
       r.status === "submitted" || r.status === "needs_review" || r.status === "scored";
 
     const rows = data.results.filter((r) => r.check_in_id === checkIn.id && handedIn(r));

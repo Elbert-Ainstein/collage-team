@@ -26,6 +26,7 @@
 // in and where it sat. Taking it is a step, not a suggestion — the confirmation
 // does not unlock until the file has been downloaded.
 
+import type { ResultRow } from "@/checkins/data";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   clearCourseArtifacts,
@@ -40,7 +41,6 @@ import type {
   Activity,
   ActivityQuestion,
   CheckIn,
-  CheckInResult,
   Course,
   Student,
   TeamWithMembers,
@@ -113,7 +113,7 @@ function lastDueAt(activities: Activity[]): number | null {
  * course is the last time anyone submitted or marked anything, which is what
  * "nobody is using this course any more" actually means.
  */
-function lastWorkAt(results: CheckInResult[]): number | null {
+function lastWorkAt(results: ResultRow[]): number | null {
   let latest: number | null = null;
   for (const r of results) {
     for (const iso of [r.submitted_at, r.updated_at]) {
@@ -152,7 +152,7 @@ interface Quiet {
  * neither signal can drag the date backwards. Only when there is neither does
  * this fall back to when the rows were made, and then on the long window.
  */
-function quietSince(activities: Activity[], results: CheckInResult[] | undefined): Quiet | null {
+function quietSince(activities: Activity[], results: ResultRow[] | undefined): Quiet | null {
   const worked = results ? lastWorkAt(results) : null;
   const due = lastDueAt(activities);
   if (worked != null || due != null) {
@@ -250,7 +250,7 @@ export function ClearArtifacts({
   roster?: Student[];
   teams?: TeamWithMembers[];
   checkIns?: CheckIn[];
-  results?: CheckInResult[];
+  results?: ResultRow[];
   questions?: ActivityQuestion[];
 }): JSX.Element | null {
   const [open, setOpen] = useState(false);
