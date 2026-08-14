@@ -351,111 +351,48 @@ revoke all on function rotate_invite_code(uuid, text) from public;
 grant execute on function rotate_invite_code(uuid, text) to authenticated;
 
 -- ---------------------------------------------------------------------------
--- 5. NARROWING claim_student_rows() AND claim_tf_rows().
+-- 5. RETIRING claim_student_rows() AND claim_tf_rows().
 --
 -- This is the actual fix. Without it the codes are decorative: the email sweep
 -- runs on every sign-in and would keep enrolling people in whatever course
 -- happens to carry their address, so nobody would ever need to present a code
 -- and presenting one would prove nothing.
 --
--- RESTRICT RATHER THAN DELETE, and the reason is concrete. studentData.ts:52
--- and facultyData.ts:1017 call these by name on every sign-in. Dropping the
--- functions turns that into "function does not exist" for every account in the
--- app — including Kelly's — before a single line of client code could be
--- changed to stop calling them. A migration is not allowed to be the half of a
--- change that breaks things. The sweep also still earns its keep in the weeks
--- before codes are handed out: a roster import keeps working on its own, which
--- is what the pilot is currently built on.
+-- The sweep is the vulnerability itself, not a thing near it. It searched every
+-- course in the database for a row matching the caller's address and never
+-- asked who owned that course, so anybody who could stand up a replica of AP50A
+-- could plant a classmate's address on it and collect their work.
 --
--- The narrowing is to courses whose OWNER is on 0028's course_creators
--- allow-list. That is the whole difference between "any course that names you"
--- and "a course somebody deliberately authorised to exist": the replica in the
--- threat model is owned by a student, who is not on the list and cannot get on
--- it from inside the app — course_creators has RLS on and no policy at all, so
--- the anon key can neither read nor write it. The planted row is inert.
+-- EMPTIED, NOT DROPPED. studentData.ts:51 and facultyData.ts:1016 call these by
+-- name, and app/ck/page.tsx calls them on every sign-in. Dropping the functions
+-- turns that into "function does not exist" for every account in the app —
+-- including Kelly's — the moment this runs and before any deploy could catch
+-- up. A migration must not be the half of a change that breaks things. They
+-- return 0 now, which is exactly what a person with nothing to claim always
+-- got, so every caller already handles it. The calls are being removed from the
+-- client separately; until that ships they are a wasted round trip and nothing
+-- else.
 --
--- The join through courses.owner_id also drops any course with no owner at all
--- — rows predating 0005, which set the default. Correct rather than incidental:
--- an unowned course has nobody the allow-list could vouch for, and 0028 could
--- not seed it into course_creators either, so it must not be able to claim
--- anyone. Anything of Kelly's has an owner; these are leftovers.
+-- NOBODY IS UNENROLLED. These only ever wrote user_id where it was null.
+-- Emptying them changes which UNCLAIMED rows can be taken; it cannot touch a
+-- row that is already claimed, so every student enrolled today stays enrolled
+-- and Kelly's own sign-in is untouched.
 --
--- WHAT THIS DOES NOT COVER, said plainly: two allow-listed instructors are not
--- protected from each other. A course owned by one authorised member of staff
--- can still capture a student intended for another's, by address alone. That is
--- accepted — everyone on that list is trusted with a course already — and it is
--- exactly the residue that presenting a code removes, which is why the codes
--- are the direction of travel and this is the floor under them.
---
--- NOBODY IS UNENROLLED. Both functions only ever write user_id onto rows where
--- it is null. Narrowing the search changes which UNCLAIMED rows can be taken;
--- it cannot touch a row that is already claimed, so every student enrolled
--- today stays enrolled. Kelly's own sign-in is unaffected either way: she owns
--- her courses, and these functions have never had anything to do with that.
+-- WHAT CHANGES FOR A NEW STUDENT: being on the roster is no longer enough on
+-- its own. They need the code as well. That is the point — the roster says who
+-- MAY be in the course, the code proves they were told to be.
 
-/**
- * Claim the roster rows whose email matches this account, in courses that were
- * authorised to exist.
- *
- * Was: every course in the database, owner unexamined (0006:95). See the block
- * comment above for why this is narrowed rather than deleted.
- *
- * At most ONE row per course, unchanged from 0006: an instructor can have the
- * same address on two rows of one roster, and claiming both at once would
- * violate uniq_student_user_course, roll the whole statement back, and leave
- * the student claimed on nothing at all.
- */
 create or replace function claim_student_rows() returns int
-language plpgsql security definer set search_path = public as $$
-declare n int;
-begin
-  update students s
-     set user_id = auth.uid()
-   where s.id in (
-     select distinct on (c.course_id) c.id
-       from students c
-       join courses crs on crs.id = c.course_id
-       join auth.users ow on ow.id = crs.owner_id
-       join course_creators cc on cc.email = lower(btrim(ow.email))
-      where c.user_id is null
-        and c.email is not null
-        and lower(btrim(c.email)) = (select lower(btrim(u.email)) from auth.users u where u.id = auth.uid())
-      order by c.course_id, c.created_at, c.id
-   );
-  get diagnostics n = row_count;
-  return n;
-end $$;
+language sql security definer set search_path = public as $$
+  select 0;
+$$;
+
+create or replace function claim_tf_rows() returns int
+language sql security definer set search_path = public as $$
+  select 0;
+$$;
 
 grant execute on function claim_student_rows() to authenticated;
-
-/**
- * The same for teaching fellows, and it needs the same narrowing for the same
- * reason. Aimed at staff the original defect is worse, not better: a planted
- * course_tfs row carrying the head TF's address routes them into a student-run
- * course with grading rights over its contents, and app/ck/page.tsx gives them
- * no way back out from inside the app.
- */
-create or replace function claim_tf_rows() returns int
-language plpgsql security definer set search_path = public as $$
-declare n int;
-begin
-  update course_tfs t
-     set user_id = auth.uid()
-   where t.id in (
-     select distinct on (c.course_id) c.id
-       from course_tfs c
-       join courses crs on crs.id = c.course_id
-       join auth.users ow on ow.id = crs.owner_id
-       join course_creators cc on cc.email = lower(btrim(ow.email))
-      where c.user_id is null
-        and c.email is not null
-        and lower(btrim(c.email)) = (select lower(btrim(u.email)) from auth.users u where u.id = auth.uid())
-      order by c.course_id, c.created_at, c.id
-   );
-  get diagnostics n = row_count;
-  return n;
-end $$;
-
 grant execute on function claim_tf_rows() to authenticated;
 
 -- ---------------------------------------------------------------------------

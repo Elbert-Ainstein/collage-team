@@ -136,16 +136,17 @@ union all
 -- The one that is a live security hole until it runs: without it any signed-in
 -- account can create a course, and a course is all you need to intercept a
 -- classmate's work through the email claim.
-select '0028 only staff can make a course',
+select '0028 a roster row names only you',
        case when exists (
-              select 1 from pg_policies
-               where schemaname = 'public' and tablename = 'courses'
-                 and policyname = 'make a course if allowed')
+              select 1 from pg_trigger
+               where tgrelid = 'public.students'::regclass
+                 and tgname = 'trg_guard_student_identity')
             then 'applied'
             else 'NOT APPLIED — run 0028_only_staff_make_courses.sql' end
 union all
--- 0029 hard-depends on 0028: it joins course_creators, which 0028 creates. Run
--- them in order or 0029 fails on a missing relation.
+-- 0029 empties the email sweep that 0028's roster guard cannot reach. Neither
+-- depends on the other's tables any more, but run them in order anyway: 0028
+-- tears down an allow-list that earlier cuts of it may have left behind.
 select '0029 join a course by invite code',
        case when exists (
               select 1 from information_schema.tables

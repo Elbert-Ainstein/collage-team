@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
-  claimStudentRows,
   getEnrolment,
   listAssignments,
   submitMyWork,
@@ -474,7 +473,6 @@ export function StudentApp({
     // Claim any roster rows carrying this address first — a student who signs
     // up before the instructor imports them would otherwise be stranded.
     try {
-      await claimStudentRows();
       setClaimError(null);
     } catch (err) {
       // Not fatal on its own: an unclaimed account simply has no enrolment yet.

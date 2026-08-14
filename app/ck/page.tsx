@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import { AuthGate } from "@/checkins/AuthGate";
 import { FacultyApp } from "@/faculty/FacultyApp";
 import { StudentApp, JoinPanel, JoinScreen } from "@/student/StudentApp";
-import { claimStudentRows, getEnrolment, getRole } from "@/checkins/studentData";
-import { claimTFRows, myTFCourses } from "@/faculty/facultyData";
+import { getEnrolment, getRole } from "@/checkins/studentData";
+import { myTFCourses } from "@/faculty/facultyData";
 import { listCourses } from "@/checkins/data";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
 import type { Role } from "@/checkins/types";
@@ -78,7 +78,6 @@ function RoleRouter({
         // owner did not already hand out. Their own course is excluded for the
         // same reason it is below: owning it is the stronger signal.
         try {
-          await claimTFRows();
           const tfCourses = await myTFCourses();
           if (tfCourses.length && !tfCourses.some((c) => c.owner_id === uid)) {
             return "tf" as Kind;
@@ -97,7 +96,6 @@ function RoleRouter({
       // nothing was missing and hand them the authoring UI for a course they
       // cannot write to.
       try {
-        await claimTFRows();
         const tfCourses = await myTFCourses();
         if (tfCourses.length && !tfCourses.some((c) => c.owner_id === uid)) {
           return "tf" as Kind;
@@ -129,7 +127,6 @@ function RoleRouter({
       // what students see — is enrolled only on a course they own, so they
       // stay in the faculty app.
       try {
-        await claimStudentRows();
         const enrolment = await getEnrolment();
         if (enrolment && enrolment.course.owner_id !== uid) return "student" as Kind;
       } catch {
