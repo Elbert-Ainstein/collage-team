@@ -217,6 +217,13 @@ export function FacultyApp({
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const busy = useRef(false);
+  // A refresh asked for while one is running. It cannot just be dropped: the
+  // write that asked for it has already landed in the database, so dropping it
+  // leaves the screen permanently disagreeing with the row — and worse, a
+  // course switch made during a load was dropped the same way, leaving the
+  // sidebar highlighting AP50B while the pane showed AP50A with nothing that
+  // would ever correct it. Queue one and run it at the end instead.
+  const again = useRef(false);
 
   const fail = (e: unknown) => setError(String((e as Error)?.message ?? e));
 
@@ -226,11 +233,20 @@ export function FacultyApp({
     setCourseId((prev) => (prev && cs.some((c) => c.id === prev) ? prev : (cs[0]?.id ?? null)));
   }, [mode]);
 
+  // Lets the queued re-run above call the CURRENT refresh rather than the one
+  // captured when this closure was built — a course switch is exactly the case
+  // where those differ, and re-running the stale one would reload the course
+  // you just left.
+  const refreshRef = useRef<(() => Promise<void>) | null>(null);
+
   const refresh = useCallback(async () => {
     if (!courseId) return;
     const known = courses.find((c) => c.id === courseId);
     if (!known) return;
-    if (busy.current) return;
+    if (busy.current) {
+      again.current = true;
+      return;
+    }
     busy.current = true;
     try {
       const isOwner = mode === "owner";
@@ -300,7 +316,20 @@ export function FacultyApp({
     } finally {
       busy.current = false;
     }
+    // Outside the finally, and after the flag is down, so the queued run is a
+    // fresh call rather than recursion inside a try it would inherit. One
+    // re-run however many were asked for — they would all have read the same
+    // rows.
+    if (again.current) {
+      again.current = false;
+      await refreshRef.current?.();
+    }
   }, [courseId, courses, mode]);
+
+  // Kept pointing at the latest refresh, so a queued re-run picks up the course
+  // that is selected NOW rather than the one that was selected when the run it
+  // is following started.
+  refreshRef.current = refresh;
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
