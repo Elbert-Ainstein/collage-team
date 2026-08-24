@@ -10,6 +10,7 @@ import type { ResultRow } from "@/checkins/data";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteActivity, tintFor, updateActivity } from "@/checkins/data";
 import { deleteActivityRecordings } from "@/checkins/audio";
+import { BriefText } from "@/checkins/BriefText";
 import { purgeActivityStorage } from "@/checkins/purge";
 import { isCompletionMet, isOpenToStudents } from "@/checkins/studentData";
 import {
@@ -31,26 +32,27 @@ import { ActivityTeamPanel } from "./ActivityTeamPanel";
 import { NEW_ACTIVITY_STEPS, Steps } from "./Steps";
 
 /**
- * 0007 added `activities.due_at`; the shared row type in checkins/types.ts has
- * not caught up. Read and write it through this shape rather than widening the
- * type here, so the column stays usable and there is one place to delete when
- * the row type does catch up.
+ * The deadline the INDIVIDUAL hand-in is judged against, and the one this
+ * screen's date field writes.
+ *
+ * 0007's `due_at` wins; rows created before it have only the older per-half
+ * column. team_due_at is not a fallback here at any point: the two halves are
+ * handed in separately, by different people, and a team answer measured against
+ * the date its members' own work was due is a whole team marked late for a
+ * deadline that was never theirs.
  */
-type WithDue = { due_at?: string | null };
+function indivDueOf(a: Activity): string | null {
+  return a.due_at ?? a.individual_due_at;
+}
 
 /**
- * The one due date this screen shows and edits.
+ * The one due date this screen shows.
  *
- * 0007's `due_at` wins, but rows created before it have only the older
- * per-half columns, so fall back to the half this activity's SCOPE is marked
- * on — a team activity's deadline is its team due date, not its individual one.
+ * A team-only activity has no individual half for the date to belong to, so
+ * there — and only there — its own team date leads.
  */
 function dueOf(a: Activity): string | null {
-  const own = (a as Activity & WithDue).due_at;
-  if (own) return own;
-  return SCOPE_OF[a.type] === "team"
-    ? (a.team_due_at ?? a.individual_due_at)
-    : (a.individual_due_at ?? a.team_due_at);
+  return SCOPE_OF[a.type] === "team" ? (a.team_due_at ?? indivDueOf(a)) : indivDueOf(a);
 }
 
 /** One person or team in the right-hand lists. */
@@ -59,6 +61,8 @@ interface Subject {
   name: string;
   tint: string | null;
   stamp: string | null;
+  /** Handed in after the individual deadline. Never true on the team list. */
+  late: boolean;
   /** What they got, on the graded list. Null everywhere else. */
   grade?: string | null;
 }
@@ -170,6 +174,31 @@ function describe(a: Activity): string {
     case "amplify":
       return `Team activity on ${t}. Worked away from Collage and marked once per team at the check-in, so there is one mark per team rather than one per student.`;
   }
+}
+
+/**
+ * When it arrived, and whether that was in time.
+ *
+ * One component for both lists, because "who is done" and "who was late" are
+ * the same question asked of a graded row and an ungraded one, and answering it
+ * twice is how the two lists start disagreeing.
+ */
+function Stamp({ s }: { s: Subject }): JSX.Element | null {
+  // Late is only ever set from a stamp that parsed, so there is no late-without-
+  // a-time case to render.
+  if (!s.stamp) return null;
+  return (
+    <span
+      className="fv-num"
+      style={{
+        fontSize: "var(--fv-2xs)",
+        color: s.late ? "var(--fv-amber)" : "var(--fv-muted)",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {s.late ? `Late · ${s.stamp}` : s.stamp}
+    </span>
+  );
 }
 
 /** Mirrors model.statFor's notion of "handed in", so the lists and the counts agree. */
@@ -287,10 +316,28 @@ export function ActivityDetail(props: {
       if (subjectId) found.set(subjectId, r);
     }
 
+    // Only the individual half has a deadline to be late against. The team half
+    // is handed in once, by a team, on its own date — and is marked at the
+    // check-in rather than by a clock — so nothing on a team list is ever
+    // flagged late.
+    const cutoff = kind === "team" ? NaN : Date.parse(indivDueOf(activity) ?? "");
+
     const people: Subject[] =
       kind === "team"
-        ? data.teams.map((t) => ({ id: t.id, name: t.name, tint: tintFor(t.name), stamp: null }))
-        : data.roster.map((s) => ({ id: s.id, name: s.name, tint: s.avatar_tint, stamp: null }));
+        ? data.teams.map((t) => ({
+            id: t.id,
+            name: t.name,
+            tint: tintFor(t.name),
+            stamp: null,
+            late: false,
+          }))
+        : data.roster.map((s) => ({
+            id: s.id,
+            name: s.name,
+            tint: s.avatar_tint,
+            stamp: null,
+            late: false,
+          }));
 
     const doneList: Subject[] = [];
     const inList: Subject[] = [];
@@ -302,6 +349,11 @@ export function ActivityDetail(props: {
         continue;
       }
       const stamp = fmtStamp(r.submitted_at);
+      // submitted_at, never updated_at: grading writes to the row, so the
+      // fallback GradingScreen uses to show *something* would turn every
+      // student marked after the deadline into a late one.
+      const arrived = r.submitted_at ? Date.parse(r.submitted_at) : NaN;
+      const late = !Number.isNaN(cutoff) && !Number.isNaN(arrived) && arrived > cutoff;
       // Graded means RELEASED — status 'scored' is the same state the student's
       // own screen reads to show them a number. So somebody on this list can see
       // their grade, which is the only reading of "graded" that is useful to the
@@ -310,6 +362,7 @@ export function ActivityDetail(props: {
         doneList.push({
           ...p,
           stamp,
+          late,
           grade: r.is_ci
             ? isCompletionMet(r)
               ? "Complete"
@@ -319,7 +372,7 @@ export function ActivityDetail(props: {
               : String(r.score ?? 0),
         });
       } else {
-        inList.push({ ...p, stamp });
+        inList.push({ ...p, stamp, late });
       }
     }
     // Three lists, no overlap: a graded student is not also counted as waiting.
@@ -438,7 +491,7 @@ export function ActivityDetail(props: {
   const save = async (): Promise<boolean> => {
     setSaving(true);
     try {
-      const patch: Partial<Activity> & WithDue = {
+      const patch: Partial<Activity> = {
         // An empty title keeps the placeholder rather than writing "": a row
         // with no name is worse than one that says it has none.
         title: title.trim() || "Untitled activity",
@@ -596,7 +649,12 @@ export function ActivityDetail(props: {
               )}
 
               <div className="fv-sub" style={{ marginTop: 8 }}>
-                {dueLine ? `Due ${dueLine}` : "No due date set"}
+                {/* "Individual work due", not "Due": on an activity with both
+                    halves there are two hand-ins and only one of them is
+                    measured against this date. */}
+                {dueLine
+                  ? `${scope === "team" ? "Due" : "Individual work due"} ${dueLine}`
+                  : "No due date set"}
               </div>
             </>
           )}
@@ -672,7 +730,10 @@ export function ActivityDetail(props: {
             />
           ) : (
             <p style={{ margin: "20px 0 0", fontSize: 16, lineHeight: 1.65, maxWidth: "64ch" }}>
-              {blurb}
+              {/* Same renderer the class reads it through, so a link that works
+                  here works there and one that was refused is visibly dead to
+                  the only person who can fix it. */}
+              <BriefText text={blurb} />
             </p>
           )}
 
@@ -777,7 +838,7 @@ export function ActivityDetail(props: {
 
                 <div className="fv-field" style={{ minWidth: 210 }}>
                   <label className="fv-eyebrow" htmlFor="fv-ed-due">
-                    Due
+                    {SCOPE_OF[kind] === "team" ? "Due" : "Individual work due"}
                   </label>
                   <input
                     id="fv-ed-due"
@@ -809,6 +870,23 @@ export function ActivityDetail(props: {
                   {isCompletion(activity) ? " (marked for completion)" : ""}
                 </span>
               </div>
+
+              {/* Said here rather than left to be inferred from a field
+                  labelled "Due". One column holds one date, and which half of
+                  the work it governs was the question — a team that discusses
+                  on Thursday is not late for a Tuesday hand-in. */}
+              {SCOPE_OF[kind] === "team" ? null : (
+                <div
+                  className="fv-sub"
+                  style={{ marginTop: 8, fontSize: "var(--fv-2xs)", lineHeight: 1.5 }}
+                >
+                  This is the deadline for the individual hand-in, and the only one anything is
+                  marked late against.
+                  {SCOPE_OF[kind] === "both"
+                    ? " The team half is marked at the check-in, on its own schedule."
+                    : ""}
+                </div>
+              )}
 
               {kind !== activity.type ? (
                 <div
@@ -984,6 +1062,10 @@ export function ActivityDetail(props: {
                       >
                         {s.name}
                       </span>
+                      {/* When it came in sits beside what it got: a released
+                          grade does not stop the hand-in time mattering, and a
+                          late one is exactly the row anyone goes looking for. */}
+                      <Stamp s={s} />
                       {/* The grade itself, because "who is done" and "what did they
                           get" are the two things anyone opens this list to learn. */}
                       <span
@@ -1040,18 +1122,7 @@ export function ActivityDetail(props: {
                       >
                         {s.name}
                       </span>
-                      {s.stamp ? (
-                        <span
-                          className="fv-num"
-                          style={{
-                            fontSize: "var(--fv-2xs)",
-                            color: "var(--fv-muted)",
-                            whiteSpace: "nowrap",
-                          }}
-                        >
-                          {s.stamp}
-                        </span>
-                      ) : null}
+                      <Stamp s={s} />
                     </div>
                   ))
                 )}

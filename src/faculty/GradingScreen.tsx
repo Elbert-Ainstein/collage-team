@@ -1,7 +1,8 @@
 "use client";
 
-// Grading, Gradescope-style: one question of one submission at a time, marked
-// by picking a line off the activity's deduction ladder.
+// Grading, Gradescope-style: the whole submission on one scrolling list — every
+// question with what it scored, and the one being marked showing the activity's
+// deduction ladder open underneath it.
 //
 // The rule that shapes everything here: a mark IS the picked ladder row, not the
 // points that row happens to carry. Two rows may deduct the same amount, and
@@ -49,6 +50,12 @@ function stamp(iso: string | null): string {
 }
 
 const pts = (n: number) => `${n} ${n === 1 ? "pt" : "pts"}`;
+
+// A share of the total divides, so these numbers are not always whole. Two
+// places is as far as a mark is ever worth printing, and rounding at every step
+// is what keeps the question rows adding up to the header.
+const round2 = (n: number) => Math.round(n * 100) / 100;
+const num = (n: number) => String(round2(n));
 
 /**
  * An activity with no question rows still has to be gradeable, so `questions`
@@ -230,8 +237,17 @@ export function GradingScreen({
         el instanceof HTMLElement &&
         (el.tagName === "INPUT" || el.tagName === "TEXTAREA" || el.isContentEditable);
       if (typing) return;
-      if (e.key === "ArrowLeft") setQIdx((i) => Math.max(0, i - 1));
-      if (e.key === "ArrowRight") setQIdx((i) => Math.min(qCount - 1, i + 1));
+      // editIdx points into the OPEN question's criteria, so leaving it set
+      // while the list opens a different question puts the edit box on an
+      // unrelated line.
+      if (e.key === "ArrowLeft") {
+        setEditIdx(null);
+        setQIdx((i) => Math.max(0, i - 1));
+      }
+      if (e.key === "ArrowRight") {
+        setEditIdx(null);
+        setQIdx((i) => Math.min(qCount - 1, i + 1));
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -258,15 +274,42 @@ export function GradingScreen({
   const deductionOf = (id: string | null) =>
     ladder?.find((r) => r.id === id)?.deduction ?? 0;
 
-  /** What the pick on this question costs — a deduction off the activity total. */
-  const takenHere = deductionOf(pickedId);
-  const runningTotal = useMemo(() => {
+  /**
+   * Every question's score and the submission's, out of one walk.
+   *
+   * The total is the activity's points minus every deduction on the row —
+   * exactly the arithmetic recompute_result_score() runs in the database
+   * (0007), down to counting a mark left behind by a deleted question, because
+   * that mark is still a row and the trigger still subtracts it. So the number
+   * in the header and the number the student is sent cannot drift.
+   *
+   * The per-question figures are carved out of that same walk rather than
+   * summed up somewhere else. Two places computing a score is how the two come
+   * to disagree, and this screen has been bitten by it before.
+   *
+   * A question is "out of" its even share of the activity total, because points
+   * live on the activity and nowhere else — there is no per-question value to
+   * read. The shares are cut cumulatively so they add back up to the total
+   * exactly instead of drifting by a rounding step each. A deduction bigger
+   * than the share leaves that question negative rather than floored at zero: a
+   * floored row stops summing to the header, and a column of numbers that does
+   * not add up is worse than one that reads harshly.
+   */
+  const score = useMemo(() => {
     if (!ladder) return null;
+    const out = pointsTotal(activity);
+    const per = new Map<string, { out: number; taken: number }>();
+    let cut = 0;
+    questions.forEach((q, i) => {
+      const upto = round2((out * (i + 1)) / questions.length);
+      per.set(keyOf(q), { out: round2(upto - cut), taken: deductionOf(pickOf(picks, q)) });
+      cut = upto;
+    });
     let taken = 0;
     for (const [, id] of picks) taken += deductionOf(id);
-    return Math.max(pointsTotal(activity) - taken, 0);
+    return { out, per, earned: Math.max(round2(out - taken), 0) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ladder, picks, questions]);
+  }, [ladder, picks, questions, activity]);
 
   // A completion activity has no criteria to pick — the rubric collapses to one
   // Complete/Not complete for the whole assignment — so requiring a pick per
@@ -470,7 +513,7 @@ export function GradingScreen({
           </div>
           <p className="fv-sub" style={{ marginTop: 8, lineHeight: 1.6, maxWidth: "56ch" }}>
             No {half === "team" ? "team has" : "student has"} handed this in. Once work arrives it
-            will appear here, one question at a time.
+            will appear here.
           </p>
         </div>
       </div>
@@ -485,8 +528,13 @@ export function GradingScreen({
         {/* ------------------------------------------------ the submission */}
         <div className="fv-subpane">
           <div className="fv-subtool">
-            <FAvatar name={subject.name} tint={subject.tint} size={24} />
-            <span style={{ fontSize: "var(--fv-sm)", fontWeight: 600 }}>{subject.name}</span>
+            {/* This pane is a reader, so its toolbar says which question it is
+                open at. Whose work it is heads the list on the right, where the
+                marking happens; printing a name twice across one screen is
+                noise, not reassurance. */}
+            <span style={{ fontSize: "var(--fv-sm)", fontWeight: 600 }}>
+              Question {question?.label ?? qIdx + 1}
+            </span>
             <span className="fv-num" style={{ fontSize: "var(--fv-2xs)", color: "var(--fv-muted)" }}>
               {stamp(subject.result.submitted_at ?? subject.result.updated_at)}
             </span>
@@ -509,9 +557,6 @@ export function GradingScreen({
                 ))}
               </div>
             ) : null}
-            <span style={{ fontSize: "var(--fv-xs)", color: "var(--fv-muted)" }}>
-              Question {qIdx + 1}
-            </span>
           </div>
 
           {/* The student's OWN pages, at the question being marked. This was a
@@ -527,36 +572,52 @@ export function GradingScreen({
 
         {/* ----------------------------------------------------- the panel */}
         <div className="fv-gradeside">
+          {/* Whose work this is and what it stands at, which is what the pane
+              is read top-down for. The total is the one the Release button
+              sends — same object, so they cannot say different things. */}
           <div className="fv-card" style={{ padding: "12px 14px" }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-              <span className="fv-eyebrow" style={{ flex: 1 }}>
-                Progress
-              </span>
-              <span className="fv-num" style={{ fontSize: "var(--fv-xs)", color: "var(--fv-muted)" }}>
-                {stat ? `${stat.graded} of ${stat.total} ${stat.verb}` : "—"}
-              </span>
-            </div>
-            <div className="fv-track" style={{ height: 8, marginTop: 8 }}>
-              <i
+            <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
+              <FAvatar name={subject.name} tint={subject.tint} size={26} />
+              <span
                 style={{
-                  width: stat && stat.total ? `${(stat.graded / stat.total) * 100}%` : "0%",
-                  background: "var(--fv-emerald)",
+                  flex: 1,
+                  minWidth: 0,
+                  fontFamily: "var(--fv-serif)",
+                  fontSize: "var(--fv-base)",
+                  fontWeight: 700,
+                  letterSpacing: "var(--fv-tight)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
                 }}
-              />
-            </div>
-            {/* The missing fact. "1 of 12 marked" counts the whole class, while
-                everything below counts only the people who handed something in
-                — so the two disagree unless somebody says why. They do not
-                contradict: nine of twelve simply have nothing to mark yet. */}
-            {stat && stat.total > stat.submitted ? (
-              <div
-                className="fv-sub"
-                style={{ marginTop: 6, fontSize: "var(--fv-2xs)", lineHeight: 1.5 }}
               >
-                {stat.total - stat.submitted} of {stat.total} haven&rsquo;t handed in yet, so there
-                is nothing to mark for them.
+                {subject.name}
+              </span>
+              {subject.result.status === "scored" ? (
+                <span className="fv-eyebrow" style={{ flex: "none", color: "var(--fv-emerald)" }}>
+                  Released
+                </span>
+              ) : null}
+            </div>
+            {forCompletion ? null : (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "baseline",
+                  gap: 8,
+                  marginTop: 10,
+                  paddingTop: 10,
+                  borderTop: "1px solid var(--fv-neutral-200)",
+                }}
+              >
+                <span className="fv-eyebrow" style={{ flex: 1 }}>
+                  Total points
+                </span>
+                <span className="fv-num" style={{ fontSize: "var(--fv-lg)", fontWeight: 700 }}>
+                  {score ? num(score.earned) : "—"} / {pts(pointsTotal(activity))}
+                </span>
               </div>
-            ) : null}
+            )}
           </div>
 
           {forCompletion ? (
@@ -603,76 +664,158 @@ export function GradingScreen({
                   : "Pick one, then finalise. You can change it afterwards."}
               </p>
             </div>
-          ) : (
-          <div className="fv-card" style={{ padding: "14px 16px" }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-              <span className="fv-eyebrow" style={{ flex: 1 }}>
-                Question {question?.label ?? qIdx + 1} rubric
-              </span>
-              <span className="fv-num" style={{ fontSize: "var(--fv-sm)", fontWeight: 600 }}>
-                {takenHere > 0 ? `− ${pts(takenHere)}` : "no deduction"}
-              </span>
-            </div>
-            <p
-              style={{
-                fontSize: "var(--fv-2xs)",
-                color: "var(--fv-muted)",
-                lineHeight: 1.5,
-                margin: "6px 0 10px",
-              }}
-            >
-              Pick one — its points come off the {pts(pointsTotal(activity))} this activity is out
-              of.{data.can.author ? " Use the pencil to edit a line." : ""}
-            </p>
+          ) : null}
 
-            {forQuestion == null ? (
-              <div className="fv-sub">Loading the ladder…</div>
-            ) : forQuestion.length === 0 ? (
-              // Only the instructor can write criteria, so say that rather than
-              // showing an empty list that looks broken.
-              <div className="fv-sub" style={{ lineHeight: 1.6 }}>
-                No criteria have been written for this question yet. Ask the instructor to open
-                the <strong>Rubric</strong> on the activity and add some, then reload.
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 2, margin: "0 -4px" }}>
-                {forQuestion.map((item, i) => (
-                  <RubricRow
-                    key={item.id}
-                    item={item}
-                    selected={pickedId === item.id}
-                    editing={data.can.author && editIdx === i}
-                    canEdit={data.can.author}
-                    onPick={() => void pick(item)}
-                    onToggleEdit={() => setEditIdx(editIdx === i ? null : i)}
-                    onCommit={(patch) => void commitLine(item, patch)}
-                  />
-                ))}
-              </div>
-            )}
+          {/* ------------------------------------------------ every question */}
+          {/* The list is the screen. A stepper showed one question at a time
+              and so never showed the submission — a grader could not tell what
+              a person had scored without paging the whole way through and
+              adding it up. Every question is here at once with what it scored
+              and which line was picked; only the criteria of the one being
+              marked open underneath, because twelve open ladders is a different
+              way of seeing nothing.
 
-            <button
-              type="button"
-              className="fv-btn outline sm full"
-              style={{ marginTop: 10 }}
-              onClick={() => void addLine()}
-              disabled={!ladder || !data.can.author}
-              title={
-                data.can.author
-                  ? "Adds a line to this question's criteria"
-                  : "Only the instructor who owns this course can change the rubric."
-              }
-            >
-              <FIcon name="add" size={14} />
-              Add rubric item
-            </button>
-            <div
-              className="fv-num"
-              style={{ marginTop: 8, fontSize: "var(--fv-2xs)", color: "var(--fv-muted)" }}
-            >
-              Submission so far · {runningTotal ?? "—"} / {pts(pointsTotal(activity))}
+              Opening a question is what "current" means here — the pages on the
+              left follow it, and pick() and the criteria filter both read it —
+              so the open row does not close on its own click. Something has to
+              be current or the reader has nothing to point at.
+
+              A completion activity has no ladder and no per-question score, so
+              it gets labels only, and only when there is more than one: the
+              list is then purely how you move the pages on the left, and one
+              row would be a control that does nothing. */}
+          {forCompletion && qCount < 2 ? null : (
+            <div className="fv-card" style={{ padding: 0, overflow: "hidden" }}>
+              {questions.map((q, i) => {
+                // Clamped the same way `question` is, so the open row and the
+                // pages on the left are never a question apart in the frame
+                // after a question is deleted.
+                const open = i === Math.min(qIdx, qCount - 1);
+                const here = score?.per.get(keyOf(q)) ?? null;
+                const line = ladder?.find((r) => r.id === pickOf(picks, q)) ?? null;
+                return (
+                  <div
+                    key={keyOf(q)}
+                    style={{ borderTop: i ? "1px solid var(--fv-neutral-200)" : undefined }}
+                  >
+                    <button
+                      type="button"
+                      aria-expanded={open}
+                      onClick={() => {
+                        setEditIdx(null);
+                        setQIdx(i);
+                      }}
+                      style={{
+                        display: "flex",
+                        alignItems: "baseline",
+                        gap: 10,
+                        width: "100%",
+                        padding: "9px 14px",
+                        border: 0,
+                        background: open ? "var(--fv-cream-400)" : "transparent",
+                        font: "inherit",
+                        color: "inherit",
+                        textAlign: "left",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <span style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontSize: "var(--fv-xs)", fontWeight: 600 }}>
+                          Question {q.label}
+                        </span>
+                        {/* The line that was picked, which is the only sentence
+                            this app holds about why the question scored what it
+                            did — and the fastest way to spot the wrong pick
+                            without opening anything. */}
+                        {forCompletion ? null : (
+                          <span
+                            style={{
+                              display: "block",
+                              marginTop: 2,
+                              fontSize: "var(--fv-2xs)",
+                              lineHeight: 1.45,
+                              color: line ? "var(--fv-muted)" : "var(--fv-amber)",
+                            }}
+                          >
+                            {line ? line.description : "Not marked yet"}
+                          </span>
+                        )}
+                      </span>
+                      {forCompletion || !here ? null : (
+                        <span
+                          className="fv-num"
+                          style={{ flex: "none", fontSize: "var(--fv-xs)", fontWeight: 600 }}
+                        >
+                          {num(here.out - here.taken)} / {pts(here.out)}
+                        </span>
+                      )}
+                    </button>
+
+                    {open && !forCompletion ? (
+                      <div style={{ padding: "4px 10px 12px" }}>
+                        <p
+                          style={{
+                            fontSize: "var(--fv-2xs)",
+                            color: "var(--fv-muted)",
+                            lineHeight: 1.5,
+                            margin: "0 4px 8px",
+                          }}
+                        >
+                          Pick one — its points come off the {pts(pointsTotal(activity))} this
+                          activity is out of.
+                          {data.can.author ? " Use the pencil to edit a line." : ""}
+                        </p>
+
+                        {forQuestion == null ? (
+                          <div className="fv-sub" style={{ margin: "0 4px" }}>
+                            Loading the ladder…
+                          </div>
+                        ) : forQuestion.length === 0 ? (
+                          // Only the instructor can write criteria, so say that
+                          // rather than showing an empty list that looks broken.
+                          <div className="fv-sub" style={{ margin: "0 4px", lineHeight: 1.6 }}>
+                            No criteria have been written for this question yet. Ask the
+                            instructor to open the <strong>Rubric</strong> on the activity and add
+                            some, then reload.
+                          </div>
+                        ) : (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                            {forQuestion.map((item, ri) => (
+                              <RubricRow
+                                key={item.id}
+                                item={item}
+                                selected={pickedId === item.id}
+                                editing={data.can.author && editIdx === ri}
+                                canEdit={data.can.author}
+                                onPick={() => void pick(item)}
+                                onToggleEdit={() => setEditIdx(editIdx === ri ? null : ri)}
+                                onCommit={(patch) => void commitLine(item, patch)}
+                              />
+                            ))}
+                          </div>
+                        )}
+
+                        <button
+                          type="button"
+                          className="fv-btn outline sm full"
+                          style={{ marginTop: 10 }}
+                          onClick={() => void addLine()}
+                          disabled={!ladder || !data.can.author}
+                          title={
+                            data.can.author
+                              ? "Adds a line to this question's criteria"
+                              : "Only the instructor who owns this course can change the rubric."
+                          }
+                        >
+                          <FIcon name="add" size={14} />
+                          Add rubric item
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
-          </div>
           )}
 
           <div className="fv-card" style={{ padding: "12px 14px" }}>
@@ -739,15 +882,50 @@ export function GradingScreen({
                 ? "Finalize grade"
                 : subject.result.status === "scored"
                   ? "Released"
-                  : `Release ${runningTotal ?? 0} / ${pts(pointsTotal(activity))}`}
+                  : `Release ${num(score?.earned ?? 0)} / ${pts(pointsTotal(activity))}`}
           </button>
+
+          {/* Where the class stands, next to the control that moves it. The
+              button above finishes one person; everything below this is about
+              the other eleven, and the count belongs with them. */}
+          <div className="fv-card" style={{ padding: "12px 14px" }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+              <span className="fv-eyebrow" style={{ flex: 1 }}>
+                Progress
+              </span>
+              <span className="fv-num" style={{ fontSize: "var(--fv-xs)", color: "var(--fv-muted)" }}>
+                {stat ? `${stat.graded} of ${stat.total} ${stat.verb}` : "—"}
+              </span>
+            </div>
+            <div className="fv-track" style={{ height: 8, marginTop: 8 }}>
+              <i
+                style={{
+                  width: stat && stat.total ? `${(stat.graded / stat.total) * 100}%` : "0%",
+                  background: "var(--fv-emerald)",
+                }}
+              />
+            </div>
+            {/* The missing fact. "1 of 12 marked" counts the whole class, while
+                everything below counts only the people who handed something in
+                — so the two disagree unless somebody says why. They do not
+                contradict: nine of twelve simply have nothing to mark yet. */}
+            {stat && stat.total > stat.submitted ? (
+              <div
+                className="fv-sub"
+                style={{ marginTop: 6, fontSize: "var(--fv-2xs)", lineHeight: 1.5 }}
+              >
+                {stat.total - stat.submitted} of {stat.total} haven&rsquo;t handed in yet, so there
+                is nothing to mark for them.
+              </div>
+            ) : null}
+          </div>
 
           {/* ------------------------------------------------ release in bulk */}
           <ReleaseMany
             subjects={subjects}
             forCompletion={forCompletion}
             noun={half === "team" ? "team" : "student"}
-            // The same marks the rubric card reads, so "ready" here and a lit
+            // The same marks the question list reads, so "ready" here and a lit
             // Release button there can never disagree about one submission.
             marks={marks}
             questions={questions}
@@ -755,29 +933,26 @@ export function GradingScreen({
             onError={onError}
           />
 
+          {/* Only the person steps now. The question stepper was the thing
+              being complained about — the list above IS the way through the
+              questions, and a second control moving the same cursor would just
+              be somewhere else to look. The arrow keys still step it. */}
           <div className="fv-card" style={{ padding: "12px 14px" }}>
             <Stepper
-              label={`Question ${question?.label ?? qIdx + 1} of ${qCount}`}
-              onPrev={() => setQIdx((i) => Math.max(0, i - 1))}
-              onNext={() => setQIdx((i) => Math.min(qCount - 1, i + 1))}
-              prevOk={qIdx > 0}
-              nextOk={qIdx < qCount - 1}
+              label={`${half === "team" ? "Team" : "Student"} ${stIdx + 1} of ${subjects.length}`}
+              onPrev={() => {
+                setEditIdx(null);
+                setStIdx((i) => Math.max(0, i - 1));
+                setQIdx(0);
+              }}
+              onNext={() => {
+                setEditIdx(null);
+                setStIdx((i) => Math.min(subjects.length - 1, i + 1));
+                setQIdx(0);
+              }}
+              prevOk={stIdx > 0}
+              nextOk={stIdx < subjects.length - 1}
             />
-            <div style={{ borderTop: "1px solid var(--fv-neutral-200)", paddingTop: 10, marginTop: 10 }}>
-              <Stepper
-                label={`${half === "team" ? "Team" : "Student"} ${stIdx + 1} of ${subjects.length}`}
-                onPrev={() => {
-                  setStIdx((i) => Math.max(0, i - 1));
-                  setQIdx(0);
-                }}
-                onNext={() => {
-                  setStIdx((i) => Math.min(subjects.length - 1, i + 1));
-                  setQIdx(0);
-                }}
-                prevOk={stIdx > 0}
-                nextOk={stIdx < subjects.length - 1}
-              />
-            </div>
           </div>
         </div>
       </div>
@@ -1006,7 +1181,7 @@ function ReleaseMany({
   /**
    * How far each submission has been marked.
    *
-   * Counted question by question through the same `pickOf` the rubric card
+   * Counted question by question through the same `pickOf` the question list
    * uses, never by how many mark rows the submission carries: a mark left
    * behind by a question deleted before 0026 still sits there, and counting
    * rows was what let a grade go out with a question nobody had looked at.

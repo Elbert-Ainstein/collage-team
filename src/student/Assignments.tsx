@@ -17,12 +17,14 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
+import { BriefText } from "@/checkins/BriefText";
 import { ensureTeamResult } from "@/checkins/studentData";
-import { getMyTeamMarks, type TutorialMark } from "@/checkins/tutorial";
+import { getMyMarks, type StudentMark } from "@/checkins/tutorial";
 import { listTeamResources, resourceUrls, type TeamResource } from "@/checkins/resources";
 import { listMyQuestions } from "@/checkins/studentData";
 import type { Assignment, AssignmentStatus, Enrolment } from "@/checkins/studentData";
 import type {
+  Activity,
   ActivityQuestion,
   ActivityType,
   CheckInResult,
@@ -145,17 +147,30 @@ function fmtWhen(iso: string | null | undefined): string | null {
   return `${weekday} ${h}:${String(d.getMinutes()).padStart(2, "0")}${suffix}`;
 }
 
+/**
+ * The deadline the individual hand-in is judged against.
+ *
+ * due_at is what the faculty app writes (migration 0007) and it is the
+ * INDIVIDUAL deadline — the editor over there says so in as many words. The
+ * older per-scope column is still honoured so activities authored before 0007
+ * keep their date, but it is the fallback now, not the source.
+ */
+function indivDueAt(act: Activity): string | null {
+  return act.due_at ?? act.individual_due_at;
+}
+
 /** The due line under a row title, and the warning badge on the detail card. */
 function dueLine(a: Assignment): string {
   const act = a.activity;
   const scope = SCOPE_OF[act.type];
   const closed = act.stage >= 4;
   const verb = closed ? "Closed" : "Due";
-  // due_at is what the faculty app writes (migration 0007). The older per-scope
-  // columns are still honoured so activities authored before it keep their
-  // dates, but they are the fallback now, not the source.
-  const indiv = fmtWhen(act.due_at ?? act.individual_due_at);
-  const team = fmtWhen(act.due_at ?? act.team_due_at);
+  const indiv = fmtWhen(indivDueAt(act));
+  // Not due_at, except where there is no individual half for it to belong to.
+  // Printing the individual deadline as the discussion date told a team its
+  // answer was owed on the day its members' own work was — two different
+  // deadlines reported as one.
+  const team = fmtWhen(scope === "team" ? (act.team_due_at ?? indivDueAt(act)) : act.team_due_at);
 
   if (scope === "team") {
     return team ? `${verb} ${team}` : act.dates_label ?? "No due date set";
@@ -184,10 +199,51 @@ function handedIn(a: Assignment): boolean {
   return a.status === "Turned in" || a.status === "Graded" || a.status === "Discussing";
 }
 
-/** When it arrived — null whenever nothing did, whatever timestamp the row carries. */
+/**
+ * The instant work arrived — null whenever nothing did, whatever timestamp the
+ * row happens to carry.
+ *
+ * submitted_at is stamped when a student hands in. `a.submitted` is the row's
+ * updated_at, which a marker also moves, so on its own it answers "when was
+ * this last touched" and shows a student a submission time that drifts to the
+ * day they were graded. Kept behind it for rows handed in before the stamp
+ * existed.
+ */
+function handedInAt(a: Assignment): string | null {
+  if (!handedIn(a)) return null;
+  const lead = SCOPE_OF[a.activity.type] === "team" ? a.teamResult : a.myResult;
+  return lead?.submitted_at ?? a.submitted;
+}
+
+/** When it arrived, ready to print. */
 function submittedAt(a: Assignment): string | null {
-  if (!a.submitted || !handedIn(a)) return null;
-  return fmtWhen(a.submitted) ?? a.submitted;
+  const iso = handedInAt(a);
+  if (!iso) return null;
+  return fmtWhen(iso) ?? iso;
+}
+
+/**
+ * Handed in, but after the deadline.
+ *
+ * Against the INDIVIDUAL deadline and nothing else. A team hands its answer in
+ * once, on a date of its own, and judging that against the date each member's
+ * own work was due would mark whole teams late for a deadline that was never
+ * theirs — so a team-only activity is never late here, and on an activity with
+ * both halves this reads the student's own row.
+ *
+ * Different from the "Late" STATUS, which statusOf gives to a row with nothing
+ * in it once the activity is past its stage and which means
+ * missing-and-overdue. This one means the work is in.
+ */
+function lateHandIn(a: Assignment): boolean {
+  if (SCOPE_OF[a.activity.type] === "team") return false;
+  const due = indivDueAt(a.activity);
+  const when = handedInAt(a);
+  if (!due || !when) return false;
+  const cutoff = Date.parse(due);
+  const arrived = Date.parse(when);
+  if (Number.isNaN(cutoff) || Number.isNaN(arrived)) return false;
+  return arrived > cutoff;
 }
 
 function statusStamp(a: Assignment): string {
@@ -424,7 +480,9 @@ function DescriptionCard({ a, questions }: { a: Assignment; questions: number })
     <div className="sv-card" style={{ marginTop: 14 }}>
       <div className="sv-eyebrow">Description</div>
       {brief ? (
-        <p style={CARD_BODY}>{brief}</p>
+        <p style={CARD_BODY}>
+          <BriefText text={brief} />
+        </p>
       ) : (
         <p style={{ ...CARD_BODY, color: "var(--muted-foreground)" }}>
           Your instructor hasn&rsquo;t written a brief for this one. Ask in the session if
@@ -623,17 +681,25 @@ function ResourceStrip({
 function StatusCard({ a, scope }: { a: Assignment; scope: Scope }) {
   const when = submittedAt(a);
   const arrived = handedIn(a);
+  const late = lateHandIn(a);
   return (
     <div className="sv-card" style={{ padding: "16px 18px" }}>
       <Eyebrow>Status</Eyebrow>
       <div style={{ marginTop: 8 }}>
         <span className={`sv-badge ${STATUS_BADGE[a.status]}`}>{a.status}</span>
       </div>
-      <div
-        className="sv-num"
-        style={{ fontSize: "var(--text-xs)", color: "var(--muted-foreground)", marginTop: 8 }}
-      >
-        {statusStamp(a)}
+      {/* The stamp and the late marker sit together because they are one fact:
+          the badge above says the work is in, and this says when — and whether
+          that was in time. Late here is not the "Late" status, which means
+          nothing came at all. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+        <span
+          className="sv-num"
+          style={{ fontSize: "var(--text-xs)", color: "var(--muted-foreground)" }}
+        >
+          {statusStamp(a)}
+        </span>
+        {late ? <span className="sv-badge warning">Late</span> : null}
       </div>
 
       {/* Nothing about a grade until something has actually been handed in.
@@ -673,7 +739,8 @@ function StatusCard({ a, scope }: { a: Assignment; scope: Scope }) {
                 textAlign: "center",
               }}
             >
-              Handed in {when}. Open your work to replace it.
+              Handed in {when}
+              {late ? ", after the deadline" : ""}. Open your work to replace it.
             </div>
           ) : null}
         </>
@@ -696,17 +763,20 @@ function StatusCard({ a, scope }: { a: Assignment; scope: Scope }) {
 /**
  * What the instructor recorded for THIS team during the session.
  *
- * Real rows now (0016), not the handoff's seed copy. A team sees only its own —
- * the policy on tutorial_marks is what enforces that; this just renders what
- * came back. Absences are deliberately absent: who else on your team was marked
- * away is a fact about them.
+ * THEIR score, not the team's. The team's mark and this student's score are the
+ * same number right up until they were away — 0031 lets a student read their own
+ * absence rows, and getMyMarks folds that in, so a student who missed a check-in
+ * sees the 0 they actually got rather than the 5 their team was sitting on.
+ *
+ * Who ELSE on the team was away stays invisible, exactly as 0016 left it: that
+ * is a fact about them.
  */
 function LiveGrading({
   marks,
   members,
   loading,
 }: {
-  marks: TutorialMark[];
+  marks: StudentMark[];
   members: Student[];
   loading: boolean;
 }) {
@@ -902,7 +972,7 @@ function AssignmentDetail({
 
   // What the instructor recorded for this team in the session. Loaded on the
   // team half only, which is the only place it is shown.
-  const [marks, setMarks] = useState<TutorialMark[]>([]);
+  const [marks, setMarks] = useState<StudentMark[]>([]);
   const [marksLoading, setMarksLoading] = useState(false);
 
   /**
@@ -924,8 +994,8 @@ function AssignmentDetail({
 
     const read = (showSpinner: boolean) => {
       if (showSpinner) setMarksLoading(true);
-      return getMyTeamMarks(act.id, teamId)
-        .then((rows) => {
+      return getMyMarks(act.id, teamId, enrolment.student.id)
+        .then((rows: StudentMark[]) => {
           if (alive) setMarks(rows);
         })
         .catch(() => {
@@ -1002,7 +1072,7 @@ function AssignmentDetail({
     : a.myResult?.status === "draft"
       ? `Draft saved ${fmtWhen(a.myResult.updated_at) ?? "recently"}`
       : submittedAt(a)
-        ? `Submitted ${submittedAt(a)}`
+        ? `Submitted ${submittedAt(a)}${lateHandIn(a) ? " · Late" : ""}`
         : "Nothing saved yet";
 
   return (
@@ -1081,7 +1151,9 @@ function AssignmentDetail({
                   </div>
                 </div>
                 {brief ? (
-                  <p style={CARD_BODY}>{brief}</p>
+                  <p style={CARD_BODY}>
+                    <BriefText text={brief} />
+                  </p>
                 ) : (
                   <p style={{ ...CARD_BODY, color: "var(--muted-foreground)" }}>
                     Your instructor hasn&rsquo;t written instructions for this one.

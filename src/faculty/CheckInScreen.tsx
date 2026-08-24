@@ -4,8 +4,14 @@
 //
 // Pick an activity on the left, mark the room on the right: who was absent, who
 // presented each check-in, and the two 1-5 scores. It saves as you go, and what
-// is recorded here is what a student on that team sees against that activity —
+// is recorded here is what the students on that team see against that activity —
 // so nothing is held in this component that a reload would lose.
+//
+// The unit of MARKING is the team, because this is filled in standing up while
+// walking between them. The unit of SCORING is the student: everyone present
+// takes the team's numbers, everyone ticked absent takes 0. That is derived from
+// these same two tables by studentMarks — there is no per-student row to write
+// here, and adding one would mean a second write on every tick of a checkbox.
 //
 // Only TEAM and INDIVIDUAL+TEAM activities are listed. A check-in is a team
 // presenting to the room; an individual-only activity has no team half for the
@@ -17,10 +23,12 @@ import { SCOPE_OF } from "@/checkins/types";
 import {
   SCALE,
   SLOTS,
+  absentIds,
   getTutorialSheet,
   markFor,
   setTutorialAbsences,
   setTutorialMark,
+  studentMarks,
   type TutorialAbsence,
   type TutorialMark,
 } from "@/checkins/tutorial";
@@ -202,8 +210,7 @@ export function CheckInScreen({ data }: { data: FacultyData }): JSX.Element {
     }
   };
 
-  const absentIn = (teamId: string): string[] =>
-    absences.filter((a) => a.team_id === teamId).map((a) => a.student_id);
+  const absentIn = (teamId: string): string[] => absentIds(absences, teamId);
 
   return (
     <div className="fv-panel">
@@ -374,6 +381,8 @@ export function CheckInScreen({ data }: { data: FacultyData }): JSX.Element {
                             <AbsentPicker
                               team={team}
                               away={away}
+                              marks={marks}
+                              absences={absences}
                               disabled={!canEdit}
                               onChange={(ids) => void writeAbsences(team.id, ids)}
                             />
@@ -442,8 +451,10 @@ export function CheckInScreen({ data }: { data: FacultyData }): JSX.Element {
               </div>
 
               <p className="fv-sub" style={{ marginTop: 12, lineHeight: 1.55, maxWidth: "70ch" }}>
-                Each team sees its own presenter and scores on this activity. Nobody sees
-                another team&rsquo;s row, and absences are not shown to students at all.
+                You mark the team; the score is each student&rsquo;s. Everyone who was in the
+                room gets the team&rsquo;s two numbers for that check-in, and anyone ticked
+                absent gets 0. Each student sees their own numbers and their team&rsquo;s
+                presenter — never another team&rsquo;s row, and never who else was away.
               </p>
             </>
           )}
@@ -453,15 +464,28 @@ export function CheckInScreen({ data }: { data: FacultyData }): JSX.Element {
   );
 }
 
-/** Absences as a multi-select: any number, not two fixed slots. */
+/**
+ * Absences as a multi-select: any number, not two fixed slots.
+ *
+ * The tick is also the score. Everyone in the room gets the team's numbers for a
+ * check-in and anyone ticked here gets 0, so an away row carries its 0 next to
+ * the name — the consequence of the tick, at the tick, rather than a rule the TF
+ * has to have read somewhere. It only appears once the team has actually been
+ * given something, because a 0 against a sheet nobody has marked yet says the
+ * student failed a check-in that has not happened.
+ */
 function AbsentPicker({
   team,
   away,
+  marks,
+  absences,
   disabled,
   onChange,
 }: {
   team: TeamWithMembers;
   away: string[];
+  marks: TutorialMark[];
+  absences: TutorialAbsence[];
   disabled: boolean;
   onChange: (studentIds: string[]) => void;
 }) {
@@ -469,10 +493,16 @@ function AbsentPicker({
     <div className="fv-absent">
       {team.members.map((m) => {
         const on = away.includes(m.id);
+        const zeroed =
+          on &&
+          studentMarks(marks, absences, team.id, m.id).some(
+            (s) => s.accuracy !== null || s.discussion !== null,
+          );
         return (
           <label
             key={m.id}
             className={`fv-absentrow${on ? " away" : ""}${disabled ? " ro" : ""}`}
+            title={zeroed ? `${m.name} scores 0 on this activity's check-ins.` : undefined}
           >
             <input
               type="checkbox"
@@ -483,6 +513,9 @@ function AbsentPicker({
               }
             />
             <span className="fv-ellip">{m.name}</span>
+            {zeroed ? (
+              <span style={{ marginLeft: "auto", flex: "none", fontWeight: 600 }}>0</span>
+            ) : null}
           </label>
         );
       })}

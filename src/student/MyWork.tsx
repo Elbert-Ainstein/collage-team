@@ -159,8 +159,11 @@ const CSS = `
 `;
 
 /**
- * The back control is 12px type with no padding — a 17px tall target, and the
- * only way off this screen, since nothing here is routed through history. The
+ * The back control is 12px type with no padding — a 17px tall target. It is no
+ * longer the ONLY way off this screen: since the deep-link work each page is a
+ * history entry, so browser-back leaves too. Typed answers survive that — the
+ * draft is written to localStorage as you type and read back on return — but a
+ * 17px target is still a 17px target. The
  * padding buys a 45px one; the matching negative margin hands the space back,
  * so the margin box is the size it always was and the row lays out unchanged.
  */

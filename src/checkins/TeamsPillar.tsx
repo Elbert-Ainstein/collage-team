@@ -349,7 +349,10 @@ export function TeamsPillar(props: PillarProps) {
     if (!activeSet) return;
     const setIdNow = activeSet.id;
     await run(async () => {
-      await createTeam(setIdNow, "New team", teams.length);
+      // Numbered like the auto-formed ones rather than "New team": the number
+      // is what gets said out loud in the room, and a set reading Team 1..5 plus
+      // a "New team" is one team nobody can refer to.
+      await createTeam(setIdNow, `Team ${teams.length + 1}`, teams.length);
       await reload(setIdNow);
     });
   };
@@ -839,19 +842,22 @@ export function TeamsPillar(props: PillarProps) {
             return (
               <div className="t-teamcard" key={t.id}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  {/* Drawn as the field it is. It used to be transparent on
+                      both border and background, which made a renameable name
+                      look exactly like a printed heading — the rename worked,
+                      nobody could tell it was there. */}
                   <input
                     className="t-in"
                     style={{
                       flex: 1,
                       minWidth: 0,
-                      borderColor: "transparent",
-                      background: "transparent",
                       fontSize: 13.5,
                       fontWeight: 600,
-                      padding: "2px 4px",
+                      padding: "2px 6px",
                     }}
                     value={t.name}
                     aria-label="Team name"
+                    title="Rename this team"
                     onChange={(e) => onTeamNameChange(t.id, e.target.value)}
                     onBlur={() => void commitTeamName(t.id)}
                     onKeyDown={(e) => {

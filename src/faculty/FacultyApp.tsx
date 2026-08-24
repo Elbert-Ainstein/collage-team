@@ -130,6 +130,64 @@ export interface FacultyData {
 
 const FULL_SCREEN: Screen[] = ["detail", "rubric", "grade"];
 
+const SCREENS: string[] = ["activities", "checkin", "teams", "tfs", "detail", "rubric", "grade"];
+
+/**
+ * Where you are, written on the URL: /ck?s=<screen>&a=<activity>&c=<course>.
+ *
+ * Query params rather than nested routes because /ck is one route that decides
+ * which app you get from your enrolment — a student and an instructor opening
+ * the SAME link each land on their own view of that activity, which is the
+ * whole point of a link you can paste into Canvas once.
+ *
+ * Params this app does not own are left alone. AuthGate parks a class code at
+ * ?join= across sign-in and spends it later; rewriting the query from scratch
+ * here would eat it.
+ */
+function readWhere(): { screen: Screen | null; selId: string | null; courseId: string | null } {
+  const q = new URLSearchParams(window.location.search);
+  const s = q.get("s") ?? "";
+  return {
+    screen: SCREENS.includes(s) ? (s as Screen) : null,
+    selId: q.get("a"),
+    courseId: q.get("c"),
+  };
+}
+
+function writeWhere(
+  at: { screen: Screen; selId: string | null; courseId: string | null },
+  mode: "push" | "replace",
+) {
+  const q = new URLSearchParams(window.location.search);
+  // The default screen is a bare /ck, so the common URL stays short and the
+  // one somebody copies off a deep screen is visibly about that screen.
+  if (at.screen === "activities") q.delete("s");
+  else q.set("s", at.screen);
+  // Only where an activity is what the screen is showing. Carrying the last
+  // selection onto the week list would make a copied URL promise a page the
+  // person copying it was not looking at.
+  if (at.selId && FULL_SCREEN.includes(at.screen)) q.set("a", at.selId);
+  else q.delete("a");
+  if (at.courseId) q.set("c", at.courseId);
+  else q.delete("c");
+  const qs = q.toString();
+  const url = window.location.pathname + (qs ? "?" + qs : "");
+  const state: unknown = window.history.state;
+  if (mode === "push") window.history.pushState(state, "", url);
+  else window.history.replaceState(state, "", url);
+}
+
+/**
+ * The link to paste into Canvas. Includes the course so an instructor who
+ * teaches AP50A and AP50B opens the right one; a student's app ignores `c`
+ * because their enrolment already decided it.
+ */
+export function linkToActivity(id: string, courseId?: string | null): string {
+  const q = new URLSearchParams({ s: "detail", a: id });
+  if (courseId) q.set("c", courseId);
+  return `${window.location.origin}${window.location.pathname}?${q.toString()}`;
+}
+
 export function FacultyApp({
   account,
   onSignOut,
@@ -183,8 +241,31 @@ export function FacultyApp({
   // component server-renders, and reading a browser-only store during render
   // makes the server and client markup disagree.
   const restored = useRef(false);
+  /** The activity the URL asked for, so a dead link can be named as one. */
+  const linked = useRef<string | null>(null);
+  /** The page the restore below decided on, so the URL sync can tell it has landed. */
+  const landing = useRef("activities|");
   useEffect(() => {
     try {
+      // THE URL WINS. sessionStorage is where a plain reload finds its way
+      // back; a pasted link is somebody telling us where to go, and letting the
+      // restore run first would have it overwritten a tick later by wherever
+      // this tab happened to be yesterday.
+      const url = readWhere();
+      if (url.screen || url.selId) {
+        // An `a` with no `s` is a trimmed link, and an activity id can only
+        // have meant its page.
+        const target = url.screen ?? "detail";
+        setScreen(target);
+        setSelId(url.selId);
+        linked.current = url.selId;
+        landing.current = `${target}|${url.selId ?? ""}`;
+        // A course this account cannot see falls back to their first one:
+        // loadCourses keeps the previous id only when it is in the list.
+        if (url.courseId) setCourseId(url.courseId);
+        return;
+      }
+
       const raw = window.sessionStorage.getItem("fv-where");
       if (!raw) return;
       const at = JSON.parse(raw) as Partial<{
@@ -195,6 +276,7 @@ export function FacultyApp({
       if (at.screen) setScreen(at.screen);
       if (at.selId !== undefined) setSelId(at.selId);
       if (at.courseId) setCourseId(at.courseId);
+      landing.current = `${at.screen ?? "activities"}|${at.selId ?? ""}`;
     } catch {
       // Unparseable or refused storage: start where the app started before any
       // of this, which is the week list.
@@ -203,6 +285,25 @@ export function FacultyApp({
     }
   }, []);
 
+  // Back and forward. The URL is applied to state rather than left to the
+  // browser, because a reload here is nine round trips — the perf pass exists
+  // to stop paying them and back must not quietly reintroduce the bill.
+  const popped = useRef(false);
+  useEffect(() => {
+    const onPop = () => {
+      const at = readWhere();
+      popped.current = true;
+      setScreen(at.screen ?? (at.selId ? "detail" : "activities"));
+      setSelId(at.selId);
+      if (at.courseId) setCourseId(at.courseId);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  /** Set by a correction, so being sent home does not become a place to go back to. */
+  const replaceNext = useRef(false);
+  const lastPage = useRef<string | null>(null);
   useEffect(() => {
     // Not until the restore has run, or the initial "activities" overwrites the
     // thing we are about to read back.
@@ -212,6 +313,39 @@ export function FacultyApp({
     } catch {
       // A browser refusing storage just means a reload starts at the list.
     }
+
+    const page = `${screen}|${selId ?? ""}`;
+
+    // A state change that CAME from the URL is not written back to it — that is
+    // how back turns into a loop that cannot leave the page.
+    if (popped.current) {
+      popped.current = false;
+      lastPage.current = page;
+      return;
+    }
+
+    if (lastPage.current === null) {
+      // Still on the mount commit. This effect runs in the same pass as the
+      // restore above, which has QUEUED its state and not had it applied, so
+      // the values here are the pre-restore ones — writing them would erase the
+      // very link we arrived on. Wait for the commit that matches what the
+      // restore asked for, then say it once, as a replace: you are already on
+      // that URL and it must not become somewhere to go back to.
+      if (page !== landing.current) return;
+      lastPage.current = page;
+      writeWhere({ screen, selId, courseId }, "replace");
+      return;
+    }
+
+    // A history entry per PAGE — the screen and the activity on it. Everything
+    // else replaces: the course id arriving from loadCourses a beat after the
+    // page did, and any bounce off a page that turned out not to exist. Pushing
+    // those would make back press three times to do one thing, which traps
+    // people harder than having no back at all.
+    const moved = page !== lastPage.current;
+    writeWhere({ screen, selId, courseId }, moved && !replaceNext.current ? "push" : "replace");
+    lastPage.current = page;
+    replaceNext.current = false;
   }, [screen, selId, courseId]);
   const [data, setData] = useState<FacultyData | null>(null);
   const [ready, setReady] = useState(false);
@@ -400,8 +534,41 @@ export function FacultyApp({
     // would undo the restore in the same tick it happened — the reload would
     // still dump you on the list, just for a different reason.
     if (!restored.current) return;
-    if (FULL_SCREEN.includes(screen) && data && !selected) setScreen("activities");
+    // The linked activity turned up, so it is no longer the thing being explained.
+    if (selected) linked.current = null;
+    if (!FULL_SCREEN.includes(screen) || !data || selected) return;
+    // A correction, not a destination: replaced rather than pushed, so back does
+    // not lead to the page that just turned out not to be there and bounce again.
+    replaceNext.current = true;
+    // Say so when it was a LINK that pointed here. Bouncing silently is fine for
+    // an activity deleted in another tab — you were just looking at it — but
+    // somebody arriving from Canvas has no idea they were sent anywhere.
+    if (linked.current && linked.current === selId) {
+      setError(
+        "That link points to an activity that isn't on this course. It may have been deleted, or the link was for a different class.",
+      );
+    }
+    linked.current = null;
+    setScreen("activities");
   }, [screen, data, selected, fresh, selId]);
+
+  // A link to a screen this account is not allowed on. The sidebar hides both
+  // buttons, so the only ways here are a pasted URL and the instructor moving a
+  // TF permission while somebody is standing on the screen — and body() returns
+  // null for exactly this case, which is a blank panel and no explanation.
+  useEffect(() => {
+    if (!data) return;
+    const shut =
+      (screen === "checkin" && !data.can.runCheckIns) || (screen === "tfs" && !data.can.manageTFs);
+    if (!shut) return;
+    replaceNext.current = true;
+    setError(
+      screen === "checkin"
+        ? "Check-ins are turned off for teaching fellows on this course, so that link has nothing to open."
+        : "Only the instructor can see the TF roster, so that link has nothing to open.",
+    );
+    setScreen("activities");
+  }, [screen, data]);
 
   const toGrade = useMemo(() => {
     if (!data) return 0;

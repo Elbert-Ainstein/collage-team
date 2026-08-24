@@ -21,6 +21,68 @@ import "./student.css";
 
 type Screen = "list" | "detail" | "work" | "submit" | "tr" | "trDetail";
 
+const SCREENS: string[] = ["list", "detail", "work", "submit", "tr", "trDetail"];
+
+/** The screens whose `a` is an assignment rather than a team folder. */
+const OF_ASSIGNMENT: string[] = ["detail", "work", "submit"];
+
+/**
+ * Where you are, written on the URL: /ck?s=<screen>&a=<activity>&m=<half>.
+ *
+ * The same three params the faculty app uses, and deliberately the same
+ * spelling: /ck decides which app you get from your enrolment, so ?s=detail&a=…
+ * is ONE link that opens the instructor's activity page for her and the
+ * student's assignment page for them. That is what makes it pasteable into
+ * Canvas once rather than twice.
+ *
+ * Params this app does not own are left alone — AuthGate parks a class code at
+ * ?join= across sign-in, and rebuilding the query from scratch would eat it.
+ */
+function readWhere(): {
+  screen: Screen | null;
+  id: string | null;
+  workMode: "indiv" | "team" | null;
+} {
+  const q = new URLSearchParams(window.location.search);
+  const s = q.get("s") ?? "";
+  const m = q.get("m");
+  return {
+    screen: SCREENS.includes(s) ? (s as Screen) : null,
+    id: q.get("a"),
+    workMode: m === "indiv" || m === "team" ? m : null,
+  };
+}
+
+/** The page identity a history entry is worth having for: the screen and what is on it. */
+function pageOf(screen: Screen, selId: string | null, trId: string | null): string {
+  const id = screen === "trDetail" ? trId : OF_ASSIGNMENT.includes(screen) ? selId : null;
+  return `${screen}|${id ?? ""}`;
+}
+
+function writeWhere(
+  at: { screen: Screen; selId: string | null; trId: string | null; workMode: "indiv" | "team" },
+  mode: "push" | "replace",
+) {
+  const q = new URLSearchParams(window.location.search);
+  // The assignment list is a bare /ck, so the everyday URL stays short.
+  if (at.screen === "list") q.delete("s");
+  else q.set("s", at.screen);
+  const id =
+    at.screen === "trDetail" ? at.trId : OF_ASSIGNMENT.includes(at.screen) ? at.selId : null;
+  if (id) q.set("a", id);
+  else q.delete("a");
+  // The individual and the team answer are two different pieces of work behind
+  // one activity id, so a copied work URL that did not say which would reopen
+  // the wrong one half the time.
+  if (at.screen === "work") q.set("m", at.workMode);
+  else q.delete("m");
+  const qs = q.toString();
+  const url = window.location.pathname + (qs ? "?" + qs : "");
+  const state: unknown = window.history.state;
+  if (mode === "push") window.history.pushState(state, "", url);
+  else window.history.replaceState(state, "", url);
+}
+
 /** How many faces the stack shows before the count carries the remainder. */
 const STACK_CAP = 4;
 
@@ -421,8 +483,33 @@ export function StudentApp({
   // this component server-renders, and reading a browser-only store during
   // render makes the server and client markup disagree.
   const restored = useRef(false);
+  /** The activity the URL asked for, so a link that goes nowhere can say so. */
+  const linked = useRef<string | null>(null);
+  /** The page the restore below decided on, so the URL sync can tell it has landed. */
+  const landing = useRef("list|");
   useEffect(() => {
     try {
+      // THE URL WINS. sessionStorage is where a plain reload finds its way back;
+      // a link is somebody telling us where to go, and running the restore first
+      // would have it overwritten a tick later by wherever this tab was before.
+      const url = readWhere();
+      if (url.screen || url.id) {
+        // An `a` with no `s` is a trimmed link, and an activity id can only have
+        // meant that assignment.
+        const target = url.screen ?? "detail";
+        setScreen(target);
+        if (target === "trDetail") setTrId(url.id);
+        else setSelId(url.id);
+        if (url.workMode) setWorkMode(url.workMode);
+        linked.current = url.id;
+        landing.current = pageOf(
+          target,
+          target === "trDetail" ? null : url.id,
+          target === "trDetail" ? url.id : null,
+        );
+        return;
+      }
+
       const raw = window.sessionStorage.getItem("sv-where");
       if (!raw) return;
       const at = JSON.parse(raw) as Partial<{
@@ -437,6 +524,7 @@ export function StudentApp({
       if (at.trId !== undefined) setTrId(at.trId);
       if (at.tab) setTab(at.tab);
       if (at.workMode) setWorkMode(at.workMode);
+      landing.current = pageOf(at.screen ?? "list", at.selId ?? null, at.trId ?? null);
     } catch {
       // Unparseable or refused storage: start on the list, which is where the
       // app started before any of this.
@@ -445,6 +533,27 @@ export function StudentApp({
     }
   }, []);
 
+  // Back and forward. The URL is applied to state rather than left to the
+  // browser, because a reload here refetches the whole enrolment — back must
+  // not quietly turn into that.
+  const popped = useRef(false);
+  useEffect(() => {
+    const onPop = () => {
+      const at = readWhere();
+      const target = at.screen ?? (at.id ? "detail" : "list");
+      popped.current = true;
+      setScreen(target);
+      setTrId(target === "trDetail" ? at.id : null);
+      if (target !== "trDetail") setSelId(at.id);
+      if (at.workMode) setWorkMode(at.workMode);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  /** Set by a correction, so being sent back to the list is not a place to go back to. */
+  const replaceNext = useRef(false);
+  const lastPage = useRef<string | null>(null);
   useEffect(() => {
     // Not before the restore has run, or the initial "list" would overwrite
     // what we are about to read back.
@@ -457,12 +566,54 @@ export function StudentApp({
     } catch {
       // A browser refusing storage just means a reload starts at the list.
     }
+
+    const page = pageOf(screen, selId, trId);
+
+    // A state change that CAME from the URL is not written back to it — that is
+    // how back turns into a loop that cannot leave the page.
+    if (popped.current) {
+      popped.current = false;
+      lastPage.current = page;
+      return;
+    }
+
+    if (lastPage.current === null) {
+      // Still on the mount commit. This effect runs in the same pass as the
+      // restore above, which has QUEUED its state and not had it applied, so the
+      // values here are the pre-restore ones — writing them would erase the very
+      // link we arrived on. Wait for the commit that matches what the restore
+      // asked for, then say it once, as a replace: you are already on that URL,
+      // and it must not become somewhere to go back to.
+      if (page !== landing.current) return;
+      lastPage.current = page;
+      writeWhere({ screen, selId, trId, workMode }, "replace");
+      return;
+    }
+
+    // A history entry per PAGE — the screen and the assignment on it. Switching
+    // the individual/team tab replaces instead, because it is one page showing
+    // two columns of itself, and so does any bounce off an assignment that
+    // turned out not to be there.
+    const moved = page !== lastPage.current;
+    writeWhere(
+      { screen, selId, trId, workMode },
+      moved && !replaceNext.current ? "push" : "replace",
+    );
+    lastPage.current = page;
+    replaceNext.current = false;
   }, [screen, selId, trId, tab, workMode]);
 
   const [enrolment, setEnrolment] = useState<Enrolment | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * A sentence about a link that led nowhere. Separate from `error`, which
+   * replaces the whole panel — this one has to sit ABOVE the assignment list,
+   * because the list is the useful thing on the screen and the reason they are
+   * looking at it instead of the page they clicked.
+   */
+  const [notice, setNotice] = useState<string | null>(null);
   /** The code box, opened from the sidebar rather than only by having nothing. */
   const [joining, setJoining] = useState(false);
 
@@ -509,11 +660,35 @@ export function StudentApp({
   // vanish from under a student mid-session. Without this the work and detail
   // screens render nothing and leave them on a blank panel with no way back.
   useEffect(() => {
-    if (selId && !selected && (screen === "detail" || screen === "work")) {
-      setSelId(null);
-      setScreen("list");
+    // NOT until the first load has landed. `assignments` is empty for the whole
+    // of it, so a restored — or linked — assignment looks exactly like a deleted
+    // one, and this used to bounce it back to the list before it had a chance to
+    // arrive: the reload you did to get back to your work always dumped you on
+    // the list instead.
+    if (!ready) return;
+    // Nor while they are on nobody's roster. A Canvas link clicked by a student
+    // who has not entered their class code yet lands on the code box, and the
+    // assignment it points at has to still be waiting for them on the other side
+    // of it rather than have been discarded as missing while they typed.
+    if (!enrolment) return;
+    if (selected) linked.current = null;
+    if (!selId || selected || !OF_ASSIGNMENT.includes(screen)) return;
+    // A correction, not a destination: replaced rather than pushed, so back does
+    // not lead to the page that just turned out not to be there and bounce again.
+    replaceNext.current = true;
+    // Say so when a LINK pointed here. Vanishing mid-session is one thing — you
+    // were just looking at it — but a link off Canvas gives no clue at all, and
+    // hidden and non-existent are the same thing from here: the row is simply
+    // not readable, so the sentence must cover both without guessing.
+    if (linked.current && linked.current === selId) {
+      setNotice(
+        "That link points to an assignment you can't open yet. Your instructor may not have posted it, or it may belong to another class.",
+      );
     }
-  }, [selId, selected, screen]);
+    linked.current = null;
+    setSelId(null);
+    setScreen("list");
+  }, [selId, selected, screen, ready, enrolment]);
   const dueCount = assignments.filter(
     (a) => a.status === "Not started" || a.status === "Late",
   ).length;
@@ -617,6 +792,34 @@ export function StudentApp({
           {enrolment && (
             <div className="sv-panelbar">
               <TeamStack enrolment={enrolment} />
+            </div>
+          )}
+          {notice && (
+            <div
+              role="status"
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+                padding: "10px 12px",
+                marginBottom: 14,
+                border: "1px solid var(--neutral-200)",
+                borderRadius: "var(--radius-md)",
+                background: "var(--cream-100)",
+                fontSize: "var(--text-sm)",
+                lineHeight: 1.55,
+                color: "var(--navy)",
+              }}
+            >
+              <span style={{ flex: 1 }}>{notice}</span>
+              <button
+                type="button"
+                className="sv-btn link"
+                style={{ padding: 0, fontSize: "var(--text-xs)" }}
+                onClick={() => setNotice(null)}
+              >
+                Dismiss
+              </button>
             </div>
           )}
           {body}

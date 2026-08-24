@@ -1,10 +1,15 @@
 // The live tutorial sheet: who was absent, who presented, and how it went.
 //
 // Written by whoever runs check-ins (the course owner, or a TF given the
-// permission), read back by the students it is about — their own team only.
-// RLS decides both; nothing here re-filters for security.
+// permission), read back by the students it is about — their own team's marks,
+// and their own absence. RLS decides both; nothing here re-filters for security.
 //
-// Needs supabase/migrations/0016_tutorial_check_ins.sql.
+// A mark is recorded against a TEAM and scored against a STUDENT: the two tables
+// below are the only copy of that, and studentMarks is the only place the
+// per-person number is worked out.
+//
+// Needs supabase/migrations/0016_tutorial_check_ins.sql, and 0031 for the
+// student's own absence.
 
 import { requireSupabase } from "@/lib/supabaseClient";
 import { dbError } from "./data";
@@ -84,36 +89,109 @@ export async function getTutorialSheet(activityId: string): Promise<TutorialShee
 }
 
 /**
- * What one team was given for one activity — the student's side of the sheet.
+ * What ONE STUDENT was given for one slot.
  *
- * Marks only. Who else was marked absent is a fact about them, and 0016 does not
- * let a student read it at all; asking here would only produce an error.
+ * The team is what gets marked — that is the right interaction, one row per team
+ * filled in while the room is being walked — but the score belongs to a person.
+ * Everyone who was in the room gets the team's numbers; anyone ticked absent for
+ * that activity gets 0, because they were not there to earn them.
+ *
+ * Field-compatible with TutorialMark on purpose: the screens that already render
+ * a slot read presenter_id, accuracy and discussion, and swapping the team's
+ * numbers for the student's should not be a rewrite of how a slot looks.
  */
-export async function getMyTeamMarks(activityId: string, teamId: string): Promise<TutorialMark[]> {
+export interface StudentMark {
+  slot: number;
+  student_id: string;
+  /** Ticked absent for this activity, so the two scores below read 0. */
+  absent: boolean;
+  presenter_id: string | null;
+  /** The team's number, 0 when this student was away, null when unmarked. */
+  accuracy: number | null;
+  discussion: number | null;
+}
+
+/**
+ * A team's mark, resolved for one member.
+ *
+ * An untouched field stays null rather than becoming 0. The team not having been
+ * marked yet is not the same fact as a student having missed it, and a card that
+ * says 0 the moment an instructor opens the sheet is telling everyone they
+ * failed something nobody has looked at.
+ */
+function forStudent(teamValue: number | null, absent: boolean): number | null {
+  if (teamValue === null) return null;
+  return absent ? 0 : teamValue;
+}
+
+/** Who was ticked absent on one team — the ids, in no particular order. */
+export function absentIds(absences: TutorialAbsence[], teamId: string): string[] {
+  return absences.filter((a) => a.team_id === teamId).map((a) => a.student_id);
+}
+
+/**
+ * One student's slots, derived from the team sheet.
+ *
+ * Derived and never stored. tutorial_marks and tutorial_absences already carry
+ * every fact this needs, and a stored per-student copy would have to be rewritten
+ * on every mark and every absence tick — including the ticks that happen after a
+ * mark, which is the case that would be missed.
+ */
+export function studentMarks(
+  marks: TutorialMark[],
+  absences: TutorialAbsence[],
+  teamId: string,
+  studentId: string,
+): StudentMark[] {
+  const absent = absences.some((a) => a.team_id === teamId && a.student_id === studentId);
+  return marks
+    .filter((m) => m.team_id === teamId)
+    .sort((a, b) => a.slot - b.slot)
+    .map((m) => ({
+      slot: m.slot,
+      student_id: studentId,
+      absent,
+      presenter_id: m.presenter_id,
+      accuracy: forStudent(m.accuracy, absent),
+      discussion: forStudent(m.discussion, absent),
+    }));
+}
+
+/**
+ * What THIS student was given for one activity — the student's side of the sheet.
+ *
+ * Two reads in parallel, not one: there is no relationship between the two tables
+ * for PostgREST to embed, and the team's marks alone are not this student's score
+ * — an absent student's team can be sitting on a 5 they were not in the room for.
+ * The absence read is theirs alone; 0031 grants exactly their own rows, so who
+ * ELSE was away stays as invisible as 0016 made it.
+ *
+ * Without 0031 that second read comes back EMPTY rather than failing — RLS
+ * filters, it does not raise — so an absent student would quietly go on seeing
+ * their team's number. There is nothing the browser can check to tell the two
+ * apart; the migration has to be run.
+ */
+export async function getMyMarks(
+  activityId: string,
+  teamId: string,
+  studentId: string,
+): Promise<StudentMark[]> {
   try {
-    return (
-      (unwrap(
-        await db().from("tutorial_marks").select("*")
-          .eq("activity_id", activityId).eq("team_id", teamId).order("slot"),
-      ) as TutorialMark[] | null) ?? []
+    const [marks, absences] = await Promise.all([
+      db().from("tutorial_marks").select("*")
+        .eq("activity_id", activityId).eq("team_id", teamId).order("slot"),
+      db().from("tutorial_absences").select("*")
+        .eq("activity_id", activityId).eq("team_id", teamId).eq("student_id", studentId),
+    ]);
+    return studentMarks(
+      (unwrap(marks) as TutorialMark[] | null) ?? [],
+      (unwrap(absences) as TutorialAbsence[] | null) ?? [],
+      teamId,
+      studentId,
     );
   } catch (e) {
     // A student's screen must not break because an optional migration has not
     // been run — they would have no idea what it meant or who to tell.
-    if (missingTable(e)) return [];
-    throw e;
-  }
-}
-
-/** Every team's marks for one activity, for the teams this student is on. */
-export async function listMyTeamMarks(teamId: string): Promise<TutorialMark[]> {
-  try {
-    return (
-      (unwrap(
-        await db().from("tutorial_marks").select("*").eq("team_id", teamId),
-      ) as TutorialMark[] | null) ?? []
-    );
-  } catch (e) {
     if (missingTable(e)) return [];
     throw e;
   }

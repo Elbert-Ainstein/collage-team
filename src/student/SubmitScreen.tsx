@@ -22,7 +22,8 @@ import { SIcon } from "./icons";
 
 /**
  * The back control is 12px type with no padding — a 17px tall target, and the
- * only way off this screen, since nothing here is routed through history. The
+ * only way off this screen — browser-back leaves too, since the deep-link work
+ * made each page a history entry. The
  * padding buys a 45px one; the matching negative margin hands the space back,
  * so the margin box is the size it always was and the row lays out unchanged.
  */

@@ -6,11 +6,17 @@
 // the grades have a seven-day safety net and the recordings, hand-ins and
 // whiteboard photos have none at all.
 //
-// Two files come out of here, and they answer different questions.
+// Four files come out of here, and they answer different questions.
 //
 //   GRADES     what everyone got. The record of record, and the thing a faculty
 //              member wants at the end of a term regardless of any of this. It
 //              is also the copy that survives if this app does not.
+//
+//   CANVAS     the same term, one week of it, as points a gradebook can add.
+//              Not a second opinion about anyone's grade — it reads the same
+//              cellFor() the screens do — just the arithmetic Canvas needs.
+//
+//   CHECK-INS  the live tutorial sheet, per student rather than per team.
 //
 //   MANIFEST   what was handed in. One row per uploaded object, with who, what
 //              it answered, and when. This is the one that matters after the
@@ -18,7 +24,7 @@
 //              what existed is not, and "what did you delete" stops being an
 //              unanswerable question.
 //
-// Neither of these is the bytes. 22 GB cannot come down through a browser, and
+// None of these is the bytes. 22 GB cannot come down through a browser, and
 // Vercel caps a request body at 4.5 MB so nothing can proxy it either. Pulling
 // the objects themselves is rclone against Supabase's S3-compatible endpoint —
 // docs/backup-runbook.md — and it is a thing a person runs, not a button.
@@ -28,14 +34,17 @@ import { selectAll, selectAllIn,
   type ResultRow,
 } from "@/checkins/data";
 import { isCompletionMet } from "@/checkins/studentData";
-import type {
-  Activity,
-  ActivityQuestion,
-  CheckIn,
-  CheckInResult,
-  Course,
-  Student,
-  TeamWithMembers,
+import { SCALE, type StudentMark } from "@/checkins/tutorial";
+import {
+  isCompletion,
+  SCOPE_OF,
+  type Activity,
+  type ActivityQuestion,
+  type CheckIn,
+  type CheckInResult,
+  type Course,
+  type Student,
+  type TeamWithMembers,
 } from "@/checkins/types";
 import { cellFor, pointsTotal, studentPercents } from "./model";
 
@@ -132,6 +141,229 @@ export function gradesCsv(input: GradesInput): string {
       ...cols.map((a) => gradeCell(a, s, checkIns, results)),
       percents.get(s.id) ?? "",
     ]);
+
+  return toCsv([header, ...body]);
+}
+
+// -------------------------------------------- into somebody else's gradebook
+//
+// gradesCsv above is the record of a term: it prints "complete" and "12 of 20"
+// because a PERSON reads it. Canvas does not read a column, it adds one — so
+// everything below writes the same facts as points, one row per student, with a
+// total that is the sum of the cells beside it and nothing else.
+//
+// The shape is Kelly's, per week: tutorial completion + challenge completion +
+// combo, added up. Nothing here derives one activity's score from another's —
+// the three activities stay exactly as they are and this file does the adding.
+// A combo that half-derived its own points would be fighting 0014's trigger,
+// which recomputes a score from its marks the moment anything is re-pointed,
+// and the number that reaches Canvas is the same either way.
+
+/** One column of the Canvas file: an activity, and what it pays. */
+export interface CanvasColumn {
+  activity: Activity;
+  /** Points on offer. Also what a met completion is worth. */
+  worth: number;
+  label: string;
+}
+
+/**
+ * Which activities become columns, and what each is out of.
+ *
+ * Team-scope activities are not among them: Canvas grades people, and a column
+ * every student row would have to leave blank is worse than no column.
+ *
+ * A completion activity is worth its own points_total. "Complete" is not a
+ * number and a gradebook cannot add a word, so the figure faculty already set
+ * on the activity is what a met completion pays — deliberately with no second
+ * place to keep "what a Complete is worth", because a second place is a place
+ * to disagree. An activity nobody has priced comes out as 0, in the bracket in
+ * the header as well as in the cells, where it is visible rather than invented.
+ *
+ * Exported because the screen offering the download shows these columns before
+ * anything is written: a 0 in a header is the one problem with this file that
+ * is much cheaper to see beforehand than to find in Canvas afterwards.
+ */
+export function canvasColumns(activities: Activity[], checkIns: CheckIn[]): CanvasColumn[] {
+  return activities
+    .filter((a) => SCOPE_OF[a.type] !== "team")
+    .sort(
+      (a, b) =>
+        (a.week ?? 0) - (b.week ?? 0) ||
+        a.position - b.position ||
+        a.title.localeCompare(b.title),
+    )
+    .map((a) => {
+      const ci = checkIns.find((c) => c.activity_id === a.id && c.kind === "individual");
+      return {
+        activity: a,
+        // A completion check-in carries max_points NULL by design (data.ts), so
+        // this falls through to the activity for exactly the activities Kelly
+        // is exporting.
+        worth: ci?.max_points ?? pointsTotal(a),
+        label: `${a.title}${isCompletion(a) ? " completion" : ""}`,
+      };
+    });
+}
+
+/**
+ * One activity's contribution to one student's row, in points.
+ *
+ * Blank, never 0, for anything not released. `submitted` and `needs_review` are
+ * work that is IN and waiting on a marker, and uploading a 0 against it tells a
+ * class it failed something nobody has read yet. A released Not complete IS a
+ * 0 — that one was marked, and the answer was no.
+ */
+function pointsCell(
+  col: CanvasColumn,
+  student: Student,
+  checkIns: CheckIn[],
+  results: ResultRow[],
+): number | null {
+  const cell = cellFor(col.activity, { kind: "student", id: student.id }, checkIns, results, null);
+  const r = cell.result;
+  if (!r || r.status !== "scored") return null;
+  if (r.is_ci) return isCompletionMet(r) ? col.worth : 0;
+  return r.score ?? 0;
+}
+
+export interface CanvasInput {
+  students: Student[];
+  /** One week's worth, ordinarily. Whatever is here becomes the columns. */
+  activities: Activity[];
+  checkIns: CheckIn[];
+  results: ResultRow[];
+}
+
+/**
+ * The file that goes into Canvas.
+ *
+ * Kelly's columns in Kelly's order — name, email, the total, then the pieces
+ * the total is made of. She asked for four and then listed five; five is what
+ * she listed and five is what this writes, since the count was the slip and the
+ * list was the specification.
+ *
+ * Matching is on EMAIL, because an SIS id is the other thing Canvas will match
+ * on and this app has never held one — there is no column for it anywhere in
+ * the schema, so there is nothing honest to put in one. The assumption is said
+ * out loud on the screen that offers the download, and every header here is
+ * plain English with what it is out of in brackets, so a person whose Canvas
+ * matches on something else can map the five columns by hand in a minute.
+ */
+export function canvasCsv(input: CanvasInput): string {
+  const { students, checkIns, results } = input;
+  const cols = canvasColumns(input.activities, checkIns);
+  const possible = cols.reduce((n, c) => n + c.worth, 0);
+
+  const header = [
+    "Student",
+    "Email",
+    `Total (${possible})`,
+    ...cols.map((c) => `${c.label} (${c.worth})`),
+  ];
+
+  const body = [...students]
+    .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
+    .map((s) => {
+      const cells = cols.map((c) => pointsCell(c, s, checkIns, results));
+      const marked = cells.filter((v): v is number => v !== null);
+      // Nothing released yet is no total, not a zero. Every cell beside it is
+      // blank, and a 0 in that row would be a grade nobody has given.
+      const total = marked.length ? marked.reduce((n, v) => n + v, 0) : null;
+      return [s.name, s.email ?? "", total, ...cells];
+    });
+
+  return toCsv([header, ...body]);
+}
+
+/** One student's slots on one activity, as tutorial.ts derives them. */
+export interface CheckInGradeRow {
+  activityId: string;
+  studentId: string;
+  slots: StudentMark[];
+}
+
+/** The top of both 1-5 scales, from the scale itself rather than from memory. */
+const TOP = SCALE[SCALE.length - 1];
+
+/**
+ * What one student's slots come to.
+ *
+ * Only a slot that was actually marked is on offer — an untouched check-in is
+ * not a zero for anybody, so it adds nothing to the score OR to what the score
+ * is out of. An absent student's numbers arrive here already zeroed by
+ * studentMarks(); who was in the room is decided once, there, and re-deciding
+ * it here is precisely the two-functions-one-score bug this file must not add.
+ */
+function checkInPoints(slots: StudentMark[]): { score: number; outOf: number } {
+  let score = 0;
+  let outOf = 0;
+  for (const s of slots) {
+    for (const v of [s.accuracy, s.discussion]) {
+      if (v === null) continue;
+      score += v;
+      outOf += TOP;
+    }
+  }
+  return { score, outOf };
+}
+
+export interface CheckInGradesInput {
+  students: Student[];
+  activities: Activity[];
+  rows: CheckInGradeRow[];
+}
+
+/**
+ * The live check-in, as points per student.
+ *
+ * There is no Absent column, and that is a decision rather than an oversight:
+ * both scales start at 1, so a student who was in the room cannot come out
+ * below 2 on a slot that was marked at all. A 0 in this file IS the absence and
+ * needs no second column to say so.
+ */
+export function checkInCsv(input: CheckInGradesInput): string {
+  const { students, activities, rows } = input;
+  const key = (activityId: string, studentId: string) => `${activityId} ${studentId}`;
+  const scored = new Map(
+    rows.map((r) => [key(r.activityId, r.studentId), checkInPoints(r.slots)] as const),
+  );
+
+  const cols = activities
+    .map((a) => ({
+      activity: a,
+      // What the best-marked student on this activity was out of. Two teams can
+      // be a slot apart mid-term and the column still needs one denominator.
+      outOf: students.reduce((n, s) => Math.max(n, scored.get(key(a.id, s.id))?.outOf ?? 0), 0),
+    }))
+    // A tutorial nobody has marked yet is not a column of zeroes, it is a column
+    // that does not exist.
+    .filter((c) => c.outOf > 0)
+    .sort(
+      (a, b) =>
+        (a.activity.week ?? 0) - (b.activity.week ?? 0) ||
+        a.activity.position - b.activity.position,
+    );
+
+  const possible = cols.reduce((n, c) => n + c.outOf, 0);
+  const header = [
+    "Student",
+    "Email",
+    `Total (${possible})`,
+    ...cols.map((c) => `${c.activity.title} (${c.outOf})`),
+  ];
+
+  const body = [...students]
+    .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
+    .map((s) => {
+      const cells = cols.map((c) => {
+        const got = scored.get(key(c.activity.id, s.id));
+        return got && got.outOf > 0 ? got.score : null;
+      });
+      const marked = cells.filter((v): v is number => v !== null);
+      const total = marked.length ? marked.reduce((n, v) => n + v, 0) : null;
+      return [s.name, s.email ?? "", total, ...cells];
+    });
 
   return toCsv([header, ...body]);
 }

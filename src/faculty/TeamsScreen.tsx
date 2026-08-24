@@ -24,7 +24,16 @@ import {
   type ParsedStudent,
 } from "@/checkins/rosterImport";
 import { reconcileRoster } from "@/checkins/rosterReconcile";
+import { getTutorialSheet, studentMarks } from "@/checkins/tutorial";
 import type { Student } from "@/checkins/types";
+import {
+  canvasColumns,
+  canvasCsv,
+  checkInCsv,
+  downloadCsv,
+  safeFilename,
+  type CheckInGradeRow,
+} from "./exportTerm";
 import { InviteCodeCard } from "./InviteCodeCard";
 import { FAvatar, FIcon } from "./icons";
 import { FacultyError, type FacultyData } from "./FacultyApp";
@@ -52,7 +61,7 @@ export function TeamsScreen(props: {
   onError: (e: unknown) => void;
 }): JSX.Element {
   const { data, onChanged, onError } = props;
-  const { course, roster, activities, teams, tfs } = data;
+  const { course, roster, activities, checkIns, results, teams, tfs } = data;
 
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -75,6 +84,10 @@ export function TeamsScreen(props: {
   /** Only addresses being edited right now. Everything else reads the props,
    *  so a saved — or deleted — address is never shadowed by a stale draft. */
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  /** Null means "whichever week the course is on" — see `gradeWeek` below. */
+  const [pickedWeek, setPickedWeek] = useState<number | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportProblem, setExportProblem] = useState<string | null>(null);
   const file = useRef<HTMLInputElement | null>(null);
 
   const fail = (e: unknown) => {
@@ -85,6 +98,14 @@ export function TeamsScreen(props: {
   const teamOf = useMemo(() => {
     const m = new Map<string, string>();
     teams.forEach((t) => t.members.forEach((mem) => m.set(mem.id, t.name)));
+    return m;
+  }, [teams]);
+
+  // By id, not by name: the export asks tutorial.ts for one member's marks and
+  // that call is keyed on the team row, not on what the team is called.
+  const teamIdOf = useMemo(() => {
+    const m = new Map<string, string>();
+    teams.forEach((t) => t.members.forEach((mem) => m.set(mem.id, t.id)));
     return m;
   }, [teams]);
 
@@ -346,6 +367,91 @@ export function TeamsScreen(props: {
     }
   }
 
+  // ---------------- grades out ----------------
+  //
+  // On this screen and not on Activities, because everything the file is made of
+  // is here: one row per student, and the column Canvas matches on is the email
+  // address sitting on every roster row below. The screen where a missing
+  // address gets fixed is the screen that should say which students will not
+  // match — anywhere else and she downloads first and finds out in Canvas.
+
+  const gradeWeeks = useMemo(
+    () =>
+      [...new Set(activities.map((a) => a.week).filter((w): w is number => w != null))].sort(
+        (a, b) => b - a,
+      ),
+    [activities],
+  );
+
+  // The live week if there is one, else the newest — the week she has just
+  // finished marking is the one she is exporting, and it is one click to change.
+  const gradeWeek =
+    pickedWeek ??
+    (course.live_week != null && gradeWeeks.includes(course.live_week)
+      ? course.live_week
+      : (gradeWeeks[0] ?? null));
+
+  const weekActivities = useMemo(
+    () => activities.filter((a) => a.week === gradeWeek),
+    [activities, gradeWeek],
+  );
+
+  const gradeCols = useMemo(
+    () => canvasColumns(weekActivities, checkIns),
+    [weekActivities, checkIns],
+  );
+  // An activity nobody has priced pays 0 into the total, and it does that
+  // silently — the file opens, the arithmetic is right, and the week is short by
+  // five points. Say which one, and where the number lives.
+  const unpriced = gradeCols.filter((c) => c.worth === 0);
+  const gradeTotal = gradeCols.reduce((n, c) => n + c.worth, 0);
+
+  const named = (what: string) =>
+    `${safeFilename(course.code?.trim() || course.name, course.term, what)}.csv`;
+
+  const takeCanvas = () => {
+    setExportProblem(null);
+    try {
+      downloadCsv(
+        named(`week-${gradeWeek}-canvas`),
+        canvasCsv({ students: roster, activities: weekActivities, checkIns, results }),
+      );
+    } catch (e) {
+      setExportProblem(String((e as Error)?.message ?? e));
+    }
+  };
+
+  const takeCheckIns = async () => {
+    setExporting(true);
+    setExportProblem(null);
+    try {
+      // One read per activity in the week, in parallel: tutorial_marks is keyed
+      // by activity and a week holds one or two of them. Two round trips on a
+      // button press, none at load.
+      const sheets = await Promise.all(weekActivities.map((a) => getTutorialSheet(a.id)));
+      const rows: CheckInGradeRow[] = [];
+      weekActivities.forEach((a, i) => {
+        const sheet = sheets[i];
+        for (const s of roster) {
+          const teamId = teamIdOf.get(s.id);
+          // Nobody has marked a student who is on no team — the sheet is walked
+          // team by team, so there is no row for them to be in or out of.
+          if (!teamId) continue;
+          const slots = studentMarks(sheet.marks, sheet.absences, teamId, s.id);
+          if (slots.length) rows.push({ activityId: a.id, studentId: s.id, slots });
+        }
+      });
+      downloadCsv(
+        named(`week-${gradeWeek}-check-ins`),
+        checkInCsv({ students: roster, activities: weekActivities, rows }),
+      );
+    } catch (e) {
+      setExportProblem(String((e as Error)?.message ?? e));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   // ---------------- team builder ----------------
 
   if (builder) {
@@ -437,6 +543,123 @@ export function TeamsScreen(props: {
             kind="student"
             waiting={notJoined}
           />
+        ) : null}
+
+        {/* Between the code and the roster on purpose: the code fills the list,
+            the list is what this adds up, and the email column it matches on is
+            the next thing on the page. */}
+        {data.can.grade && gradeWeek != null ? (
+          <div className="fv-card" style={{ padding: 16, marginBottom: 14 }}>
+            <div className="fv-eyebrow">Grades out</div>
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-end",
+                gap: 10,
+                flexWrap: "wrap",
+                marginTop: 8,
+              }}
+            >
+              <div className="fv-field" style={{ width: 130 }}>
+                <label className="fv-eyebrow" htmlFor="fv-grade-week">
+                  Week
+                </label>
+                <select
+                  id="fv-grade-week"
+                  className="fv-in quiet"
+                  value={gradeWeek}
+                  onChange={(e) => setPickedWeek(Number(e.target.value))}
+                >
+                  {gradeWeeks.map((w) => (
+                    <option key={w} value={w}>
+                      Week {w}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="button"
+                className="fv-btn primary sm"
+                disabled={roster.length === 0 || gradeCols.length === 0}
+                onClick={takeCanvas}
+              >
+                <FIcon name="fileUpload" size={15} />
+                Canvas points
+              </button>
+
+              {/* A TF without the check-in permission can read no tutorial_marks
+                  at all, so this would hand them an empty file rather than an
+                  error and they would have no way to tell which it was. */}
+              {data.can.runCheckIns ? (
+                <button
+                  type="button"
+                  className="fv-btn outline sm"
+                  disabled={exporting || roster.length === 0}
+                  onClick={() => void takeCheckIns()}
+                >
+                  {exporting ? "Reading the sheet…" : "Check-in scores"}
+                </button>
+              ) : null}
+            </div>
+
+            <div className="fv-sub" style={{ maxWidth: "72ch", lineHeight: 1.55, marginTop: 10 }}>
+              One row per student. Completion marks are written as points, not as the words
+              Complete and Not complete — a gradebook adds a column, it does not read one. The
+              total is the sum of the columns beside it: work that is in but not released yet is
+              left blank rather than scored 0, so a mark nobody has made cannot arrive in Canvas
+              as a fail.
+            </div>
+
+            {gradeCols.length ? (
+              <div className="fv-sub" style={{ maxWidth: "72ch", lineHeight: 1.55, marginTop: 6 }}>
+                Week {gradeWeek} is <strong>{gradeTotal} points</strong>:{" "}
+                {gradeCols.map((c, i) => (
+                  <span key={c.activity.id}>
+                    {i ? " + " : ""}
+                    {c.label} ({c.worth})
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <div className="fv-sub" style={{ maxWidth: "72ch", lineHeight: 1.55, marginTop: 6 }}>
+                Week {gradeWeek} has nothing students are marked on their own for, so there is no
+                Canvas file to write. Team-only activities are left out — Canvas grades people.
+              </div>
+            )}
+
+            {unpriced.length ? (
+              <div
+                className="fv-sub"
+                style={{ maxWidth: "72ch", lineHeight: 1.55, marginTop: 6, color: "var(--fv-amber)" }}
+              >
+                {unpriced.map((c) => c.label).join(", ")}{" "}
+                {unpriced.length === 1 ? "is" : "are"} not worth anything yet, so{" "}
+                {unpriced.length === 1 ? "its column comes out" : "those columns come out"} as
+                zeros. Set what it is out of on the activity — that number is what a Complete
+                pays here.
+              </div>
+            ) : null}
+
+            <div className="fv-sub" style={{ maxWidth: "72ch", lineHeight: 1.55, marginTop: 6 }}>
+              Canvas matches these rows on <strong>email</strong>. This course holds no SIS id —
+              there is no column for one — so if your Canvas matches on that instead, the headers
+              are plain English with the points in brackets and map by hand.{" "}
+              {withoutEmail > 0
+                ? `${plural(withoutEmail, "student has", "students have")} no address on this roster and will not match.`
+                : null}
+            </div>
+
+            {exportProblem ? (
+              <div
+                className="fv-sub"
+                style={{ marginTop: 8, lineHeight: 1.55, color: "var(--fv-destructive)" }}
+              >
+                {exportProblem}
+              </div>
+            ) : null}
+          </div>
         ) : null}
 
         <div className="fv-card" style={{ padding: 16 }}>
