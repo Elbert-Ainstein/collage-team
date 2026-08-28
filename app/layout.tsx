@@ -2,8 +2,12 @@ import type { Metadata, Viewport } from "next";
 import "@/styles/base.css";
 
 export const metadata: Metadata = {
-  title: "Class Check-ins — Applied Physics 50",
-  description: "Weekly team-based learning check-ins for AP 50.",
+  title: "Collage-Team",
+  // What a link to this shows in Slack or a Canvas page. It named one course,
+  // which was true when there was one — the app now holds whatever courses the
+  // people using it set up, and a preview naming AP 50 to somebody in another
+  // class reads as the wrong link.
+  description: "Team-based learning, in one place.",
 };
 
 // The gradebook scrolls horizontally inside its own container, so the page

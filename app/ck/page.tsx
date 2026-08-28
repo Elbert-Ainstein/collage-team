@@ -18,7 +18,7 @@ import type { Role } from "@/checkins/types";
  */
 type Kind = "faculty" | "tf" | "student" | "choose";
 
-// Class Check-ins, behind a sign-in wall. The account's role decides which app
+// Collage-Team, behind a sign-in wall. The account's role decides which app
 // it is: faculty run the sessions, students see their own work.
 export default function Page() {
   // Without a database there is nothing to sign in to; FacultyApp renders the

@@ -1,4 +1,4 @@
-// Inline SVG icon set, ported from the Class Check-ins prototype.
+// Inline SVG icon set, ported from the Collage-Team prototype.
 const PATHS: Record<string, string> = {
   groups:
     '<circle cx="9" cy="8" r="3.1"/><path d="M3.2 19c0-3 2.7-5 5.8-5s5.8 2 5.8 5"/><path d="M16 5.6a3 3 0 0 1 0 5.8"/><path d="M18.8 19c0-2-1-3.6-2.6-4.6"/>',

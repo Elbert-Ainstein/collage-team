@@ -198,7 +198,7 @@ function Heading() {
       <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
         <Logo size={34} />
         <div style={{ fontFamily: "var(--serif)", fontSize: 27, fontWeight: 700 }}>
-          Class Check-ins
+          Collage-Team
         </div>
       </div>
       <div style={{ fontSize: 13, color: "var(--ink2)", marginTop: 7 }}>
