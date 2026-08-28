@@ -14,6 +14,7 @@ import {
   type ActivityQuestion,
   type CheckIn,
   type CourseWeek,
+  type RubricItem,
   type Scope,
   type Student,
   type Team,
@@ -53,6 +54,205 @@ export function questionsFor(
  */
 export function questionCount(a: Activity, questions?: ActivityQuestion[]): number {
   return questions && questions.length ? questions.length : a.question_count;
+}
+
+// ------------------------------------------------ what one question is worth
+//
+// An activity has ONE total and that stays true: points_total is what
+// recompute_result_score subtracts from, and nothing below is derived from the
+// questions. What 0034 adds is a question's OWN worth, because Kelly's combo is
+// 20 points across six questions worth 3, 2, 3, 2, 5 and 5 — a shape the old
+// "every question is an equal share of the total" reading cannot say at all.
+//
+// The identity that keeps the two facts agreeing:
+//
+//   score = total - sum(worth - award) = sum(award),  when the worths add to
+//   the total
+//
+// So when her six add up to 20, a submission scores the sum of what she awarded
+// it, question by question. When they do not add up, nothing is corrupt and
+// nothing is rescaled — every score simply sits a constant off the sum of the
+// awards, which is why `tallyQuestionPoints` says so out loud instead.
+
+/** An activity_questions row from a database that has run 0034. */
+export type PointedQuestion = ActivityQuestion & {
+  /**
+   * What this question is out of, or NULL for unset.
+   *
+   * Undefined means the same thing and arrives the same way `title` does on a
+   * pre-0033 week: a client reading a database where the column is not there
+   * yet. Unset is not zero — a question with no worth of its own has criteria
+   * that deduct from the activity total, which is what every criterion in the
+   * course has always done, so an activity nobody re-points cannot move.
+   */
+  points?: number | null;
+};
+
+/** Kill float dust, so a value survives a round trip through both directions. */
+const exact = (n: number): number => Math.round(n * 1e6) / 1e6;
+
+/**
+ * What one question is out of.
+ *
+ * The fallback is the whole compatibility story: a question with no points of
+ * its own is worth the activity total, because the activity total is the number
+ * its criteria have always come off. Every activity that exists today has null
+ * on every question, and every one of them reads here exactly as it did before.
+ */
+export function worthOf(
+  activity: Pick<Activity, "points_total" | "question_count" | "points_per_question">,
+  question?: PointedQuestion | null,
+): number {
+  const own = question?.points;
+  return own == null ? pointsTotal(activity) : exact(own);
+}
+
+/**
+ * A ladder is WRITTEN as awards and STORED as deductions.
+ *
+ * Kelly writes "+1 pt — work is mostly complete, but major steps are missing".
+ * The database holds a deduction, because score = points_total - sum of deductions.
+ * On her 3-point At Home Effort question that "+1" is a deduction of 2; the
+ * identical "+1" on her 2-point Mark-up question is a deduction of 1. Which is
+ * why the worth passed in is the QUESTION's and never the activity's.
+ *
+ * Both directions live here and only here. Every grade in the course goes
+ * through this subtraction, and an off-by-one is an off-by-one on eighty
+ * transcripts.
+ */
+export function deductionForAward(worth: number, award: number): number {
+  return exact(worth - award);
+}
+
+/** The same conversion read backwards: what a stored deduction awards. */
+export function awardForDeduction(worth: number, deduction: number): number {
+  return exact(worth - deduction);
+}
+
+/**
+ * Whether an award is one this question can actually give.
+ *
+ * Neither direction above clamps, throws, or rounds into range, so a caller
+ * asks this BEFORE saving. Quietly pulling an out-of-range award back to the
+ * question's worth would silently rewrite what she typed, and she would find
+ * out from a transcript.
+ *
+ * Note what this deliberately does NOT reject: two rungs awarding the same
+ * points. Her Mark-up ladder has two different +1s, on purpose — two failures
+ * she scores the same — and they map to the same deduction, which is harmless
+ * because a mark stores the ROW it was picked from, never its value.
+ */
+export function awardFits(worth: number, award: number): boolean {
+  return Number.isFinite(award) && award >= 0 && award <= worth;
+}
+
+/** The question a criterion is written under. Null is 0012's shared ladder. */
+export function questionForItem(
+  item: Pick<RubricItem, "question_label">,
+  questions: PointedQuestion[],
+): PointedQuestion | null {
+  if (item.question_label == null) return null;
+  return questions.find((q) => q.label === item.question_label) ?? null;
+}
+
+/**
+ * What a stored criterion awards, read under its own question's worth.
+ *
+ * A criterion on the shared ladder has no question, so it is read against the
+ * activity total — the number it has always deducted from.
+ */
+export function awardOfItem(
+  activity: Pick<Activity, "points_total" | "question_count" | "points_per_question">,
+  item: Pick<RubricItem, "question_label" | "deduction">,
+  questions: PointedQuestion[],
+): number {
+  return awardForDeduction(worthOf(activity, questionForItem(item, questions)), item.deduction);
+}
+
+/** Where an activity's questions stand against its total. */
+export type PointsBalance =
+  /** No question declares a worth. Every activity in the course today. */
+  | "unset"
+  /** Some do and some do not, which is what typing the sixth one looks like. */
+  | "partial"
+  | "balanced"
+  | "over"
+  | "under";
+
+export interface QuestionPointsTally {
+  /** What the activity is out of. Never derived from the questions. */
+  total: number;
+  /** The sum of the questions that declare a worth. */
+  declared: number;
+  /** How many questions declare one, and how many do not. */
+  set: number;
+  unset: number;
+  balance: PointsBalance;
+  /** What to tell faculty, or null when there is nothing to say. */
+  note: string | null;
+}
+
+const pts = (n: number): string => String(exact(n));
+
+/**
+ * Add up what the questions are worth and compare it to the activity total.
+ *
+ * This is a real state faculty can reach by typing, and it is NOT an error: the
+ * questions are not made to add up, points_total is not recomputed from them,
+ * and no stored deduction is touched. Rescaling her numbers to fit would be a
+ * silent regrade of everyone already marked, so the model reports the gap and
+ * she decides which number was wrong.
+ *
+ * What the gap actually does, since the note has to be true: scores still come
+ * off points_total, so a shortfall is points nobody can lose and an excess is
+ * loss the floor at zero swallows. Either way every score moves by the same
+ * constant, and no submission is scored from a number that is not on screen.
+ */
+export function tallyQuestionPoints(
+  activity: Pick<Activity, "points_total" | "question_count" | "points_per_question">,
+  questions: PointedQuestion[],
+): QuestionPointsTally {
+  const total = pointsTotal(activity);
+  const scored = questions.filter((q) => q.points != null);
+  const declared = exact(scored.reduce((n, q) => n + (q.points ?? 0), 0));
+  const set = scored.length;
+  const unset = questions.length - set;
+
+  if (set === 0) {
+    return { total, declared: 0, set: 0, unset, balance: "unset", note: null };
+  }
+
+  const base = { total, declared, set, unset };
+  if (unset > 0) {
+    return {
+      ...base,
+      balance: "partial",
+      note:
+        `${set} of these ${questions.length} questions are worth points. A criterion on one of ` +
+        `the other ${unset} comes off the activity's ${pts(total)} instead.`,
+    };
+  }
+  if (declared > total) {
+    return {
+      ...base,
+      balance: "over",
+      note:
+        `Your questions add up to ${pts(declared)} points and the activity is out of ` +
+        `${pts(total)}. Scores still come off the ${pts(total)}, so a submission reaches 0 with ` +
+        `${pts(declared - total)} points still to lose.`,
+    };
+  }
+  if (declared < total) {
+    return {
+      ...base,
+      balance: "under",
+      note:
+        `Your questions add up to ${pts(declared)} points and the activity is out of ` +
+        `${pts(total)}. Scores still come off the ${pts(total)}, so a submission that loses ` +
+        `every point still scores ${pts(total - declared)}.`,
+    };
+  }
+  return { ...base, balance: "balanced", note: null };
 }
 
 /** "50 pts", or "Completion" for the types that are marked rather than scored. */

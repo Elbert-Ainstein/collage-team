@@ -24,6 +24,15 @@ import {
   type ParsedStudent,
 } from "@/checkins/rosterImport";
 import { reconcileRoster } from "@/checkins/rosterReconcile";
+import {
+  applyTeamPlan,
+  hasTeamNumbers,
+  missReason,
+  planTeamImport,
+  KEEPS_THEIR_TEAM,
+  NOTHING_IS_DELETED,
+  type TeamPlan,
+} from "@/checkins/teamImport";
 import { getTutorialSheet, studentMarks } from "@/checkins/tutorial";
 import type { Student } from "@/checkins/types";
 import {
@@ -46,14 +55,121 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 interface Preview {
   /** Named in the summary so the user knows which input this came from. */
   source: string;
+  /** Everything the file said, kept so the teams can be re-planned after an add. */
+  rows: ParsedStudent[];
   fresh: ParsedStudent[];
   emailFills: { student: Student; email: string }[];
   unchanged: number;
+  /** Null when the file carries no team numbers, which is every roster import. */
+  plan: TeamPlan | null;
   warnings: string[];
 }
 
 function plural(n: number, one: string, many: string): string {
   return `${n} ${n === 1 ? one : many}`;
+}
+
+/** Enough of a miss list to see the shape of the problem, not eighty lines of it. */
+const SHOW_MISSES = 6;
+
+/**
+ * What importing the team column would do — teams, sizes, and every student the
+ * file does not settle.
+ *
+ * The counts are the point. Names would be eighty lines for a class this size,
+ * and the thing Kelly has to be able to see at a glance is that team 4 has one
+ * student in it because a row above it is spelled wrong.
+ */
+function TeamPlanPreview(props: { plan: TeamPlan }): JSX.Element {
+  const { plan } = props;
+  const named = plan.teams.filter((t) => t.number != null);
+  const emptied = plan.teams.filter((t) => t.emptied);
+  const stay = plan.teams.reduce((n, t) => n + t.kept.length, 0);
+  const byName = plan.placements.filter((p) => p.by === "name").length;
+  const notes: string[] = [];
+
+  if (plan.notInFile.length || plan.noNumber.length) {
+    notes.push(
+      `${plural(plan.notInFile.length + plan.noNumber.length, "student is", "students are")} ` +
+        `on the roster with no team in this file. ${KEEPS_THEIR_TEAM}` +
+        (stay ? ` ${stay} of them ${stay === 1 ? "is" : "are"} on a team today, and stay on it.` : ""),
+    );
+  }
+  if (emptied.length) {
+    notes.push(
+      `${emptied.map((t) => t.name).join(", ")} ${emptied.length === 1 ? "ends" : "end"} up with ` +
+        `nobody on ${emptied.length === 1 ? "it" : "them"}, and ${emptied.length === 1 ? "is" : "are"} ` +
+        `left in place. Deleting a team deletes its photos and recordings, so that stays on Form teams.`,
+    );
+  }
+  notes.push(NOTHING_IS_DELETED);
+
+  return (
+    <>
+      <div className="fv-eyebrow" style={{ marginTop: 12 }}>
+        Teams
+      </div>
+      <div style={{ fontSize: "var(--fv-xs)", marginTop: 4, lineHeight: 1.6 }}>
+        {plural(named.length, "team", "teams")} ·{" "}
+        {plural(plan.placements.length, "student placed", "students placed")}
+        {byName ? ` · ${byName} matched on name, not email` : ""}
+      </div>
+      <ul
+        style={{
+          margin: "6px 0 0",
+          paddingLeft: 18,
+          fontSize: "var(--fv-2xs)",
+          lineHeight: 1.6,
+        }}
+      >
+        {named.map((t) => (
+          <li key={`${t.number}-${t.name}`}>
+            <strong>{t.name}</strong> · {plural(t.members.length, "student", "students")}
+            {t.existingId === null
+              ? " — new"
+              : t.name === `Team ${t.number}`
+                ? ""
+                : ` — team ${t.number} in the file, keeping its name`}
+            {t.kept.length ? `, ${t.kept.length} of them already there` : ""}
+          </li>
+        ))}
+      </ul>
+      {plan.unplaced.length ? (
+        <ul
+          style={{
+            margin: "6px 0 0",
+            paddingLeft: 18,
+            fontSize: "var(--fv-2xs)",
+            color: "var(--fv-amber)",
+            lineHeight: 1.6,
+          }}
+        >
+          {plan.unplaced.slice(0, SHOW_MISSES).map((u, i) => (
+            <li key={`${i}-${u.row.name}`}>{missReason(u)}</li>
+          ))}
+          {plan.unplaced.length > SHOW_MISSES ? (
+            <li>
+              {plan.unplaced.length - SHOW_MISSES} more rows the roster has nobody for. Nothing was
+              moved for any of them.
+            </li>
+          ) : null}
+        </ul>
+      ) : null}
+      <ul
+        style={{
+          margin: "6px 0 0",
+          paddingLeft: 18,
+          fontSize: "var(--fv-2xs)",
+          color: "var(--fv-muted)",
+          lineHeight: 1.6,
+        }}
+      >
+        {notes.map((n) => (
+          <li key={n}>{n}</li>
+        ))}
+      </ul>
+    </>
+  );
 }
 
 export function TeamsScreen(props: {
@@ -275,7 +391,13 @@ export function TeamsScreen(props: {
   function propose(text: string, source: string) {
     const parsed = parseRoster(text);
     const rec = reconcileRoster<Student>(roster, parsed.students);
-    if (!rec.fresh.length && !rec.emailFills.length) {
+    // A file with a team column has something to do even when every name on it
+    // is already here and correct — which is the normal case now that students
+    // arrive by class code, and used to be reported as "nothing to add".
+    const plan = hasTeamNumbers(parsed.students)
+      ? planTeamImport({ roster, rows: parsed.students, teams })
+      : null;
+    if (!rec.fresh.length && !rec.emailFills.length && !plan) {
       setPending(null);
       setNote(
         [
@@ -303,9 +425,11 @@ export function TeamsScreen(props: {
     setNote(null);
     setPending({
       source,
+      rows: parsed.students,
       fresh: rec.fresh,
       emailFills: rec.emailFills,
       unchanged: rec.unchanged,
+      plan,
       warnings: [
         ...parsed.warnings,
         ...Array.from(
@@ -337,26 +461,67 @@ export function TeamsScreen(props: {
     setBusy(true);
     setError(null);
     try {
+      let after = roster;
       if (p.fresh.length) {
-        await addStudents(
+        const added = await addStudents(
           course.id,
           p.fresh.map((s) => ({ name: s.name, email: s.email })),
           nextPosition,
         );
+        after = [...roster, ...added];
       }
       for (const fillIn of p.emailFills) {
         await setStudentEmail(fillIn.student.id, fillIn.email);
       }
+      const done = [
+        p.fresh.length ? `Added ${plural(p.fresh.length, "student", "students")}.` : "",
+        p.emailFills.length
+          ? `Filled in ${plural(p.emailFills.length, "address", "addresses")}.`
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+
+      if (p.plan) {
+        // The rows just added are exactly the ones the team plan had nobody for,
+        // so re-plan and stay on the panel rather than sending her back to the
+        // file. Planned against the rows the insert HANDED BACK: `roster` is a
+        // refresh behind us and would match none of them.
+        setPending({
+          ...p,
+          fresh: [],
+          emailFills: [],
+          unchanged: p.rows.length,
+          plan: planTeamImport({ roster: after, rows: p.rows, teams }),
+        });
+        setNote(`${done} Everyone in the file is on the roster now — check the teams below.`);
+      } else {
+        setImportOpen(false);
+        setNote(done);
+        setPending(null);
+        setPaste("");
+      }
+      onChanged();
+    } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Write the teams the file describes. Moves and creates only — see teamImport. */
+  async function applyTeams() {
+    const p = pending;
+    if (!p?.plan) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const out = await applyTeamPlan(course.id, p.plan);
       setImportOpen(false);
       setNote(
-        [
-          p.fresh.length ? `Added ${plural(p.fresh.length, "student", "students")}.` : "",
-          p.emailFills.length
-            ? `Filled in ${plural(p.emailFills.length, "address", "addresses")}.`
-            : "",
-        ]
-          .filter(Boolean)
-          .join(" "),
+        `${plural(out.moved, "student is", "students are")} on the teams from ${p.source}` +
+          (out.created ? `, and ${plural(out.created, "team was", "teams were")} added` : "") +
+          ". Nothing was deleted.",
       );
       setPending(null);
       setPaste("");
@@ -970,7 +1135,7 @@ export function TeamsScreen(props: {
                 color: "var(--fv-navy)",
               }}
             >
-              {roster.length === 0 ? "Add students in advance" : "Add more students"}
+              {roster.length === 0 ? "Add students in advance" : "Add students, or upload teams"}
             </span>
             <span
               style={{
@@ -981,8 +1146,8 @@ export function TeamsScreen(props: {
               }}
             >
               Drop a <strong>.csv</strong>, <strong>.tsv</strong> or <strong>.txt</strong> here, or
-              click to choose. One column of names, optionally with emails — extra columns are
-              ignored.
+              click to choose. Names, optionally with emails, and a <strong>team number</strong> if
+              you already have your teams in a spreadsheet — other columns are ignored.
             </span>
           </button>
 
@@ -1045,15 +1210,33 @@ export function TeamsScreen(props: {
                   ))}
                 </ul>
               ) : null}
+              {pending.plan ? <TeamPlanPreview plan={pending.plan} /> : null}
               <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                <button
-                  type="button"
-                  className="fv-btn primary sm"
-                  disabled={busy}
-                  onClick={() => void applyImport()}
-                >
-                  {busy ? "Adding…" : "Add to roster"}
-                </button>
+                {pending.fresh.length || pending.emailFills.length ? (
+                  <button
+                    type="button"
+                    className="fv-btn primary sm"
+                    disabled={busy}
+                    onClick={() => void applyImport()}
+                  >
+                    {busy ? "Adding…" : "Add to roster"}
+                  </button>
+                ) : null}
+                {pending.plan ? (
+                  <button
+                    type="button"
+                    className={`fv-btn ${pending.fresh.length ? "outline" : "primary"} sm`}
+                    disabled={busy || pending.plan.placements.length === 0}
+                    title={
+                      pending.plan.placements.length === 0
+                        ? "Nobody in the file matches a student on the roster, so there is no team to set."
+                        : undefined
+                    }
+                    onClick={() => void applyTeams()}
+                  >
+                    {busy ? "Setting teams…" : "Set teams"}
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   className="fv-btn outline sm"

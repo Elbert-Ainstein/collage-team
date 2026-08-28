@@ -352,3 +352,230 @@ describe("isSupportedRosterFile", () => {
     expect(isSupportedRosterFile("roster.numbers")).toBe(false);
   });
 });
+
+describe("a team column with a header", () => {
+  it("reads name, email and team", () => {
+    const csv = [
+      "Name,Email,Team",
+      "Ada Lovelace,ada@harvard.edu,1",
+      "Grace Hopper,grace@harvard.edu,1",
+      "Alan Turing,alan@harvard.edu,2",
+    ].join("\n");
+    expect(pairs(csv)).toEqual([
+      { name: "Ada Lovelace", email: "ada@harvard.edu", team: 1 },
+      { name: "Grace Hopper", email: "grace@harvard.edu", team: 1 },
+      { name: "Alan Turing", email: "alan@harvard.edu", team: 2 },
+    ]);
+  });
+
+  it("accepts the headers a spreadsheet actually uses", () => {
+    for (const header of ["Team", "Team #", "team number", "Team No.", "Group", "Group Number", "Table", "TABLE #"]) {
+      expect(pairs(`Name,${header}\nAda Lovelace,4`)).toEqual([{ name: "Ada Lovelace", team: 4 }]);
+    }
+  });
+
+  it('reads "Team 3" and "Group 3" as values, not just bare numbers', () => {
+    expect(pairs("Name,Team\nAda Lovelace,Team 3\nGrace Hopper,Group #4\nAlan Turing,#5")).toEqual([
+      { name: "Ada Lovelace", team: 3 },
+      { name: "Grace Hopper", team: 4 },
+      { name: "Alan Turing", team: 5 },
+    ]);
+  });
+
+  it("treats a blank team cell as no team, which is not team 0", () => {
+    const csv = "Name,Email,Team\nAda Lovelace,ada@harvard.edu,\nGrace Hopper,grace@harvard.edu,2";
+    expect(pairs(csv)).toEqual([
+      { name: "Ada Lovelace", email: "ada@harvard.edu", team: null },
+      { name: "Grace Hopper", email: "grace@harvard.edu", team: 2 },
+    ]);
+  });
+
+  it("lists team among the detected columns", () => {
+    const r = parseRoster("Name,Email,Team\nAda Lovelace,ada@harvard.edu,1\nGrace Hopper,grace@harvard.edu,1");
+    expect(r.warnings[0]).toMatch(/detected columns.*team/i);
+  });
+
+  it("does not claim a team column that produced no number", () => {
+    const r = parseRoster("Name,Team\nAda Lovelace,\nGrace Hopper,");
+    expect(r.warnings.join(" ")).not.toMatch(/detected column.*team/i);
+  });
+
+  it("keeps the team when it drops a duplicate of the same student", () => {
+    const r = parseRoster("Name,Team\nAda Lovelace,\nAda Lovelace,3");
+    expect(r.students).toEqual([{ name: "Ada Lovelace", team: 3 }]);
+  });
+
+  it("still finds the name and email columns around it", () => {
+    const csv = "Student,Team,Email\n\"Lovelace, Ada\",2,ada@harvard.edu";
+    expect(pairs(csv)).toEqual([{ name: "Ada Lovelace", email: "ada@harvard.edu", team: 2 }]);
+  });
+});
+
+describe("a roster with no team column is unchanged", () => {
+  it("leaves team off the student entirely", () => {
+    const r = parseRoster("Name,Email\nAda Lovelace,ada@harvard.edu");
+    expect(r.students[0]).not.toHaveProperty("team");
+  });
+
+  it("does not invent a team from a headered file that names no team column", () => {
+    // The header answered the question already: there is no team here, and the
+    // ID column must not be read as one.
+    const csv = "Name,ID,Email\nAda Lovelace,7,ada@harvard.edu\nGrace Hopper,7,grace@harvard.edu";
+    expect(pairs(csv)).toEqual([
+      { name: "Ada Lovelace", email: "ada@harvard.edu" },
+      { name: "Grace Hopper", email: "grace@harvard.edu" },
+    ]);
+  });
+});
+
+describe("a headerless team column", () => {
+  const headerless = (third: string[]) =>
+    ["Ada Lovelace,ada@harvard.edu", "Grace Hopper,grace@harvard.edu", "Alan Turing,alan@harvard.edu"]
+      .map((row, i) => `${row},${third[i]}`)
+      .join("\n");
+
+  it("reads three columns pasted with no header at all", () => {
+    expect(pairs(headerless(["1", "1", "2"]))).toEqual([
+      { name: "Ada Lovelace", email: "ada@harvard.edu", team: 1 },
+      { name: "Grace Hopper", email: "grace@harvard.edu", team: 1 },
+      { name: "Alan Turing", email: "alan@harvard.edu", team: 2 },
+    ]);
+  });
+
+  it("says that it guessed", () => {
+    expect(parseRoster(headerless(["1", "1", "2"])).warnings.join(" ")).toMatch(
+      /no header row — a column of numbers was read as the team/i,
+    );
+  });
+
+  it("allows a student with no team on a line of their own", () => {
+    const csv = [
+      "Ada Lovelace,ada@harvard.edu,1",
+      "Grace Hopper,grace@harvard.edu,",
+      "Alan Turing,alan@harvard.edu,1",
+      "Barbara Liskov,barbara@harvard.edu,2",
+    ].join("\n");
+    expect(pairs(csv)).toEqual([
+      { name: "Ada Lovelace", email: "ada@harvard.edu", team: 1 },
+      { name: "Grace Hopper", email: "grace@harvard.edu", team: null },
+      { name: "Alan Turing", email: "alan@harvard.edu", team: 1 },
+      { name: "Barbara Liskov", email: "barbara@harvard.edu", team: 2 },
+    ]);
+  });
+
+  it('reads "Team 3" without needing the numbers to repeat', () => {
+    expect(pairs(headerless(["Team 3", "Team 4", "Team 5"]))).toEqual([
+      { name: "Ada Lovelace", email: "ada@harvard.edu", team: 3 },
+      { name: "Grace Hopper", email: "grace@harvard.edu", team: 4 },
+      { name: "Alan Turing", email: "alan@harvard.edu", team: 5 },
+    ]);
+  });
+
+  it('does not claim to have guessed when the file spells out "Team"', () => {
+    expect(parseRoster(headerless(["Team 3", "Team 4", "Team 5"])).warnings.join(" ")).not.toMatch(
+      /read as the team/i,
+    );
+  });
+
+  it("does not fuse a spelled-out team onto the name", () => {
+    expect(names("Ada,Table 7\nGrace,Table 7\nAlan,Table 8")).toEqual(["Ada", "Grace", "Alan"]);
+    expect(parseRoster("Ada,Table 7\nGrace,Table 7\nAlan,Table 8").students[0].team).toBe(7);
+  });
+
+  it("works without an email column in between", () => {
+    expect(pairs("Ada Lovelace,1\nGrace Hopper,1\nAlan Turing,2")).toEqual([
+      { name: "Ada Lovelace", team: 1 },
+      { name: "Grace Hopper", team: 1 },
+      { name: "Alan Turing", team: 2 },
+    ]);
+  });
+});
+
+describe("numbers a headerless file must not mistake for a team", () => {
+  const withThird = (third: string[]) =>
+    parseRoster(
+      ["Ada Lovelace,ada@harvard.edu", "Grace Hopper,grace@harvard.edu", "Alan Turing,alan@harvard.edu"]
+        .map((row, i) => `${row},${third[i]}`)
+        .join("\n"),
+    ).students;
+
+  const noTeams = (rows: ReturnType<typeof withThird>) => rows.every((s) => s.team === undefined);
+
+  it("refuses a student id, which is distinct per student", () => {
+    expect(noTeams(withThird(["90210", "90211", "90212"]))).toBe(true);
+  });
+
+  it("refuses a short id that would fit inside the team range", () => {
+    expect(noTeams(withThird(["11", "12", "13"]))).toBe(true);
+  });
+
+  it("refuses a row number", () => {
+    expect(noTeams(withThird(["1", "2", "3"]))).toBe(true);
+  });
+
+  it("refuses a year", () => {
+    expect(noTeams(withThird(["2027", "2027", "2028"]))).toBe(true);
+  });
+
+  it("refuses a phone number", () => {
+    expect(noTeams(withThird(["617-555-0101", "617-555-0102", "617-555-0103"]))).toBe(true);
+  });
+
+  it("refuses a 0/1 flag column", () => {
+    expect(noTeams(withThird(["1", "0", "1"]))).toBe(true);
+  });
+
+  it("refuses a column where every value is the same", () => {
+    expect(noTeams(withThird(["1", "1", "1"]))).toBe(true);
+  });
+
+  it("refuses a graduation year even when it repeats", () => {
+    expect(noTeams(withThird(["2027", "2028", "2027"]))).toBe(true);
+  });
+
+  it("refuses a column of letters, which is not a number in any spelling", () => {
+    expect(noTeams(withThird(["A", "A", "B"]))).toBe(true);
+  });
+
+  it("refuses a column of two teams where nothing repeats", () => {
+    // Two students on two teams is indistinguishable from two students with two
+    // ids, and half a class of eighty would be on a team of one.
+    expect(noTeams(withThird(["1", "2", ""]))).toBe(true);
+  });
+});
+
+describe("teams that are named rather than numbered", () => {
+  it("warns instead of numbering them itself, under a Team header", () => {
+    const r = parseRoster("Name,Team\nAda Lovelace,Red\nGrace Hopper,Red\nAlan Turing,Helix");
+    expect(r.students).toEqual([
+      { name: "Ada Lovelace", team: null },
+      { name: "Grace Hopper", team: null },
+      { name: "Alan Turing", team: null },
+    ]);
+    expect(r.warnings.join(" ")).toMatch(/not a number.*“Red”/i);
+  });
+
+  it('warns at a headerless "Team Red", where the intent is unmistakable', () => {
+    const r = parseRoster(
+      "Ada Lovelace,ada@harvard.edu,Team Red\nGrace Hopper,grace@harvard.edu,Team Helix",
+    );
+    expect(r.students.map((s) => s.team)).toEqual([null, null]);
+    expect(r.warnings.join(" ")).toMatch(/not a number/i);
+  });
+
+  it("does not warn about a headerless column of words that never says team", () => {
+    // "Physics" could be a major, a dorm or a note; guessing it is a team, even
+    // to complain about it, would cry wolf on ordinary rosters.
+    const r = parseRoster("Ada Lovelace,ada@harvard.edu,Physics\nGrace Hopper,grace@harvard.edu,Physics");
+    expect(r.warnings.join(" ")).not.toMatch(/not a number/i);
+  });
+
+  it("keeps the numbered rows when only some rows are named", () => {
+    const r = parseRoster("Name,Team\nAda Lovelace,1\nGrace Hopper,Red");
+    expect(r.students).toEqual([
+      { name: "Ada Lovelace", team: 1 },
+      { name: "Grace Hopper", team: null },
+    ]);
+    expect(r.warnings.join(" ")).toMatch(/1 row came in with no team/i);
+  });
+});
