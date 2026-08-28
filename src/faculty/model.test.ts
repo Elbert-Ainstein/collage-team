@@ -5,8 +5,8 @@ import type { ActivityStat } from "@/faculty/model";
 
 const act = (id: string, week: number | null): Activity =>
   ({ id, week, position: 0, dates_label: null, type: "combo" } as unknown as Activity);
-const wk = (week: number, dates: string | null = null): CourseWeek =>
-  ({ id: `w${week}`, course_id: "c", week, dates_label: dates, created_at: "" });
+const wk = (week: number, dates: string | null = null, title: string | null = null): CourseWeek =>
+  ({ id: `w${week}`, course_id: "c", week, title, dates_label: dates, created_at: "" });
 const stats = new Map<string, ActivityStat>();
 
 describe("week groups", () => {
@@ -31,6 +31,44 @@ describe("week groups", () => {
   it("keeps unscheduled activities last", () => {
     const g = groupByWeek([act("a", null), act("b", 2)], [wk(2)], stats);
     expect(g.map((x) => x.label)).toEqual(["Week 2", "Unscheduled"]);
+  });
+
+  // 0033. The number still orders the page and still says where an activity
+  // lives; a title only changes what the week is CALLED.
+  it("calls a week by its title when it has one", () => {
+    const g = groupByWeek([act("a", 3)], [wk(3, null, "Momentum")], stats);
+    expect(g[0].label).toBe("Momentum");
+    expect(g[0].title).toBe("Momentum");
+    expect(g[0].week).toBe(3);
+  });
+
+  it("falls back to the number, and reports no title, when there is none", () => {
+    const g = groupByWeek([act("a", 3)], [wk(3)], stats);
+    expect(g[0].label).toBe("Week 3");
+    expect(g[0].title).toBeNull();
+  });
+
+  // A project that has not run 0033 has no column, so the field arrives
+  // undefined rather than null. It must read as "no title", not crash.
+  it("survives a database without the title column", () => {
+    const noColumn = { id: "w4", course_id: "c", week: 4, dates_label: null, created_at: "" } as CourseWeek;
+    const g = groupByWeek([act("a", 4)], [noColumn], stats);
+    expect(g[0].label).toBe("Week 4");
+    expect(g[0].title).toBeNull();
+  });
+
+  // Whitespace is not a name. Seeding an editor from it would show an empty box
+  // over a week whose heading had stopped saying anything.
+  it("treats a whitespace title as no title", () => {
+    const g = groupByWeek([act("a", 5)], [wk(5, null, "   ")], stats);
+    expect(g[0].label).toBe("Week 5");
+    expect(g[0].title).toBeNull();
+  });
+
+  it("renaming a week does not move it — the number still orders the page", () => {
+    const g = groupByWeek([act("a", 1), act("b", 2)], [wk(1, null, "Zebra"), wk(2, null, "Alpha")], stats);
+    expect(g.map((x) => x.label)).toEqual(["Alpha", "Zebra"]);
+    expect(g.map((x) => x.week)).toEqual([2, 1]);
   });
 });
 

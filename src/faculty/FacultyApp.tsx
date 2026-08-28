@@ -404,7 +404,12 @@ export function FacultyApp({
    */
   const loadCourses = useCallback(async () => {
     const [owned, helping] = await Promise.all([
-      mode === "tf" ? listCourses() : ensureSessions(),
+      // Owned only. listCourses reads through the enrolment and TF policies as
+      // well, so unfiltered it would hand this list a course she is a STUDENT on
+      // and the faculty app would try to run it.
+      mode === "tf"
+        ? listCourses().then((cs) => cs.filter((c) => c.owner_id === uid))
+        : ensureSessions(),
       myTFCourses().catch(() => [] as Course[]),
     ]);
     // Owned first, and owned wins on a tie: being a TF on a course you own is a

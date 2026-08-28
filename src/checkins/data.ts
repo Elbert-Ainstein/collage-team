@@ -321,7 +321,15 @@ export async function ensureSessions(term = "Fall"): Promise<Course[]> {
 
     // RLS already limits reads to this account; owner_id is set explicitly so
     // the row passes the WITH CHECK on insert.
-    const existing = await listCourses();
+    // OWNED, not merely visible. listCourses reads through three SELECT policies
+    // — your own (0003), one you are enrolled on (0006), one you are a TF on
+    // (0007) — so "did anything come back" is not the same question as "have you
+    // been set up". A new instructor who is already a TF on a colleague's course
+    // would otherwise be told she was provisioned and handed that colleague's
+    // course as though it were hers.
+    const visible = await listCourses();
+    const existing = visible.filter((c) => c.owner_id === ownerId);
+
     // BOOTSTRAP ONCE, not forever. This used to re-provision whichever of
     // AP50A/AP50B it could not see, which meant renaming a course silently grew
     // a replacement for it on the next load — and deleting one you did not want
@@ -339,7 +347,9 @@ export async function ensureSessions(term = "Fall"): Promise<Course[]> {
     if (error && !/duplicate key|23505/i.test(error.message)) throw dbError(error);
     // A silent no-op (RLS filtering the insert away) would otherwise show as an
     // empty workspace rather than a problem.
-    const after = pickSessions(await listCourses());
+    const after = pickSessions(
+      (await listCourses()).filter((c) => c.owner_id === ownerId),
+    );
     if (!after.length) {
       throw new Error(
         "Signed in, but the first sessions could not be created. The database refused them — " +
