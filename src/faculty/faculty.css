@@ -329,6 +329,13 @@
 }
 /* Sits in the meta line under the course name. Quiet until you go looking for
    it — a rename control that advertises itself turns a masthead into a form. */
+.fv-helping {
+  margin-left: 5px;
+  font-size: var(--fv-2xs);
+  font-weight: 600;
+  letter-spacing: var(--fv-wide);
+  opacity: 0.6;
+}
 .fv-courserename {
   cursor: pointer;
   color: var(--fv-muted);

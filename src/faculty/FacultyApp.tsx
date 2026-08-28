@@ -199,9 +199,15 @@ export function FacultyApp({
    * conclude nothing is missing, and hand a teaching fellow the full authoring
    * UI on a course they cannot write to.
    */
+  uid,
   mode = "owner",
 }: {
   account?: string;
+  /**
+   * The signed-in account's id. Load-bearing rather than decorative: it is what
+   * decides, PER COURSE, whether this person owns the one they are looking at.
+   */
+  uid?: string;
   onSignOut?: () => Promise<void>;
   mode?: "owner" | "tf";
 }) {
@@ -382,8 +388,30 @@ export function FacultyApp({
     })();
   };
 
+  /**
+   * Every course this account can work on — the ones it owns AND the ones it
+   * helps teach.
+   *
+   * These used to be alternatives: `mode === "tf" ? myTFCourses() : ensureSessions()`.
+   * That was fine while an account was one or the other, and a lockout the
+   * moment somebody was both — an instructor who also TFs for a colleague was
+   * routed to the TF app by app/ck (the TF test runs first), and the TF app
+   * loaded only TF courses, so HER OWN COURSE became invisible with no way back
+   * from inside the app.
+   *
+   * ensureSessions still only runs for an account that owns nothing, so a pure
+   * TF is never handed a course of their own to bootstrap.
+   */
   const loadCourses = useCallback(async () => {
-    const cs = mode === "tf" ? await myTFCourses() : await ensureSessions();
+    const [owned, helping] = await Promise.all([
+      mode === "tf" ? listCourses() : ensureSessions(),
+      myTFCourses().catch(() => [] as Course[]),
+    ]);
+    // Owned first, and owned wins on a tie: being a TF on a course you own is a
+    // row somebody could add, and it must not downgrade what you can do there.
+    const byId = new Map<string, Course>();
+    for (const c of [...owned, ...helping]) if (!byId.has(c.id)) byId.set(c.id, c);
+    const cs = [...byId.values()];
     setCourses(cs);
     setCourseId((prev) => (prev && cs.some((c) => c.id === prev) ? prev : (cs[0]?.id ?? null)));
   }, [mode]);
@@ -406,7 +434,14 @@ export function FacultyApp({
     }
     busy.current = true;
     try {
-      const isOwner = mode === "owner";
+      // A fact about THIS course, not about the account. capabilitiesFor has
+      // always taken it per course; it was being handed one app-wide answer,
+      // which is what made "you are a TF somewhere" mean "you are a TF
+      // everywhere" — including on the course you own.
+      // Without a uid — the unconfigured-Supabase path renders FacultyApp with no
+      // props at all — fall back to the session-wide mode rather than deciding
+      // nobody owns anything.
+      const isOwner = uid ? known.owner_id === uid : mode === "owner";
 
       const [allCourses, roster, activities, weeks, sets, tfs] = await Promise.all([
         // Re-read the course row on every refresh. It used to come only from the
@@ -855,6 +890,16 @@ export function FacultyApp({
                   }}
                 >
                   {c.code ?? c.name}
+                  {/* Which of these is YOURS. The switcher can now hold both
+                      your own courses and ones you help teach, and those give
+                      you very different buttons on the screens behind them —
+                      finding that out by discovering a control is missing is
+                      the wrong way round. */}
+                  {uid && c.owner_id !== uid ? (
+                    <span className="fv-helping" title="You are a teaching fellow on this course">
+                      TF
+                    </span>
+                  ) : null}
                 </button>
               ))}
             </div>

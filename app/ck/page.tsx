@@ -176,7 +176,7 @@ function RoleRouter({
   // The team BUILDER is not retired — TeamsScreen still embeds TeamsPillar
   // behind "Form teams", because the redesign has no replacement for it.
   return (
-    <FacultyApp account={account} onSignOut={onSignOut} mode={kind === "tf" ? "tf" : "owner"} />
+    <FacultyApp account={account} uid={uid} onSignOut={onSignOut} mode={kind === "tf" ? "tf" : "owner"} />
   );
 }
 
