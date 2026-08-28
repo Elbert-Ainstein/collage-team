@@ -265,10 +265,17 @@ export interface CourseWeek {
 /**
  * One question or sub-question of an activity, written on the rubric page.
  *
- * Deliberately carries no points of its own: an activity has ONE total, and
- * criteria deduct from it. How many questions there are and what the activity
- * is worth are separate facts, and tying them together is what made the old
- * count x points shape unable to describe a real assignment.
+ * MAY carry points of its own (0034), because a real rubric does not spread an
+ * activity's total evenly: Kelly's combo is 3, 2, 3, 2, 5, 5 across six
+ * questions. Null means unset, and unset behaves exactly as every question did
+ * before — its criteria deduct from the activity's total.
+ *
+ * The activity still has ONE total and criteria still deduct from it. Nothing
+ * derives points_total from these, and nothing rescales them to match: a course
+ * whose questions do not add up is a real state somebody reaches by typing, and
+ * it is reported rather than quietly corrected. What this is NOT is a return to
+ * the old count x points shape, which could not describe an assignment where
+ * the questions are worth different amounts.
  */
 export interface ActivityQuestion {
   id: string;

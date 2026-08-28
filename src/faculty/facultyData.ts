@@ -31,7 +31,7 @@ import {
   type RubricItem,
   type SubmissionMark,
 } from "@/checkins/types";
-import { pointsTotal } from "./model";
+import { pointsTotal, type PointedQuestion } from "./model";
 
 const db = () => requireSupabase();
 
@@ -189,8 +189,8 @@ export async function setActivityPoints(activityId: string, total: number): Prom
 // (setActivityPoints above); these rows say what its questions are called and
 // what order they come in, and criteria hang off them.
 
-export async function listQuestions(activityId: string): Promise<ActivityQuestion[]> {
-  return selectAll<ActivityQuestion>((from, to) =>
+export async function listQuestions(activityId: string): Promise<PointedQuestion[]> {
+  return selectAll<PointedQuestion>((from, to) =>
     db().from("activity_questions").select("*").eq("activity_id", activityId)
       .order("position").order("label")
       .range(from, to),
@@ -198,10 +198,10 @@ export async function listQuestions(activityId: string): Promise<ActivityQuestio
 }
 
 /** Every question on a course's activities, for the screens that show totals. */
-export async function listQuestionsFor(activityIds: string[]): Promise<ActivityQuestion[]> {
+export async function listQuestionsFor(activityIds: string[]): Promise<PointedQuestion[]> {
   if (!activityIds.length) return [];
   try {
-    return await selectAllIn<ActivityQuestion>(activityIds, (chunk, from, to) =>
+    return await selectAllIn<PointedQuestion>(activityIds, (chunk, from, to) =>
       db().from("activity_questions").select("*").in("activity_id", chunk)
         .order("position").order("label")
         .range(from, to),
@@ -233,7 +233,7 @@ export async function listQuestionsFor(activityIds: string[]): Promise<ActivityQ
 export async function ensureQuestions(
   activity: Activity,
   canSeed = true,
-): Promise<ActivityQuestion[]> {
+): Promise<PointedQuestion[]> {
   const existing = await listQuestions(activity.id);
   if (existing.length || !canSeed) return existing;
 
@@ -248,7 +248,7 @@ export async function ensureQuestions(
   }));
   const inserted = unwrap(
     await db().from("activity_questions").insert(rows).select(),
-  ) as ActivityQuestion[];
+  ) as PointedQuestion[];
   return (inserted ?? []).sort((a, b) => a.position - b.position);
 }
 
@@ -263,10 +263,10 @@ export async function ensureQuestions(
  */
 export async function addQuestion(
   activityId: string,
-  rows: ActivityQuestion[],
+  rows: PointedQuestion[],
   label: string,
   after?: ActivityQuestion,
-): Promise<ActivityQuestion[]> {
+): Promise<PointedQuestion[]> {
   const at = after ? after.position + 1 : rows.length;
   const inserted = unwrap(
     await db()
@@ -274,11 +274,58 @@ export async function addQuestion(
       .insert({ activity_id: activityId, label, position: at })
       .select()
       .single(),
-  ) as ActivityQuestion;
+  ) as PointedQuestion;
 
   const next = [...rows.slice(0, at), inserted, ...rows.slice(at)];
   await renumber(next);
   return next.map((q, i) => ({ ...q, position: i }));
+}
+
+/**
+ * Set what ONE question is out of, or null to leave it unset.
+ *
+ * Two things this deliberately does not do.
+ *
+ * It does not touch points_total, and it does not make the questions add up to
+ * it. What an activity is out of is still one number faculty chose and still
+ * the only number recompute_result_score subtracts from; when the questions do
+ * not sum to it, model.tallyQuestionPoints says so and she decides which number
+ * was wrong. Deriving the total from the questions here would re-score every
+ * submission on the activity from a keystroke, through 0014's rescore trigger.
+ *
+ * It does not rescale the criteria written under the question either. The
+ * ladder is STORED as deductions, so re-pointing a question from 3 to 5 leaves
+ * a deduction of 2 meaning "+3" where it used to mean "+1". That is a real
+ * shift in meaning and she has to see it, but rewriting those deductions to
+ * preserve the awards would move the score of everyone already marked — no
+ * score may move on a keystroke, so the ladder is re-read in awards
+ * (model.awardOfItem) and she fixes it there.
+ */
+export async function setQuestionPoints(id: string, points: number | null): Promise<void> {
+  const value = points == null ? null : Math.max(0, points);
+  const { data, error } = await db()
+    .from("activity_questions")
+    .update({ points: value })
+    .eq("id", id)
+    .select("id");
+  if (error) {
+    // 0034 is the migration that adds the column. Unlike the read in
+    // listQuestionsFor, this cannot degrade to "no points" — she typed a
+    // number and it has to either be stored or be refused out loud.
+    if (/'?points'?/.test(error.message) && /column|schema cache/i.test(error.message)) {
+      throw new Error(
+        "Points per question need migration 0034 — this database hasn't had it run yet. Until " +
+          "then every question shares the activity's total.",
+      );
+    }
+    throw dbError(error);
+  }
+  if (!data || data.length === 0) {
+    throw new Error(
+      "That question was not saved — only the instructor who owns this course can change the " +
+        "rubric.",
+    );
+  }
 }
 
 export async function updateQuestion(id: string, patch: { label?: string }): Promise<void> {
@@ -316,8 +363,8 @@ export async function updateQuestion(id: string, patch: { label?: string }): Pro
 export async function deleteQuestion(
   activityId: string,
   question: ActivityQuestion,
-  rows: ActivityQuestion[],
-): Promise<ActivityQuestion[]> {
+  rows: PointedQuestion[],
+): Promise<PointedQuestion[]> {
   const { error: e1 } = await db()
     .from("rubric_items")
     .delete()
@@ -490,14 +537,31 @@ export async function setRubricQuestion(id: string, questionLabel: string | null
 // rubric — a ladder of criteria written per question — and rewriting it from
 // scratch each week is the whole cost this section removes.
 
-/** An activity's questions, as rows belonging to a different activity. */
+/**
+ * An activity's questions, as rows belonging to a different activity.
+ *
+ * What each question is WORTH comes across too, and has to: duplicating Kelly's
+ * combo without it would hand back six questions that no longer say 3, 2, 3, 2,
+ * 5, 5, and the copied ladder — carried over as deductions — would then award
+ * something else entirely on every one of them.
+ *
+ * The key is omitted rather than sent as null when the source row does not
+ * carry it, which is how a row read from a database that has not run 0034
+ * arrives. Sending a column that is not there fails the whole insert, and a
+ * duplicate that works without points is worth more than one that refuses.
+ */
 export function copiedQuestions(
   activityId: string,
-  questions: ActivityQuestion[],
-): { activity_id: string; label: string; position: number }[] {
+  questions: PointedQuestion[],
+): { activity_id: string; label: string; position: number; points?: number | null }[] {
   return [...questions]
     .sort((a, b) => a.position - b.position)
-    .map((q) => ({ activity_id: activityId, label: q.label, position: q.position }));
+    .map((q) => ({
+      activity_id: activityId,
+      label: q.label,
+      position: q.position,
+      ...("points" in q ? { points: q.points ?? null } : {}),
+    }));
 }
 
 /**

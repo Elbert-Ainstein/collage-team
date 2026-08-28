@@ -7,9 +7,18 @@
 // screen. Nothing here is a draft: every edit writes straight to the same
 // rubric_items rows the grading screen marks against.
 //
-// Questions here are structure and nothing else: "1", "2", "2a", in order, each
-// holding the criteria written against it. They carry no points — the activity
-// has ONE total, chosen on its own page, and every criterion deducts from that.
+// A question is a NAME and a place in the order. It used to be only "1", "2",
+// "2a", and three separate things read structure back out of that text; they
+// now ask `numbered()` first and fall back to `position`, which is what has
+// actually ordered this list all along. Kelly's questions are called
+// "Challenge Problem 1: At Home Effort", and criteria are still filed under
+// them by that name (0012), so renaming one has to carry them with it.
+//
+// A criterion is WRITTEN as what it awards and STORED as what it deducts. The
+// activity still has ONE total and that is still the only number a score comes
+// off; 0034 lets a question say what IT is out of, which is the number the
+// award is read against — the same "+1" is a deduction of 2 on a 3-point
+// question and of 1 on a 2-point one. All of that conversion is in model.ts.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Activity, ActivityQuestion, FileRef, RubricItem } from "@/checkins/types";
@@ -26,12 +35,21 @@ import {
   ensureQuestions,
   ensureRubric,
   removeActivityFile,
+  setQuestionPoints,
   setRubricQuestion,
   updateQuestion,
   updateRubricItem,
   uploadActivityFile,
 } from "./facultyData";
-import { pointsTotal } from "./model";
+import {
+  awardFits,
+  awardForDeduction,
+  deductionForAward,
+  pointsTotal,
+  tallyQuestionPoints,
+  worthOf,
+  type PointedQuestion,
+} from "./model";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { FIcon } from "./icons";
 import { NEW_ACTIVITY_STEPS, Steps } from "./Steps";
@@ -44,6 +62,37 @@ function baseOf(label: string): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+/**
+ * Whether a label is still running on the numbering, rather than being a name.
+ *
+ * Everything that used to parse a label asks this first. A question keeps its
+ * place in the order because the order is `position` — renumbered on every add
+ * and delete by facultyData, and what `groupsFor` walks — and never the text.
+ * baseOf only ever fed three things: what the NEXT label is called, whether a
+ * block is drawn as a sub-question, and how strays are sorted. None of those
+ * can be read out of "Challenge Problem 1: At Home Effort", so each of them
+ * falls back rather than mis-parsing it into question 1.
+ */
+function numbered(label: string): boolean {
+  return /^\d+$/.test(label);
+}
+
+/**
+ * The two shapes a sub-question's name takes: "2a", and "Tutorial 1 (a)".
+ *
+ * The old test was "not exactly its own base number", which every free-text
+ * name passes — so naming a question drew it indented and took its
+ * Sub-question button away.
+ */
+function isSubLabel(label: string): boolean {
+  return /^\d+[a-z]+$/i.test(label) || /\s\([a-z]\)$/i.test(label);
+}
+
+/** What a block is called: "Question 2", or just the name she typed. */
+function headingFor(label: string): string {
+  return /^\d/.test(label) ? `Question ${label}` : label;
+}
+
 /** "2" then "2a" then "2b" — numbers before their own sub-questions. */
 function byLabel(a: string, b: string): number {
   const na = baseOf(a) ?? 0;
@@ -52,28 +101,43 @@ function byLabel(a: string, b: string): number {
   return a.localeCompare(b);
 }
 
-/** The next free whole number: the question after the last one. */
+/**
+ * The name a new question arrives with, before anyone types over it.
+ *
+ * Counted from how many questions there are rather than from 1: once all six
+ * are named, every small number is "free" again, and handing her a seventh
+ * question called "1" underneath six named ones is a worse guess than "7".
+ */
 function nextTop(taken: string[]): string {
   const used = new Set(taken);
-  for (let n = 1; n < 500; n += 1) {
+  for (let n = taken.length + 1; n <= taken.length + 500; n += 1) {
     if (!used.has(String(n))) return String(n);
   }
   return String(taken.length + 1);
 }
 
-/** The next free sub-question letter under a question: 2a, 2b, 2c… */
-function nextSub(question: number, taken: string[]): string {
+/**
+ * The next free sub-question of one question: 2a, 2b, 2c…
+ *
+ * A named parent has no number to hang a letter off, so its sub-questions read
+ * "Tutorial Screen 1 (a)" instead. Either way the row goes directly under its
+ * parent by position, which is the part that actually places it.
+ */
+function nextSub(parent: ActivityQuestion, taken: string[]): string {
   const used = new Set(taken);
+  const stem = baseOf(parent.label);
+  const make = (letter: string) =>
+    numbered(parent.label) && stem != null ? `${stem}${letter}` : `${parent.label} (${letter})`;
   for (let i = 0; i < 26; i += 1) {
-    const label = `${question}${String.fromCharCode(97 + i)}`;
+    const label = make(String.fromCharCode(97 + i));
     if (!used.has(label)) return label;
   }
-  return `${question}z`;
+  return make("z");
 }
 
 interface Group {
   /** The question row, or null for the ladder that applies to every question. */
-  question: ActivityQuestion | null;
+  question: PointedQuestion | null;
   /** null is the shared ladder written before per-question criteria existed. */
   label: string | null;
   heading: string;
@@ -93,7 +157,7 @@ interface Group {
  * Questions with no criteria are still listed — an empty question is the whole
  * reason to be on this screen, and hiding it would leave nowhere to press.
  */
-function groupsFor(questions: ActivityQuestion[], items: RubricItem[]): Group[] {
+function groupsFor(questions: PointedQuestion[], items: RubricItem[]): Group[] {
   const byQuestion = new Map<string, RubricItem[]>();
   const shared: RubricItem[] = [];
   for (const item of items) {
@@ -121,7 +185,7 @@ function groupsFor(questions: ActivityQuestion[], items: RubricItem[]): Group[] 
     out.push({
       question: q,
       label: q.label,
-      heading: `Question ${q.label}`,
+      heading: headingFor(q.label),
       items: byQuestion.get(q.label) ?? [],
     });
   }
@@ -130,7 +194,7 @@ function groupsFor(questions: ActivityQuestion[], items: RubricItem[]): Group[] 
     out.push({
       question: null,
       label,
-      heading: `Question ${label}`,
+      heading: headingFor(label),
       items: byQuestion.get(label) ?? [],
       orphan: true,
     });
@@ -138,26 +202,38 @@ function groupsFor(questions: ActivityQuestion[], items: RubricItem[]): Group[] 
   return out;
 }
 
-/** The heading of one question: what it is called, and what it is worth. */
+/** The heading of one question: what it is called, and what it is out of. */
 function QuestionHead({
   group,
   canEdit,
+  scored,
+  total,
   onRename,
+  onPoints,
   onSub,
   onDelete,
 }: {
   group: Group;
   canEdit: boolean;
-  onRename: (label: string) => void;
+  /** Out of points. A completion activity has no per-question worth to set. */
+  scored: boolean;
+  /** The activity total — what an unpointed question's criteria come off. */
+  total: number;
+  /** Returns what is wrong with the name, or null when it was accepted. */
+  onRename: (label: string) => string | null;
+  onPoints: (points: number | null) => void;
   onSub: () => void;
   onDelete: () => void;
 }) {
   const q = group.question;
   const [label, setLabel] = useState(q?.label ?? "");
+  const [pts, setPts] = useState(q?.points == null ? "" : String(q.points));
+  const [warn, setWarn] = useState<string | null>(null);
 
   useEffect(() => setLabel(q?.label ?? ""), [q?.label]);
+  useEffect(() => setPts(q?.points == null ? "" : String(q.points)), [q?.points]);
 
-  const isSub = q != null && q.label !== String(baseOf(q.label) ?? "");
+  const isSub = q != null && isSubLabel(q.label);
 
   if (!q) {
     return (
@@ -170,88 +246,205 @@ function QuestionHead({
     );
   }
 
+  const commitPts = () => {
+    const raw = pts.trim();
+    if (raw === "") {
+      if (q.points != null) onPoints(null);
+      return;
+    }
+    const parsed = Number.parseFloat(raw.replace(/[^\d.]/g, ""));
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      setPts(q.points == null ? "" : String(q.points));
+      return;
+    }
+    const next = Math.round(parsed * 1e6) / 1e6;
+    setPts(String(next));
+    if (next !== q.points) onPoints(next);
+  };
+
   return (
-    <div className={`fv-qhead${isSub ? " sub" : ""}`}>
-      <span className="fv-sub" style={{ flex: "none", fontSize: "var(--fv-2xs)" }}>
-        Question
-      </span>
-      <input
-        className="fv-qname"
-        style={{ flex: "none", width: 56 }}
-        aria-label="Question number"
-        disabled={!canEdit}
-        value={label}
-        onChange={(e) => setLabel(e.target.value)}
-        onBlur={() => {
-          const next = label.trim();
-          // An empty or duplicate label would address criteria that can never
-          // be found again, so the field goes back to what is stored.
-          if (!next || next === q.label) {
-            setLabel(q.label);
-            return;
-          }
-          onRename(next);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") e.currentTarget.blur();
-          if (e.key === "Escape") {
-            setLabel(q.label);
-            e.currentTarget.blur();
-          }
-        }}
-      />
-      <span style={{ flex: 1 }} />
-      {canEdit && !isSub ? (
-        <button
-          type="button"
-          className="fv-btn ghost sm"
-          style={{ height: 22, padding: "0 8px", fontSize: "var(--fv-2xs)", flex: "none" }}
-          title={`Add a sub-question under question ${q.label}`}
-          onClick={onSub}
+    <>
+      <div className={`fv-qhead${isSub ? " sub" : ""}`}>
+        {/* "Question 2" reads right; "Question Challenge Problem 1: At Home
+            Effort" does not, so the word goes away once she has named it. */}
+        {headingFor(q.label) !== q.label ? (
+          <span className="fv-sub" style={{ flex: "none", fontSize: "var(--fv-2xs)" }}>
+            Question
+          </span>
+        ) : null}
+        <input
+          className="fv-qname"
+          style={{ flex: 1, minWidth: 0 }}
+          aria-label="Question name"
+          placeholder="Name this question"
+          disabled={!canEdit}
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          onBlur={() => {
+            const next = label.trim();
+            // An empty label would address criteria that can never be found
+            // again, so the field goes back to what is stored. A duplicate is
+            // refused by the caller, which knows the other questions — and her
+            // typing STAYS on screen with the reason, since reverting it would
+            // throw away a whole sentence she has to type again to fix.
+            if (!next || next === q.label) {
+              setLabel(q.label);
+              setWarn(null);
+              return;
+            }
+            setWarn(onRename(next));
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+            if (e.key === "Escape") {
+              setLabel(q.label);
+              setWarn(null);
+              e.currentTarget.blur();
+            }
+          }}
+        />
+        {/* What THIS question is out of (0034). Empty is unset, not zero: its
+            criteria come off the activity's total, which is what every criterion
+            in the course did before there was anywhere else to put a number. */}
+        {scored ? (
+          <span
+            style={{ display: "flex", alignItems: "center", gap: 4, flex: "none" }}
+            title={`Blank means this question has no points of its own — its criteria come off the activity's ${total}.`}
+          >
+            <span className="fv-sub" style={{ fontSize: "var(--fv-2xs)" }}>
+              out of
+            </span>
+            <input
+              className="fv-in quiet fv-num"
+              style={{ width: 44, padding: "3px 5px", textAlign: "right" }}
+              inputMode="decimal"
+              placeholder="—"
+              aria-label={`Points for “${q.label}”`}
+              disabled={!canEdit}
+              value={pts}
+              onChange={(e) => setPts(e.target.value)}
+              onBlur={commitPts}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.currentTarget.blur();
+                if (e.key === "Escape") {
+                  setPts(q.points == null ? "" : String(q.points));
+                  e.currentTarget.blur();
+                }
+              }}
+            />
+            <span className="fv-sub" style={{ fontSize: "var(--fv-2xs)" }}>
+              pts
+            </span>
+          </span>
+        ) : null}
+        {canEdit && !isSub ? (
+          <button
+            type="button"
+            className="fv-btn ghost sm"
+            style={{ height: 22, padding: "0 8px", fontSize: "var(--fv-2xs)", flex: "none" }}
+            title={`Add a sub-question under ${headingFor(q.label)}`}
+            onClick={onSub}
+          >
+            <FIcon name="add" size={13} />
+            Sub-question
+          </button>
+        ) : null}
+        {canEdit ? (
+          <button
+            type="button"
+            className="fv-iconbtn"
+            style={{ width: 22, height: 22, flex: "none" }}
+            aria-label={`Delete ${headingFor(q.label)}`}
+            onClick={onDelete}
+          >
+            <FIcon name="close" size={13} />
+          </button>
+        ) : null}
+      </div>
+      {warn ? (
+        <div
+          className="fv-sub"
+          style={{
+            padding: "0 12px 8px 26px",
+            fontSize: "var(--fv-2xs)",
+            lineHeight: 1.5,
+            color: "var(--fv-destructive)",
+          }}
         >
-          <FIcon name="add" size={13} />
-          Sub-question
-        </button>
+          {warn}
+        </div>
       ) : null}
-      {canEdit ? (
-        <button
-          type="button"
-          className="fv-iconbtn"
-          style={{ width: 22, height: 22, flex: "none" }}
-          aria-label={`Delete question ${q.label}`}
-          onClick={onDelete}
-        >
-          <FIcon name="close" size={13} />
-        </button>
-      ) : null}
-    </div>
+    </>
   );
 }
 
-/** One criterion: a deduction and what earns it. Both save on blur. */
+/**
+ * One rung: what it awards, and what earns it. Both save on blur.
+ *
+ * She types "+1"; the row stores a deduction, because that is what
+ * recompute_result_score subtracts. `worth` is the QUESTION's, never the
+ * activity's — the identical "+1" is a deduction of 2 on her 3-point At Home
+ * Effort and of 1 on her 2-point Mark-up.
+ */
 function CriterionRow({
   item,
+  worth,
   canEdit,
   onCommit,
   onDelete,
 }: {
   item: RubricItem;
+  worth: number;
   canEdit: boolean;
   onCommit: (patch: { description?: string; deduction?: number }) => void;
   onDelete: () => void;
 }) {
+  const award = awardForDeduction(worth, item.deduction);
   const [desc, setDesc] = useState(item.description);
-  const [pts, setPts] = useState(String(item.deduction));
+  const [pts, setPts] = useState(String(award));
+  const [warn, setWarn] = useState<string | null>(null);
+  const box = useRef<HTMLTextAreaElement | null>(null);
 
   // Adopt a value that changed underneath — a failed write is reverted by the
-  // parent, and the field has to show what was actually stored.
+  // parent, and the field has to show what was actually stored. Re-pointing the
+  // question moves this too: the deduction has not changed, but what it awards
+  // has, which is the shift she needs to see rather than be told about.
   useEffect(() => setDesc(item.description), [item.description]);
-  useEffect(() => setPts(String(item.deduction)), [item.deduction]);
+  useEffect(() => setPts(String(award)), [award]);
+
+  // Her longest rung — the At Home Effort +3 — runs to about 180 characters,
+  // and in a one-line box that is a slot showing eight words of it at a time.
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [desc]);
 
   const commitPts = () => {
+    // The minus stays in: a rung stored before its question was re-pointed
+    // DOWN reads as a negative award, and stripping the sign would turn a
+    // focus and a tab into a silent rewrite of somebody's grading.
     const parsed = Number.parseFloat(pts.replace(/[^\d.-]/g, ""));
-    const next = Number.isFinite(parsed) && parsed >= 0 ? Math.min(Math.round(parsed), 99) : item.deduction;
-    setPts(String(next));
+    if (!Number.isFinite(parsed)) {
+      setPts(String(award));
+      setWarn(null);
+      return;
+    }
+    if (!awardFits(worth, parsed)) {
+      // Not clamped into range: pulling a 5 back to 3 would store a rung she
+      // never wrote, and she would find out from a transcript.
+      setPts(String(award));
+      setWarn(
+        parsed === award
+          ? null
+          : `A rung awards between 0 and the ${worth} ${unit(worth)} this question is out of.`,
+      );
+      return;
+    }
+    setWarn(null);
+    setPts(String(parsed));
+    const next = deductionForAward(worth, parsed);
     if (next !== item.deduction) onCommit({ deduction: next });
   };
 
@@ -262,19 +455,19 @@ function CriterionRow({
   };
 
   return (
-    <div className="fv-crit">
+    <div className="fv-crit" style={{ flexWrap: "wrap" }}>
       <span
         className="fv-critpts"
         style={{ display: "flex", alignItems: "center", gap: 3, justifyContent: "flex-end" }}
       >
         <span aria-hidden="true" style={{ color: "var(--fv-muted)" }}>
-          −
+          +
         </span>
         <input
           className="fv-in quiet fv-num"
           style={{ width: 40, padding: "3px 5px", textAlign: "right" }}
-          inputMode="numeric"
-          aria-label={`Points deducted for “${item.description}”`}
+          inputMode="decimal"
+          aria-label={`Points awarded for “${item.description}”`}
           disabled={!canEdit}
           value={pts}
           onChange={(e) => setPts(e.target.value)}
@@ -283,22 +476,32 @@ function CriterionRow({
             if (e.key === "Enter") e.currentTarget.blur();
           }}
         />
-        <span style={{ fontSize: "var(--fv-2xs)", color: "var(--fv-muted)" }}>
-          {unit(item.deduction)}
-        </span>
+        <span style={{ fontSize: "var(--fv-2xs)", color: "var(--fv-muted)" }}>{unit(award)}</span>
       </span>
 
-      <input
+      <textarea
+        ref={box}
         className="fv-in quiet fv-critdesc"
-        style={{ padding: "3px 6px", fontSize: "var(--fv-sm)" }}
-        aria-label="Criterion"
-        placeholder="What loses these points?"
+        style={{
+          padding: "3px 6px",
+          fontSize: "var(--fv-sm)",
+          resize: "none",
+          overflow: "hidden",
+          lineHeight: 1.45,
+          minHeight: 26,
+        }}
+        rows={1}
+        aria-label="What earns these points"
+        placeholder="What earns these points?"
         disabled={!canEdit}
         value={desc}
         onChange={(e) => setDesc(e.target.value)}
         onBlur={commitDesc}
         onKeyDown={(e) => {
-          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            e.currentTarget.blur();
+          }
         }}
       />
 
@@ -313,6 +516,21 @@ function CriterionRow({
         >
           <FIcon name="close" size={14} />
         </button>
+      ) : null}
+
+      {warn ? (
+        <div
+          className="fv-sub"
+          style={{
+            flexBasis: "100%",
+            paddingLeft: 72,
+            fontSize: "var(--fv-2xs)",
+            lineHeight: 1.5,
+            color: "var(--fv-destructive)",
+          }}
+        >
+          {warn}
+        </div>
       ) : null}
     </div>
   );
@@ -538,9 +756,9 @@ export function RubricBuilder({
   onError: (e: unknown) => void;
 }): JSX.Element {
   const [items, setItems] = useState<RubricItem[] | null>(null);
-  const [questions, setQuestions] = useState<ActivityQuestion[] | null>(null);
+  const [questions, setQuestions] = useState<PointedQuestion[] | null>(null);
   const [pending, setPending] = useState<RubricItem | null>(null);
-  const [pendingQ, setPendingQ] = useState<ActivityQuestion | null>(null);
+  const [pendingQ, setPendingQ] = useState<PointedQuestion | null>(null);
   const [cost, setCost] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -595,13 +813,11 @@ export function RubricBuilder({
 
   /** Add a question, or a sub-question of one. */
   const addQ = useCallback(
-    (parent?: ActivityQuestion) => {
+    (parent?: PointedQuestion) => {
       const rows = questions;
       if (!rows) return;
       const taken = rows.map((q) => q.label);
-      const label = parent
-        ? nextSub(baseOf(parent.label) ?? rows.length + 1, taken)
-        : nextTop(taken);
+      const label = parent ? nextSub(parent, taken) : nextTop(taken);
       setBusy(true);
       addQuestion(activity.id, rows, label, parent)
         .then((next) => {
@@ -614,41 +830,82 @@ export function RubricBuilder({
     [activity.id, questions, onChanged, onError],
   );
 
-  const patchQ = useCallback(
-    (q: ActivityQuestion, patch: { label?: string }) => {
+  /**
+   * Rename a question, and take its criteria with it.
+   *
+   * 0026 keys a MARK to the question's id, so renaming cannot lose anyone's
+   * grade. But a criterion still points at its question by LABEL (0012), and
+   * that is the pair that can come apart: GradingScreen offers a grader the
+   * lines whose `question_label` matches the question in front of them, so a
+   * question renamed without its criteria has an empty ladder and the criteria
+   * become strays. Nobody is unmarked and no score moves — but the next
+   * submission graded is graded against nothing, silently.
+   *
+   * Two writes, two tables, and no transaction available from the client. So
+   * the question goes first and, if the criteria fail to follow, its name is
+   * put back: a half-move is the one outcome that must not survive, and the
+   * rename is the reversible half. Returns what is wrong with the name, or
+   * null — the field keeps her typing and shows the reason.
+   */
+  const renameQ = useCallback(
+    (q: PointedQuestion, label: string): string | null => {
       const before = questions;
-      setQuestions((prev) => prev?.map((x) => (x.id === q.id ? { ...x, ...patch } : x)) ?? prev);
-
-      // A renamed question takes its criteria with it: they are addressed by
-      // label, so leaving them behind would strand them under a heading that no
-      // longer exists and quietly stop them being offered while grading.
-      const renamed = patch.label != null && patch.label !== q.label;
-      if (renamed) {
-        setItems((prev) =>
-          prev?.map((it) =>
-            it.question_label === q.label ? { ...it, question_label: patch.label ?? null } : it,
-          ) ?? prev,
-        );
+      const beforeItems = items;
+      // `unique (activity_id, label)` would refuse this as a database error
+      // with nowhere useful to put it, and criteria are filed BY name, so two
+      // questions sharing one is genuinely ambiguous rather than merely untidy.
+      if ((before ?? []).some((x) => x.id !== q.id && x.label === label)) {
+        return `Another question is already called “${label}”. Criteria are filed under a question by name, so two cannot share one.`;
       }
 
+      setQuestions((prev) => prev?.map((x) => (x.id === q.id ? { ...x, label } : x)) ?? prev);
+      setItems((prev) =>
+        prev?.map((it) => (it.question_label === q.label ? { ...it, question_label: label } : it)) ??
+        prev,
+      );
+
       void (async () => {
+        const moving = (beforeItems ?? []).filter((it) => it.question_label === q.label);
         try {
-          await updateQuestion(q.id, patch);
-          if (renamed) {
-            const moving = (before ?? []).length ? items ?? [] : [];
+          await updateQuestion(q.id, { label });
+          try {
+            await Promise.all(moving.map((it) => setRubricQuestion(it.id, label)));
+          } catch (e) {
+            await updateQuestion(q.id, { label: q.label }).catch(() => {});
             await Promise.all(
-              moving
-                .filter((it) => it.question_label === q.label)
-                .map((it) => setRubricQuestion(it.id, patch.label ?? null)),
+              moving.map((it) => setRubricQuestion(it.id, q.label).catch(() => {})),
             );
+            throw e;
           }
         } catch (e) {
           setQuestions(before);
+          setItems(beforeItems);
           onError(e);
         }
       })();
+      return null;
     },
     [questions, items, onError],
+  );
+
+  /**
+   * Set what one question is out of.
+   *
+   * Nothing else moves: not the activity total, not the deductions underneath.
+   * Re-pointing 3 to 5 leaves a stored deduction of 2 awarding +3 where it
+   * awarded +1, and the rungs on screen renumber to say so — rewriting them to
+   * hold the awards still would regrade everyone already marked.
+   */
+  const pointsQ = useCallback(
+    (q: PointedQuestion, points: number | null) => {
+      const before = questions;
+      setQuestions((prev) => prev?.map((x) => (x.id === q.id ? { ...x, points } : x)) ?? prev);
+      setQuestionPoints(q.id, points).catch((e) => {
+        setQuestions(before);
+        onError(e);
+      });
+    },
+    [questions, onError],
   );
 
   // Deleting a criterion cascades its marks and re-scores everyone marked with
@@ -677,7 +934,7 @@ export function RubricBuilder({
   }, [pending, onError]);
 
   /** Deleting a question takes its criteria — and their marks — with it. */
-  const armQ = useCallback((q: ActivityQuestion, own: RubricItem[]) => {
+  const armQ = useCallback((q: PointedQuestion, own: RubricItem[]) => {
     setPendingQ(q);
     setCost(null);
     if (own.length === 0) {
@@ -715,6 +972,13 @@ export function RubricBuilder({
 
   const week = activity.week == null ? "Unscheduled" : `Week ${activity.week}`;
   const total = pointsTotal(activity);
+
+  // 3 + 2 + 3 + 2 + 5 + 5 against the 20 the combo is out of. Finding out these
+  // came to 19 after grading is the whole reason this line is on screen.
+  const tally = useMemo(
+    () => tallyQuestionPoints(activity, questions ?? []),
+    [activity, questions],
+  );
 
   // Marked complete/incomplete, or out of points (0019). Held locally so the
   // switch answers immediately, and reconciled from the row when the parent
@@ -820,8 +1084,8 @@ export function RubricBuilder({
               >
                 <span className="fv-cititle">Out of points</span>
                 <span className="fv-cihint">
-                  Each question carries criteria, and each criterion deducts from the {total} this
-                  is out of.
+                  Each question carries a ladder, and picking a rung while grading awards what it
+                  says out of the {total} this is out of.
                 </span>
               </button>
               <button
@@ -841,6 +1105,34 @@ export function RubricBuilder({
             </div>
           </div>
 
+          {/* Where her questions stand against the activity total. Nothing is
+              rescaled to make them agree — a score still comes off the
+              activity's total, so the gap is reported and she decides which
+              number was wrong. Silent while no question carries points of its
+              own, which is every activity written before 0034. */}
+          {!completion && tally.balance !== "unset" ? (
+            <div
+              className="fv-cirow fv-sub"
+              style={{
+                gap: 8,
+                alignItems: "flex-start",
+                lineHeight: 1.5,
+                borderBottom: "1px solid var(--fv-neutral-200)",
+                color: tally.note ? "var(--fv-amber)" : undefined,
+              }}
+            >
+              {tally.note ? null : (
+                <span style={{ flex: "none", marginTop: 1 }}>
+                  <FIcon name="check" size={14} />
+                </span>
+              )}
+              <span>
+                {tally.note ??
+                  `Your ${tally.set} questions add up to ${tally.declared}, which is what this activity is out of.`}
+              </span>
+            </div>
+          ) : null}
+
           <div className="fv-panebody">
             {items == null || questions == null ? (
               <div className="fv-sub" style={{ padding: 14 }}>
@@ -854,12 +1146,25 @@ export function RubricBuilder({
               </div>
             ) : (
               groups.map((g) => {
+                // What the rungs under this heading are read against. A shared
+                // or stray block has no question, so it is read against the
+                // activity total — the number it has always come off.
+                const own = g.question?.points ?? null;
+                const worth = worthOf(activity, g.question);
+                const top = g.items.length
+                  ? Math.max(...g.items.map((it) => awardForDeduction(worth, it.deduction)))
+                  : null;
                 return (
                   <div className="fv-qblock" key={g.question?.id ?? g.label ?? "shared"}>
                     <QuestionHead
                       group={g}
                       canEdit={canEdit && !busy}
-                      onRename={(label) => g.question && patchQ(g.question, { label })}
+                      scored={!completion}
+                      total={total}
+                      onRename={(label) =>
+                        g.question ? renameQ(g.question, label) : "This block has no question row."
+                      }
+                      onPoints={(points) => g.question && pointsQ(g.question, points)}
                       onSub={() => g.question && addQ(g.question)}
                       onDelete={() => g.question && armQ(g.question, g.items)}
                     />
@@ -887,6 +1192,7 @@ export function RubricBuilder({
                           <CriterionRow
                             key={item.id}
                             item={item}
+                            worth={worth}
                             canEdit={canEdit}
                             onCommit={(patch) => commit(item.id, patch)}
                             onDelete={() => arm(item)}
@@ -894,17 +1200,48 @@ export function RubricBuilder({
                         ))
                     )}
 
-                    {canEdit && !completion ? (
-                      <div className="fv-qfoot">
-                        <button
-                          type="button"
-                          className="fv-btn outline sm"
-                          style={{ height: 26, padding: "0 9px", fontSize: "var(--fv-2xs)" }}
-                          onClick={() => add(g.label)}
-                        >
-                          <FIcon name="add" size={13} />
-                          Add criterion
-                        </button>
+                    {!completion && (canEdit || top != null) ? (
+                      <div
+                        className="fv-qfoot"
+                        style={{ display: "flex", alignItems: "center", gap: 10 }}
+                      >
+                        {canEdit ? (
+                          <button
+                            type="button"
+                            className="fv-btn outline sm"
+                            style={{ height: 26, padding: "0 9px", fontSize: "var(--fv-2xs)" }}
+                            onClick={() => add(g.label)}
+                          >
+                            <FIcon name="add" size={13} />
+                            Add criterion
+                          </button>
+                        ) : null}
+                        <span style={{ flex: 1 }} />
+                        {/* The ladder adding up, where she can see it while
+                            writing it: her top rung has to reach what the
+                            question is out of, or full marks are unreachable
+                            on it and every score comes in low by the gap.
+                            Only a question with points of its own is held to
+                            that — an unpointed one is read against the whole
+                            activity, where a top rung short of the total is
+                            what every rubric written before 0034 looks like. */}
+                        {top != null ? (
+                          <span
+                            className="fv-sub fv-num"
+                            style={{
+                              fontSize: "var(--fv-2xs)",
+                              textAlign: "right",
+                              color:
+                                own != null && top < worth ? "var(--fv-amber)" : undefined,
+                            }}
+                          >
+                            {own == null
+                              ? `Best rung +${top} of the activity's ${worth}`
+                              : top < worth
+                                ? `Best rung +${top} of ${worth} — nothing here awards the full ${worth}`
+                                : `Best rung +${top} of ${worth}`}
+                          </span>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>
@@ -944,7 +1281,7 @@ export function RubricBuilder({
 
       {pendingQ ? (
         <ConfirmDialog
-          title={`Are you sure you'd like to delete question ${pendingQ.label}?`}
+          title={`Are you sure you'd like to delete “${pendingQ.label}”?`}
           body={<>{cost ?? "Checking what would be deleted with it…"}</>}
           confirmLabel="Delete question"
           busy={busy}
