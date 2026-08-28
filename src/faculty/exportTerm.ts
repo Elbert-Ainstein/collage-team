@@ -314,27 +314,43 @@ export interface CheckInGradesInput {
   rows: CheckInGradeRow[];
 }
 
-/**
- * The live check-in, as points per student.
- *
- * There is no Absent column, and that is a decision rather than an oversight:
- * both scales start at 1, so a student who was in the room cannot come out
- * below 2 on a slot that was marked at all. A 0 in this file IS the absence and
- * needs no second column to say so.
- */
-export function checkInCsv(input: CheckInGradesInput): string {
-  const { students, activities, rows } = input;
-  const key = (activityId: string, studentId: string) => `${activityId} ${studentId}`;
-  const scored = new Map(
-    rows.map((r) => [key(r.activityId, r.studentId), checkInPoints(r.slots)] as const),
-  );
+/** One column of the check-in file: an activity, and what it was marked out of. */
+export interface CheckInColumn {
+  activity: Activity;
+  outOf: number;
+}
 
-  const cols = activities
+const checkInKey = (activityId: string, studentId: string) => `${activityId} ${studentId}`;
+
+function checkInScores(input: CheckInGradesInput): Map<string, { score: number; outOf: number }> {
+  return new Map(
+    input.rows.map(
+      (r) => [checkInKey(r.activityId, r.studentId), checkInPoints(r.slots)] as const,
+    ),
+  );
+}
+
+/**
+ * Which activities become columns.
+ *
+ * Exported because the screen offering the download has to know whether a week
+ * holds a check-in BEFORE it writes anything, and it has to ask this function
+ * rather than one of its own. With no columns this file is not empty — it is the
+ * entire roster with a blank Total beside it, which is indistinguishable from
+ * having downloaded some other export, and that is precisely what it got
+ * mistaken for.
+ */
+export function checkInColumns(input: CheckInGradesInput): CheckInColumn[] {
+  const scored = checkInScores(input);
+  return input.activities
     .map((a) => ({
       activity: a,
       // What the best-marked student on this activity was out of. Two teams can
       // be a slot apart mid-term and the column still needs one denominator.
-      outOf: students.reduce((n, s) => Math.max(n, scored.get(key(a.id, s.id))?.outOf ?? 0), 0),
+      outOf: input.students.reduce(
+        (n, s) => Math.max(n, scored.get(checkInKey(a.id, s.id))?.outOf ?? 0),
+        0,
+      ),
     }))
     // A tutorial nobody has marked yet is not a column of zeroes, it is a column
     // that does not exist.
@@ -344,6 +360,20 @@ export function checkInCsv(input: CheckInGradesInput): string {
         (a.activity.week ?? 0) - (b.activity.week ?? 0) ||
         a.activity.position - b.activity.position,
     );
+}
+
+/**
+ * The live check-in, as points per student.
+ *
+ * There is no Absent column, and that is a decision rather than an oversight:
+ * both scales start at 1, so a student who was in the room cannot come out
+ * below 2 on a slot that was marked at all. A 0 in this file IS the absence and
+ * needs no second column to say so.
+ */
+export function checkInCsv(input: CheckInGradesInput): string {
+  const { students } = input;
+  const scored = checkInScores(input);
+  const cols = checkInColumns(input);
 
   const possible = cols.reduce((n, c) => n + c.outOf, 0);
   const header = [
@@ -357,7 +387,7 @@ export function checkInCsv(input: CheckInGradesInput): string {
     .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
     .map((s) => {
       const cells = cols.map((c) => {
-        const got = scored.get(key(c.activity.id, s.id));
+        const got = scored.get(checkInKey(c.activity.id, s.id));
         return got && got.outOf > 0 ? got.score : null;
       });
       const marked = cells.filter((v): v is number => v !== null);

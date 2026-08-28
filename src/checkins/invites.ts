@@ -1,4 +1,5 @@
-// Invite codes: the only way onto a roster (supabase/migrations/0029).
+// Invite codes (supabase/migrations/0029), and below them the invitation an
+// instructor addresses to one person by name (0032).
 //
 // Read the shape of this before using it, because it is not symmetric. LISTING
 // and ROTATING go straight at the table and only work for the course's owner —
@@ -14,6 +15,11 @@
 // meant to be shown as-is. Do not collapse them into "that didn't work"; the
 // third is the case a real student hits when their instructor mistyped their
 // address, and it is the only thing that tells them who to go and ask.
+//
+// A code is still the only thing anyone can PRESENT. The invitations at the
+// bottom of this file are the other direction — offers already waiting for the
+// caller, which they accept or refuse — so nothing there takes a string typed
+// into a box, and nothing there can be aimed at somebody else.
 
 import { requireSupabase } from "@/lib/supabaseClient";
 import { dbError } from "./data";
@@ -100,4 +106,74 @@ export async function rotateInviteCode(courseId: string, kind: InviteKind): Prom
  */
 export function formatInviteCode(code: string): string {
   return code.length === 8 ? `${code.slice(0, 4)}-${code.slice(4)}` : code;
+}
+
+// ---------------------------------------------------------------------------
+// Invitations (supabase/migrations/0032).
+//
+// The other way onto a TF list, and the one that does not need a code. An
+// instructor types an address into her TF roster; that row is an OFFER until
+// the person holding the address signs in and accepts it. Nothing here takes a
+// user id: every one of these three answers about the caller's own address and
+// no other, which is what lets them read a table a TF cannot select from.
+//
+// Read failures are the caller's to swallow, not to show. listMyTFInvitations
+// runs beside the code box on a screen whose whole job is the code box, and an
+// account with no invitations — nearly everyone — must not be told that
+// something went wrong on their behalf.
+
+/** A pending offer to join somebody's course as a TF. One per course. */
+export interface TFInvitation {
+  /** The course_tfs row. Passed back to accept or decline; it is not the authority on either. */
+  invitation_id: string;
+  course_id: string;
+  course_name: string;
+  course_code: string | null;
+  /** The instructor's name, or her address when the account carries no name. */
+  invited_by: string | null;
+  invited_at: string;
+}
+
+/** Every pending invitation addressed to the signed-in account. Empty is the normal answer. */
+export async function listMyTFInvitations(): Promise<TFInvitation[]> {
+  const { data, error } = await db().rpc("my_tf_invitations");
+  if (error) throw dbError(error);
+  return (data as TFInvitation[] | null) ?? [];
+}
+
+/**
+ * Accept one, and get back the course in the same shape redeeming a code
+ * returns — the caller has one thing to do with "you are now on this course"
+ * however the person got there.
+ */
+export async function acceptTFInvitation(invitationId: string): Promise<JoinedCourse> {
+  const { data, error } = await db().rpc("accept_tf_invitation", { invitation_id: invitationId });
+  if (error) throw dbError(error);
+  const rows = (data as JoinedCourse[] | null) ?? [];
+  if (!rows[0]) throw new Error("That was accepted but the course did not come back. Reload and check.");
+  return rows[0];
+}
+
+/** Stop being asked. The instructor's roster row is left exactly as it was. */
+export async function declineTFInvitation(invitationId: string): Promise<void> {
+  const { error } = await db().rpc("decline_tf_invitation", { invitation_id: invitationId });
+  if (error) throw dbError(error);
+}
+
+/**
+ * Which of these TF rows have been declined — for the instructor looking at her
+ * own list, so a row nobody is coming to stops reading as one she is waiting on.
+ *
+ * RLS on tf_invitation_declines answers only about courses she owns, so the
+ * `in` is a filter and not the security. Skipped entirely for an empty list
+ * rather than posting a query that cannot match anything.
+ */
+export async function listDeclinedTFInvitations(tfIds: string[]): Promise<Set<string>> {
+  if (!tfIds.length) return new Set();
+  const { data, error } = await db()
+    .from("tf_invitation_declines")
+    .select("course_tf_id")
+    .in("course_tf_id", tfIds);
+  if (error) throw dbError(error);
+  return new Set(((data as { course_tf_id: string }[] | null) ?? []).map((d) => d.course_tf_id));
 }

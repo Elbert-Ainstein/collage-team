@@ -382,7 +382,9 @@ function SignIn({
           {mode === "in"
             ? "Your sessions, rosters and grades are private to your account."
             : mode === "up"
-              ? "Your name and email go on your instructor's roster when you enter their class code."
+              ? pick === "teach"
+                ? "Your name is what students see on the courses you set up."
+                : "Your name and email go on your instructor's roster when you enter their class code."
               : "We'll email you a link that lets you set a new password."}
         </div>
 
@@ -444,7 +446,12 @@ function SignIn({
               {/* Required, because this is the name that goes on the roster —
                   0030 reads profiles.full_name and only falls back to the email
                   address, and there is no rename-a-student screen anywhere in
-                  the app for Kelly to fix it with afterwards. */}
+                  the app for Kelly to fix it with afterwards.
+
+                  The placeholder follows the fork above, because on the teaching
+                  side the person's instructor is nobody: it asked someone
+                  standing up their own course how their instructor should see
+                  them. Same name, opposite end of it. */}
               <input
                 className="t-in"
                 type="text"
@@ -453,7 +460,11 @@ function SignIn({
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
-                placeholder="How your instructor should see you"
+                placeholder={
+                  pick === "teach"
+                    ? "How your students should see you"
+                    : "How your instructor should see you"
+                }
               />
             </label>
           )}
@@ -461,6 +472,9 @@ function SignIn({
           {!sent && (
             <label className="t-fld">
               Email
+              {/* Not college.harvard.edu: that address belongs to undergraduates,
+                  and this field is the same field for the person teaching the
+                  course. The placeholder only has to show the shape. */}
               <input
                 className="t-in"
                 type="email"
@@ -468,7 +482,7 @@ function SignIn({
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@college.harvard.edu"
+                placeholder="you@harvard.edu"
               />
             </label>
           )}

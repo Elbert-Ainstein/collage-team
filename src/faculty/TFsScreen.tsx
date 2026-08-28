@@ -5,11 +5,20 @@
 //
 // The permissions are course-wide, never per person — they live on the course
 // row, so every TF on AP50 gets the same two answers.
+//
+// ADDING SOMEBODY HERE IS AN INVITATION, not an enrolment (0032). The row is
+// real and it is hers, but it carries no account until the person holding that
+// address signs in and accepts it. Which means every row on this list is in one
+// of three states and she has to be able to tell them apart: joined, waiting on
+// a person who has not answered, or turned down — because the last two look
+// identical from here otherwise, and the difference is whether there is anybody
+// to wait for.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { isSupportedRosterFile, parseRoster } from "@/checkins/rosterImport";
 import { removeStudentWithStorage } from "@/checkins/purge";
 import type { CourseTF } from "@/checkins/types";
+import { listDeclinedTFInvitations } from "@/checkins/invites";
 import { addTF, addTFs, countWorkForStudent, removeTF, setTFPermissions } from "./facultyData";
 import { InviteCodeCard } from "./InviteCodeCard";
 import { FAvatar, FIcon } from "./icons";
@@ -77,6 +86,44 @@ export function TFsScreen(props: {
     [tfs],
   );
 
+  /**
+   * The rows nobody has answered yet, and which of those were turned down.
+   *
+   * A separate read rather than a column on the TF row: a decline is the
+   * invited person's decision and they cannot write to Kelly's roster, so it is
+   * recorded beside it (0032) and RLS answers only for courses she owns. Keyed
+   * on the id list rather than on `tfs` so a permission toggle, which reloads
+   * the whole of FacultyData, does not send the query again.
+   *
+   * Silent on failure. This decorates a list that is already on screen and is
+   * worth nothing if it costs the screen — including on a database where 0032
+   * has not been run.
+   */
+  const pendingKey = useMemo(
+    () =>
+      tfs
+        .filter((t) => !t.user_id && t.email)
+        .map((t) => t.id)
+        .join(","),
+    [tfs],
+  );
+  const [declined, setDeclined] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!pendingKey) {
+      setDeclined(new Set());
+      return;
+    }
+    let alive = true;
+    listDeclinedTFInvitations(pendingKey.split(","))
+      .then((s) => {
+        if (alive) setDeclined(s);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [pendingKey]);
+
   const fail = (e: unknown) => {
     setError(String((e as Error)?.message ?? e));
     onError(e);
@@ -141,7 +188,9 @@ export function TFsScreen(props: {
 
       const skipped = parsed.students.length - people.length;
       const parts = [
-        people.length ? `Added ${plural(people.length, "TF", "TFs")}.` : "No new TFs in that file.",
+        people.length
+          ? `Invited ${plural(people.length, "TF", "TFs")} — each joins when they accept.`
+          : "No new TFs in that file.",
         skipped ? `${skipped} already on the roster.` : "",
         ...cleared,
         ...parsed.warnings,
@@ -195,7 +244,12 @@ export function TFsScreen(props: {
       const cleared = await clearStudentRows([one.email]);
       setEmail("");
       setNote(
-        [one.email ? `Added ${name} (${one.email}).` : `Added ${name}.`, ...cleared].join(" "),
+        [
+          one.email
+            ? `Invited ${name} (${one.email}). They see it the next time they sign in and join when they accept.`
+            : `Added ${name}. Without an address there is nothing to invite — remove the row and add them by email.`,
+          ...cleared,
+        ].join(" "),
       );
       onChanged();
     } catch (e) {
@@ -348,19 +402,23 @@ export function TFsScreen(props: {
                     </span>
                   </span>
 
-                  {/* Access arrives when they sign up under this address, not
-                      when they are added. Without saying so, an instructor has
-                      no way to tell why a TF sees nothing. */}
+                  {/* Adding them does not let them in; accepting does. Without
+                      saying so, an instructor has no way to tell why a TF sees
+                      nothing — and no way to tell "has not got round to it" from
+                      "said no", which are the same silence and opposite
+                      problems. */}
                   {tf.user_id ? null : (
                     <span
                       className="fv-badge"
                       title={
-                        tf.email
-                          ? `Waiting for ${tf.email} to sign up. Access starts then.`
-                          : "Add an address so they can sign in."
+                        !tf.email
+                          ? "There is no address here to invite. Remove this row and add them by email."
+                          : declined.has(tf.id)
+                            ? `${tf.email} turned this down. Remove the row and add them again to ask a second time, or send them the code above.`
+                            : `Invited. ${tf.email} sees it the next time they sign in, and joins when they accept — they do not need the code above.`
                       }
                     >
-                      not signed in yet
+                      {!tf.email ? "no address" : declined.has(tf.id) ? "declined" : "invited"}
                     </span>
                   )}
 

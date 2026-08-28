@@ -29,6 +29,7 @@ import type { Student } from "@/checkins/types";
 import {
   canvasColumns,
   canvasCsv,
+  checkInColumns,
   checkInCsv,
   downloadCsv,
   safeFilename,
@@ -441,10 +442,24 @@ export function TeamsScreen(props: {
           if (slots.length) rows.push({ activityId: a.id, studentId: s.id, slots });
         }
       });
-      downloadCsv(
-        named(`week-${gradeWeek}-check-ins`),
-        checkInCsv({ students: roster, activities: weekActivities, rows }),
-      );
+      // Refused rather than written when the week holds nothing. A check-in file
+      // with no columns still carries every student, a blank Total and nothing
+      // else — it looks like some other export rather than like an empty one,
+      // and reading it as "the wrong CSV" is the correct reading of it. Asked of
+      // checkInColumns and not of `rows`: a row whose slots were opened but
+      // never scored is out of nothing, so it makes no column, and this has to
+      // agree with the file or it is the same bug one step later.
+      const forExport = { students: roster, activities: weekActivities, rows };
+      if (!checkInColumns(forExport).length) {
+        setExportProblem(
+          `Nothing has been marked on the week ${gradeWeek} check-in, so there is no file to ` +
+            `write and nothing was downloaded. Check the week above, and that these are the ` +
+            `teams that were in the room — marks belong to the teams they were given to, and ` +
+            `re-forming teams deletes them.`,
+        );
+        return;
+      }
+      downloadCsv(named(`week-${gradeWeek}-check-ins`), checkInCsv(forExport));
     } catch (e) {
       setExportProblem(String((e as Error)?.message ?? e));
     } finally {
@@ -586,7 +601,7 @@ export function TeamsScreen(props: {
                 onClick={takeCanvas}
               >
                 <FIcon name="fileUpload" size={15} />
-                Canvas points
+                Canvas points (CSV)
               </button>
 
               {/* A TF without the check-in permission can read no tutorial_marks
@@ -599,7 +614,8 @@ export function TeamsScreen(props: {
                   disabled={exporting || roster.length === 0}
                   onClick={() => void takeCheckIns()}
                 >
-                  {exporting ? "Reading the sheet…" : "Check-in scores"}
+                  <FIcon name="fileUpload" size={15} />
+                  {exporting ? "Reading the sheet…" : "Check-in scores (CSV)"}
                 </button>
               ) : null}
             </div>

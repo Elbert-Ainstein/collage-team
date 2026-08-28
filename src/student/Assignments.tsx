@@ -133,18 +133,28 @@ function inFilter(f: Filter, s: AssignmentStatus): boolean {
 // ------------------------------------------------------------- derivations
 
 /**
- * "Thu 9:00am". Fixed locale so the server and the client agree. Rows always
- * sit under a week heading carrying the date range, so the weekday is enough.
+ * "Thu Oct 9, 9:00am". Fixed locale so the server and the client agree.
+ *
+ * This printed the weekday alone, on the grounds that a row sits under a week
+ * heading carrying the date range. It does not: dates_label is optional and
+ * mostly unset, so the heading is usually a bare "Week 9" — and the same string
+ * is printed on the detail card's due badge and on every "Submitted"/"Handed in"
+ * stamp, none of which have a heading above them at all. A student looking at
+ * week 9 could not tell which Thursday. Comma rather than "·" between the date
+ * and the time: dueLine already spends "·" separating two deadlines, and one
+ * separator doing both jobs turns "Due X · Y · discussion Z · W" into a list of
+ * four things.
  */
 function fmtWhen(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
   const weekday = d.toLocaleDateString("en-US", { weekday: "short" });
+  const day = d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   const h24 = d.getHours();
   const suffix = h24 >= 12 ? "pm" : "am";
   const h = h24 % 12 === 0 ? 12 : h24 % 12;
-  return `${weekday} ${h}:${String(d.getMinutes()).padStart(2, "0")}${suffix}`;
+  return `${weekday} ${day}, ${h}:${String(d.getMinutes()).padStart(2, "0")}${suffix}`;
 }
 
 /**

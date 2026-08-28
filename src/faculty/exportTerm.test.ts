@@ -4,6 +4,7 @@ import type { StudentMark } from "@/checkins/tutorial";
 import type { Activity, CheckIn, Student } from "@/checkins/types";
 import {
   canvasCsv,
+  checkInColumns,
   checkInCsv,
   manifestCsv,
   safeFilename,
@@ -177,9 +178,19 @@ const CHECK_INS = [
 
 const cells = (csv: string, row: number) => csv.trim().split("\r\n")[row].split(",");
 
-describe("canvasCsv", () => {
-  const kim = student("s1", "Kim", 0);
+const slot = (n: number, accuracy: number | null, discussion: number | null, absent = false): StudentMark => ({
+  slot: n,
+  student_id: "s1",
+  absent,
+  presenter_id: null,
+  accuracy,
+  discussion,
+});
 
+const kim = student("s1", "Kim", 0);
+const sam = student("s2", "Sam", 1);
+
+describe("canvasCsv", () => {
   it("writes the five columns Kelly listed, in her order", () => {
     const head = cells(canvasCsv({ students: [kim], activities: WEEK, checkIns: CHECK_INS, results: [] }), 0);
     expect(head).toEqual([
@@ -280,17 +291,6 @@ describe("canvasCsv", () => {
 });
 
 describe("checkInCsv", () => {
-  const kim = student("s1", "Kim", 0);
-  const sam = student("s2", "Sam", 1);
-  const slot = (n: number, accuracy: number | null, discussion: number | null, absent = false): StudentMark => ({
-    slot: n,
-    student_id: "s1",
-    absent,
-    presenter_id: null,
-    accuracy,
-    discussion,
-  });
-
   it("scores both slots out of twenty", () => {
     const csv = checkInCsv({
       students: [kim],
@@ -343,5 +343,60 @@ describe("checkInCsv", () => {
       rows: [{ activityId: "a-tut", studentId: "s1", slots: [slot(1, 4, 5)] }],
     });
     expect(cells(csv, 2)).toEqual(["Sam", "s2@example.edu", "", ""]);
+  });
+
+  // Why TeamsScreen refuses to download this rather than writing it. With no
+  // columns the file is NOT empty — it is the whole roster with a blank Total
+  // beside every name, which opens looking like some other export entirely.
+  // That is the file that got reported as "the wrong CSV", and it is pinned
+  // here so nobody later decides an empty download is harmless.
+  it("with nothing marked, writes the whole roster and not one score", () => {
+    const csv = checkInCsv({ students: [kim, sam], activities: WEEK, rows: [] });
+    expect(cells(csv, 0)).toEqual(["Student", "Email", "Total (0)"]);
+    expect(cells(csv, 1)).toEqual(["Kim", "s1@example.edu", ""]);
+    expect(csv.trim().split("\r\n")).toHaveLength(3);
+  });
+});
+
+// The question the screen asks before it writes anything. It has to be this
+// function and not a second opinion: a check the screen computes for itself is
+// free to disagree with the file, which is the same bug one step later.
+describe("checkInColumns", () => {
+  it("finds nothing in a week nobody has checked in on", () => {
+    expect(checkInColumns({ students: [kim, sam], activities: WEEK, rows: [] })).toEqual([]);
+  });
+
+  // `rows` is not empty here and there is still nothing to export: a presenter
+  // was picked and the session moved on, so studentMarks returns slots that are
+  // out of nothing. Asking "did we get any rows" would have written the file.
+  it("finds nothing when the slots exist but no score was given", () => {
+    const cols = checkInColumns({
+      students: [kim],
+      activities: [TUTORIAL],
+      rows: [{ activityId: "a-tut", studentId: "s1", slots: [slot(1, null, null)] }],
+    });
+    expect(cols).toEqual([]);
+  });
+
+  it("names exactly the columns the file goes on to write", () => {
+    const input = {
+      students: [kim, sam],
+      activities: [TUTORIAL, CHALLENGE],
+      rows: [{ activityId: "a-tut", studentId: "s1", slots: [slot(1, 4, 5)] }],
+    };
+    expect(checkInColumns(input).map((c) => c.activity.id)).toEqual(["a-tut"]);
+    expect(cells(checkInCsv(input), 0)).toEqual(["Student", "Email", "Total (10)", "Tutorial (10)"]);
+  });
+
+  it("reports the best-marked student's denominator, not the first one's", () => {
+    const cols = checkInColumns({
+      students: [kim, sam],
+      activities: [TUTORIAL],
+      rows: [
+        { activityId: "a-tut", studentId: "s1", slots: [slot(1, 4, 5)] },
+        { activityId: "a-tut", studentId: "s2", slots: [slot(1, 4, 5), slot(2, 3, 3)] },
+      ],
+    });
+    expect(cols).toEqual([{ activity: TUTORIAL, outOf: 20 }]);
   });
 });

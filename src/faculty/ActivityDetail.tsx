@@ -77,12 +77,18 @@ function fmtTime(d: Date): string {
   return `${h % 12 === 0 ? 12 : h % 12}:${pad2(d.getMinutes())}${suffix}`;
 }
 
-/** "Sun 11:47pm" — narrow enough to sit in the list column. */
+/**
+ * "Mar 3, 11:47pm" — narrow enough to sit in the list column.
+ *
+ * The date rather than the weekday it used to name. Nothing on this list stays
+ * within a week of today: by week 9 "Fri" is one of nine of them, and the row
+ * anyone is squinting at is a late hand-in they are deciding what to do about.
+ */
 function fmtStamp(iso: string | null): string | null {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  return `${d.toLocaleDateString(undefined, { weekday: "short" })} ${fmtTime(d)}`;
+  return `${d.toLocaleDateString(undefined, { month: "short", day: "numeric" })}, ${fmtTime(d)}`;
 }
 
 /**
@@ -144,37 +150,6 @@ function visibilityOf(a: Activity): { text: string; open: boolean } {
   return isOpenToStudents(a)
     ? { text: "Visible to students", open: true }
     : { text: "Not visible to students", open: false };
-}
-
-/**
- * The blurb shown when an activity carries no source text of its own.
- *
- * Per type rather than per scope: scope decides who is marked, but what a
- * faculty member needs here is how this kind of work is done and how it earns
- * its mark, and that is a property of the type.
- */
-/**
- * The stand-in blurb for an activity with no brief.
- *
- * Says how the work is SHAPED, never how it is marked. It used to assert the
- * marking mode from the type — "marked for completion, not for points" on a
- * Challenge — which was true when the type decided that and became a
- * contradiction the moment 0019 made it a choice: an instructor could set a
- * Challenge to points and this paragraph would go on telling students the
- * opposite. Marking is stated once, by the badge that reads the column.
- */
-function describe(a: Activity): string {
-  const t = a.title.trim().toLowerCase();
-  switch (a.type) {
-    case "combo":
-      return `Tutorial and challenge questions on ${t}. Students work alone and hand in before the deadline.`;
-    case "skills":
-      return `Timed skills check on ${t}. One attempt each, worked individually.`;
-    case "challenge":
-      return `Problem set on ${t}. Students work it alone first, then bring their answers to the team discussion.`;
-    case "amplify":
-      return `Team activity on ${t}. Worked away from Collage and marked once per team at the check-in, so there is one mark per team rather than one per student.`;
-  }
 }
 
 /**
@@ -297,7 +272,7 @@ export function ActivityDetail(props: {
 
   // Whitespace-only source text is not a description; the editor writes null for
   // it, but rows written elsewhere can still carry "".
-  const blurb = activity.source_text?.trim() || describe(activity);
+  const brief = activity.source_text?.trim() ?? "";
 
   const { graded, submitted, missing } = useMemo(() => {
     // A `both` activity owns two check-ins; its individual half is the one the
@@ -744,7 +719,16 @@ export function ActivityDetail(props: {
 
           {/* The description is the same paragraph in both states — same size,
               same measure, same place on the page. Editing just puts a caret
-              in it. */}
+              in it.
+
+              An activity with no brief SAYS so. This slot used to print a
+              sentence generated from the type and the title, in the same face
+              and measure as written prose, so an activity nobody had described
+              looked described — and pressing Edit opened a box holding the
+              nothing that was really there, which reads as the description
+              having been wiped. That sentence was never on a student's screen
+              either: the student side stopped inventing one for the same
+              reason. */}
           {editing ? (
             <textarea
               id="fv-ed-desc"
@@ -753,18 +737,28 @@ export function ActivityDetail(props: {
               style={{ marginTop: 20, maxWidth: "64ch" }}
               rows={2}
               aria-label="Description"
-              // Not the generated blurb as a ghost: it is built from the title,
-              // so on a new activity it would read "…on untitled activity".
-              placeholder="Describe what they do — or leave it empty for the standard description for this type."
+              placeholder="Describe what they do. Leave it empty and students see no description."
               value={desc}
               onChange={(e) => setDesc(e.target.value)}
             />
-          ) : (
+          ) : brief ? (
             <p style={{ margin: "20px 0 0", fontSize: 16, lineHeight: 1.65, maxWidth: "64ch" }}>
               {/* Same renderer the class reads it through, so a link that works
                   here works there and one that was refused is visibly dead to
                   the only person who can fix it. */}
-              <BriefText text={blurb} />
+              <BriefText text={brief} />
+            </p>
+          ) : (
+            <p
+              style={{
+                margin: "20px 0 0",
+                fontSize: 16,
+                lineHeight: 1.65,
+                maxWidth: "64ch",
+                color: "var(--fv-muted)",
+              }}
+            >
+              No description yet — students see a line saying you haven&rsquo;t written one.
             </p>
           )}
 

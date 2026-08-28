@@ -9,7 +9,14 @@ import {
   type Assignment,
   type Enrolment,
 } from "@/checkins/studentData";
-import { redeemInviteCode, type JoinedCourse } from "@/checkins/invites";
+import {
+  acceptTFInvitation,
+  declineTFInvitation,
+  listMyTFInvitations,
+  redeemInviteCode,
+  type JoinedCourse,
+  type TFInvitation,
+} from "@/checkins/invites";
 import { initials, tintFor } from "@/checkins/data";
 import { SCOPE_OF, type Student } from "@/checkins/types";
 import { SIcon } from "./icons";
@@ -261,6 +268,14 @@ export function JoinScreen({ children }: { children: React.ReactNode }) {
  * person to two different places — back to the board, or back to whoever handed
  * it out — and folding them into "that didn't work" would leave someone
  * retyping a code that was never the problem.
+ *
+ * INVITATIONS SIT ABOVE THE BOX, and this is the screen they have to sit on. A
+ * teaching fellow an instructor added by typing their address has no code — she
+ * never sent one, because typing the address used to BE the invite — and with
+ * nothing to their name they land here, in the student app, looking at the one
+ * door they cannot open. So the offer waiting for them goes first and the code
+ * box second: for the person who has one, the code box is the wrong half of the
+ * screen.
  */
 export function JoinPanel({
   account,
@@ -278,8 +293,28 @@ export function JoinPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [joined, setJoined] = useState<JoinedCourse | null>(null);
+  const [invitations, setInvitations] = useState<TFInvitation[]>([]);
+  /** Kept apart from `error`, which belongs to the code field further down the page. */
+  const [inviteError, setInviteError] = useState<string | null>(null);
+  const [declined, setDeclined] = useState<TFInvitation | null>(null);
   const fieldId = useId();
   const noteId = useId();
+
+  // What is already waiting for this account. Failure is swallowed on purpose:
+  // nearly every person who sees this screen has no invitation, so an empty
+  // list and a query that did not come back look the same to them, and neither
+  // is a reason to put a database error above the box they came here to use.
+  useEffect(() => {
+    let alive = true;
+    listMyTFInvitations()
+      .then((list) => {
+        if (alive) setInvitations(list);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // A code can arrive in a link (?join=…). Prefill it, and say where it came
   // from so the filled box is not a mystery — but never redeem on load. A link
@@ -295,6 +330,43 @@ export function JoinPanel({
     setCode(linked);
     setFromLink(true);
   }, []);
+
+  /**
+   * Take an invitation. It ends the same way redeeming a code does — same
+   * confirmation card, same handoff — because to the person pressing it these
+   * are one event with two doors, and the router downstream cannot tell them
+   * apart either.
+   */
+  const accept = async (inv: TFInvitation) => {
+    if (busy) return;
+    setBusy(true);
+    setInviteError(null);
+    try {
+      const j = await acceptTFInvitation(inv.invitation_id);
+      setJoined(j);
+      await onJoined(j);
+    } catch (err: unknown) {
+      setInviteError(String((err as Error)?.message ?? err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /** Drops it from the list here and stops it coming back. Their row on the instructor's list is untouched. */
+  const decline = async (inv: TFInvitation) => {
+    if (busy) return;
+    setBusy(true);
+    setInviteError(null);
+    try {
+      await declineTFInvitation(inv.invitation_id);
+      setInvitations((list) => list.filter((i) => i.invitation_id !== inv.invitation_id));
+      setDeclined(inv);
+    } catch (err: unknown) {
+      setInviteError(String((err as Error)?.message ?? err));
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -346,10 +418,13 @@ export function JoinPanel({
   // than a retype. There is no student equivalent any more: a student code that
   // is live cannot be refused for who is holding it.
 
-  return (
-    <form className="sv-card" style={{ maxWidth: 620 }} onSubmit={submit}>
-      <div className="sv-h1" style={{ fontSize: "var(--text-xl)" }}>
-        Join your course
+  const invitationCards = invitations.map((inv) => (
+    <div key={inv.invitation_id} className="sv-card" style={{ maxWidth: 620, marginBottom: 14 }}>
+      <div className="sv-eyebrow">Invitation</div>
+      <div className="sv-h1" style={{ fontSize: "var(--text-xl)", marginTop: 6 }}>
+        {inv.invited_by ? `${inv.invited_by} invited you` : "You have been invited"} to be a
+        teaching fellow on {inv.course_name}
+        {inv.course_code ? ` · ${inv.course_code}` : ""}
       </div>
       <p
         style={{
@@ -360,91 +435,160 @@ export function JoinPanel({
           maxWidth: "62ch",
         }}
       >
-        Your instructor hands out a class code — eight characters, on the board or in an email.
-        Entering it puts you on their roster. There is no list you have to be on first.
+        Accepting opens their course for you — the roster, and the marking and check-ins
+        they have turned on. You&rsquo;ll be listed under{" "}
+        <strong style={{ color: "var(--navy)" }}>{account}</strong>. Nothing happens until you
+        press it.
       </p>
-      <p id={noteId} className="sv-sub" style={{ lineHeight: 1.6, marginTop: 6, maxWidth: "62ch" }}>
-        You&rsquo;ll appear on the roster under the name and address on this account. You&rsquo;re
-        signed in as <strong style={{ color: "var(--navy)" }}>{account}</strong>.
-      </p>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+        <button
+          className="sv-btn primary"
+          type="button"
+          disabled={busy}
+          onClick={() => void accept(inv)}
+        >
+          Accept
+        </button>
+        <button
+          className="sv-btn outline"
+          type="button"
+          disabled={busy}
+          onClick={() => void decline(inv)}
+        >
+          Decline
+        </button>
+      </div>
+    </div>
+  ));
 
-      <label
-        htmlFor={fieldId}
-        className="sv-eyebrow"
-        style={{ display: "block", marginTop: 16, marginBottom: 6 }}
-      >
-        Class code
-      </label>
-      {/* Typed on a phone, in a hurry, off a whiteboard. The alphabet has
-          letters AND digits so a numeric keypad would be the wrong keyboard;
-          autocorrect and spellcheck would try to make eight consonants into a
-          word; autocapitalize costs nothing, since the database upper-cases
-          what arrives either way. */}
-      <input
-        id={fieldId}
-        inputMode="text"
-        autoCapitalize="characters"
-        autoCorrect="off"
-        spellCheck={false}
-        autoComplete="off"
-        enterKeyHint="go"
-        aria-describedby={noteId}
-        value={code}
-        onChange={(e) => setCode(e.target.value)}
-        disabled={busy}
-        placeholder="ABCD-EFGH"
-        style={{
-          width: "100%",
-          maxWidth: 320,
-          padding: "11px 13px",
-          border: "1px solid var(--neutral-200)",
-          borderRadius: "var(--radius-md)",
-          background: "var(--cream-100)",
-          color: "var(--navy)",
-          font: "inherit",
-          fontFamily: "var(--font-mono)",
-          fontSize: "var(--text-lg)",
-          letterSpacing: "0.14em",
-          // Display only. Upper-casing the VALUE on every keystroke moves the
-          // caret to the end on some phone keyboards, which makes fixing the
-          // third character of eight a fight.
-          textTransform: "uppercase",
-        }}
-      />
+  const invitationNote =
+    inviteError || declined ? (
+      <div className="sv-card" style={{ maxWidth: 620, marginBottom: 14 }}>
+        {inviteError ? (
+          <p
+            role="alert"
+            style={{ fontSize: "var(--text-sm)", color: "var(--amber-700)", lineHeight: 1.6 }}
+          >
+            {inviteError}
+          </p>
+        ) : null}
+        {/* Declining is not a door closing. The TF code still works, and the
+            person who added them is the one who can hand it over — so name
+            them, rather than leaving "you won't be asked again" as the last
+            word to somebody who has just realised they pressed the wrong one. */}
+        {declined ? (
+          <p className="sv-sub" style={{ lineHeight: 1.6, maxWidth: "62ch" }}>
+            You turned down {declined.course_name}, and won&rsquo;t be asked again.{" "}
+            {declined.invited_by ?? "Whoever added you"} can send you the teaching fellow code if
+            it was meant for you.
+          </p>
+        ) : null}
+      </div>
+    ) : null;
 
-      {fromLink && (
-        <p className="sv-sub" style={{ marginTop: 8, maxWidth: "62ch" }}>
-          This came from the link you opened. Check it matches the code you were given, then join.
-        </p>
-      )}
-
-      {error && (
+  return (
+    <>
+      {invitationCards}
+      {invitationNote}
+      <form className="sv-card" style={{ maxWidth: 620 }} onSubmit={submit}>
+        <div className="sv-h1" style={{ fontSize: "var(--text-xl)" }}>
+          Join your course
+        </div>
         <p
-          role="alert"
           style={{
             fontSize: "var(--text-sm)",
-            color: "var(--amber-700)",
+            color: "var(--muted-foreground)",
             lineHeight: 1.6,
-            marginTop: 12,
+            marginTop: 8,
             maxWidth: "62ch",
           }}
         >
-          {error}
-
+          Your instructor hands out a class code — eight characters, on the board or in an email.
+          Entering it puts you on their roster. There is no list you have to be on first.
         </p>
-      )}
+        <p id={noteId} className="sv-sub" style={{ lineHeight: 1.6, marginTop: 6, maxWidth: "62ch" }}>
+          You&rsquo;ll appear on the roster under the name and address on this account. You&rsquo;re
+          signed in as <strong style={{ color: "var(--navy)" }}>{account}</strong>.
+        </p>
 
-      <button
-        className="sv-btn primary"
-        type="submit"
-        style={{ marginTop: 16 }}
-        disabled={busy || !code.trim()}
-      >
-        {busy ? "Joining…" : "Join course"}
-      </button>
+        <label
+          htmlFor={fieldId}
+          className="sv-eyebrow"
+          style={{ display: "block", marginTop: 16, marginBottom: 6 }}
+        >
+          Class code
+        </label>
+        {/* Typed on a phone, in a hurry, off a whiteboard. The alphabet has
+            letters AND digits so a numeric keypad would be the wrong keyboard;
+            autocorrect and spellcheck would try to make eight consonants into a
+            word; autocapitalize costs nothing, since the database upper-cases
+            what arrives either way. */}
+        <input
+          id={fieldId}
+          inputMode="text"
+          autoCapitalize="characters"
+          autoCorrect="off"
+          spellCheck={false}
+          autoComplete="off"
+          enterKeyHint="go"
+          aria-describedby={noteId}
+          value={code}
+          onChange={(e) => setCode(e.target.value)}
+          disabled={busy}
+          placeholder="ABCD-EFGH"
+          style={{
+            width: "100%",
+            maxWidth: 320,
+            padding: "11px 13px",
+            border: "1px solid var(--neutral-200)",
+            borderRadius: "var(--radius-md)",
+            background: "var(--cream-100)",
+            color: "var(--navy)",
+            font: "inherit",
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--text-lg)",
+            letterSpacing: "0.14em",
+            // Display only. Upper-casing the VALUE on every keystroke moves the
+            // caret to the end on some phone keyboards, which makes fixing the
+            // third character of eight a fight.
+            textTransform: "uppercase",
+          }}
+        />
 
-      {footer}
-    </form>
+        {fromLink && (
+          <p className="sv-sub" style={{ marginTop: 8, maxWidth: "62ch" }}>
+            This came from the link you opened. Check it matches the code you were given, then join.
+          </p>
+        )}
+
+        {error && (
+          <p
+            role="alert"
+            style={{
+              fontSize: "var(--text-sm)",
+              color: "var(--amber-700)",
+              lineHeight: 1.6,
+              marginTop: 12,
+              maxWidth: "62ch",
+            }}
+          >
+            {error}
+
+          </p>
+        )}
+
+        <button
+          className="sv-btn primary"
+          type="submit"
+          style={{ marginTop: 16 }}
+          disabled={busy || !code.trim()}
+        >
+          {busy ? "Joining…" : "Join course"}
+        </button>
+
+        {footer}
+      </form>
+    </>
   );
 }
 
@@ -895,9 +1039,15 @@ export function StudentApp({
       <JoinScreen>
         <JoinPanel
           account={account}
-          onJoined={async () => {
+          onJoined={async (j) => {
             await load();
             setJoining(false);
+            // A TF code, or an invitation accepted from this panel, makes the
+            // account staff on a course this app has nothing to show for. The
+            // student view they came from is still theirs, so nothing is
+            // reloaded out from under them — but the router has to be asked
+            // again, or the press appears to have done nothing at all.
+            if (j.kind === "tf") onRerouted?.();
           }}
           footer={
             <div style={{ marginTop: 18, paddingTop: 14, borderTop: "1px solid var(--neutral-200)" }}>
