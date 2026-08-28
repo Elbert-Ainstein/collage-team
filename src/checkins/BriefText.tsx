@@ -96,7 +96,13 @@ function splitTail(raw: string): [url: string, tail: string] {
  * same way the browser will. Ask the parser what the protocol is, then check it
  * against the two we allow.
  */
-function safeHref(raw: string): string | null {
+/**
+ * The security boundary of this file, and the reason it is exported: this text
+ * is written by faculty and rendered to eighty students, and the ONE thing that
+ * must never happen is a javascript: or data: URL becoming a live link. That is
+ * a claim worth a test rather than a comment.
+ */
+export function safeHref(raw: string): string | null {
   // The one completion made for anyone: a bare www. is a URL to a person and
   // half a URL to the parser, and https is the only scheme it gets promoted to.
   const candidate = /^www\./i.test(raw) ? `https://${raw}` : raw;

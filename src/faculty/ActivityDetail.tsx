@@ -27,6 +27,7 @@ import { countWorkForActivity, ensureCheckIn, setActivityPoints } from "./facult
 import { pointsLabel, nextPositionIn, pointsTotal, questionCount, questionsFor, statFor } from "./model";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { FAvatar, FIcon } from "./icons";
+import { linkToActivity } from "./FacultyApp";
 import type { FacultyData } from "./FacultyApp";
 import { ActivityTeamPanel } from "./ActivityTeamPanel";
 import { NEW_ACTIVITY_STEPS, Steps } from "./Steps";
@@ -407,6 +408,22 @@ export function ActivityDetail(props: {
   // afterwards without it.
   const [week, setWeek] = useState<number | null>(activity.week);
   const [visBusy, setVisBusy] = useState(false);
+  // Says so on the button for a beat. window.alert is suppressed here and a
+  // toast would be a whole mechanism for one word.
+  const [copied, setCopied] = useState(false);
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(linkToActivity(activity.id, data.course.id));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch (e) {
+      // Clipboard access can be refused — an insecure origin, a browser that
+      // wants a user gesture it did not see. Say so rather than flashing
+      // "Copied" over a clipboard that did not change.
+      onError(e instanceof Error ? e : new Error("Could not copy the link"));
+    }
+  }
   // Deleting an activity cascades its check-ins, every submission against them,
   // and every mark. Counted while the question is on screen, not after it.
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -559,6 +576,20 @@ export function ActivityDetail(props: {
           <FIcon name="chevronLeft" size={18} />
         </button>
         <span className="fv-sub">{weekLine}</span>
+        <span style={{ flex: 1 }} />
+        {/* The link this page now has. Built here rather than copied out of the
+            address bar because the bar carries whatever else the session put
+            there — a course id, a tab — and a link with those on it sends the
+            next person somewhere subtly different from this page. */}
+        <button
+          type="button"
+          className="fv-btn ghost sm"
+          title="Copy a link that opens this activity — paste it into Canvas"
+          onClick={() => void copyLink()}
+        >
+          <FIcon name="copy" size={15} />
+          {copied ? "Copied" : "Copy link"}
+        </button>
       </div>
 
       {/* Creating an activity is a sequence: its details, then its questions
