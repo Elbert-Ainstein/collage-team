@@ -31,7 +31,8 @@ import {
   type RubricItem,
   type SubmissionMark,
 } from "@/checkins/types";
-import { pointsTotal, type PointedQuestion } from "./model";
+import { deductionForAward, pointsTotal, type PointedQuestion } from "./model";
+import type { RubricTemplate } from "./comboRubric";
 
 const db = () => requireSupabase();
 
@@ -414,6 +415,102 @@ export async function listRubric(activityId: string): Promise<RubricItem[]> {
  */
 export async function ensureRubric(activity: Activity, _canSeed = true): Promise<RubricItem[]> {
   return listRubric(activity.id);
+}
+
+/**
+ * Fill a blank rubric from a template.
+ *
+ * REFUSES to touch an activity that already has a question or a criterion, and
+ * that refusal is the whole safety story: this runs from a dropdown and from
+ * opening the builder, so the one thing it must never do is overwrite a rubric
+ * somebody wrote. Returns false in that case rather than throwing — "there was
+ * already a rubric here" is the expected answer most times it is called.
+ *
+ * Points go on first because a rung is STORED as a deduction from its
+ * question's worth, so the worths have to be true before anything is written
+ * against them. And if the questions cannot carry their own points — a database
+ * that has not had 0034 run — the whole thing is refused rather than half
+ * written: every rung would silently deduct from the activity's 20 instead of
+ * from its question's 3, which is a rubric that looks right and grades wrong.
+ */
+export async function seedRubricTemplate(
+  activity: Activity,
+  template: RubricTemplate,
+): Promise<boolean> {
+  const [questions, items] = await Promise.all([
+    listQuestions(activity.id),
+    listRubric(activity.id),
+  ]);
+  if (questions.length > 0 || items.length > 0) return false;
+
+  // Only onto an activity nobody has priced. A total somebody typed is a
+  // decision, and quietly replacing 25 with 20 because a template says so is
+  // the same class of mistake as overwriting her criteria. When the two
+  // disagree, tallyQuestionPoints says so on screen and she picks.
+  if (pointsTotal(activity) === 0) {
+    await setActivityPoints(activity.id, template.pointsTotal);
+  }
+
+  const seeded = await db()
+    .from("activity_questions")
+    .insert(
+      template.questions.map((q, i) => ({
+        activity_id: activity.id,
+        label: q.label,
+        position: i,
+        points: q.points,
+      })),
+    )
+    .select();
+  if (seeded.error) {
+    // Same test as setQuestionPoints, and the same reason it cannot degrade to
+    // "no points": without the column every rung below would come off the
+    // activity's 20 rather than its question's 3.
+    if (/'?points'?/.test(seeded.error.message) && /column|schema cache/i.test(seeded.error.message)) {
+      throw new Error(
+        "The standard combo rubric needs migration 0034 — this database hasn't had it run yet. " +
+          "Its questions are worth 3, 2, 3, 2, 5 and 5, and without that column they cannot say so.",
+      );
+    }
+    throw dbError(seeded.error);
+  }
+  const inserted = (seeded.data ?? []) as PointedQuestion[];
+
+  const rows = template.questions.flatMap((q) =>
+    q.rungs.map((r) => ({
+      question_label: q.label,
+      description: r.description,
+      deduction: deductionForAward(q.points, r.award),
+    })),
+  );
+
+  if (rows.length) {
+    const { error } = await db()
+      .from("rubric_items")
+      .insert(
+        rows.map((r, i) => ({
+          activity_id: activity.id,
+          row_index: i,
+          description: r.description,
+          deduction: r.deduction,
+          is_custom: true,
+          question_label: r.question_label,
+        })),
+      );
+    if (error) {
+      // The questions went in and the ladders did not, which is the one state
+      // worse than not seeding at all: six named questions with nothing under
+      // them, and this function would refuse to try again because they exist.
+      // They are seconds old and carry no marks, so taking them back is safe.
+      await db()
+        .from("activity_questions")
+        .delete()
+        .in("id", inserted.map((q) => q.id));
+      throw dbError(error);
+    }
+  }
+
+  return true;
 }
 
 export async function updateRubricItem(

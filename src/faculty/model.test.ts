@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   awardFits,
   awardForDeduction,
+  autoCompletionParts,
   awardOfItem,
+  comboTotal,
   deductionForAward,
   groupByWeek,
   pointsTotal,
@@ -11,7 +13,14 @@ import {
   tallyQuestionPoints,
   worthOf,
 } from "@/faculty/model";
-import type { Activity, ActivityQuestion, CourseWeek, RubricItem } from "@/checkins/types";
+import type { ResultRow } from "@/checkins/data";
+import type {
+  Activity,
+  ActivityQuestion,
+  CheckIn,
+  CourseWeek,
+  RubricItem,
+} from "@/checkins/types";
 import type { ActivityStat, PointedQuestion } from "@/faculty/model";
 
 const act = (id: string, week: number | null): Activity =>
@@ -288,5 +297,155 @@ describe("questions against the activity total", () => {
   it("never derives the total from the questions", () => {
     const t = tallyQuestionPoints(combo, [q(0, 100)]);
     expect(t.total).toBe(20);
+  });
+});
+
+// -------------------------------------------------------- a combo out of 30
+//
+// The week is Kelly's: a tutorial completion worth 5, a challenge completion
+// worth 5, and a combo out of 20. What is tested here is the assembly and the
+// refusals — a number in a grading header that is wrong is a number a grader
+// reads out loud to a student.
+
+const wact = (over: Partial<Activity> & Pick<Activity, "id" | "type">): Activity =>
+  ({
+    course_id: "c",
+    week: 8,
+    title: over.id,
+    points_total: 5,
+    question_count: 0,
+    points_per_question: 0,
+    completion: true,
+    position: 0,
+    dates_label: null,
+    ...over,
+  }) as unknown as Activity;
+
+const wci = (id: string, activityId: string, over: Partial<CheckIn> = {}): CheckIn =>
+  ({
+    id,
+    activity_id: activityId,
+    kind: "individual",
+    scale: "ci",
+    max_points: null,
+    ...over,
+  }) as unknown as CheckIn;
+
+const wres = (over: Partial<ResultRow> & Pick<ResultRow, "check_in_id">): ResultRow =>
+  ({
+    id: `r-${over.check_in_id}`,
+    subject_type: "student",
+    student_id: "s1",
+    team_id: null,
+    status: "scored",
+    score: null,
+    is_ci: true,
+    ci_met: true,
+    ...over,
+  }) as unknown as ResultRow;
+
+const TUT = wact({ id: "tut", title: "Tutorial", type: "skills", position: 0 });
+const CHAL = wact({ id: "chal", title: "CHALLENGE", type: "challenge", position: 1 });
+const CMB = wact({
+  id: "combo",
+  title: "COMBO",
+  type: "combo",
+  position: 2,
+  completion: false,
+  points_total: 20,
+});
+const WEEK = [TUT, CHAL, CMB];
+const CIS = [
+  wci("ci-tut", "tut"),
+  wci("ci-chal", "chal"),
+  wci("ci-combo", "combo", { scale: "points", max_points: 20 }),
+];
+
+describe("a combo, out of thirty", () => {
+  it("pulls in the week's completions and adds up to 30", () => {
+    const t = comboTotal(CMB, "s1", 14, WEEK, CIS, [
+      wres({ check_in_id: "ci-tut" }),
+      wres({ check_in_id: "ci-chal" }),
+    ]);
+    expect(t?.outOf).toBe(30);
+    expect(t?.earned).toBe(24);
+    expect(t?.pending).toBe(false);
+    expect(t?.auto.map((p) => [p.label, p.earned])).toEqual([
+      ["Tutorial completion", 5],
+      ["CHALLENGE completion", 5],
+    ]);
+  });
+
+  it("scores a released Not complete as a real 0", () => {
+    const t = comboTotal(CMB, "s1", 20, WEEK, CIS, [
+      wres({ check_in_id: "ci-tut" }),
+      wres({ check_in_id: "ci-chal", ci_met: false }),
+    ]);
+    expect(t?.earned).toBe(25);
+    expect(t?.pending).toBe(false);
+  });
+
+  // Uploading a 0 for work nobody has read is the export's rule and it is this
+  // screen's rule too: a dash, and the total says it is not final.
+  it("leaves an unmarked completion out of the total and says so", () => {
+    const t = comboTotal(CMB, "s1", 14, WEEK, CIS, [wres({ check_in_id: "ci-tut" })]);
+    expect(t?.earned).toBe(19);
+    expect(t?.pending).toBe(true);
+    expect(t?.auto[1].earned).toBeNull();
+  });
+
+  it("does not add work that is handed in but unreleased", () => {
+    const t = comboTotal(CMB, "s1", 14, WEEK, CIS, [
+      wres({ check_in_id: "ci-tut", status: "submitted" }),
+      wres({ check_in_id: "ci-chal", status: "needs_review" }),
+    ]);
+    expect(t?.earned).toBe(14);
+    expect(t?.pending).toBe(true);
+  });
+
+  it("is nothing at all for the week's own completions", () => {
+    expect(comboTotal(TUT, "s1", null, WEEK, CIS, [])).toBeNull();
+  });
+
+  it("is nothing when the combo stands alone in its week", () => {
+    expect(comboTotal(CMB, "s1", 14, [CMB], CIS, [])).toBeNull();
+  });
+
+  it("is nothing for an unscheduled combo, which has no week to read", () => {
+    const loose = { ...CMB, week: null };
+    expect(comboTotal(loose, "s1", 14, [...WEEK, loose], CIS, [])).toBeNull();
+  });
+
+  it("does not reach into another week", () => {
+    const other = wact({ id: "other", title: "Tutorial", type: "skills", week: 9 });
+    const parts = autoCompletionParts(CMB, [...WEEK, other], CIS);
+    expect(parts.map((p) => p.activity.id)).toEqual(["tut", "chal"]);
+  });
+
+  // Scope decides, not the type's name. Amplify has a team half, but it also
+  // has an individual one, and this figure is read off the individual one.
+  it("counts an Amplify completion, which is marked on both halves", () => {
+    const amp = wact({ id: "amp", title: "Amplify", type: "amplify", position: 3 });
+    const parts = autoCompletionParts(CMB, [...WEEK, amp], CIS);
+    expect(parts.map((p) => p.activity.id)).toEqual(["tut", "chal", "amp"]);
+  });
+
+  // Order is the week's own, so the breakdown reads down the page in the order
+  // the activities are listed on it.
+  it("keeps the week's order rather than the array's", () => {
+    const parts = autoCompletionParts(CMB, [CHAL, TUT], CIS);
+    expect(parts.map((p) => p.activity.id)).toEqual(["tut", "chal"]);
+  });
+
+  it("shows an unpriced completion as 0 rather than hiding it", () => {
+    const free = wact({ id: "free", title: "Reading", type: "skills", points_total: 0 });
+    const parts = autoCompletionParts(CMB, [...WEEK, free], CIS);
+    expect(parts.find((p) => p.activity.id === "free")?.worth).toBe(0);
+  });
+
+  // A combo an instructor switched to Complete/Not complete is not out of
+  // anything, so there is nothing for the completions to be added to.
+  it("is nothing for a combo marked by completion", () => {
+    expect(comboTotal({ ...CMB, completion: true }, "s1", null, WEEK, CIS, [])).toBeNull();
   });
 });

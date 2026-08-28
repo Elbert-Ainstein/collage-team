@@ -35,10 +35,10 @@ export function pointsTotal(
 }
 
 /** This activity's questions, in the order they are asked. */
-export function questionsFor(
+export function questionsFor<T extends ActivityQuestion>(
   activityId: string,
-  questions: ActivityQuestion[],
-): ActivityQuestion[] {
+  questions: T[],
+): T[] {
   return questions
     .filter((q) => q.activity_id === activityId)
     .sort((a, b) => a.position - b.position);
@@ -253,6 +253,140 @@ export function tallyQuestionPoints(
     };
   }
   return { ...base, balance: "balanced", note: null };
+}
+
+// ------------------------------------------------- a combo, out of thirty
+//
+// A week in AP 50 is worth 30 to a student: 5 for handing the tutorial in on
+// time, 5 for handing the challenge in on time, and 20 for the combo. The first
+// two are marked on their own activities — they are completions, and a
+// completion is one answer for the whole assignment — so a grader working
+// through the combo could see 14 / 20 while the number the student actually
+// gets that week was 24 / 30, computed nowhere and visible nowhere.
+//
+// This assembles it. What it does NOT do is move any of it into the database:
+// the combo stays out of 20, the two completions stay on their own rows, and
+// recompute_result_score goes on subtracting from points_total exactly as
+// before. A stored 30 would mean marking a tutorial silently re-scores a combo,
+// and one number written by two screens is how the two come to disagree.
+//
+// It is also the same arithmetic the Canvas export does — canvasCsv adds the
+// same three columns to the same 30 — so the figure on this screen and the
+// figure in that file cannot say different things.
+
+/** One completion pulled into a combo's total. */
+export interface AutoPart {
+  activity: Activity;
+  /** "Tutorial completion". */
+  label: string;
+  /** What a met completion pays: the check-in's total, or the activity's. */
+  worth: number;
+  /** worth, 0, or null while nothing has been released to the student. */
+  earned: number | null;
+}
+
+export interface ComboTotal {
+  /** The combo's own marks, against its own points_total. */
+  own: { earned: number | null; outOf: number };
+  auto: AutoPart[];
+  /** 30 on Kelly's week: the combo's 20 plus both completions. */
+  outOf: number;
+  /** The sum. Null only when the combo itself has no score to add to. */
+  earned: number | null;
+  /** True while a completion in the week is unmarked, so 24 is not yet final. */
+  pending: boolean;
+}
+
+/**
+ * The completions a combo absorbs: the rest of its week, marked complete/not.
+ *
+ * Keyed on the WEEK rather than on any link between activities, because there
+ * is no such link in the schema and inventing one would be a column that has to
+ * be maintained by hand. A week holds a tutorial, a challenge and a combo; the
+ * two that are marked Complete are the two that pay 5.
+ *
+ * Team-scope activities are excluded for the same reason canvasColumns excludes
+ * them: this figure is one student's, and a team's mark is not.
+ *
+ * An unpriced completion is kept rather than filtered out, and shows as 0 —
+ * same choice canvasColumns makes. A missing row is invisible; a 0 is a
+ * question about whether somebody forgot to price it.
+ */
+export function autoCompletionParts(
+  combo: Pick<Activity, "id" | "type" | "week" | "completion">,
+  activities: Activity[],
+  checkIns: CheckIn[],
+): { activity: Activity; label: string; worth: number }[] {
+  if (combo.type !== "combo" || isCompletion(combo) || combo.week == null) return [];
+  return activities
+    .filter(
+      (a) =>
+        a.id !== combo.id &&
+        a.week === combo.week &&
+        SCOPE_OF[a.type] !== "team" &&
+        isCompletion(a),
+    )
+    .sort((a, b) => a.position - b.position || a.title.localeCompare(b.title))
+    .map((a) => {
+      const ci = checkIns.find((c) => c.activity_id === a.id && c.kind === "individual");
+      return {
+        activity: a,
+        label: `${a.title} completion`,
+        // A completion check-in carries max_points NULL by design, so this
+        // falls through to the activity for exactly the activities in play.
+        worth: ci?.max_points ?? pointsTotal(a),
+      };
+    });
+}
+
+/**
+ * What one student's combo comes to once its week's completions are added.
+ *
+ * Null when there is nothing to add — not a combo, marked by completion itself,
+ * unscheduled, or a week with no completion activities in it. Callers show the
+ * combo's own total in that case, which is what every screen did before.
+ *
+ * `ownEarned` is passed in rather than derived: the grading screen already
+ * computes it from the marks on the row in front of it, including the ones it
+ * has not written yet, and a second derivation here would drift from it the
+ * moment somebody clicks a rung.
+ */
+export function comboTotal(
+  combo: Activity,
+  studentId: string,
+  ownEarned: number | null,
+  activities: Activity[],
+  checkIns: CheckIn[],
+  results: ResultRow[],
+): ComboTotal | null {
+  const parts = autoCompletionParts(combo, activities, checkIns);
+  if (!parts.length) return null;
+
+  const auto: AutoPart[] = parts.map((p) => {
+    const cell = cellFor(p.activity, { kind: "student", id: studentId }, checkIns, results, null);
+    const r = cell.result;
+    // Blank, never 0, for work that is in and unread — the same rule pointsCell
+    // follows in the export. A released Not complete IS a 0: that one was
+    // marked and the answer was no.
+    const earned =
+      !r || r.status !== "scored"
+        ? null
+        : r.is_ci
+          ? isCompletionMet(r)
+            ? p.worth
+            : 0
+          : (r.score ?? 0);
+    return { ...p, earned };
+  });
+
+  const own = { earned: ownEarned, outOf: pointsTotal(combo) };
+  const outOf = exact(own.outOf + auto.reduce((n, p) => n + p.worth, 0));
+  const earned =
+    own.earned == null
+      ? null
+      : exact(own.earned + auto.reduce((n, p) => n + (p.earned ?? 0), 0));
+
+  return { own, auto, outOf, earned, pending: auto.some((p) => p.earned == null) };
 }
 
 /** "50 pts", or "Completion" for the types that are marked rather than scored. */

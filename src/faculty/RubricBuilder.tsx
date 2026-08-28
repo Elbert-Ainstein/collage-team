@@ -35,12 +35,14 @@ import {
   ensureQuestions,
   ensureRubric,
   removeActivityFile,
+  seedRubricTemplate,
   setQuestionPoints,
   setRubricQuestion,
   updateQuestion,
   updateRubricItem,
   uploadActivityFile,
 } from "./facultyData";
+import { COMBO_TEMPLATE } from "./comboRubric";
 import {
   awardFits,
   awardForDeduction,
@@ -761,21 +763,107 @@ export function RubricBuilder({
   const [pendingQ, setPendingQ] = useState<PointedQuestion | null>(null);
   const [cost, setCost] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  /** Set for the one visit where the standard combo rubric was written in. */
+  const [filled, setFilled] = useState(false);
+
+  /**
+   * Whether this activity is a blank Combo waiting for the course's rubric.
+   *
+   * The points test is what stops a seeded rubric coming back from the dead: an
+   * activity is created out of 0, seeding sets it to 20, so a combo somebody
+   * deliberately emptied has a total on it and is left alone. Without it,
+   * deleting all six questions would just re-write them on the next visit.
+   */
+  const blankCombo =
+    canEdit &&
+    activity.type === "combo" &&
+    !isCompletion(activity) &&
+    items != null &&
+    questions != null &&
+    items.length === 0 &&
+    questions.length === 0;
+
+  // The note below belongs to one activity. This screen is reused across
+  // activities without unmounting, so without this it would follow you onto the
+  // next rubric and claim credit for something it did not write.
+  useEffect(() => {
+    setFilled(false);
+  }, [activity.id]);
+
+  // Kept out of the effect's deps on purpose. Seeding has to tell the parent to
+  // refetch — the activity's total moves from 0 to 20 and this screen reads it
+  // for the running tally — and a parent that hands down a fresh callback each
+  // render would turn that dependency into a loop.
+  const changedRef = useRef(onChanged);
+  useEffect(() => {
+    changedRef.current = onChanged;
+  });
 
   useEffect(() => {
     let live = true;
-    // Both seed on read. An activity authored before questions were rows
-    // arrives here as a count and leaves as the same questions, written down.
-    Promise.all([ensureRubric(activity, canEdit), ensureQuestions(activity, canEdit)])
-      .then(([ladder, qs]) => {
+    void (async () => {
+      try {
+        // Both seed on read. An activity authored before questions were rows
+        // arrives here as a count and leaves as the same questions, written down.
+        let [ladder, qs] = await Promise.all([
+          ensureRubric(activity, canEdit),
+          ensureQuestions(activity, canEdit),
+        ]);
+
+        // Every combo in AP 50 is marked against the same rubric, so a new one
+        // arrives with it already written rather than with a blank page and
+        // twenty-four rungs to retype. seedRubricTemplate refuses outright if
+        // there is anything here, so this cannot overwrite anybody's work — and
+        // everything it writes is ordinary rows, editable and deletable.
+        if (
+          live &&
+          canEdit &&
+          ladder.length === 0 &&
+          qs.length === 0 &&
+          activity.type === "combo" &&
+          !isCompletion(activity) &&
+          pointsTotal(activity) === 0 &&
+          (await seedRubricTemplate(activity, COMBO_TEMPLATE))
+        ) {
+          if (!live) return;
+          setFilled(true);
+          [ladder, qs] = await Promise.all([
+            ensureRubric(activity, canEdit),
+            ensureQuestions(activity, canEdit),
+          ]);
+          if (!live) return;
+          await changedRef.current();
+        }
+
         if (!live) return;
         setItems(ladder);
         setQuestions(qs);
-      })
-      .catch(onError);
+      } catch (e) {
+        if (live) onError(e);
+      }
+    })();
     return () => {
       live = false;
     };
+  }, [activity, canEdit, onError]);
+
+  /** Write the standard combo rubric in by hand, for a combo that is priced. */
+  const fillCombo = useCallback(() => {
+    setBusy(true);
+    seedRubricTemplate(activity, COMBO_TEMPLATE)
+      .then(async (done) => {
+        if (!done) return;
+        setFilled(true);
+        const [ladder, qs] = await Promise.all([
+          ensureRubric(activity, canEdit),
+          ensureQuestions(activity, canEdit),
+        ]);
+        setItems(ladder);
+        setQuestions(qs);
+        await changedRef.current();
+      })
+      .catch(onError)
+      .finally(() => setBusy(false));
   }, [activity, canEdit, onError]);
 
   const groups = useMemo(
@@ -1133,6 +1221,29 @@ export function RubricBuilder({
             </div>
           ) : null}
 
+          {/* Said once, on the visit it happened. Everything below is hers to
+              edit or delete, and somebody who did not press a button deserves
+              to be told where six named questions came from. */}
+          {filled ? (
+            <div
+              className="fv-cirow fv-sub"
+              style={{
+                gap: 8,
+                alignItems: "flex-start",
+                lineHeight: 1.5,
+                borderBottom: "1px solid var(--fv-neutral-200)",
+              }}
+            >
+              <span style={{ flex: "none", marginTop: 1 }}>
+                <FIcon name="check" size={14} />
+              </span>
+              <span>
+                Started from the standard combo rubric. Rename a question, change what it is
+                worth, edit a rung or delete any of it — none of it is fixed.
+              </span>
+            </div>
+          ) : null}
+
           <div className="fv-panebody">
             {items == null || questions == null ? (
               <div className="fv-sub" style={{ padding: 14 }}>
@@ -1143,6 +1254,35 @@ export function RubricBuilder({
               // has nothing to seed and should be told why.
               <div className="fv-sub" style={{ padding: 14, lineHeight: 1.6 }}>
                 The instructor has not set up this rubric yet.
+              </div>
+            ) : blankCombo ? (
+              // Reached when the combo carries a total already, so the load
+              // above left it alone. The offer is still worth making — the
+              // rubric is the same one either way — it just is not made behind
+              // her back on an activity somebody has started pricing.
+              <div
+                style={{
+                  padding: 14,
+                  display: "grid",
+                  gap: 11,
+                  justifyItems: "start",
+                  lineHeight: 1.6,
+                }}
+              >
+                <span className="fv-sub">
+                  Nothing here yet. Every combo in this course is marked the same way — two
+                  challenge problems, each out of 3 for the work done at home and 2 for the
+                  mark-up, then the two tutorial screens at 5 apiece.
+                </span>
+                <button
+                  type="button"
+                  className="fv-btn outline sm"
+                  disabled={busy}
+                  onClick={fillCombo}
+                >
+                  <FIcon name="assignment" size={15} />
+                  Use the standard combo rubric
+                </button>
               </div>
             ) : (
               groups.map((g) => {

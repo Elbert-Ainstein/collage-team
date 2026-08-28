@@ -22,7 +22,6 @@ import {
 } from "@/checkins/data";
 import type {
   Activity,
-  ActivityQuestion,
   CheckIn,
   Course,
   CourseTF,
@@ -32,7 +31,7 @@ import type {
 } from "@/checkins/types";
 import type { ResultRow } from "@/checkins/data";
 import { duplicateActivity, listQuestionsFor, listTFs, listWeeks, myTFCourses } from "./facultyData";
-import { nextPositionIn, statFor, type ActivityStat } from "./model";
+import { nextPositionIn, statFor, type ActivityStat, type PointedQuestion } from "./model";
 import { FIcon } from "./icons";
 import { ActivitiesScreen } from "./ActivitiesScreen";
 import { ActivityDetail } from "./ActivityDetail";
@@ -111,8 +110,11 @@ export interface FacultyData {
   weeks: CourseWeek[];
   roster: Student[];
   activities: Activity[];
-  /** Every activity's questions (0014). Empty for one that has none yet. */
-  questions: ActivityQuestion[];
+  /**
+   * Every activity's questions (0014), each with what it is out of (0034).
+   * Empty for an activity that has none yet.
+   */
+  questions: PointedQuestion[];
   checkIns: CheckIn[];
   /**
    * Narrow rows: no `text`, no `transcription`, no `files`. Nothing on the
@@ -488,7 +490,7 @@ export function FacultyApp({
         // disagreeing is the failure this whole module is written to avoid.
         activities.length
           ? listQuestionsFor(activities.map((a) => a.id))
-          : Promise.resolve([] as ActivityQuestion[]),
+          : Promise.resolve([] as PointedQuestion[]),
         set ? listTeams(set.id, roster) : Promise.resolve([] as TeamWithMembers[]),
       ]);
 

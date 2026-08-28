@@ -32,7 +32,14 @@ import {
   setMark,
   updateRubricItem,
 } from "./facultyData";
-import { pointsTotal, questionsFor } from "./model";
+import {
+  comboTotal,
+  pointsTotal,
+  questionsFor,
+  worthOf,
+  type ComboTotal,
+  type PointedQuestion,
+} from "./model";
 import type { FacultyData } from "./FacultyApp";
 import { FAvatar, FIcon } from "./icons";
 import { ActivityTeamPanel } from "./ActivityTeamPanel";
@@ -91,6 +98,30 @@ function pickOf(picks: Map<string, string>, q: ActivityQuestion | undefined): st
   return picks.get(keyOf(q)) ?? (isSynthetic(q) ? null : picks.get(`#${q.position}`)) ?? null;
 }
 
+/** One line of the header breakdown: what a piece of the week contributed. */
+function TotalPart({ label, value, outOf }: { label: string; value: string; outOf: number }) {
+  return (
+    <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+      <span
+        style={{
+          flex: 1,
+          minWidth: 0,
+          fontSize: "var(--fv-2xs)",
+          color: "var(--fv-muted)",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {label}
+      </span>
+      <span className="fv-num" style={{ flex: "none", fontSize: "var(--fv-2xs)" }}>
+        {value} / {outOf}
+      </span>
+    </div>
+  );
+}
+
 /** One person or team to be graded, with the result row that holds their work. */
 interface Subject {
   id: string;
@@ -125,7 +156,7 @@ export function GradingScreen({
   // Questions are rows (0014), in the order the rubric puts them. An activity
   // that has none yet still grades the old way — N questions of equal value —
   // so this synthesises that shape rather than showing a grader nothing.
-  const questions = useMemo(() => {
+  const questions = useMemo<PointedQuestion[]>(() => {
     const rows = questionsFor(activity.id, data.questions);
     if (rows.length) return rows;
     return Array.from({ length: Math.max(activity.question_count, 1) }, (_, i) => ({
@@ -134,7 +165,7 @@ export function GradingScreen({
       label: String(i + 1),
       position: i,
       created_at: "",
-    })) as ActivityQuestion[];
+    })) as PointedQuestion[];
   }, [activity.id, activity.question_count, data.questions]);
 
   const qCount = questions.length;
@@ -287,9 +318,14 @@ export function GradingScreen({
    * summed up somewhere else. Two places computing a score is how the two come
    * to disagree, and this screen has been bitten by it before.
    *
-   * A question is "out of" its even share of the activity total, because points
-   * live on the activity and nowhere else — there is no per-question value to
-   * read. The shares are cut cumulatively so they add back up to the total
+   * What a question is "out of" is its OWN points when 0034 lets it carry them
+   * — Kelly's combo is 3, 2, 3, 2, 5, 5 and printing 3.33 against each of the
+   * six is the screen disagreeing with the rubric that produced the deductions.
+   * Only when EVERY question declares a worth, because a half-priced activity
+   * has no honest way to share what is left over; a partly-priced one falls back
+   * to the even share, which is what every activity did before.
+   *
+   * The even share is cut cumulatively so the shares add back up to the total
    * exactly instead of drifting by a rounding step each. A deduction bigger
    * than the share leaves that question negative rather than floored at zero: a
    * floored row stops summing to the header, and a column of numbers that does
@@ -299,17 +335,44 @@ export function GradingScreen({
     if (!ladder) return null;
     const out = pointsTotal(activity);
     const per = new Map<string, { out: number; taken: number }>();
-    let cut = 0;
-    questions.forEach((q, i) => {
-      const upto = round2((out * (i + 1)) / questions.length);
-      per.set(keyOf(q), { out: round2(upto - cut), taken: deductionOf(pickOf(picks, q)) });
-      cut = upto;
-    });
+    const priced = questions.length > 0 && questions.every((q) => q.points != null);
+    if (priced) {
+      for (const q of questions) {
+        per.set(keyOf(q), { out: worthOf(activity, q), taken: deductionOf(pickOf(picks, q)) });
+      }
+    } else {
+      let cut = 0;
+      questions.forEach((q, i) => {
+        const upto = round2((out * (i + 1)) / questions.length);
+        per.set(keyOf(q), { out: round2(upto - cut), taken: deductionOf(pickOf(picks, q)) });
+        cut = upto;
+      });
+    }
     let taken = 0;
     for (const [, id] of picks) taken += deductionOf(id);
     return { out, per, earned: Math.max(round2(out - taken), 0) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ladder, picks, questions, activity]);
+
+  /**
+   * The week's 30, when this is a combo and its week holds the completions.
+   *
+   * Null everywhere else, and every screen then shows what it always showed.
+   */
+  const week: ComboTotal | null = useMemo(() => {
+    // isCompletion inline rather than the forCompletion below it: that const
+    // is declared further down and this factory runs during the same render.
+    if (!subject || isCompletion(activity) || half !== "individual") return null;
+    return comboTotal(
+      activity,
+      subject.id,
+      score?.earned ?? null,
+      data.activities,
+      data.checkIns,
+      data.results,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activity, subject, half, score?.earned, data.activities, data.checkIns, data.results]);
 
   // A completion activity has no criteria to pick — the rubric collapses to one
   // Complete/Not complete for the whole assignment — so requiring a pick per
@@ -602,20 +665,59 @@ export function GradingScreen({
             {forCompletion ? null : (
               <div
                 style={{
-                  display: "flex",
-                  alignItems: "baseline",
-                  gap: 8,
                   marginTop: 10,
                   paddingTop: 10,
                   borderTop: "1px solid var(--fv-neutral-200)",
                 }}
               >
-                <span className="fv-eyebrow" style={{ flex: 1 }}>
-                  Total points
-                </span>
-                <span className="fv-num" style={{ fontSize: "var(--fv-lg)", fontWeight: 700 }}>
-                  {score ? num(score.earned) : "—"} / {pts(pointsTotal(activity))}
-                </span>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                  <span className="fv-eyebrow" style={{ flex: 1 }}>
+                    Total points
+                  </span>
+                  <span className="fv-num" style={{ fontSize: "var(--fv-lg)", fontWeight: 700 }}>
+                    {week
+                      ? week.earned == null
+                        ? "—"
+                        : num(week.earned)
+                      : score
+                        ? num(score.earned)
+                        : "—"}{" "}
+                    / {pts(week ? week.outOf : pointsTotal(activity))}
+                  </span>
+                </div>
+
+                {/* What the 30 is made of. Without this the header is a number
+                    a grader cannot check against anything on their screen —
+                    they are marking out of 20 and being shown 24. */}
+                {week ? (
+                  <div style={{ display: "grid", gap: 3, marginTop: 8 }}>
+                    <TotalPart
+                      label="This combo"
+                      value={score ? num(score.earned) : "—"}
+                      outOf={week.own.outOf}
+                    />
+                    {week.auto.map((p) => (
+                      <TotalPart
+                        key={p.activity.id}
+                        label={p.label}
+                        value={p.earned == null ? "—" : num(p.earned)}
+                        outOf={p.worth}
+                      />
+                    ))}
+                    <p
+                      style={{
+                        fontSize: "var(--fv-2xs)",
+                        color: "var(--fv-muted)",
+                        lineHeight: 1.5,
+                        margin: "6px 0 0",
+                      }}
+                    >
+                      {week.pending
+                        ? "Added from this week's other activities, which are marked on their own pages. A dash is one nobody has released yet, so this total is not final."
+                        : "Added from this week's other activities. Releasing here sends this combo's marks; the completions were released on their own pages."}
+                    </p>
+                  </div>
+                ) : null}
               </div>
             )}
           </div>

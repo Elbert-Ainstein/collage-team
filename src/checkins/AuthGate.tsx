@@ -87,7 +87,12 @@ export function AuthGate({
   const [pendingCode, setPendingCode] = useState<string | null>(null);
 
   useEffect(() => {
-    const params = hashParams(initialHash);
+    // Whichever of the two still has it. `initialHash` is the backstop for a
+    // client that consumed the fragment before this effect ran; the live hash
+    // is the backstop for the other order — a recovery link that lands on `/`
+    // and is forwarded here, where this module is first evaluated part-way
+    // through the redirect rather than with the URL already settled.
+    const params = hashParams(initialHash || window.location.hash);
     // A TOKEN is required, not just the marker. `type=recovery` alone is not a
     // callback as far as auth-js is concerned — it restores whatever session was
     // already in storage — so trusting the bare marker meant anyone could open
@@ -226,6 +231,67 @@ function NoticeLine({ text }: { text: string }) {
       <Icon name="check" size={15} />
       {text}
     </div>
+  );
+}
+
+/**
+ * A password box you can read back.
+ *
+ * Typing a password blind is where sign-in actually fails: the address is
+ * visible and checkable and the password is eight dots, so a stuck caps lock or
+ * a phone keyboard's autocorrect looks identical to a wrong account. The reveal
+ * is per field and starts off — it is for checking what you typed, not a
+ * setting — and it never travels with the value, so nothing about it is
+ * remembered between visits.
+ *
+ * Its own component because there are three of these across two screens, and a
+ * toggle that shows one field while leaving another masked is worse than none.
+ */
+function PasswordField({
+  label,
+  value,
+  onChange,
+  autoComplete,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+  autoComplete: "current-password" | "new-password";
+  placeholder?: string;
+}) {
+  const [shown, setShown] = useState(false);
+  return (
+    <label className="t-fld">
+      {label}
+      <div className="t-pw">
+        <input
+          className="t-in"
+          type={shown ? "text" : "password"}
+          autoComplete={autoComplete}
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          required
+          minLength={6}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+        />
+        {/* Inside the label, and deliberately a button: clicking interactive
+            content inside a label does not activate the label's control, so
+            this cannot also focus and re-focus the box it sits in. */}
+        <button
+          type="button"
+          className="t-pwbtn"
+          aria-pressed={shown}
+          aria-label={shown ? "Hide password" : "Show password"}
+          onClick={() => setShown((s) => !s)}
+        >
+          {shown ? "Hide" : "Show"}
+        </button>
+      </div>
+    </label>
   );
 }
 
@@ -472,35 +538,32 @@ function SignIn({
           {!sent && (
             <label className="t-fld">
               Email
-              {/* Not college.harvard.edu: that address belongs to undergraduates,
-                  and this field is the same field for the person teaching the
-                  course. The placeholder only has to show the shape. */}
+              {/* college.harvard.edu, which is the address eighty of the eighty-one
+                  people who see this screen actually have. Faculty type over it,
+                  and a placeholder has never rejected anything. */}
               <input
                 className="t-in"
                 type="email"
                 autoComplete="email"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@harvard.edu"
+                placeholder="you@college.harvard.edu"
               />
             </label>
           )}
 
           {mode !== "forgot" && (
-            <label className="t-fld">
-              Password
-              <input
-                className="t-in"
-                type="password"
-                autoComplete={mode === "in" ? "current-password" : "new-password"}
-                required
-                minLength={6}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={mode === "up" ? "at least 6 characters" : ""}
-              />
-            </label>
+            <PasswordField
+              label="Password"
+              autoComplete={mode === "in" ? "current-password" : "new-password"}
+              value={password}
+              onChange={setPassword}
+              placeholder={mode === "up" ? "at least 6 characters" : undefined}
+            />
           )}
 
           {mode === "up" && pick === "join" && (
@@ -725,31 +788,19 @@ function SetNewPassword({ onLeave }: { onLeave: () => void }) {
         </div>
 
         <div style={{ display: "grid", gap: 10 }}>
-          <label className="t-fld">
-            New password
-            <input
-              className="t-in"
-              type="password"
-              autoComplete="new-password"
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="at least 6 characters"
-            />
-          </label>
-          <label className="t-fld">
-            Confirm new password
-            <input
-              className="t-in"
-              type="password"
-              autoComplete="new-password"
-              required
-              minLength={6}
-              value={confirm}
-              onChange={(e) => setConfirm(e.target.value)}
-            />
-          </label>
+          <PasswordField
+            label="New password"
+            autoComplete="new-password"
+            value={password}
+            onChange={setPassword}
+            placeholder="at least 6 characters"
+          />
+          <PasswordField
+            label="Confirm new password"
+            autoComplete="new-password"
+            value={confirm}
+            onChange={setConfirm}
+          />
 
           {error && <ErrorLine text={error} />}
 

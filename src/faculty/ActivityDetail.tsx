@@ -23,7 +23,13 @@ import {
   type Activity,
   type ActivityType,
 } from "@/checkins/types";
-import { countWorkForActivity, ensureCheckIn, setActivityPoints } from "./facultyData";
+import {
+  countWorkForActivity,
+  ensureCheckIn,
+  seedRubricTemplate,
+  setActivityPoints,
+} from "./facultyData";
+import { COMBO_TEMPLATE } from "./comboRubric";
 import { pointsLabel, nextPositionIn, pointsTotal, questionCount, questionsFor, statFor } from "./model";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { FAvatar, FIcon } from "./icons";
@@ -566,6 +572,15 @@ export function ActivityDetail(props: {
         const withKind = { ...activity, ...patch, type: kind } as Activity;
         if (scope !== "team") await ensureCheckIn(withKind, "individual", data.checkIns);
         if (scope !== "indiv") await ensureCheckIn(withKind, "team", data.checkIns);
+
+        // Picking Combo hands over the course's combo rubric, already written:
+        // two challenge problems marked for effort and mark-up, and the two
+        // tutorial screens. It writes nothing unless the rubric is completely
+        // empty, so switching an activity that has been set up keeps what is
+        // there, and everything it does write is editable on the Rubric page.
+        if (kind === "combo") {
+          await seedRubricTemplate({ ...withKind, points_total: nextPoints }, COMBO_TEMPLATE);
+        }
       }
       setEditing(false);
       // Awaited, not fired and forgotten: whoever called this may navigate away

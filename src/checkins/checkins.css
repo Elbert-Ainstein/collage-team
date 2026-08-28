@@ -116,6 +116,15 @@
 .t-card{border:1px solid var(--line);background:var(--paper2);border-radius:10px;padding:13px}
 .t-in{border:1px solid var(--line);background:var(--paper);border-radius:10px;padding:5px 7px;font-size:13px;color:var(--ink)}
 .t-in:focus{outline:1px solid var(--purple)}
+
+/* Show/hide inside the password box. 24px minimum on both axes (WCAG 2.2 SC
+   2.5.8), and the input's right padding is what keeps a long password from
+   running underneath it. */
+.t-pw{position:relative;display:grid}
+.t-pw .t-in{padding-right:56px}
+.t-pwbtn{position:absolute;right:4px;top:50%;transform:translateY(-50%);min-width:44px;min-height:24px;border:0;background:transparent;color:var(--ink3);font-family:inherit;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:4px 6px;border-radius:8px;cursor:pointer}
+.t-pwbtn:hover{color:var(--ink)}
+.t-pwbtn:focus-visible{outline:1px solid var(--purple);outline-offset:1px}
 .t-pill{border:1px solid var(--line);background:var(--paper2);color:var(--ink2);font-size:12px;padding:5px 12px;border-radius:999px;white-space:nowrap;box-shadow:var(--shadowCard)}
 .t-pill.on{border-color:var(--ink);background:var(--ink);color:var(--paper3);box-shadow:none}
 
