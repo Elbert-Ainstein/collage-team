@@ -144,6 +144,12 @@ export interface WeekGroup {
    */
   id: string | null;
   label: string;
+  /**
+   * What the week was NAMED, as opposed to what it is called. Null when it is
+   * running on its number — `label` has already resolved that, and an editor
+   * seeded from `label` would make the number look like typed text.
+   */
+  title: string | null;
   dates: string | null;
   activities: Activity[];
   waiting: number;
@@ -181,7 +187,14 @@ export function groupByWeek(
     groups.push({
       week,
       id: row?.id ?? null,
-      label: week == null ? "Unscheduled" : `Week ${week}`,
+      // The week's own title when it has one (0033), the number otherwise. The
+      // number is still what orders the page and what activities point at — a
+      // title only changes what it is CALLED.
+      label:
+        week == null
+          ? "Unscheduled"
+          : (row?.title?.trim() || `Week ${week}`),
+      title: row?.title?.trim() || null,
       dates:
         week == null
           ? null

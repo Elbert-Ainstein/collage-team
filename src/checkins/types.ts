@@ -256,6 +256,8 @@ export interface CourseWeek {
   id: string;
   course_id: string;
   week: number;
+  /** What it is called, when "Week N" is not it (0033). Null means the number. */
+  title?: string | null;
   dates_label: string | null;
   created_at: string;
 }

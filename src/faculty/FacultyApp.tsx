@@ -11,6 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
 import {
   ensureSessions,
+  renameCourse,
   listCourses,
   listActivities,
   listCheckIns,
@@ -350,6 +351,8 @@ export function FacultyApp({
   const [data, setData] = useState<FacultyData | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [namingCourse, setNamingCourse] = useState(false);
+  const [courseDraft, setCourseDraft] = useState("");
   const busy = useRef(false);
   // A refresh asked for while one is running. It cannot just be dropped: the
   // write that asked for it has already landed in the database, so dropping it
@@ -360,6 +363,24 @@ export function FacultyApp({
   const again = useRef(false);
 
   const fail = (e: unknown) => setError(String((e as Error)?.message ?? e));
+
+  // Renaming touches the courses row, which is the one thing loadCourses owns
+  // rather than refresh() — so both have to be re-read or the sidebar keeps the
+  // old name until a reload.
+  const commitCourseName = () => {
+    const next = courseDraft.trim();
+    setNamingCourse(false);
+    if (!data || !next || next === data.course.name) return;
+    void (async () => {
+      try {
+        await renameCourse(data.course.id, { name: next });
+        await loadCourses();
+        await refresh();
+      } catch (e) {
+        fail(e);
+      }
+    })();
+  };
 
   const loadCourses = useCallback(async () => {
     const cs = mode === "tf" ? await myTFCourses() : await ensureSessions();
@@ -762,21 +783,63 @@ export function FacultyApp({
           {/* The course name is the way home. It reads like a masthead and people
               click it like one — from four screens deep in grading there was
               otherwise no single control that meant "back to the class". */}
-          <button
-            type="button"
-            className="fv-coursehome"
-            title="Back to the class"
-            onClick={() => {
-              setScreen("activities");
-              setSelId(null);
-            }}
-          >
-            <span className="fv-coursetitle">{data?.course.name ?? "Applied Physics 50"}</span>
-            <span className="fv-meta">
-              <span>{data ? `${data.roster.length} students` : "—"}</span>
-              {data?.course.term ? <span>· {data.course.term}</span> : null}
-            </span>
-          </button>
+          {namingCourse && data ? (
+            <input
+              className="fv-in"
+              style={{ width: "100%", height: 34, fontFamily: "var(--fv-serif)", fontSize: 19 }}
+              value={courseDraft}
+              autoFocus
+              aria-label="Course name"
+              onChange={(e) => setCourseDraft(e.target.value)}
+              onBlur={commitCourseName}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitCourseName();
+                if (e.key === "Escape") setNamingCourse(false);
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              className="fv-coursehome"
+              title="Back to the class"
+              onClick={() => {
+                setScreen("activities");
+                setSelId(null);
+              }}
+            >
+              <span className="fv-coursetitle">{data?.course.name ?? "Applied Physics 50"}</span>
+              <span className="fv-meta">
+                <span>{data ? `${data.roster.length} students` : "—"}</span>
+                {data?.course.term ? <span>· {data.course.term}</span> : null}
+                {/* Rename lives inside the meta line rather than beside the
+                    title: the title is the way home, and a second control on it
+                    makes the target for that ambiguous. Owner only — a TF is a
+                    guest on somebody else's course. */}
+                {data?.can.isOwner ? (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    className="fv-courserename"
+                    title="Rename this course"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCourseDraft(data.course.name);
+                      setNamingCourse(true);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter" && e.key !== " ") return;
+                      e.preventDefault();
+                      e.stopPropagation();
+                      setCourseDraft(data.course.name);
+                      setNamingCourse(true);
+                    }}
+                  >
+                    · Rename
+                  </span>
+                ) : null}
+              </span>
+            </button>
+          )}
 
           {courses.length > 1 ? (
             <div className="fv-seg fv-courseswitch">

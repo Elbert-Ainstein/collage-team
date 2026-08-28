@@ -82,6 +82,31 @@ export async function addWeek(courseId: string, datesLabel?: string): Promise<Co
 }
 
 /**
+ * Rename a week, or hand it back to its number.
+ *
+ * The number is untouched: it is what activities point at and what orders the
+ * page, so a rename can never move a week or strand what is in it. An empty
+ * title is stored as NULL rather than "", so "use the number" is one state
+ * rather than two that render the same.
+ *
+ * Needs 0033. A project without it gets a clear sentence rather than the raw
+ * "column title does not exist", which is the same shape as the other
+ * migration-gated writes in this file.
+ */
+export async function renameWeek(id: string, title: string | null): Promise<void> {
+  const next = title?.trim() || null;
+  const { error } = await db().from("course_weeks").update({ title: next }).eq("id", id);
+  if (!error) return;
+  if (/title/.test(error.message) && /does not exist|schema cache|could not find/i.test(error.message)) {
+    throw new Error(
+      "This project cannot name weeks yet — run supabase/migrations/0033_week_titles.sql " +
+        "in the Supabase SQL editor.",
+    );
+  }
+  throw dbError(error);
+}
+
+/**
  * Give every week an activity references a course_weeks row of its own.
  *
  * Without one a week renders (activities name it) but has no id, so it cannot

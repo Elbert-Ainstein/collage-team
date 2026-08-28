@@ -215,6 +215,41 @@ export async function createCourse(input: {
       .select().single(),
   );
 }
+/**
+ * Rename a course, its section code, or its term.
+ *
+ * No migration needed: 0003's "own courses" is FOR ALL on owner_id = auth.uid(),
+ * so an owner could always have written these columns — nothing ever offered it.
+ *
+ * The code is what a person reads to tell two sections apart, and 0003's
+ * uniq_course_owner_code stops one account holding two of the same. An empty
+ * code is stored as NULL rather than "", because that index is partial on
+ * `code is not null` and a pile of empty strings would collide.
+ */
+export async function renameCourse(
+  id: string,
+  patch: { name?: string; code?: string | null; term?: string | null },
+): Promise<void> {
+  const next: { name?: string; code?: string | null; term?: string | null } = {};
+  if (patch.name !== undefined) {
+    const name = patch.name.trim();
+    // A course with no name is a blank row in a switcher nobody can identify.
+    if (!name) throw new Error("A course needs a name");
+    next.name = name;
+  }
+  if (patch.code !== undefined) next.code = patch.code?.trim() || null;
+  if (patch.term !== undefined) next.term = patch.term?.trim() || null;
+  if (!Object.keys(next).length) return;
+
+  const { error } = await db().from("courses").update(next).eq("id", id);
+  if (error) {
+    if (/duplicate key|23505/i.test(error.message)) {
+      throw new Error("You already have a course with that code. Give this one a different one.");
+    }
+    throw dbError(error);
+  }
+}
+
 export async function deleteCourse(id: string): Promise<void> {
   const { error } = await db().from("courses").delete().eq("id", id);
   if (error) throw dbError(error);
@@ -222,20 +257,38 @@ export async function deleteCourse(id: string): Promise<void> {
 
 /** The course this tool is built for. Its sessions are fixed, not user-created. */
 export const COURSE_NAME = "Applied Physics 50";
+/**
+ * What a brand-new account is given to start with, and nothing more. These were
+ * once the only codes the app would show — pickSessions dropped everything else
+ * — which is why renaming a course was impossible. A course may now be called
+ * whatever its owner calls it.
+ */
 export const SESSION_CODES = ["AP50A", "AP50B"] as const;
 
-const isSessionCode = (code: string | null): code is (typeof SESSION_CODES)[number] =>
-  SESSION_CODES.includes((code ?? "") as (typeof SESSION_CODES)[number]);
 
-/** One row per code, oldest wins — mirrors the DB rule in migration 0002. */
+/**
+ * The account's courses, oldest first, one per code.
+ *
+ * It used to KEEP only AP50A and AP50B and drop everything else, which made
+ * renaming a course impossible in the worst way: rename the code and the course
+ * vanished from the switcher while ensureSessions created a fresh AP50A beside
+ * it. The two seeded codes are a starting point, not the set of courses that may
+ * exist.
+ *
+ * Still de-duplicated by code, because 0002 de-duplicates by (owner, code) in
+ * the database and a client that disagreed with that would show a row the next
+ * reload deletes. A course with no code stands on its own id.
+ */
 function pickSessions(all: Course[]): Course[] {
-  const byCode = new Map<string, Course>();
+  const byKey = new Map<string, Course>();
   for (const c of all) {
-    if (!isSessionCode(c.code)) continue;
-    const prev = byCode.get(c.code);
-    if (!prev || c.created_at < prev.created_at) byCode.set(c.code, c);
+    const key = c.code ?? `id:${c.id}`;
+    const prev = byKey.get(key);
+    if (!prev || c.created_at < prev.created_at) byKey.set(key, c);
   }
-  return SESSION_CODES.map((code) => byCode.get(code)).filter((c): c is Course => Boolean(c));
+  return [...byKey.values()].sort(
+    (a, b) => (a.code ?? "").localeCompare(b.code ?? "") || a.created_at.localeCompare(b.created_at),
+  );
 }
 
 /** In-flight provisioning, so concurrent callers share one attempt. */
@@ -269,8 +322,15 @@ export async function ensureSessions(term = "Fall"): Promise<Course[]> {
     // RLS already limits reads to this account; owner_id is set explicitly so
     // the row passes the WITH CHECK on insert.
     const existing = await listCourses();
-    const missing = SESSION_CODES.filter((code) => !existing.some((c) => c.code === code));
-    if (!missing.length) return pickSessions(existing);
+    // BOOTSTRAP ONCE, not forever. This used to re-provision whichever of
+    // AP50A/AP50B it could not see, which meant renaming a course silently grew
+    // a replacement for it on the next load — and deleting one you did not want
+    // was impossible, because it came straight back.
+    //
+    // An account that owns any course has been set up. What it owns after that
+    // is its own business.
+    if (existing.length) return pickSessions(existing);
+    const missing = [...SESSION_CODES];
 
     const { error } = await sb
       .from("courses")
@@ -282,8 +342,8 @@ export async function ensureSessions(term = "Fall"): Promise<Course[]> {
     const after = pickSessions(await listCourses());
     if (!after.length) {
       throw new Error(
-        "Signed in, but no AP 50 sessions came back. The database rejected them — " +
-          "check that migrations 0003–0005 have been run in Supabase.",
+        "Signed in, but the first sessions could not be created. The database refused them — " +
+          "check that migrations 0003-0005 have been run in Supabase.",
       );
     }
     return after;

@@ -327,6 +327,18 @@
   font-weight: 700;
   letter-spacing: var(--fv-tight);
 }
+/* Sits in the meta line under the course name. Quiet until you go looking for
+   it — a rename control that advertises itself turns a masthead into a form. */
+.fv-courserename {
+  cursor: pointer;
+  color: var(--fv-muted);
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+.fv-courserename:hover {
+  color: var(--fv-navy);
+}
 .fv-meta {
   display: flex;
   gap: 6px;

@@ -21,6 +21,7 @@ import {
   backfillWeeks,
   ensureCheckIn,
   setLiveWeek,
+  renameWeek,
   setWeekDates,
 } from "./facultyData";
 import {
@@ -237,6 +238,11 @@ export function ActivitiesScreen(props: {
       await setWeekDates(id, label);
     });
 
+  const saveWeekName = (id: string, title: string | null) =>
+    void run(async () => {
+      await renameWeek(id, title);
+    });
+
   // live_week is one column on the course, so marking a week live is inherently
   // exclusive — the previous one stops being live in the same write.
   const makeLive = (target: number | null) =>
@@ -445,6 +451,7 @@ export function ActivitiesScreen(props: {
             onAddTo={(w) => startNewActivity(w)}
             onDuplicate={duplicate}
             onDates={saveDates}
+            onRename={saveWeekName}
             onLive={makeLive}
             run={run}
             onDropWeek={(g) =>
@@ -525,6 +532,7 @@ function WeekHead({
   isLive,
   busy,
   onDates,
+  onRename,
   onLive,
   trailing,
 }: {
@@ -535,12 +543,17 @@ function WeekHead({
   isLive: boolean;
   busy: boolean;
   onDates: (id: string, label: string | null) => void;
+  onRename: (id: string, title: string | null) => void;
   onLive: (week: number | null) => void;
   /** Slot at the end of the heading — the delete control, when there is one. */
   trailing?: React.ReactNode;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  // The heading itself — "Week 8", or whatever it has been called instead.
+  // Separate state from the dates so opening one does not arm the other.
+  const [naming, setNaming] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
 
   // Only a course_weeks row can hold dates. A week that exists solely because
   // an activity names it has nothing to write to, so it reads rather than edits.
@@ -558,6 +571,21 @@ function WeekHead({
     if (next !== (group.dates ?? null)) onDates(group.id, next);
   };
 
+  const openName = () => {
+    // Seeded with what is ON the week, not with the label — the label falls back
+    // to "Week 8", and seeding that would make the number look like something
+    // somebody typed, so clearing it would read as deleting a name.
+    setNameDraft(group.title ?? "");
+    setNaming(true);
+  };
+
+  const commitName = () => {
+    if (!group.id) return;
+    const next = nameDraft.trim() || null;
+    setNaming(false);
+    if (next !== (group.title ?? null)) onRename(group.id, next);
+  };
+
   return (
     <div className="fv-weekhead">
       {isLive ? (
@@ -567,7 +595,38 @@ function WeekHead({
           aria-hidden="true"
         />
       ) : null}
-      <span className="fv-weekname">{group.label}</span>
+      {naming ? (
+        <input
+          className="fv-in"
+          style={{ width: 190, flex: "none", height: 26, padding: "0 8px" }}
+          value={nameDraft}
+          autoFocus
+          placeholder={group.week == null ? "Unscheduled" : `Week ${group.week}`}
+          onChange={(e) => setNameDraft(e.target.value)}
+          onBlur={commitName}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commitName();
+            if (e.key === "Escape") setNaming(false);
+          }}
+        />
+      ) : (
+        <span className="fv-weekname">
+          {group.label}
+          {editable ? (
+            <button
+              type="button"
+              className="fv-iconbtn"
+              style={{ width: 24, height: 24, marginLeft: 6, verticalAlign: "middle" }}
+              aria-label={`Rename ${group.label}`}
+              title="Call this week something else"
+              disabled={busy}
+              onClick={openName}
+            >
+              <FIcon name="edit" size={13} />
+            </button>
+          ) : null}
+        </span>
+      )}
 
       {editing ? (
         <>
@@ -672,6 +731,7 @@ function RowView({
   onAddTo,
   onDuplicate,
   onDates,
+  onRename,
   onLive,
   run,
   onDropWeek,
@@ -686,6 +746,7 @@ function RowView({
   /** Copy one into the same week and open it — the parent owns both halves. */
   onDuplicate: (a: Activity) => void;
   onDates: (id: string, label: string | null) => void;
+  onRename: (id: string, title: string | null) => void;
   onLive: (week: number | null) => void;
   run: (job: () => Promise<void>) => Promise<void>;
   onDropWeek: (g: WeekGroup) => void;
@@ -713,6 +774,7 @@ function RowView({
               isLive={g.week != null && g.week === data.course.live_week}
               busy={busy}
               onDates={onDates}
+              onRename={onRename}
               onLive={onLive}
               trailing={
                 canAuthor ? (
