@@ -575,15 +575,16 @@ export async function autoFormTeams(
   teamSetId: string, roster: Student[], size: number,
 ): Promise<void> {
   await deleteTeamsOfSet(teamSetId);
-  const NAMES = [
-    "Team Helix", "Team Ribosome", "Team Vesicle", "Team Mitosis", "Team Cytosol",
-    "Team Axon", "Team Lysosome", "Team Codon", "Team Flagellum", "Team Nucleus",
-    "Team Golgi", "Team Plasmid",
-  ];
+  // Team 1, Team 2. There was a list of cell-biology names here — Helix,
+  // Ribosome, Vesicle — and they read well on a design mock and badly in a room:
+  // a TF calling out a team, an instructor reading a roster, and a CSV of team
+  // NUMBERS all want the number, and nobody could tell whether Golgi came before
+  // or after Plasmid. Renaming one to something meaningful is still there for
+  // anyone who wants it; it is just no longer the default nobody chose.
   const chunks: Student[][] = [];
   for (let i = 0; i < roster.length; i += size) chunks.push(roster.slice(i, i + size));
   for (let i = 0; i < chunks.length; i++) {
-    const team = await createTeam(teamSetId, NAMES[i] ?? `Team ${i + 1}`, i);
+    const team = await createTeam(teamSetId, `Team ${i + 1}`, i);
     await moveStudents(chunks[i].map((s) => s.id), team.id, []);
   }
 }
