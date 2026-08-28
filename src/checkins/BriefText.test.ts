@@ -46,3 +46,24 @@ describe("safeHref", () => {
     expect(safeHref("https://example.edu/a?b=1&c=2#d")).toBe("https://example.edu/a?b=1&c=2#d");
   });
 });
+
+// The editor's Cmd-K validates with the SAME safeHref the renderer uses, so
+// these are the exact cases it refuses to author. If that ever diverges, faculty
+// could write a link that comes out as dead text in front of the class.
+describe("what the editor will let you author", () => {
+  it("accepts what a person actually pastes", () => {
+    for (const ok of [
+      "https://canvas.harvard.edu/courses/1108579",
+      "http://intranet.school/handout.pdf",
+      "www.example.edu/reading",
+    ]) {
+      expect(safeHref(ok)).not.toBeNull();
+    }
+  });
+
+  it("refuses what would render as dead text", () => {
+    for (const bad of ["javascript:alert(1)", "mailto:kelly@harvard.edu", "notaurl", ""]) {
+      expect(safeHref(bad)).toBeNull();
+    }
+  });
+});

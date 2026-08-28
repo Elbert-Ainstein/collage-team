@@ -10,7 +10,7 @@ import type { ResultRow } from "@/checkins/data";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteActivity, tintFor, updateActivity } from "@/checkins/data";
 import { deleteActivityRecordings } from "@/checkins/audio";
-import { BriefText } from "@/checkins/BriefText";
+import { BriefText, safeHref } from "@/checkins/BriefText";
 import { purgeActivityStorage } from "@/checkins/purge";
 import { isCompletionMet, isOpenToStudents } from "@/checkins/studentData";
 import {
@@ -409,6 +409,50 @@ export function ActivityDetail(props: {
   const titleRef = useRef<HTMLInputElement | null>(null);
   const descRef = useRef<HTMLTextAreaElement | null>(null);
 
+  /**
+   * The Cmd-K dialog, and where in the description it will write.
+   *
+   * The selection is captured when the dialog OPENS, not when it closes:
+   * focusing the URL field takes the caret out of the textarea, and by the time
+   * anyone presses Insert the browser has forgotten what was highlighted.
+   */
+  const [linking, setLinking] = useState<
+    { text: string; url: string; start: number; end: number } | null
+  >(null);
+  const [linkBad, setLinkBad] = useState(false);
+
+  const openLink = () => {
+    const el = descRef.current;
+    if (!el) return;
+    const start = el.selectionStart ?? desc.length;
+    const end = el.selectionEnd ?? start;
+    setLinkBad(false);
+    setLinking({ text: desc.slice(start, end), url: "", start, end });
+  };
+
+  const insertLink = () => {
+    if (!linking) return;
+    // Checked with the SAME function the renderer uses, so the editor cannot
+    // author a link that would come out as dead text in front of the class.
+    if (!safeHref(linking.url.trim())) {
+      setLinkBad(true);
+      return;
+    }
+    const label = linking.text.trim() || linking.url.trim();
+    const md = `[${label}](${linking.url.trim()})`;
+    const next = desc.slice(0, linking.start) + md + desc.slice(linking.end);
+    setDesc(next);
+    setLinking(null);
+    // Caret after the link, so typing carries on where the sentence was.
+    const at = linking.start + md.length;
+    window.setTimeout(() => {
+      const el = descRef.current;
+      if (!el) return;
+      el.focus();
+      el.setSelectionRange(at, at);
+    }, 0);
+  };
+
   const openEditor = (opts?: { blankTitle?: boolean }) => {
     setKind(activity.type);
     // Seed from the activity every time rather than once, so a refresh that
@@ -740,6 +784,14 @@ export function ActivityDetail(props: {
               placeholder="Describe what they do. Leave it empty and students see no description."
               value={desc}
               onChange={(e) => setDesc(e.target.value)}
+              onKeyDown={(e) => {
+                // The shortcut every editor uses for this, so nobody has to be
+                // told it exists. Meta on a Mac, Ctrl elsewhere.
+                if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+                  e.preventDefault();
+                  openLink();
+                }
+              }}
             />
           ) : brief ? (
             <p style={{ margin: "20px 0 0", fontSize: 16, lineHeight: 1.65, maxWidth: "64ch" }}>
@@ -761,6 +813,68 @@ export function ActivityDetail(props: {
               No description yet — students see a line saying you haven&rsquo;t written one.
             </p>
           )}
+
+          {editing ? (
+            <div
+              className="fv-sub"
+              style={{ marginTop: 6, fontSize: "var(--fv-2xs)", display: "flex", gap: 8 }}
+            >
+              <button type="button" className="fv-btn ghost sm" onClick={openLink}>
+                <FIcon name="copy" size={13} />
+                Add link
+              </button>
+              <span style={{ alignSelf: "center" }}>
+                Select a word and press ⌘K — students see the word, not the address.
+              </span>
+            </div>
+          ) : null}
+
+          {linking ? (
+            <div className="fv-card" style={{ marginTop: 10, padding: "12px 14px", maxWidth: "48ch" }}>
+              <div className="fv-eyebrow" style={{ marginBottom: 8 }}>
+                Add a link
+              </div>
+              <input
+                className="fv-in"
+                style={{ width: "100%" }}
+                placeholder="Words students will see"
+                value={linking.text}
+                onChange={(e) => setLinking({ ...linking, text: e.target.value })}
+              />
+              <input
+                className="fv-in"
+                style={{ width: "100%", marginTop: 8 }}
+                placeholder="https://…"
+                autoFocus
+                value={linking.url}
+                onChange={(e) => {
+                  setLinkBad(false);
+                  setLinking({ ...linking, url: e.target.value });
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") insertLink();
+                  if (e.key === "Escape") setLinking(null);
+                }}
+              />
+              {linkBad ? (
+                <div
+                  className="fv-sub"
+                  style={{ marginTop: 6, fontSize: "var(--fv-2xs)", color: "var(--fv-amber)" }}
+                >
+                  That is not a web address this will open. Links have to start with http or
+                  https — anything else is left as plain text when students read it.
+                </div>
+              ) : null}
+              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                <button type="button" className="fv-btn primary sm" onClick={insertLink}>
+                  Add it
+                </button>
+                <button type="button" className="fv-btn ghost sm" onClick={() => setLinking(null)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           {editing ? null : (
             <>
