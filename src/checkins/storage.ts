@@ -32,6 +32,17 @@ export type Bucket = "recordings" | "submissions" | "resources" | "activity-file
 /** How long a signed link lives. Long enough to use, short enough that a copied one dies. */
 export const SIGNED_SECONDS = 60 * 60;
 
+/**
+ * When a screen holding signed links should mint fresh ones.
+ *
+ * Four fifths of the life, so a re-sign lands with time to spare rather than in
+ * the same second the old one dies. Three screens sit on signed links for
+ * longer than an hour — the rubric builder, the activity page and a student's
+ * assignment — and each of them wrote this number down separately until they
+ * did not agree.
+ */
+export const RESIGN_MS = Math.round(SIGNED_SECONDS * 1000 * 0.8);
+
 const db = () => requireSupabase();
 
 export interface StorageFailure {

@@ -2099,3 +2099,91 @@ button.fv-steplabel:hover { color: var(--fv-navy); }
     background: var(--fv-lavender);
   }
 }
+
+/* ------------------------------------------------------------ attachments */
+
+/* The files hanging off a brief, on the activity page. The student half of
+   this lives at .sv-attach* in student.css and the two are deliberately the
+   same shape — an instructor checking what the class can see should not be
+   reading a different layout from the one they are about to publish. */
+
+.fv-attach {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--fv-neutral-200);
+  display: grid;
+  gap: 10px;
+  justify-items: stretch;
+}
+.fv-attachlist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.fv-attachitem {
+  min-width: 0;
+}
+.fv-attachrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+/* A filename is the one string on this screen nobody wrote to be read, so it
+   breaks anywhere rather than pushing the two buttons off the side. */
+.fv-attachname {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--fv-xs);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.fv-attachsize {
+  margin-left: 8px;
+  font-size: var(--fv-2xs);
+  color: var(--fv-muted);
+  white-space: nowrap;
+}
+.fv-attachopen,
+.fv-attachdrop {
+  flex: none;
+}
+.fv-attachdrop {
+  color: var(--fv-destructive);
+}
+.fv-attachnote {
+  font-size: var(--fv-2xs);
+  color: var(--fv-muted);
+  line-height: 1.5;
+}
+.fv-attachgoing {
+  font-size: var(--fv-2xs);
+  color: var(--fv-muted);
+}
+/* Bounded on BOTH axes. max-width alone lets a tall scan of a page run the
+   brief off the bottom of the screen; max-height alone lets a wide photograph
+   run it off the side. */
+.fv-attachimg {
+  display: block;
+  margin-top: 8px;
+  max-width: 100%;
+  max-height: 320px;
+  width: auto;
+  height: auto;
+  border: 1px solid var(--fv-neutral-200);
+  border-radius: var(--fv-r-lg);
+}
+.fv-attachrefused {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--fv-2xs);
+  line-height: 1.5;
+  color: var(--fv-destructive);
+}

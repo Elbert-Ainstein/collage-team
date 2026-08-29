@@ -22,6 +22,7 @@ import type { Activity, Student, TeamWithMembers } from "@/checkins/types";
 import { SCOPE_OF } from "@/checkins/types";
 import {
   SCALE,
+  SCALE_LABEL,
   SLOTS,
   absentIds,
   getTutorialSheet,
@@ -347,10 +348,10 @@ export function CheckInScreen({ data }: { data: FacultyData }): JSX.Element {
                             <span className="fv-eyebrow">Presenter</span>
                           </th>
                           <th>
-                            <span className="fv-eyebrow">Accuracy 1–5</span>
+                            <span className="fv-eyebrow">{SCALE_LABEL.accuracy} 1–5</span>
                           </th>
                           <th className="fv-ckdisc">
-                            <span className="fv-eyebrow">Quality of discussion 1–5</span>
+                            <span className="fv-eyebrow">{SCALE_LABEL.discussion} 1–5</span>
                           </th>
                         </Cells>
                       ))}
@@ -425,7 +426,7 @@ export function CheckInScreen({ data }: { data: FacultyData }): JSX.Element {
                                 </td>
                                 <td className="fv-ckcell">
                                   <Scale
-                                    label={`Accuracy, check-in ${n}, ${team.name}`}
+                                    label={`${SCALE_LABEL.accuracy}, check-in ${n}, ${team.name}`}
                                     value={mark?.accuracy ?? null}
                                     disabled={!canEdit}
                                     onChange={(v) => void writeMark(team.id, n, { accuracy: v })}
@@ -434,7 +435,7 @@ export function CheckInScreen({ data }: { data: FacultyData }): JSX.Element {
                                 <td className="fv-ckcell fv-ckdisc">
                                   <Scale
                                     tone="disc"
-                                    label={`Quality of discussion, check-in ${n}, ${team.name}`}
+                                    label={`${SCALE_LABEL.discussion}, check-in ${n}, ${team.name}`}
                                     value={mark?.discussion ?? null}
                                     disabled={!canEdit}
                                     onChange={(v) => void writeMark(team.id, n, { discussion: v })}
@@ -569,9 +570,14 @@ function PersonPicker({
  *
  * `tone` is which of the two scales this is. They sit side by side in every
  * slot and used to render identically, so a mis-tap put a wrong score on a
- * named student and said nothing; the discussion column is round and lavender
- * where accuracy is square and navy. Shape as well as colour, because a room
- * lit for a lecture is not where you want to be telling two hues apart.
+ * named student and said nothing; Engagement and reflection is round and
+ * lavender where Preparation and understanding is square and navy. Shape as
+ * well as colour, because a room lit for a lecture is not where you want to be
+ * telling two hues apart.
+ *
+ * The tone is "disc" and the class is fv-ckdisc after tutorial_marks.discussion,
+ * the column it writes. Only the heading was renamed; keeping the old word on
+ * the hooks is what lets you find the CSS from the column and back again.
  */
 function Scale({
   label,

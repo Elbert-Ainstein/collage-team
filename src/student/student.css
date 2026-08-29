@@ -406,6 +406,9 @@
   .sv-rowgrade { order: 3; flex: none; width: auto; margin-top: 4px; }
   .sv-rowstatus { order: 5; margin-top: 7px; }
   .sv-rowscope { order: 6; margin-top: 7px; }
+  /* Same order as the scope pill, so the two sit together on the metadata line
+     in the order they are written and neither claims a line of its own. */
+  .sv-rowfiles { order: 6; margin-top: 7px; }
   .sv-rowdue { order: 7; flex: 1 1 auto; min-width: 0; margin-top: 7px; }
   /* The whole row is the target and it is 140px tall — a chevron pointing at
      nothing else costs 18px of title width to say so again. */
@@ -429,6 +432,76 @@
 
   /* Wrapped below the brief, so it is a band across the pane, not a column. */
   .sv-detailside { width: 100%; }
+}
+
+/* ----------------------------------------------- the activity attachments
+   What the instructor attached, shown on the assignment the student opened.
+   The bucket is private, so every href and src down here is a signed URL
+   minted for this reader and re-signed before it expires — nothing here is a
+   permalink and nothing survives being pasted somewhere else for long.
+
+   A filename is the one string on this screen that nobody wrote to be read:
+   "AP50 ProblemSet Week07 FINAL v3(2).pdf" is wider than a 320px pane, so it
+   breaks mid-word rather than pushing the page sideways. */
+.sv-attach {
+  margin-top: 14px;
+  padding-top: 13px;
+  border-top: 1px solid var(--neutral-200);
+}
+.sv-attachlist {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sv-attachitem { min-width: 0; }
+.sv-attachhead { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
+.sv-attachicon { color: var(--muted-foreground); display: flex; margin-top: 4px; }
+.sv-attachname {
+  min-width: 0;
+  font-size: var(--text-xs);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+/* 18px of line plus 3px above and below is the 24px target SC 2.5.8 asks for,
+   without a padded box that would read as a button sitting in a sentence. */
+.sv-attachlink {
+  display: inline-block;
+  padding: 3px 0;
+  color: var(--navy-700);
+  font-weight: var(--weight-semibold);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.sv-attachlink:hover { color: var(--navy); }
+.sv-attachsize {
+  margin-left: 8px;
+  font-size: var(--text-2xs);
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+/* Indented past the icon, so it reads as belonging to the name above it. */
+.sv-attachnote {
+  margin-left: 24px;
+  font-size: var(--text-2xs);
+  color: var(--muted-foreground);
+}
+/* Bounded on BOTH axes. max-width alone lets a tall scan of a page run the
+   card off the bottom of the screen; max-height alone lets a wide photograph
+   push the brief sideways. width/height auto keep whichever limit bites from
+   squashing the other. */
+.sv-attachimg {
+  display: block;
+  margin-top: 8px;
+  max-width: 100%;
+  max-height: 320px;
+  width: auto;
+  height: auto;
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-md);
+  background: var(--neutral-100);
 }
 
 /* Drop zone — the PDF hand-in. Same shape as the faculty roster dropzone so the

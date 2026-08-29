@@ -24,9 +24,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Activity, ActivityQuestion, FileRef, RubricItem } from "@/checkins/types";
 import { isCompletion } from "@/checkins/types";
 import { updateActivity } from "@/checkins/data";
+import { RESIGN_MS } from "@/checkins/storage";
 import { restampReleased } from "./facultyData";
 import {
-  activityFileUrl,
+  activityFileUrls,
+  addActivityFile,
   addQuestion,
   addRubricItem,
   countMarksForRubricItem,
@@ -34,14 +36,14 @@ import {
   deleteRubricItem,
   ensureQuestions,
   ensureRubric,
-  removeActivityFile,
+  removeActivityFileAt,
   seedRubricTemplate,
   setQuestionPoints,
   setRubricQuestion,
   updateQuestion,
   updateRubricItem,
-  uploadActivityFile,
 } from "./facultyData";
+import { ATTACHMENT_ACCEPT, kindOf, refuseFile } from "./activityFiles";
 import { COMBO_TEMPLATE } from "./comboRubric";
 import {
   awardFits,
@@ -538,6 +540,47 @@ function CriterionRow({
   );
 }
 
+/** How an attachment is addressed on the row — see removeActivityFileAt. */
+const keyOf = (ref: FileRef) => ref.path ?? ref.name;
+
+/**
+ * The controls in the pane's head. Small, but 24px is the floor a pointer
+ * target is allowed to be (WCAG 2.2 SC 2.5.8) and these were sitting at 22.
+ */
+const HEAD_BTN: React.CSSProperties = { height: 24, padding: "0 8px", fontSize: "var(--fv-2xs)" };
+
+/**
+ * Which attachment this pane opens on.
+ *
+ * The first PDF, and only then the first attachment. An activity carries a
+ * LIST now, so files[0] is merely whichever went up first — which can easily be
+ * a photograph of the board sitting in front of the brief every criterion on
+ * the right is being written against. Past the PDF nothing is ranked: the order
+ * is the instructor's.
+ */
+function openingFile(held: readonly FileRef[]): FileRef | null {
+  return held.find((ref) => kindOf(ref) === "pdf") ?? held[0] ?? null;
+}
+
+/** The middle of the pane when there is a sentence to read rather than a document. */
+function PaneNote({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        flex: 1,
+        minHeight: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 24,
+        overflowY: "auto",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 /** The left pane: whatever document the criteria are being written against. */
 function DocumentPane({
   activity,
@@ -550,99 +593,186 @@ function DocumentPane({
   onChanged: () => void | Promise<void>;
   onError: (e: unknown) => void;
 }) {
-  const file: FileRef | null = activity.files?.[0] ?? null;
-  const [url, setUrl] = useState<string | null>(null);
+  const held = useMemo<FileRef[]>(() => activity.files ?? [], [activity.files]);
+  // Which one the grader switched to, by key. Null means "whichever this pane
+  // opens on" — and so does a key that has stopped being on the row, which is
+  // what lands the view somewhere sensible after the file on screen is removed.
+  const [chosen, setChosen] = useState<string | null>(null);
+  const [urls, setUrls] = useState<Map<string, string>>(new Map());
   const [loading, setLoading] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"" | "uploading" | "removing">("");
+  const [refused, setRefused] = useState<string | null>(null);
   const [over, setOver] = useState(false);
+  // The ref Remove was pressed against, carried from the press to the answer.
+  // The dialog deletes THIS attachment — not whatever the pane is showing by
+  // the time somebody confirms it.
+  const [confirming, setConfirming] = useState<FileRef | null>(null);
   const picker = useRef<HTMLInputElement | null>(null);
+  // Set while the picker is open on behalf of Replace: the attachment the
+  // incoming file stands in for, or null when one is simply being added. A ref
+  // because the picker answers in its own event, long after the click.
+  const replacing = useRef<FileRef | null>(null);
 
-  // A signed URL is minted per view and expires; it is never stored on the row.
+  const shown = useMemo(
+    () => held.find((ref) => keyOf(ref) === chosen) ?? openingFile(held),
+    [held, chosen],
+  );
+  const url = shown?.path ? (urls.get(shown.path) ?? null) : null;
+
+  const pathKey = held
+    .map((ref) => ref.path)
+    .filter((p): p is string => Boolean(p))
+    .join("\n");
+
+  // Signed URLs are minted per view and expire; none of them is ever stored on
+  // the row. One batch call for the whole list, not one per attachment:
+  // switching between the two halves of a two-file brief should not be a round
+  // trip, and six serial calls to open one pane is the load this app spent a
+  // perf pass getting rid of.
+  //
+  // Keyed on the PATHS, never on `held`. onChanged refetches the course after
+  // every write and on the way back from every other screen, and activity.files
+  // arrives as a fresh array carrying the identical refs — an effect keyed on
+  // that identity re-signs on each one, and because a new URL is a new src the
+  // iframe underneath is torn down and rebuilt, losing the page the grader was
+  // on. Same shape as ActivityDetail's list, deliberately.
   useEffect(() => {
-    let live = true;
-    if (!file?.path) {
-      setUrl(null);
+    if (!pathKey) {
+      setUrls(new Map());
+      setLoading(false);
       return;
     }
+    let live = true;
     setLoading(true);
-    activityFileUrl(file)
-      .then((next) => {
-        if (live) setUrl(next);
-      })
-      .catch((e) => {
-        if (live) onError(e);
-      })
-      .finally(() => {
-        if (live) setLoading(false);
-      });
+    // Rebuilt from the key rather than read out of the closure, so there is no
+    // second answer to "which paths is this run about" that can drift from the
+    // dependency. activityFileUrls reads nothing off a ref but its path.
+    const refs = pathKey.split("\n").map((path) => ({ name: path, path }));
+    const sign = () => {
+      activityFileUrls(refs)
+        .then((next) => {
+          if (live) setUrls(next);
+        })
+        .catch((e) => {
+          if (live) onError(e);
+        })
+        .finally(() => {
+          if (live) setLoading(false);
+        });
+    };
+    sign();
+    // An hour of reading a brief and writing criteria against it is a normal
+    // sitting on this screen, and a signed URL does not last one. Without this
+    // the document silently dies mid-rubric and the only cure is a reload.
+    const tick = window.setInterval(sign, RESIGN_MS);
     return () => {
       live = false;
+      window.clearInterval(tick);
     };
-  }, [file?.path, onError]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathKey, onError]);
 
   const take = useCallback(
-    (picked: File | null | undefined) => {
+    (picked: File | null | undefined, swap: FileRef | null) => {
       if (!picked) return;
-      setBusy(true);
-      uploadActivityFile(activity, picked)
-        .then(() => onChanged())
+      setRefused(null);
+      // Asked here first so a 40 MB video is refused in the time it takes to
+      // say so, rather than after carrying it. addActivityFile asks the same
+      // question again against a fresh read, and that is the one that enforces.
+      const no = refuseFile(picked, held.length);
+      if (no) {
+        setRefused(no);
+        return;
+      }
+      setBusy("uploading");
+      // Replace ADDS and only then drops, and drops BY PATH. The other order
+      // loses the instructor's document for good if the upload then fails, and
+      // dropping by position would take whichever attachment is first on the
+      // row — which since this pane opens on the first PDF is very often not
+      // the one on screen. Two costs, both deliberate: the replacement lands at
+      // the end of the list rather than in the slot it replaced, and Replace is
+      // refused outright on an activity already holding the maximum, because
+      // for a moment there would be one too many.
+      addActivityFile(activity, picked)
+        .then(async (next) => {
+          const added: FileRef | undefined = next[next.length - 1];
+          if (swap) await removeActivityFileAt(activity, keyOf(swap));
+          // Show what was just uploaded, whichever one it stood in for.
+          setChosen(added ? keyOf(added) : null);
+          await onChanged();
+        })
         .catch(onError)
-        .finally(() => setBusy(false));
+        .finally(() => setBusy(""));
     },
-    [activity, onChanged, onError],
+    [activity, held.length, onChanged, onError],
   );
+
+  const pick = (swap: FileRef | null) => {
+    replacing.current = swap;
+    picker.current?.click();
+  };
+
+  const drop = (target: FileRef) => {
+    setBusy("removing");
+    removeActivityFileAt(activity, keyOf(target))
+      .then(() => {
+        setChosen(null);
+        return onChanged();
+      })
+      .catch(onError)
+      .finally(() => {
+        setBusy("");
+        setConfirming(null);
+      });
+  };
 
   return (
     <div className="fv-rubricdoc">
       <div className="fv-panehead">
-        <span className="fv-eyebrow" style={{ flex: 1 }}>
-          {file ? file.name : "Assignment document"}
+        <span
+          className="fv-eyebrow"
+          style={{
+            flex: 1,
+            minWidth: 0,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            // A filename is not an eyebrow label, and upper-casing it disagrees
+            // with the switcher below, which shows the same name as it is.
+            textTransform: shown ? "none" : undefined,
+          }}
+        >
+          {shown ? shown.name : "Assignment document"}
         </span>
-        {file?.size ? (
+        {shown?.size ? (
           <span className="fv-sub fv-num" style={{ fontSize: "var(--fv-2xs)" }}>
-            {file.size}
+            {shown.size}
           </span>
         ) : null}
         {url ? (
-          <a
-            className="fv-btn ghost sm"
-            style={{ height: 22, padding: "0 8px", fontSize: "var(--fv-2xs)" }}
-            href={url}
-            target="_blank"
-            rel="noreferrer"
-          >
+          <a className="fv-btn ghost sm" style={HEAD_BTN} href={url} target="_blank" rel="noreferrer">
             <FIcon name="openInNew" size={13} />
             Open
           </a>
         ) : null}
-        {canEdit && file ? (
+        {canEdit && shown ? (
+          // Both act on `shown`, the attachment named to their left, and both
+          // address it by its own path. Nothing here reads files[0].
           <>
             <button
               type="button"
               className="fv-btn ghost sm"
-              style={{ height: 22, padding: "0 8px", fontSize: "var(--fv-2xs)" }}
-              disabled={busy}
-              onClick={() => picker.current?.click()}
+              style={HEAD_BTN}
+              disabled={busy !== ""}
+              onClick={() => pick(shown)}
             >
               Replace
             </button>
             <button
               type="button"
               className="fv-btn ghost sm"
-              style={{
-                height: 22,
-                padding: "0 8px",
-                fontSize: "var(--fv-2xs)",
-                color: "var(--fv-destructive)",
-              }}
-              disabled={busy}
-              onClick={() => {
-                setBusy(true);
-                removeActivityFile(activity)
-                  .then(() => onChanged())
-                  .catch(onError)
-                  .finally(() => setBusy(false));
-              }}
+              style={{ ...HEAD_BTN, color: "var(--fv-destructive)" }}
+              disabled={busy !== ""}
+              onClick={() => setConfirming(shown)}
             >
               Remove
             </button>
@@ -650,87 +780,209 @@ function DocumentPane({
         ) : null}
       </div>
 
+      {held.length > 1 ? (
+        <div
+          role="group"
+          aria-label="Attachments on this activity"
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 6,
+            flex: "none",
+            padding: "7px 14px",
+            borderBottom: "1px solid var(--fv-neutral-200)",
+            background: "var(--fv-cream-300)",
+          }}
+        >
+          {held.map((ref, i) => {
+            const on = shown ? keyOf(ref) === keyOf(shown) : false;
+            return (
+              // Indexed, because two refs written before 0012 can carry the
+              // same name and nothing else to tell them apart.
+              <button
+                key={`${i}:${keyOf(ref)}`}
+                type="button"
+                className={`fv-btn ${on ? "outline" : "ghost"} sm`}
+                style={{
+                  height: 24,
+                  padding: "0 9px",
+                  fontSize: "var(--fv-xs)",
+                  fontWeight: on ? 700 : 500,
+                  maxWidth: 220,
+                }}
+                aria-pressed={on}
+                onClick={() => setChosen(keyOf(ref))}
+              >
+                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {ref.name}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {refused ? (
+        <div
+          role="alert"
+          style={{
+            flex: "none",
+            padding: "8px 14px",
+            borderBottom: "1px solid var(--fv-neutral-200)",
+            color: "var(--fv-destructive)",
+            fontSize: "var(--fv-xs)",
+            lineHeight: 1.5,
+          }}
+        >
+          {refused}
+        </div>
+      ) : null}
+
       <input
         ref={picker}
         type="file"
-        accept="application/pdf,image/*"
+        accept={ATTACHMENT_ACCEPT}
         style={{ display: "none" }}
         onChange={(e) => {
-          take(e.target.files?.[0]);
+          const swap = replacing.current;
+          replacing.current = null;
+          take(e.target.files?.[0], swap);
           // Clear it, or picking the same file twice fires no change event.
           e.target.value = "";
         }}
       />
 
-      {/* An iframe rather than a PDF library: every browser this app supports
-          renders a PDF natively, and a viewer bundle would be the single
-          largest thing shipped for one pane of one screen. */}
-      {url ? (
-        <iframe className="fv-embed" src={url} title={file?.name ?? "Assignment document"} />
-      ) : (
-        <div
-          style={{
-            flex: 1,
-            minHeight: 0,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            padding: 24,
-            overflowY: "auto",
-          }}
-        >
-          {loading || busy ? (
-            <span className="fv-sub">{busy ? "Uploading…" : "Opening the document…"}</span>
-          ) : file ? (
-            // A row written before 0012 recorded a file NAME and no bytes.
+      {/* `loading && !url` and not a bare `loading`: a re-sign while the
+          document is already up would otherwise swap the iframe for "Opening
+          the document…" and put the grader back at page one. */}
+      {busy !== "" || (loading && !url) ? (
+        <PaneNote>
+          <span className="fv-sub">
+            {busy === "uploading"
+              ? "Uploading…"
+              : busy === "removing"
+                ? "Removing…"
+                : "Opening the document…"}
+          </span>
+        </PaneNote>
+      ) : shown && url ? (
+        kindOf(shown) === "image" ? (
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              overflow: "auto",
+              padding: 12,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              background: "var(--fv-neutral-100)",
+            }}
+          >
+            {/* Not the PDF iframe: a browser handed a PNG in a frame shows it
+                at its own pixel size against black, and a phone photograph of a
+                worksheet is four times the width of this pane. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={url}
+              alt={shown.name}
+              style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block" }}
+            />
+          </div>
+        ) : kindOf(shown) === "pdf" ? (
+          // An iframe rather than a PDF library: every browser this app supports
+          // renders a PDF natively, and a viewer bundle would be the single
+          // largest thing shipped for one pane of one screen.
+          <iframe className="fv-embed" src={url} title={shown.name} />
+        ) : (
+          <PaneNote>
             <div className="fv-sub" style={{ textAlign: "center", maxWidth: "40ch", lineHeight: 1.6 }}>
-              <div style={{ fontWeight: 600, color: "var(--fv-navy)" }}>{file.name}</div>
-              This activity lists a file but has nothing stored for it. Upload it again to read it
-              here while you write the criteria.
-              {canEdit ? (
-                <div style={{ marginTop: 12 }}>
-                  <button
-                    type="button"
-                    className="fv-btn outline sm"
-                    onClick={() => picker.current?.click()}
-                  >
-                    <FIcon name="fileUpload" size={15} />
-                    Upload it
-                  </button>
-                </div>
-              ) : null}
+              <div style={{ fontWeight: 600, color: "var(--fv-navy)" }}>{shown.name}</div>
+              This one can&rsquo;t be shown in the pane. Open it in a new tab to read it.
             </div>
-          ) : canEdit ? (
-            <button
-              type="button"
-              className={`fv-dz${over ? " over" : ""}`}
-              style={{ maxWidth: 420, width: "100%" }}
-              onClick={() => picker.current?.click()}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setOver(true);
-              }}
-              onDragLeave={() => setOver(false)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setOver(false);
-                take(e.dataTransfer.files?.[0]);
-              }}
-            >
-              <span style={{ color: "var(--fv-muted)" }}>
-                <FIcon name="fileUpload" size={24} />
-              </span>
-              <span style={{ fontWeight: 600 }}>Add the assignment PDF</span>
-              <span className="fv-sub" style={{ fontSize: "var(--fv-xs)" }}>
-                Drop it here or click to choose. Students on the course can read it once the
-                activity is visible to them.
-              </span>
-            </button>
-          ) : (
-            <span className="fv-sub">The instructor has not added a document for this activity.</span>
-          )}
-        </div>
+          </PaneNote>
+        )
+      ) : shown ? (
+        <PaneNote>
+          <div className="fv-sub" style={{ textAlign: "center", maxWidth: "40ch", lineHeight: 1.6 }}>
+            <div style={{ fontWeight: 600, color: "var(--fv-navy)" }}>{shown.name}</div>
+            {shown.path
+              ? // A path that would not sign. The bytes may well be there; what
+                // failed is this browser's permission to be handed a link to
+                // them, and nobody should be told to re-upload over that.
+                "This file could not be opened just now. Reload the page, and ask whoever set the activity up if it keeps happening."
+              : // A row written before 0012 recorded a file NAME and no bytes.
+                "This activity lists a file but has nothing stored for it. Upload it again to read it here while you write the criteria."}
+            {canEdit && !shown.path ? (
+              <div style={{ marginTop: 12 }}>
+                <button
+                  type="button"
+                  className="fv-btn outline sm"
+                  onClick={() => pick(shown)}
+                >
+                  <FIcon name="fileUpload" size={15} />
+                  Upload it
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </PaneNote>
+      ) : canEdit ? (
+        <PaneNote>
+          <button
+            type="button"
+            className={`fv-dz${over ? " over" : ""}`}
+            style={{ maxWidth: 420, width: "100%" }}
+            onClick={() => pick(null)}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setOver(true);
+            }}
+            onDragLeave={() => setOver(false)}
+            onDrop={(e) => {
+              e.preventDefault();
+              setOver(false);
+              take(e.dataTransfer.files?.[0], null);
+            }}
+          >
+            <span style={{ color: "var(--fv-muted)" }}>
+              <FIcon name="fileUpload" size={24} />
+            </span>
+            <span style={{ fontWeight: 600 }}>Add the assignment PDF</span>
+            <span className="fv-sub" style={{ fontSize: "var(--fv-xs)" }}>
+              Drop it here or click to choose. Students on the course can read it once the activity
+              is visible to them. The full set of attachments is managed on the activity page.
+            </span>
+          </button>
+        </PaneNote>
+      ) : (
+        <PaneNote>
+          <span className="fv-sub">The instructor has not added a document for this activity.</span>
+        </PaneNote>
       )}
+
+      {confirming ? (
+        <ConfirmDialog
+          title="Remove this attachment?"
+          body={
+            <>
+              <div style={{ color: "var(--fv-navy)", fontWeight: 600 }}>{confirming.name}</div>
+              <div style={{ marginTop: 6 }}>
+                It comes off this activity for everyone, including students who can already see it.
+                {held.length === 2
+                  ? " The other attachment stays where it is."
+                  : held.length > 2
+                    ? ` The other ${held.length - 1} attachments stay where they are.`
+                    : ""}
+              </div>
+            </>
+          }
+          confirmLabel="Remove attachment"
+          busy={busy === "removing"}
+          onConfirm={() => drop(confirming)}
+          onCancel={() => setConfirming(null)}
+        />
+      ) : null}
     </div>
   );
 }

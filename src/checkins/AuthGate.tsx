@@ -613,13 +613,33 @@ function SignIn({
           {error && <ErrorLine text={error} />}
           {notice && <NoticeLine text={notice} />}
           {sent && (
-            <NoticeLine
-              text={
-                "If that address has an account, a reset link is on its way to it. " +
-                "Check your spam folder — and use the link soon, it expires in about an hour " +
-                "and only works once."
-              }
-            />
+            <>
+              <NoticeLine
+                text={
+                  "If that address has an account, a reset link is on its way to it. " +
+                  "Check your spam folder — and use the link soon, it expires in about an hour " +
+                  "and only works once."
+                }
+              />
+              {/* For the person nothing ever arrives for. The built-in sender is
+                  heavily rate-limited and on most projects will only deliver to
+                  addresses on the project team, so a reset asked for a student
+                  address can go nowhere at all — and resetPasswordForEmail
+                  returns cleanly either way, so the app never learns of it.
+                  That is a dashboard fix, not a code one, and until it is done
+                  this is the only honest thing the screen can say.
+
+                  It says nothing about whether the address has an account: the
+                  line above is worded the way it is precisely to hide that, and
+                  this one sits directly underneath it. */}
+              <div
+                style={{ fontSize: 11.5, color: "var(--ink3)", lineHeight: 1.55, marginTop: -4 }}
+              >
+                Check the address you typed was the right one, and look in filtered mail too. If
+                nothing arrives, ask your instructor — this prototype&rsquo;s mail doesn&rsquo;t
+                reach every address.
+              </div>
+            </>
           )}
 
           {!sent && (

@@ -13,6 +13,7 @@ import { deleteActivityRecordings } from "@/checkins/audio";
 import { BriefText, safeHref } from "@/checkins/BriefText";
 import { purgeActivityStorage } from "@/checkins/purge";
 import { isCompletionMet, isOpenToStudents } from "@/checkins/studentData";
+import { RESIGN_MS } from "@/checkins/storage";
 import {
   HIDDEN_INSTANT,
   isCompletion,
@@ -22,13 +23,18 @@ import {
   TYPE_LABEL,
   type Activity,
   type ActivityType,
+  type FileRef,
 } from "@/checkins/types";
 import {
+  activityFileUrls,
+  addActivityFile,
   countWorkForActivity,
   ensureCheckIn,
+  removeActivityFileAt,
   seedRubricTemplate,
   setActivityPoints,
 } from "./facultyData";
+import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, kindOf, refuseFile } from "./activityFiles";
 import { COMBO_TEMPLATE } from "./comboRubric";
 import { pointsLabel, nextPositionIn, pointsTotal, questionCount, questionsFor, statFor } from "./model";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -186,6 +192,360 @@ function Stamp({ s }: { s: Subject }): JSX.Element | null {
 /** Mirrors model.statFor's notion of "handed in", so the lists and the counts agree. */
 const isIn = (r: Pick<ResultRow, "status">) =>
   r.status === "submitted" || r.status === "needs_review" || r.status === "scored";
+
+/**
+ * How an attachment is addressed on the row.
+ *
+ * A ref written before 0012 has a NAME and no path. removeActivityFileAt
+ * matches on whichever it is handed, so this is the one key both kinds answer
+ * to — and only a real path has bytes behind it to delete.
+ */
+const keyOf = (ref: FileRef) => ref.path ?? ref.name;
+
+/**
+ * What is attached to this activity, under the words that describe it.
+ *
+ * Uploading is not part of Save, and the drop zone says so in the one line it
+ * has. The moment a file lands it is bytes in a private bucket and a name on the
+ * row; the alternative is a Save that has to be able to un-upload and a Cancel
+ * that has to delete objects a student may already have opened.
+ *
+ * A TF sees the list and none of the controls — they mark against what is
+ * attached, and 0012's policies would refuse the write anyway.
+ */
+function ActivityFiles({
+  activity,
+  editing,
+  canEdit,
+  onChanged,
+}: {
+  activity: Activity;
+  /** Whether the page is in its edit mode. The list itself shows in both. */
+  editing: boolean;
+  canEdit: boolean;
+  onChanged: () => void | Promise<void>;
+}) {
+  const held = useMemo<FileRef[]>(() => activity.files ?? [], [activity.files]);
+  const [urls, setUrls] = useState<Map<string, string>>(new Map());
+  /** Has the first signing attempt come back? "Opening" is not "would not open". */
+  const [ready, setReady] = useState(false);
+  /** Which file of how many is in the air, so a drop of four says where it has got to. */
+  const [going, setGoing] = useState<{ name: string; at: number; of: number } | null>(null);
+  /** What the last batch would not take, in the order the files were picked. */
+  const [notes, setNotes] = useState<string[]>([]);
+  const [over, setOver] = useState(false);
+  /** The ref Remove was pressed against, carried from the press to the answer. */
+  const [confirming, setConfirming] = useState<FileRef | null>(null);
+  const [removing, setRemoving] = useState(false);
+  const picker = useRef<HTMLInputElement | null>(null);
+
+  // A ref rather than the two pieces of state, because both of those are set
+  // asynchronously: two clicks landing in one tick would each read the old
+  // value and start a batch, and two batches interleave their read-modify-write
+  // of the files column and lose an upload.
+  const working = useRef(false);
+
+  // Set on the way IN as well as cleared on the way out. A ref initialised at
+  // its declaration is initialised once per mount, and StrictMode mounts,
+  // unmounts and mounts again — which leaves this false for the whole life of
+  // the real component and silently drops every state set after an await.
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
+  const pathKey = held
+    .map((r) => r.path)
+    .filter((p): p is string => Boolean(p))
+    .join("\n");
+
+  // Keyed on the PATHS, never on `held`. onChanged refetches the whole course
+  // after every write and on the way back from other screens, so activity.files
+  // arrives as a fresh array carrying the identical refs; an effect keyed on
+  // that identity re-signs the entire list on every one of them, forever.
+  useEffect(() => {
+    if (!pathKey) {
+      setUrls(new Map());
+      setReady(true);
+      return;
+    }
+    let live = true;
+    setReady(false);
+    // Built back out of the key rather than read from the closure, so there is
+    // no second answer to "which paths is this run about" that could drift from
+    // the dependency. activityFileUrls reads nothing off a ref but its path.
+    const refs = pathKey.split("\n").map((path) => ({ name: path, path }));
+    const sign = () => {
+      // One batched call for the whole list. Six serial round trips to show six
+      // attachments is the load this app spent a pass getting rid of.
+      activityFileUrls(refs)
+        .then((next) => {
+          if (live) setUrls(next);
+        })
+        // Silent. Every row carries its own name and says for itself that it
+        // would not open; a red box over the brief says it a second time, in
+        // the one place somebody is trying to read.
+        .catch(() => undefined)
+        .finally(() => {
+          if (live) setReady(true);
+        });
+    };
+    sign();
+    const tick = window.setInterval(sign, RESIGN_MS);
+    return () => {
+      live = false;
+      window.clearInterval(tick);
+    };
+  }, [pathKey]);
+
+  const take = (picked: FileList | null) => {
+    const files = Array.from(picked ?? []);
+    if (!files.length || working.current) return;
+    working.current = true;
+    setNotes([]);
+    void (async () => {
+      const refused: string[] = [];
+      // The count is carried through the loop by hand. `activity` cannot grow
+      // until the refetch at the end, so asking held.length once per file would
+      // wave a seventh past a cap the sixth had already reached — and would do
+      // it after paying for the upload.
+      let count = held.length;
+      for (let i = 0; i < files.length; i += 1) {
+        const file = files[i];
+        const no = refuseFile(file, count);
+        if (no) {
+          refused.push(no);
+          continue;
+        }
+        setGoing({ name: file.name, at: i + 1, of: files.length });
+        try {
+          // Awaited one at a time. addActivityFile re-reads the row immediately
+          // before it writes, but two of them in flight still interleave
+          // read/read/write/write, and the second write is a list that never
+          // had the first file in it.
+          count = (await addActivityFile(activity, file)).length;
+        } catch (e) {
+          // Collected, not thrown: a fourth file that fails must not take the
+          // screen away from the three that landed.
+          refused.push(e instanceof Error ? e.message : `"${file.name}" was not uploaded.`);
+        }
+        if (!alive.current) {
+          working.current = false;
+          return;
+        }
+      }
+      working.current = false;
+      setGoing(null);
+      setNotes(refused);
+      // One refetch, at the end. Each file is already on the row before the
+      // next one starts, so a batch that gave up halfway still reads back
+      // everything it did manage.
+      await onChanged();
+    })();
+  };
+
+  const drop = (target: FileRef) => {
+    if (working.current) return;
+    working.current = true;
+    setRemoving(true);
+    setNotes([]);
+    removeActivityFileAt(activity, keyOf(target))
+      .then(() => onChanged())
+      .catch((e) => {
+        if (alive.current) {
+          setNotes([e instanceof Error ? e.message : `"${target.name}" was not removed.`]);
+        }
+      })
+      .finally(() => {
+        working.current = false;
+        if (!alive.current) return;
+        setRemoving(false);
+        setConfirming(null);
+      });
+  };
+
+  // Only the course owner adds and drops files, and only while the page is
+  // being edited. With neither the controls nor an attachment there is nothing
+  // to put under the brief at all.
+  const showTools = canEdit && editing;
+  if (!held.length && !showTools) return null;
+  const busy = going !== null || removing;
+
+  return (
+    <div className="fv-attach">
+      <div className="fv-eyebrow">
+        {held.length === 0
+          ? "Attachments"
+          : held.length === 1
+            ? "Attachment"
+            : `Attachments · ${held.length}`}
+      </div>
+
+      {held.length ? (
+        <ul className="fv-attachlist">
+          {held.map((ref, i) => {
+            const url = ref.path ? urls.get(ref.path) : undefined;
+            // Three ways there is nothing to open, and they are three different
+            // sentences. No path at all is a row written before 0012: there are
+            // no bytes anywhere and there never were, so it is listed and that
+            // is the whole of what anyone can do with it.
+            const note = !ref.path
+              ? "Nothing was stored for this one. The activity kept the name and no file."
+              : !ready
+                ? "Opening…"
+                : !url
+                  ? "This one would not open just now. Reload the page to try again."
+                  : null;
+            return (
+              <li className="fv-attachitem" key={ref.path ?? `${i}:${ref.name}`}>
+                <div className="fv-attachrow">
+                  <span className="fv-attachname">
+                    {ref.name}
+                    {ref.size ? <span className="fv-attachsize">{ref.size}</span> : null}
+                  </span>
+                  {url ? (
+                    <a
+                      className="fv-btn ghost sm fv-attachopen"
+                      href={url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <FIcon name="openInNew" size={14} />
+                      Open
+                    </a>
+                  ) : null}
+                  {showTools ? (
+                    // Named after the file it takes, because six of these read
+                    // "Remove" and a screen reader hears the list, not the row.
+                    <button
+                      type="button"
+                      className="fv-btn ghost sm fv-attachdrop"
+                      disabled={busy}
+                      aria-label={`Remove ${ref.name}`}
+                      onClick={() => setConfirming(ref)}
+                    >
+                      Remove
+                    </button>
+                  ) : null}
+                </div>
+                {note ? <div className="fv-attachnote">{note}</div> : null}
+                {/* Only an image, and only once it has a URL: an <img> with no
+                    src is a broken-image glyph, and a 4000px photograph at its
+                    own size takes the brief off the side of the page. The alt
+                    is the filename, which is the only description of it anybody
+                    wrote.
+
+                    Deliberately not wrapped in a link, though clicking a
+                    picture to enlarge it is the habit — the name above already
+                    opens the same file, and doing it twice puts six more tab
+                    stops between the brief and the buttons under it. */}
+                {kindOf(ref) === "image" && url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img className="fv-attachimg" src={url} alt={ref.name} loading="lazy" />
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+
+      {showTools ? (
+        <>
+          <input
+            ref={picker}
+            type="file"
+            multiple
+            accept={ATTACHMENT_ACCEPT}
+            style={{ display: "none" }}
+            onChange={(e) => {
+              take(e.target.files);
+              // Cleared, or choosing the same file twice fires no change event.
+              e.target.value = "";
+            }}
+          />
+
+          {held.length >= MAX_ATTACHMENTS ? (
+            // No zone at all rather than one that refuses everything dropped on
+            // it. The rule is the same sentence refuseFile would have said.
+            <div className="fv-attachnote">
+              {MAX_ATTACHMENTS} attachments is the most an activity carries. Remove one to add
+              another.
+            </div>
+          ) : (
+            <button
+              type="button"
+              className={`fv-dz sm${over ? " over" : ""}`}
+              onClick={() => picker.current?.click()}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setOver(true);
+              }}
+              onDragLeave={() => setOver(false)}
+              onDrop={(e) => {
+                e.preventDefault();
+                setOver(false);
+                take(e.dataTransfer.files);
+              }}
+            >
+              <span style={{ color: "var(--fv-muted)" }}>
+                <FIcon name="fileUpload" size={22} />
+              </span>
+              <span style={{ fontWeight: 600 }}>Add a PDF, PNG or JPG</span>
+              <span className="fv-sub" style={{ fontSize: "var(--fv-xs)", lineHeight: 1.5 }}>
+                Drop them here or click to choose. These go up as you add them — Save is for the
+                words. Students read them once the activity is visible.
+              </span>
+            </button>
+          )}
+
+          {going ? (
+            <div className="fv-attachgoing" role="status">
+              {going.of > 1
+                ? `Uploading ${going.at} of ${going.of} — ${going.name}`
+                : `Uploading ${going.name}`}
+            </div>
+          ) : null}
+          {removing ? (
+            <div className="fv-attachgoing" role="status">
+              Removing…
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
+      {notes.length ? (
+        <ul className="fv-attachrefused" role="alert">
+          {notes.map((n, i) => (
+            <li key={`${i}:${n}`}>{n}</li>
+          ))}
+        </ul>
+      ) : null}
+
+      {confirming ? (
+        <ConfirmDialog
+          title="Remove this attachment?"
+          body={
+            <>
+              <div style={{ color: "var(--fv-navy)", fontWeight: 600 }}>{confirming.name}</div>
+              <div style={{ marginTop: 6 }}>
+                {confirming.path
+                  ? "It comes off this activity for everyone, students included, and the file is deleted. Uploading it again is the only way back."
+                  : "Nothing was ever stored for this one, so only its name comes off the activity."}
+              </div>
+            </>
+          }
+          confirmLabel="Remove attachment"
+          busy={removing}
+          onConfirm={() => drop(confirming)}
+          onCancel={() => setConfirming(null)}
+        />
+      ) : null}
+    </div>
+  );
+}
 
 export function ActivityDetail(props: {
   data: FacultyData;
@@ -890,6 +1250,16 @@ export function ActivityDetail(props: {
               </div>
             </div>
           ) : null}
+
+          {/* Under the brief, because that is what they belong to: the sheet
+              the description is describing, the photograph of the board it
+              refers to. A TF reads them here too — they mark against them. */}
+          <ActivityFiles
+            activity={activity}
+            editing={editing}
+            canEdit={data.can.author}
+            onChanged={onChanged}
+          />
 
           {editing ? null : (
             <>

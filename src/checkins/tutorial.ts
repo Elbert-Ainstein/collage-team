@@ -38,6 +38,18 @@ export const SLOTS = [1, 2] as const;
 /** Both scales. */
 export const SCALE = [1, 2, 3, 4, 5] as const;
 
+/**
+ * What the two scales are CALLED. The columns they write are still accuracy and
+ * discussion — the words on a sheet are not a schema, and renaming a column to
+ * change a heading would be a migration and a rewrite of every reader for no
+ * gain. Faculty and student both read the names from here so the sheet and the
+ * card a student sees can never end up calling one scale two things.
+ */
+export const SCALE_LABEL = {
+  accuracy: "Preparation and understanding",
+  discussion: "Engagement and reflection",
+} as const;
+
 const db = () => requireSupabase();
 
 function unwrap<T>(res: { data: T | null; error: { message: string } | null }): T {

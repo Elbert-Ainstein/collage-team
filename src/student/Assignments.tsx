@@ -14,13 +14,14 @@
 // count — are rendered from the handoff's seed copy and are labelled "Sample"
 // in their section header so nobody mistakes them for live data.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
 import { BriefText } from "@/checkins/BriefText";
 import { ensureTeamResult } from "@/checkins/studentData";
-import { getMyMarks, type StudentMark } from "@/checkins/tutorial";
+import { getMyMarks, SCALE_LABEL, type StudentMark } from "@/checkins/tutorial";
 import { listTeamResources, resourceUrls, type TeamResource } from "@/checkins/resources";
+import { RESIGN_MS } from "@/checkins/storage";
 import { listMyQuestions } from "@/checkins/studentData";
 import type { Assignment, AssignmentStatus, Enrolment } from "@/checkins/studentData";
 import type {
@@ -28,10 +29,17 @@ import type {
   ActivityQuestion,
   ActivityType,
   CheckInResult,
+  FileRef,
   Scope,
   Student,
 } from "@/checkins/types";
 import { SCOPE_LABEL, SCOPE_OF, TYPE_LABEL } from "@/checkins/types";
+// The activity's attachments are the instructor's file, read here rather than
+// written: the rules and the signing live with the side that uploads them, and
+// a second copy of "is this a PDF" on the reading side is how the two surfaces
+// come to disagree about what a student is looking at.
+import { kindOf } from "@/faculty/activityFiles";
+import { activityFileUrls } from "@/faculty/facultyData";
 import { SIcon } from "./icons";
 import { Recorder } from "./Recorder";
 
@@ -325,6 +333,10 @@ const CARD_BODY: CSSProperties = {
 function ActivityRow({ a, onSelect }: { a: Assignment; onSelect: (id: string) => void }) {
   const act = a.activity;
   const scope = SCOPE_OF[act.type];
+  // A count, never the files themselves. Six names and six thumbnails on every
+  // row of a term is a wall, and this row is a thing you scan past; the point
+  // here is only that there IS something to open one tap away.
+  const fileCount = act.files?.length ?? 0;
   return (
     <button
       type="button"
@@ -341,6 +353,12 @@ function ActivityRow({ a, onSelect }: { a: Assignment; onSelect: (id: string) =>
         <span className="sv-rowhead">
           <span className="sv-rowtitle">{act.title}</span>
           <span className="sv-badge outline sv-rowscope">{SCOPE_LABEL[scope]}</span>
+          {fileCount > 0 ? (
+            <span className="sv-badge outline sv-rowfiles">
+              <SIcon name="attachFile" size={12} />
+              {fileCount} {fileCount === 1 ? "file" : "files"}
+            </span>
+          ) : null}
         </span>
         <span className="sv-rowdue">{dueLine(a)}</span>
       </span>
@@ -472,8 +490,161 @@ function resourceStamp(iso: string): string {
   return `${day}, ${h}:${String(d.getMinutes()).padStart(2, "0")}${h24 >= 12 ? "pm" : "am"}`;
 }
 
-// ------------------------------------------------------------------ detail
+// ------------------------------------------------------------- attachments
 
+interface Signed {
+  /** Path -> URL. A path the backend refused is absent; so is a ref that has none. */
+  urls: Map<string, string>;
+  /** Has the first attempt finished? Distinguishes "loading" from "could not open". */
+  ready: boolean;
+}
+
+/**
+ * Signed URLs for one activity's attachments, kept alive while the page is open.
+ *
+ * Keyed on the PATHS, not on the array: StudentApp re-fetches every assignment
+ * every two minutes and on every focus, so `activity.files` arrives as a fresh
+ * array carrying the identical six refs, and keying on identity would re-sign
+ * all six on that timer forever.
+ */
+function useSignedFiles(refs: FileRef[]): Signed {
+  const [urls, setUrls] = useState<Map<string, string>>(new Map());
+  const [ready, setReady] = useState(false);
+  const signedAt = useRef(0);
+
+  const key = refs
+    .map((r) => r.path)
+    .filter((p): p is string => Boolean(p))
+    .join("\n");
+
+  useEffect(() => {
+    if (!key) {
+      setUrls(new Map());
+      setReady(true);
+      return;
+    }
+    let alive = true;
+    setReady(false);
+
+    // `refs` is read from the closure rather than declared a dependency, and
+    // that is the whole point of keying on `key`: the key IS the list of paths,
+    // so a run that was not re-triggered is holding an array whose paths are
+    // the same ones. Adding refs to the deps puts the two-minute re-fetch back.
+    const sign = () => {
+      signedAt.current = Date.now();
+      activityFileUrls(refs)
+        .then((m) => {
+          if (alive) setUrls(m);
+        })
+        // Silent. Every row still renders its name and says it could not be
+        // opened; a red box over the brief is not the place to say it again.
+        .catch(() => undefined)
+        .finally(() => {
+          if (alive) setReady(true);
+        });
+    };
+    sign();
+
+    const tick = window.setInterval(sign, RESIGN_MS);
+    // A background tab's timers are throttled to whole minutes, so the interval
+    // is not a promise that anything ran. Coming back to the page is also the
+    // moment a stale link is about to be clicked, so check the age there too.
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - signedAt.current >= RESIGN_MS) sign();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
+    return () => {
+      alive = false;
+      window.clearInterval(tick);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [key]);
+
+  return { urls, ready };
+}
+
+/**
+ * What the instructor attached to this activity.
+ *
+ * The bucket is private and 0012's policy only lets a student read it once the
+ * activity has opened, which by the time this renders it has. Images show
+ * themselves, because a diagram nobody clicks is a diagram nobody sees; a PDF
+ * is a named row, because the browser cannot show it here anyway and a
+ * thumbnail of page one is not what anyone came for.
+ */
+function Attachments({ refs, signed }: { refs: FileRef[]; signed: Signed }) {
+  if (!refs.length) return null;
+  return (
+    <div className="sv-attach">
+      <div className="sv-eyebrow">
+        {refs.length === 1 ? "Attachment" : `Attachments · ${refs.length}`}
+      </div>
+      <ul className="sv-attachlist">
+        {refs.map((ref, i) => (
+          <Attachment key={ref.path ?? `${i}:${ref.name}`} attachment={ref} signed={signed} />
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// `attachment` rather than the obvious `ref`: React reserves that prop name and
+// would eat it before this component ever saw it.
+function Attachment({ attachment, signed }: { attachment: FileRef; signed: Signed }) {
+  const kind = kindOf(attachment);
+  const url = attachment.path ? signed.urls.get(attachment.path) : undefined;
+
+  // Three ways there is nothing to click, and they are not the same sentence.
+  // A ref written before 0012 recorded a NAME and no path: there are no bytes
+  // anywhere and there never were, so it is listed and that is all anyone can
+  // do with it. A ref WITH a path is either still being signed or was refused.
+  const note = !attachment.path
+    ? "No file was stored for this one."
+    : !signed.ready
+      ? "Loading…"
+      : !url
+        ? "This one would not open. Reload the page to try again."
+        : null;
+
+  return (
+    <li className="sv-attachitem">
+      <div className="sv-attachhead">
+        <span className="sv-attachicon">
+          <SIcon name={kind === "image" ? "image" : "attachFile"} size={16} />
+        </span>
+        <span className="sv-attachname">
+          {url ? (
+            <a className="sv-attachlink" href={url} target="_blank" rel="noreferrer">
+              {attachment.name}
+            </a>
+          ) : (
+            attachment.name
+          )}
+          {attachment.size ? <span className="sv-attachsize">{attachment.size}</span> : null}
+        </span>
+      </div>
+
+      {note ? <div className="sv-attachnote">{note}</div> : null}
+
+      {/* Only an image, and only once it has a URL — an <img> with no src is a
+          broken-image glyph, and a 4000px photograph at its own size would take
+          the brief off the side of the page. The alt is the filename, which is
+          the only description of it anybody wrote.
+
+          Deliberately not a link, though clicking a picture to enlarge it is
+          the habit: the name above already opens the same file in a new tab,
+          and wrapping the image too would put six more tab stops in a card
+          whose links all lead where the first six already did. */}
+      {kind === "image" && url ? (
+        <img className="sv-attachimg" src={url} alt={attachment.name} loading="lazy" />
+      ) : null}
+    </li>
+  );
+}
+
+// ------------------------------------------------------------------ detail
 
 /**
  * The brief, plus what the activity is out of.
@@ -484,7 +655,17 @@ function resourceStamp(iso: string): string {
  * student following it is following something nobody set. The question count
  * beside it was a hard-coded "5 questions"; it is the real rubric now.
  */
-function DescriptionCard({ a, questions }: { a: Assignment; questions: number }) {
+function DescriptionCard({
+  a,
+  questions,
+  files,
+  signed,
+}: {
+  a: Assignment;
+  questions: number;
+  files: FileRef[];
+  signed: Signed;
+}) {
   const brief = a.activity.source_text?.trim();
   return (
     <div className="sv-card" style={{ marginTop: 14 }}>
@@ -499,6 +680,7 @@ function DescriptionCard({ a, questions }: { a: Assignment; questions: number })
           you&rsquo;re not sure what it asks for.
         </p>
       )}
+      <Attachments refs={files} signed={signed} />
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
         {questions > 0 ? (
           <span className="sv-badge secondary">
@@ -859,27 +1041,45 @@ function LiveGrading({
                   {nameOf(m.presenter_id)}
                 </span>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 7, marginTop: 9 }}>
+              {/* Label above its bar, not beside it. These two were one-word
+                  labels in a 78px column; the words the instructor wants are
+                  "Preparation and understanding" and "Engagement and
+                  reflection", and no fixed column holds either in a 270px side
+                  card, let alone at 320px. Above the bar the label has the
+                  whole width and wraps to a second line when it needs one,
+                  which is the one thing a scale label must never do badly —
+                  "Preparation and und…" says less than "Accuracy" did. */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 11, marginTop: 9 }}>
                 {(
                   [
-                    { label: "Accuracy", value: m.accuracy },
-                    { label: "Discussion", value: m.discussion },
+                    { label: SCALE_LABEL.accuracy, value: m.accuracy },
+                    { label: SCALE_LABEL.discussion, value: m.discussion },
                   ] as const
                 ).map((s) => (
-                  <div key={s.label} style={{ display: "flex", alignItems: "center", gap: 9 }}>
+                  <div key={s.label}>
+                    <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                      <span
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          fontSize: "var(--text-xs)",
+                          lineHeight: 1.35,
+                          color: "var(--muted-foreground)",
+                        }}
+                      >
+                        {s.label}
+                      </span>
+                      <span
+                        className="sv-num"
+                        style={{ flex: "none", fontSize: "var(--text-xs)" }}
+                      >
+                        {s.value != null ? `${s.value}/5` : "—"}
+                      </span>
+                    </div>
                     <span
                       style={{
-                        width: 78,
-                        flex: "none",
-                        fontSize: "var(--text-xs)",
-                        color: "var(--muted-foreground)",
-                      }}
-                    >
-                      {s.label}
-                    </span>
-                    <span
-                      style={{
-                        flex: 1,
+                        display: "block",
+                        marginTop: 5,
                         height: 6,
                         borderRadius: 3,
                         background: "var(--neutral-200)",
@@ -897,12 +1097,6 @@ function LiveGrading({
                           }}
                         />
                       ) : null}
-                    </span>
-                    <span
-                      className="sv-num"
-                      style={{ fontSize: "var(--text-xs)", width: 26, textAlign: "right" }}
-                    >
-                      {s.value != null ? `${s.value}/5` : "—"}
                     </span>
                   </div>
                 ))}
@@ -1060,6 +1254,12 @@ function AssignmentDetail({
   const weekLabel = act.week == null ? act.dates_label ?? "Unscheduled" : `Week ${act.week}`;
   const brief = act.source_text?.trim();
 
+  // Signed once for the whole detail, not once per tab. The Individual and Team
+  // halves show the same attachments and only ever one of them is mounted, so
+  // signing inside either would re-sign all six every time somebody switched.
+  const files = act.files ?? [];
+  const signedFiles = useSignedFiles(files);
+
   const teamSavedLine = !enrolment.team
     ? "You are not on a team yet"
     : a.teamResult?.status === "scored"
@@ -1128,7 +1328,12 @@ function AssignmentDetail({
 
           {onIndiv ? (
             <div>
-              <DescriptionCard a={a} questions={questions.length} />
+              <DescriptionCard
+                a={a}
+                questions={questions.length}
+                files={files}
+                signed={signedFiles}
+              />
               {/* One door to the individual half: the hand-in. "Open my work"
                   sat beside it and led to a second screen for a written note,
                   which is two places to go for one piece of work and a question
@@ -1169,6 +1374,7 @@ function AssignmentDetail({
                     Your instructor hasn&rsquo;t written instructions for this one.
                   </p>
                 )}
+                <Attachments refs={files} signed={signedFiles} />
               </div>
 
               <Recorder resultId={teamResultId} unavailable={whyNoAudio(enrolment, a)} />

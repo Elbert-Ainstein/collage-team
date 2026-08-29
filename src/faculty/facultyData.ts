@@ -18,7 +18,7 @@ import {
   tintFor,
   updateActivity,
 } from "@/checkins/data";
-import { put, remove, signedUrl } from "@/checkins/storage";
+import { put, remove, removeReturningDeleted, signedUrls, stillThere } from "@/checkins/storage";
 import {
   HIDDEN_INSTANT,
   type Activity,
@@ -31,6 +31,7 @@ import {
   type RubricItem,
   type SubmissionMark,
 } from "@/checkins/types";
+import { humanBytes, refuseFile } from "./activityFiles";
 import { deductionForAward, pointsTotal, type PointedQuestion } from "./model";
 import type { RubricTemplate } from "./comboRubric";
 
@@ -711,13 +712,13 @@ export interface DuplicatedActivity {
  *  - The dates. `dates_label`, `due_at` and the two per-scope due columns say
  *    when THIS run happens, which is the one thing that is different about the
  *    next one. A copied deadline in the past is worse than a blank one.
- *  - The assignment document. `files` holds a storage PATH, and
- *    purgeActivityStorage removes the object by that path when an activity is
- *    deleted — so two rows naming one object means deleting either takes the
- *    other's document with it, unrecoverably: the bucket's delete policy joins
+ *  - The attachments. `files` holds a storage PATH per attachment, and
+ *    purgeActivityStorage removes the objects by those paths when an activity
+ *    is deleted — so two rows naming one object means deleting either takes the
+ *    other's attachment with it, unrecoverably: the bucket's delete policy joins
  *    back to the activity row, so once that row is gone nobody can ever remove
  *    or replace the object. Copying the bytes instead is a real feature; naming
- *    them twice is a trap. The week's document is a new file anyway.
+ *    them twice is a trap. The week's documents are new files anyway.
  *  - Submissions, marks and released results. Those are the students' work.
  *
  * Created hidden, exactly like a new activity: a copy is a draft until its week
@@ -796,22 +797,19 @@ export async function duplicateActivity(
   };
 }
 
-// ------------------------------------------------------- the activity's file
+// -------------------------------------------------- the activity's attachments
 //
 // 0012's `activity-files` bucket. Objects are named `<activity_id>/<file>` and
 // every policy on the bucket reads that first segment, so the path is not a
 // convenience here — an object stored under any other shape is reachable by
 // nobody.
+//
+// An activity carries a LIST, added one attachment at a time and capped by the
+// rules in activityFiles.ts. The column was always an array and every reader
+// always typed it as one; what the list needed was not a migration but for the
+// writes to stop treating `files` as a single slot.
 
 const BUCKET = "activity-files";
-
-/** Bytes -> "1.4 MB", for the FileRef that goes on the activity row. */
-function humanSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  const kb = bytes / 1024;
-  if (kb < 1024) return `${Math.round(kb)} KB`;
-  return `${(kb / 1024).toFixed(1)} MB`;
-}
 
 /**
  * Strip a filename down to what can safely be a storage key.
@@ -819,71 +817,241 @@ function humanSize(bytes: number): string {
  * Supabase rejects a number of characters outright, and a name that survives
  * upload but not URL-encoding produces a signed URL for an object that is not
  * there — which reads as a corrupt file rather than a bad name.
+ *
+ * A name made entirely of characters this strips comes back empty, and a name
+ * made of dots comes back as dots. Neither can produce a path segment that is
+ * "." or "..", because objectPath always puts a timestamp in front of this —
+ * which is also why the "document.pdf" fallback is unreachable in practice:
+ * refuseFile has already insisted on an ASCII .pdf/.png/.jpg/.jpeg ending, and
+ * that much always survives the sanitiser.
  */
 function safeName(name: string): string {
   const cleaned = name.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
   return cleaned || "document.pdf";
 }
 
+/** Where one attachment's bytes go. */
+function objectPath(activityId: string, fileName: string): string {
+  // Date.now() is not a key on its own. Attachments upload one at a time, but
+  // each one is a round trip timed against a millisecond clock, and two tabs
+  // share neither a queue nor a counter — while put() is upsert:false, so a
+  // repeated name is a hard refusal partway through a batch rather than a
+  // silent overwrite. The random tail is what makes the name unique; the
+  // timestamp is what keeps a bucket listing readable.
+  const tail = Math.random().toString(36).slice(2, 8);
+  return `${activityId}/${Date.now()}-${tail}-${safeName(fileName)}`;
+}
+
 /**
- * Put a file in the bucket and record it on the activity.
+ * The activity's attachments as the DATABASE has them this instant, or null if
+ * the row has gone.
  *
- * One document per activity in this version: the new file REPLACES whatever was
- * listed, and the old object is removed after the row is updated. That order
- * matters — a failed delete leaves an orphan object, while a failed update
- * would leave the row pointing at bytes that are gone.
+ * Every write below re-reads before it rewrites. One column holds the whole
+ * list, so a write is a read-modify-write of all of it: picking three files at
+ * once and building three arrays from one snapshot keeps whichever lands last
+ * and loses the other two.
  */
-export async function uploadActivityFile(activity: Activity, file: File): Promise<FileRef> {
-  const path = `${activity.id}/${Date.now()}-${safeName(file.name)}`;
-  const error = await put(BUCKET, path, file, file.type || "application/octet-stream");
-  if (error) {
+async function currentFiles(activityId: string): Promise<FileRef[] | null> {
+  const res = await db().from("activities").select("files").eq("id", activityId).maybeSingle();
+  if (res.error) throw dbError(res.error);
+  const row = res.data as { files: FileRef[] | null } | null;
+  return row ? row.files ?? [] : null;
+}
+
+const GONE = "That activity is no longer there.";
+
+/** Run the row write, and take the object back out if it does not land. */
+async function orRemoveObject<T>(path: string, write: () => Promise<T>): Promise<T> {
+  try {
+    return await write();
+  } catch (e) {
+    // The row is the record. An object no row names cannot be listed, opened or
+    // removed through the app ever again — the bucket's own delete policy
+    // resolves the activity from the path and finds nothing pointing back — so
+    // if this take-back does not land, nothing will ever mention the object
+    // again except the storage bill. Said out loud in the error rather than
+    // swallowed: it is the only chance anybody has of knowing.
+    //
+    // Its own try, because the original failure is the one worth reporting and
+    // a second one must not displace it.
+    let stranded = false;
+    try {
+      stranded = Boolean(await remove(BUCKET, [path]));
+    } catch {
+      stranded = true;
+    }
+    if (stranded) {
+      throw new Error(
+        `${String((e as Error)?.message ?? e)} The file had already reached storage and could ` +
+          `not be taken back out (${path}); it is now unreachable from this app.`,
+      );
+    }
+    throw e;
+  }
+}
+
+/**
+ * Put one file in the bucket and name it on the row.
+ *
+ * Appending is the only thing any caller wants. DocumentPane's Replace is not a
+ * placement — it adds the new attachment and then removes the one it was
+ * showing, which is two ordinary operations in an order the screen chooses, and
+ * means there is exactly one way an attachment reaches the bucket and one way
+ * it leaves rather than two that can drift.
+ */
+async function attach(
+  activity: Activity,
+  file: File,
+): Promise<{ ref: FileRef; files: FileRef[] }> {
+  const held = activity.files ?? [];
+  // Refused before the upload where possible: the format and size rules need
+  // nothing from the database, and 20 MB is a long way to carry a file that was
+  // never going to be allowed.
+  const refused = refuseFile(file, held.length);
+  if (refused) throw new Error(refused);
+
+  const path = objectPath(activity.id, file.name);
+  const failure = await put(BUCKET, path, file, file.type || "application/octet-stream");
+  if (failure) {
     throw new Error(
-      `That file was not uploaded: ${error.message}. If this says the bucket is missing, run ` +
+      `That file was not uploaded: ${failure.message}. If this says the bucket is missing, run ` +
         "supabase/migrations/0012_rubric_questions_and_files.sql.",
     );
   }
 
   const ref: FileRef = {
     name: file.name,
-    size: humanSize(file.size),
+    size: humanBytes(file.size),
     path,
     mime: file.type || undefined,
   };
-  const { error: e2 } = await db()
-    .from("activities")
-    .update({ files: [ref] })
-    .eq("id", activity.id);
-  if (e2) {
-    // The row is the record; an object nothing points at is litter, not data.
-    await remove(BUCKET, [path]);
-    throw dbError(e2);
-  }
 
-  const stale = (activity.files ?? []).map((f) => f.path).filter((p): p is string => Boolean(p));
-  if (stale.length) await remove(BUCKET, stale);
-  return ref;
-}
+  const files = await orRemoveObject(path, async () => {
+    const live = await currentFiles(activity.id);
+    if (!live) throw new Error(GONE);
+    // The same rule again, against the count the database actually holds. The
+    // snapshot the caller passed may be several uploads old by now, and the
+    // limit is only a limit if the write enforces it.
+    const late = refuseFile(file, live.length);
+    if (late) throw new Error(late);
 
-/** Take the file off the activity, then off the bucket. */
-export async function removeActivityFile(activity: Activity): Promise<void> {
-  const { error } = await db().from("activities").update({ files: [] }).eq("id", activity.id);
-  if (error) throw dbError(error);
-  const paths = (activity.files ?? []).map((f) => f.path).filter((p): p is string => Boolean(p));
-  if (paths.length) await remove(BUCKET, paths);
+    const list = [...live, ref];
+    // .select() so an RLS-filtered write is DETECTABLE. Writing activities is
+    // owner-only; without this a teaching fellow's upload came back with no
+    // error and no rows, the screen listed the attachment, and the bytes sat in
+    // a bucket the row never named.
+    const { data, error } = await db()
+      .from("activities")
+      .update({ files: list })
+      .eq("id", activity.id)
+      .select("id");
+    if (error) throw dbError(error);
+    if (!data || data.length === 0) {
+      throw new Error(
+        "That file was not attached — only the instructor who owns this course can change an " +
+          "activity.",
+      );
+    }
+    return list;
+  });
+
+  return { ref, files };
 }
 
 /**
- * A URL the browser can render the document from.
+ * Add one attachment. Returns the activity's whole new list.
+ *
+ * NOT safe to run twice at once. It reads the row, appends, and writes the
+ * whole array back, so two overlapping calls interleave read/read/write/write
+ * and the second silently drops the first's ref — leaving its object named by
+ * nothing. Callers upload one file at a time; see ActivityDetail's `working`
+ * ref for the guard. Two BROWSER TABS can still race this, which the column
+ * cannot prevent without a version to compare against.
+ */
+export async function addActivityFile(activity: Activity, file: File): Promise<FileRef[]> {
+  return (await attach(activity, file)).files;
+}
+
+/**
+ * Drop one attachment. Returns the activity's whole new list.
+ *
+ * Addressed by the path that names its object. A ref written before 0012 has a
+ * NAME and no path and so has no path to address it by; it is matched on its
+ * name instead, and there is nothing in any bucket to delete afterwards. Pass
+ * `ref.path ?? ref.name` and both kinds work.
+ */
+export async function removeActivityFileAt(activity: Activity, path: string): Promise<FileRef[]> {
+  const live = await currentFiles(activity.id);
+  if (!live) throw new Error(GONE);
+
+  const next = live.filter((ref) => (ref.path ? ref.path !== path : ref.name !== path));
+  // Nothing matched: somebody else already took it off, and re-writing the same
+  // list to say so is a round trip that changes nothing.
+  if (next.length === live.length) return live;
+
+  // OBJECT FIRST, then the row — the same order purge.ts uses, and for a
+  // sharper version of the same reason. The bucket's delete policy resolves the
+  // activity from the path, so the delete is only ever authorised while the row
+  // still names it; taking the ref off first and then failing to delete leaves
+  // an object nothing names, which no screen can list and no policy will ever
+  // authorise removing again. Doing it this way the failure is survivable
+  // instead: the attachment stays in the list with a link that will not open,
+  // and pressing Remove a second time finishes the job.
+  //
+  // "No error" is not "deleted". The DELETE endpoint runs RLS-FILTERED and
+  // answers 200 with the list of objects it actually removed, so a refusal is
+  // simply an absence — which is why this reads the list and then asks.
+  if (live.some((ref) => ref.path === path)) {
+    const { deleted, failure } = await removeReturningDeleted(BUCKET, [path]);
+    if (failure) throw new Error(`That attachment was not removed: ${failure.message}`);
+    if (!deleted.includes(path) && (await stillThere(BUCKET, path))) {
+      throw new Error(
+        "That attachment was not removed — only the instructor who owns this course can delete " +
+          "an activity's files.",
+      );
+    }
+  }
+
+  const { data, error } = await db()
+    .from("activities")
+    .update({ files: next })
+    .eq("id", activity.id)
+    .select("id");
+  if (error) throw dbError(error);
+  if (!data || data.length === 0) {
+    throw new Error(
+      "That attachment was not removed — only the instructor who owns this course can change an " +
+        "activity.",
+    );
+  }
+  return next;
+}
+
+/**
+ * A URL per attachment the browser can render from, in ONE round trip.
  *
  * Signed and short-lived, because the bucket is private: the policies decide
  * who may mint one, and the link itself expires rather than becoming a way
- * around them. Null when the row predates 0012 and carries only a file NAME.
+ * around them. Nothing is stored on the row.
+ *
+ * One request because supabase-js has a batch form — createSignedUrls, wrapped
+ * as storage.signedUrls — and a page showing six attachments should not make
+ * six serial calls to show them. Paths the backend refuses individually are
+ * simply absent from the map, which costs that one attachment its viewer
+ * rather than the whole set its links. So are refs with no path: a row written
+ * before 0012 records a file NAME and nothing else, and there is nothing to
+ * sign.
  */
-export async function activityFileUrl(ref: FileRef | null | undefined): Promise<string | null> {
-  if (!ref?.path) return null;
-  const { url, error } = await signedUrl(BUCKET, ref.path, 60 * 60);
-  if (error) throw new Error(`That file could not be opened: ${error.message}`);
-  return url;
+export async function activityFileUrls(refs: FileRef[]): Promise<Map<string, string>> {
+  const paths = [...new Set(refs.map((r) => r.path).filter((p): p is string => Boolean(p)))];
+  if (!paths.length) return new Map();
+
+  const { urls, error } = await signedUrls(BUCKET, paths);
+  if (error) {
+    const what = paths.length === 1 ? "That file" : "Those files";
+    throw new Error(`${what} could not be opened: ${error.message}`);
+  }
+  return urls;
 }
 
 // -------------------------------------------------------------------- marks
