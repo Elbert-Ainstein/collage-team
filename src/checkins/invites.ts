@@ -10,11 +10,17 @@
 // nothing except whether it worked.
 //
 // So the errors from redeem() are the product, not an afterthought. The
-// database raises three distinct ones — no such code, revoked code, code fine
-// but you are not on that roster — and they arrive here as plain sentences
-// meant to be shown as-is. Do not collapse them into "that didn't work"; the
-// third is the case a real student hits when their instructor mistyped their
-// address, and it is the only thing that tells them who to go and ask.
+// database raises two distinct ones — no such code, and a code that has been
+// rotated — and they arrive here as plain sentences meant to be shown as-is.
+// Do not collapse them into "that didn't work": they are different acts (check
+// your typing / go and ask for the current code) and only the sentence says
+// which.
+//
+// There used to be a third, and its absence is the feature. 0029 refused anyone
+// whose address the instructor had not imported first, so a real student
+// holding a real code was turned away because they enrolled late or their
+// address was typed wrong. 0030 inverted it: the roster row is what joining
+// PRODUCES. Nobody has to be on a list before they can get on it.
 //
 // A code is still the only thing anyone can PRESENT. The invitations at the
 // bottom of this file are the other direction — offers already waiting for the

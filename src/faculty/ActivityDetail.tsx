@@ -30,6 +30,7 @@ import { FAvatar, FIcon } from "./icons";
 import { linkToActivity } from "./FacultyApp";
 import type { FacultyData } from "./FacultyApp";
 import { ActivityTeamPanel } from "./ActivityTeamPanel";
+import { ActivityFileField, ActivityFileLine } from "./ActivityFile";
 import { NEW_ACTIVITY_STEPS, Steps } from "./Steps";
 
 /**
@@ -794,7 +795,21 @@ export function ActivityDetail(props: {
               }}
             />
           ) : brief ? (
-            <p style={{ margin: "20px 0 0", fontSize: 16, lineHeight: 1.65, maxWidth: "64ch" }}>
+            <p
+              style={{
+                margin: "20px 0 0",
+                fontSize: 16,
+                lineHeight: 1.65,
+                maxWidth: "64ch",
+                // The column is plain text and the box that writes it is a
+                // textarea, so the paragraph breaks somebody typed ARE the
+                // structure of the brief. Collapsed, a numbered problem set
+                // came back as one unreadable block — and the editor still
+                // showed the newlines, so it read as a save that had silently
+                // eaten them.
+                whiteSpace: "pre-wrap",
+              }}
+            >
               {/* Same renderer the class reads it through, so a link that works
                   here works there and one that was refused is visibly dead to
                   the only person who can fix it. */}
@@ -814,6 +829,11 @@ export function ActivityDetail(props: {
             </p>
           )}
 
+          {/* Under the brief in every state but the editor's, where the field
+              below carries the same file with its own controls. An activity
+              with no document renders nothing at all. */}
+          {editing ? null : <ActivityFileLine activity={activity} />}
+
           {editing ? (
             <div
               className="fv-sub"
@@ -827,6 +847,12 @@ export function ActivityDetail(props: {
                 Select a word and press ⌘K — students see the word, not the address.
               </span>
             </div>
+          ) : null}
+
+          {/* Attaching writes immediately rather than on Save — see the note at
+              the top of ActivityFile.tsx for why that is the right asymmetry. */}
+          {editing ? (
+            <ActivityFileField activity={activity} onChanged={onChanged} onError={onError} />
           ) : null}
 
           {linking ? (

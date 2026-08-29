@@ -523,37 +523,57 @@ export function JoinPanel({
             autocorrect and spellcheck would try to make eight consonants into a
             word; autocapitalize costs nothing, since the database upper-cases
             what arrives either way. */}
-        <input
-          id={fieldId}
-          inputMode="text"
-          autoCapitalize="characters"
-          autoCorrect="off"
-          spellCheck={false}
-          autoComplete="off"
-          enterKeyHint="go"
-          aria-describedby={noteId}
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-          disabled={busy}
-          placeholder="ABCD-EFGH"
-          style={{
-            width: "100%",
-            maxWidth: 320,
-            padding: "11px 13px",
-            border: "1px solid var(--neutral-200)",
-            borderRadius: "var(--radius-md)",
-            background: "var(--cream-100)",
-            color: "var(--navy)",
-            font: "inherit",
-            fontFamily: "var(--font-mono)",
-            fontSize: "var(--text-lg)",
-            letterSpacing: "0.14em",
-            // Display only. Upper-casing the VALUE on every keystroke moves the
-            // caret to the end on some phone keyboards, which makes fixing the
-            // third character of eight a fight.
-            textTransform: "uppercase",
-          }}
-        />
+        {/* The field and the button are one control: the code goes in and you
+            press go. Stacked, the button had nothing to sit against and read
+            as a stray tile a line and a half below the box. `stretch` rather
+            than a matching height literal — the field's height comes from its
+            own padding and 18px type, and the button follows it. */}
+        <div style={{ display: "flex", alignItems: "stretch", gap: 10, maxWidth: 460 }}>
+          <input
+            id={fieldId}
+            inputMode="text"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
+            autoComplete="off"
+            enterKeyHint="go"
+            aria-describedby={noteId}
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            disabled={busy}
+            placeholder="ABCD-EFGH"
+            style={{
+              // Takes the row and gives the button what it needs; minWidth 0 so
+              // a 320px phone shrinks the field instead of overflowing the card.
+              flex: "1 1 auto",
+              minWidth: 0,
+              maxWidth: 320,
+              padding: "11px 13px",
+              border: "1px solid var(--neutral-200)",
+              borderRadius: "var(--radius-md)",
+              background: "var(--cream-100)",
+              color: "var(--navy)",
+              font: "inherit",
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--text-lg)",
+              letterSpacing: "0.14em",
+              // Display only. Upper-casing the VALUE on every keystroke moves the
+              // caret to the end on some phone keyboards, which makes fixing the
+              // third character of eight a fight.
+              textTransform: "uppercase",
+            }}
+          />
+          <button
+            className="sv-btn primary"
+            type="submit"
+            // The class overrides height to 36px; the row wants the button as
+            // tall as the field beside it.
+            style={{ height: "auto", flex: "none", paddingInline: 18 }}
+            disabled={busy || !code.trim()}
+          >
+            {busy ? "Joining…" : "Join course"}
+          </button>
+        </div>
 
         {fromLink && (
           <p className="sv-sub" style={{ marginTop: 8, maxWidth: "62ch" }}>
@@ -576,15 +596,6 @@ export function JoinPanel({
 
           </p>
         )}
-
-        <button
-          className="sv-btn primary"
-          type="submit"
-          style={{ marginTop: 16 }}
-          disabled={busy || !code.trim()}
-        >
-          {busy ? "Joining…" : "Join course"}
-        </button>
 
         {footer}
       </form>

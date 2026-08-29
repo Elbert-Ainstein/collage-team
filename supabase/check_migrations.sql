@@ -153,6 +153,24 @@ select '0029 join a course by invite code',
                where table_schema = 'public' and table_name = 'course_invites')
             then 'applied'
             else 'NOT APPLIED — run 0028 first, then 0029_invite_codes.sql' end
+union all
+-- THE ONE THAT DECIDES WHETHER A CLASS CAN JOIN ITSELF.
+--
+-- Both 0029 and 0030 define join_with_code(), so "does the function exist" is
+-- not the question — 0029's version REFUSES anyone whose address the instructor
+-- has not already imported ('... is not on its roster'), and 0030's creates the
+-- roster row instead. Same name, opposite product. So read the body: the insert
+-- exists only in 0030.
+--
+-- If this says NOT APPLIED, every student holding a valid code is turned away
+-- until the instructor types their address in first, which is the behaviour
+-- 0030 exists to end. It is create-or-replace and safe to re-run.
+select '0030 the roster fills itself',
+       case when to_regprocedure('public.join_with_code(text)') is null
+            then 'NOT APPLIED — run 0029_invite_codes.sql first, then 0030_join_creates_the_roster.sql'
+            when pg_get_functiondef(to_regprocedure('public.join_with_code(text)')) like '%insert into students%'
+            then 'applied'
+            else 'NOT APPLIED — still 0029: run 0030_join_creates_the_roster.sql' end
 order by 1;
 
 -- ------------------------------------------------------- and the buckets

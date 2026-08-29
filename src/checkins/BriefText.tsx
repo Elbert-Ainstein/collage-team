@@ -46,8 +46,18 @@ const LINK = /\[([^\]\n]+)\]\(([^()\s]+)\)|((?:https?:\/\/|www\.)[^\s<>]+)/gi;
 /** Sentence punctuation that follows a URL far more often than it belongs to one. */
 const TRAILING = ".,;:!?'\"";
 
+/**
+ * Blue and underlined — the one thing every reader already knows means "this is
+ * a link". Inherited ink made a link indistinguishable from an underlined word
+ * until you hovered it, so a brief citing a reading looked like a brief with an
+ * odd bit of emphasis in it.
+ *
+ * The variable is defined per surface (faculty and student each scope their own
+ * palette), so this file names it and neither surface has a literal in it. The
+ * fallback is for anything rendering BriefText outside those scopes.
+ */
 const LINK_STYLE = {
-  color: "inherit",
+  color: "var(--brief-link, #1f66a3)",
   textDecoration: "underline",
   textUnderlineOffset: 2,
 } as const;

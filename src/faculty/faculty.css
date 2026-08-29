@@ -32,6 +32,9 @@
   --fv-lavender: #9405e6;
   --fv-lavender-300: #e5cbfa;
   --fv-emerald: #059669;
+  /* Links inside an instructor's brief. BriefText reads --brief-link, so the
+     one component both surfaces share names a colour without owning one. */
+  --brief-link: var(--fv-navy-700);
   --fv-emerald-500: #10b981;
   --fv-amber: #b45309;
   --fv-destructive: #dc2626;
