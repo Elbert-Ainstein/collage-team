@@ -794,7 +794,21 @@ export function ActivityDetail(props: {
               }}
             />
           ) : brief ? (
-            <p style={{ margin: "20px 0 0", fontSize: 16, lineHeight: 1.65, maxWidth: "64ch" }}>
+            <p
+              style={{
+                margin: "20px 0 0",
+                fontSize: 16,
+                lineHeight: 1.65,
+                maxWidth: "64ch",
+                // The column is plain text and the box that writes it is a
+                // textarea, so the paragraph breaks somebody typed ARE the
+                // structure of the brief. Collapsed, a numbered problem set
+                // came back as one unreadable block — and the editor still
+                // showed the newlines, so it read as a save that had silently
+                // eaten them.
+                whiteSpace: "pre-wrap",
+              }}
+            >
               {/* Same renderer the class reads it through, so a link that works
                   here works there and one that was refused is visibly dead to
                   the only person who can fix it. */}

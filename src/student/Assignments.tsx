@@ -318,6 +318,10 @@ const CARD_BODY: CSSProperties = {
   lineHeight: 1.6,
   color: "var(--navy)",
   maxWidth: "68ch",
+  // source_text is plain text typed into a textarea, so the blank lines between
+  // problems are the only structure a brief has. Collapsing them turned a
+  // numbered set into one paragraph.
+  whiteSpace: "pre-wrap",
 };
 
 // -------------------------------------------------------------------- list

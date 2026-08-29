@@ -28,6 +28,8 @@
   --lavender-600: #9405e6;
   --lavender-300: #e5cbfa;
   --emerald-600: #059669;
+  /* Links inside an instructor's brief — see faculty.css for the pair. */
+  --brief-link: var(--navy-700);
   --emerald-500: #10b981;
   --amber-700: #b45309;
 
