@@ -25,8 +25,8 @@ import type { Activity, ActivityQuestion, FileRef, RubricItem } from "@/checkins
 import { isCompletion } from "@/checkins/types";
 import { updateActivity } from "@/checkins/data";
 import { restampReleased } from "./facultyData";
+import { activityFileUrl } from "@/checkins/activityFile";
 import {
-  activityFileUrl,
   addQuestion,
   addRubricItem,
   countMarksForRubricItem,

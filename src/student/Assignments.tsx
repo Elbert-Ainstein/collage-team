@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
 import { BriefText } from "@/checkins/BriefText";
+import { activityFileOf, useActivityFileUrl } from "@/checkins/activityFile";
 import { ensureTeamResult } from "@/checkins/studentData";
 import { getMyMarks, type StudentMark } from "@/checkins/tutorial";
 import { listTeamResources, resourceUrls, type TeamResource } from "@/checkins/resources";
@@ -488,6 +489,63 @@ function resourceStamp(iso: string): string {
  * student following it is following something nobody set. The question count
  * beside it was a hard-coded "5 questions"; it is the real rubric now.
  */
+/**
+ * The document the instructor attached, if there is one.
+ *
+ * 0012 has always let a student on the course read it once the activity has
+ * opened; nothing on this side ever offered the link, so a worksheet uploaded
+ * on the faculty screen was visible to its author and to nobody else. This is
+ * that link.
+ *
+ * Nothing renders when there is no file — most activities have none, and a line
+ * under every brief saying so is worse than silence.
+ */
+function AttachedFile({ activity }: { activity: Activity }) {
+  const file = activityFileOf(activity);
+  const { url, loading, error } = useActivityFileUrl(file);
+  if (!file) return null;
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+      <span style={{ color: "var(--muted-foreground)", display: "flex" }}>
+        <SIcon name="attachFile" size={15} />
+      </span>
+      {url ? (
+        <a
+          href={url}
+          target="_blank"
+          // Both, always: target="_blank" alone hands the new tab a
+          // window.opener pointing at this app.
+          rel="noopener noreferrer"
+          style={{
+            color: "var(--brief-link)",
+            textDecoration: "underline",
+            textUnderlineOffset: 2,
+            fontSize: "var(--text-sm)",
+          }}
+        >
+          {file.name}
+        </a>
+      ) : (
+        <span style={{ fontSize: "var(--text-sm)" }}>{file.name}</span>
+      )}
+      {file.size ? (
+        <span className="sv-sub sv-num">{file.size}</span>
+      ) : null}
+      {loading ? <span className="sv-sub">Opening…</span> : null}
+      {/* Says which of the two it is. A file the instructor listed before 0012
+          has no bytes behind it; a refused signature is something else, and a
+          student who can name the difference gets a useful answer when they
+          ask. */}
+      {!loading && !url ? (
+        <span className="sv-sub" style={{ color: "var(--amber-700)" }}>
+          {error ?? "This file isn't available — ask your instructor to attach it again."}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function DescriptionCard({ a, questions }: { a: Assignment; questions: number }) {
   const brief = a.activity.source_text?.trim();
   return (
@@ -503,6 +561,7 @@ function DescriptionCard({ a, questions }: { a: Assignment; questions: number })
           you&rsquo;re not sure what it asks for.
         </p>
       )}
+      <AttachedFile activity={a.activity} />
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
         {questions > 0 ? (
           <span className="sv-badge secondary">
@@ -1173,6 +1232,7 @@ function AssignmentDetail({
                     Your instructor hasn&rsquo;t written instructions for this one.
                   </p>
                 )}
+                <AttachedFile activity={a.activity} />
               </div>
 
               <Recorder resultId={teamResultId} unavailable={whyNoAudio(enrolment, a)} />

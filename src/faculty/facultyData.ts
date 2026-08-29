@@ -18,7 +18,8 @@ import {
   tintFor,
   updateActivity,
 } from "@/checkins/data";
-import { put, remove, signedUrl } from "@/checkins/storage";
+import { put, remove } from "@/checkins/storage";
+import { ACTIVITY_FILE_BUCKET } from "@/checkins/activityFile";
 import {
   HIDDEN_INSTANT,
   type Activity,
@@ -701,12 +702,16 @@ export async function duplicateActivity(
 
 // ------------------------------------------------------- the activity's file
 //
+// The WRITE half. Only a course's owner may put a document on one of its
+// activities, so uploading and removing live here; reading is everybody's and
+// lives in checkins/activityFile.ts, which the student screens import too.
+//
 // 0012's `activity-files` bucket. Objects are named `<activity_id>/<file>` and
 // every policy on the bucket reads that first segment, so the path is not a
 // convenience here — an object stored under any other shape is reachable by
 // nobody.
 
-const BUCKET = "activity-files";
+const BUCKET = ACTIVITY_FILE_BUCKET;
 
 /** Bytes -> "1.4 MB", for the FileRef that goes on the activity row. */
 function humanSize(bytes: number): string {
@@ -775,19 +780,6 @@ export async function removeActivityFile(activity: Activity): Promise<void> {
   if (paths.length) await remove(BUCKET, paths);
 }
 
-/**
- * A URL the browser can render the document from.
- *
- * Signed and short-lived, because the bucket is private: the policies decide
- * who may mint one, and the link itself expires rather than becoming a way
- * around them. Null when the row predates 0012 and carries only a file NAME.
- */
-export async function activityFileUrl(ref: FileRef | null | undefined): Promise<string | null> {
-  if (!ref?.path) return null;
-  const { url, error } = await signedUrl(BUCKET, ref.path, 60 * 60);
-  if (error) throw new Error(`That file could not be opened: ${error.message}`);
-  return url;
-}
 
 // -------------------------------------------------------------------- marks
 

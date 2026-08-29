@@ -30,6 +30,7 @@ import { FAvatar, FIcon } from "./icons";
 import { linkToActivity } from "./FacultyApp";
 import type { FacultyData } from "./FacultyApp";
 import { ActivityTeamPanel } from "./ActivityTeamPanel";
+import { ActivityFileField, ActivityFileLine } from "./ActivityFile";
 import { NEW_ACTIVITY_STEPS, Steps } from "./Steps";
 
 /**
@@ -828,6 +829,11 @@ export function ActivityDetail(props: {
             </p>
           )}
 
+          {/* Under the brief in every state but the editor's, where the field
+              below carries the same file with its own controls. An activity
+              with no document renders nothing at all. */}
+          {editing ? null : <ActivityFileLine activity={activity} />}
+
           {editing ? (
             <div
               className="fv-sub"
@@ -841,6 +847,12 @@ export function ActivityDetail(props: {
                 Select a word and press ⌘K — students see the word, not the address.
               </span>
             </div>
+          ) : null}
+
+          {/* Attaching writes immediately rather than on Save — see the note at
+              the top of ActivityFile.tsx for why that is the right asymmetry. */}
+          {editing ? (
+            <ActivityFileField activity={activity} onChanged={onChanged} onError={onError} />
           ) : null}
 
           {linking ? (
