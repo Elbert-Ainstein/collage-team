@@ -18,6 +18,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode } from "react";
 
 import { BriefText } from "@/checkins/BriefText";
+import { briefFiles } from "@/checkins/briefLinks";
 import { ensureTeamResult } from "@/checkins/studentData";
 import { getMyMarks, SCALE_LABEL, type StudentMark } from "@/checkins/tutorial";
 import { listTeamResources, resourceUrls, type TeamResource } from "@/checkins/resources";
@@ -326,6 +327,11 @@ const CARD_BODY: CSSProperties = {
   lineHeight: 1.6,
   color: "var(--navy)",
   maxWidth: "68ch",
+  // A brief is written in a textarea, and the breaks someone put there are
+  // meaning: "bring these three things" is a list, not a paragraph. Default
+  // HTML collapses every newline to a space and turns the list back into
+  // prose. pre-wrap keeps the breaks and still wraps at the measure above.
+  whiteSpace: "pre-wrap",
 };
 
 // -------------------------------------------------------------------- list
@@ -672,7 +678,10 @@ function DescriptionCard({
       <div className="sv-eyebrow">Description</div>
       {brief ? (
         <p style={CARD_BODY}>
-          <BriefText text={brief} />
+          {/* The same signed URLs the attachment list below is holding, so a
+              phrase pointing at the case study and the row naming it expire
+              together and are re-minted together. */}
+          <BriefText text={brief} files={briefFiles(files, signed.urls)} />
         </p>
       ) : (
         <p style={{ ...CARD_BODY, color: "var(--muted-foreground)" }}>
@@ -1367,7 +1376,7 @@ function AssignmentDetail({
                 </div>
                 {brief ? (
                   <p style={CARD_BODY}>
-                    <BriefText text={brief} />
+                    <BriefText text={brief} files={briefFiles(files, signedFiles.urls)} />
                   </p>
                 ) : (
                   <p style={{ ...CARD_BODY, color: "var(--muted-foreground)" }}>

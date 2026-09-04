@@ -11,9 +11,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { deleteActivity, tintFor, updateActivity } from "@/checkins/data";
 import { deleteActivityRecordings } from "@/checkins/audio";
 import { BriefText, safeHref } from "@/checkins/BriefText";
+import { briefFiles, fileToken, filePath } from "@/checkins/briefLinks";
 import { purgeActivityStorage } from "@/checkins/purge";
 import { isCompletionMet, isOpenToStudents } from "@/checkins/studentData";
-import { RESIGN_MS } from "@/checkins/storage";
 import {
   HIDDEN_INSTANT,
   isCompletion,
@@ -26,7 +26,6 @@ import {
   type FileRef,
 } from "@/checkins/types";
 import {
-  activityFileUrls,
   addActivityFile,
   countWorkForActivity,
   ensureCheckIn,
@@ -35,6 +34,8 @@ import {
   setActivityPoints,
 } from "./facultyData";
 import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, kindOf, refuseFile } from "./activityFiles";
+import { type SignedFiles, useSignedActivityFiles } from "./useSignedActivityFiles";
+import { briefAnchor, briefFromNode, briefToFragment, CARET_SPACE } from "./richBrief";
 import { COMBO_TEMPLATE } from "./comboRubric";
 import { pointsLabel, nextPositionIn, pointsTotal, questionCount, questionsFor, statFor } from "./model";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -54,6 +55,13 @@ import { NEW_ACTIVITY_STEPS, Steps } from "./Steps";
  * the date its members' own work was due is a whole team marked late for a
  * deadline that was never theirs.
  */
+/**
+ * How wide the link dialog is drawn, in px — kept here as well as in the CSS
+ * because the popover has to be held inside the description rather than run off
+ * the side of it, and the arithmetic that does that needs the number.
+ */
+const LINK_POP_WIDTH = 320;
+
 function indivDueOf(a: Activity): string | null {
   return a.due_at ?? a.individual_due_at;
 }
@@ -218,17 +226,21 @@ function ActivityFiles({
   editing,
   canEdit,
   onChanged,
+  signed,
 }: {
   activity: Activity;
   /** Whether the page is in its edit mode. The list itself shows in both. */
   editing: boolean;
   canEdit: boolean;
   onChanged: () => void | Promise<void>;
+  /**
+   * Owned by the page, because the description links at these files too. Two
+   * copies of the hook would mint every URL twice on two timers.
+   */
+  signed: SignedFiles;
 }) {
   const held = useMemo<FileRef[]>(() => activity.files ?? [], [activity.files]);
-  const [urls, setUrls] = useState<Map<string, string>>(new Map());
-  /** Has the first signing attempt come back? "Opening" is not "would not open". */
-  const [ready, setReady] = useState(false);
+  const { urls, ready } = signed;
   /** Which file of how many is in the air, so a drop of four says where it has got to. */
   const [going, setGoing] = useState<{ name: string; at: number; of: number } | null>(null);
   /** What the last batch would not take, in the order the files were picked. */
@@ -256,50 +268,6 @@ function ActivityFiles({
       alive.current = false;
     };
   }, []);
-
-  const pathKey = held
-    .map((r) => r.path)
-    .filter((p): p is string => Boolean(p))
-    .join("\n");
-
-  // Keyed on the PATHS, never on `held`. onChanged refetches the whole course
-  // after every write and on the way back from other screens, so activity.files
-  // arrives as a fresh array carrying the identical refs; an effect keyed on
-  // that identity re-signs the entire list on every one of them, forever.
-  useEffect(() => {
-    if (!pathKey) {
-      setUrls(new Map());
-      setReady(true);
-      return;
-    }
-    let live = true;
-    setReady(false);
-    // Built back out of the key rather than read from the closure, so there is
-    // no second answer to "which paths is this run about" that could drift from
-    // the dependency. activityFileUrls reads nothing off a ref but its path.
-    const refs = pathKey.split("\n").map((path) => ({ name: path, path }));
-    const sign = () => {
-      // One batched call for the whole list. Six serial round trips to show six
-      // attachments is the load this app spent a pass getting rid of.
-      activityFileUrls(refs)
-        .then((next) => {
-          if (live) setUrls(next);
-        })
-        // Silent. Every row carries its own name and says for itself that it
-        // would not open; a red box over the brief says it a second time, in
-        // the one place somebody is trying to read.
-        .catch(() => undefined)
-        .finally(() => {
-          if (live) setReady(true);
-        });
-    };
-    sign();
-    const tick = window.setInterval(sign, RESIGN_MS);
-    return () => {
-      live = false;
-      window.clearInterval(tick);
-    };
-  }, [pathKey]);
 
   const take = (picked: FileList | null) => {
     const files = Array.from(picked ?? []);
@@ -579,6 +547,16 @@ export function ActivityDetail(props: {
   const accent = TYPE_ACCENT[activity.type];
   const scope = SCOPE_OF[activity.type];
 
+  // Owned here rather than inside the attachment list, because the description
+  // links at these same files: the phrase in the brief and the row underneath
+  // it get one URL each from one batched call, re-minted on one timer.
+  const held = useMemo<FileRef[]>(() => activity.files ?? [], [activity.files]);
+  const signedFiles = useSignedActivityFiles(held);
+  const linkableFiles = useMemo(
+    () => briefFiles(held, signedFiles.urls),
+    [held, signedFiles.urls],
+  );
+
   // Every week an activity can be filed under: the course's own weeks, plus any
   // week an activity already names (a week with no course_weeks row still holds
   // work, and dropping it from the list would make that work unreachable to
@@ -773,50 +751,337 @@ export function ActivityDetail(props: {
   // The title is the heading, so the caret goes there rather than into the
   // first field of a form — there is no form.
   const titleRef = useRef<HTMLInputElement | null>(null);
-  const descRef = useRef<HTMLTextAreaElement | null>(null);
+  const descRef = useRef<HTMLDivElement | null>(null);
 
   /**
    * The Cmd-K dialog, and where in the description it will write.
    *
-   * The selection is captured when the dialog OPENS, not when it closes:
-   * focusing the URL field takes the caret out of the textarea, and by the time
+   * The box is contentEditable, so "where" is a live Range rather than a pair
+   * of offsets. It is captured when the dialog OPENS, not when it closes:
+   * focusing the URL field takes the caret out of the box, and by the time
    * anyone presses Insert the browser has forgotten what was highlighted.
    */
   const [linking, setLinking] = useState<
-    { text: string; url: string; start: number; end: number } | null
+    {
+      text: string;
+      url: string;
+      /** Whether an existing link is being rewritten, not a gap filled. */
+      replacing: boolean;
+      /** Where to draw it, in the description wrapper's own coordinates. */
+      top: number;
+      left: number;
+    } | null
   >(null);
   const [linkBad, setLinkBad] = useState(false);
+  /** Where a new link goes. */
+  const linkRange = useRef<Range | null>(null);
+  /** The link the caret is in, or the one being edited. */
+  const linkNode = useRef<HTMLAnchorElement | null>(null);
+  /** Positioned parent for the two popovers, so they can sit by the words. */
+  const descWrap = useRef<HTMLDivElement | null>(null);
+  /**
+   * The bar that appears when the caret lands in a link.
+   *
+   * This is what replaces having to KNOW that ⌘K works a second time: put the
+   * caret in a link and its address and its two buttons are simply there.
+   */
+  const [chip, setChip] = useState<{ top: number; left: number; label: string; file: boolean } | null>(
+    null,
+  );
+
+  /** The filename behind a `file:` token, for a link that was given no words. */
+  const fileNameFor = (target: string): string | null => {
+    const path = filePath(target);
+    if (!path) return null;
+    return held.find((r) => r.path === path)?.name ?? path.slice(path.lastIndexOf("/") + 1);
+  };
+
+  /** Read the box back into the value that gets saved. */
+  const syncDesc = () => {
+    const el = descRef.current;
+    if (el) setDesc(briefFromNode(el));
+  };
+
+  /** The link the caret is inside, or null. */
+  const anchorAround = (node: Node | null, root: HTMLElement): HTMLAnchorElement | null => {
+    for (let n = node; n && n !== root; n = n.parentNode) {
+      if (n.nodeType === 1) {
+        const el = n as HTMLElement;
+        if (el.tagName === "A" && el.dataset.target) return el as HTMLAnchorElement;
+      }
+    }
+    return null;
+  };
+
+  /**
+   * Where a range actually is on screen.
+   *
+   * A COLLAPSED range — a caret with nothing selected — measures as a rect of
+   * all zeros in Chrome. Subtracting the wrapper's own offset from zero then
+   * gives a large negative number, and the card is drawn hundreds of pixels
+   * above the description, off the top of the page. That is the cut-off card.
+   *
+   * Widening the range by one character to the left puts it on the same line in
+   * the same place and gives it something to measure, without touching the DOM
+   * — inserting and removing a marker node would invalidate the very range that
+   * is about to be saved.
+   */
+  const measure = (range: Range, box: HTMLElement): DOMRect => {
+    const direct = range.getBoundingClientRect();
+    if (direct.width || direct.height) return direct;
+    if (range.startContainer.nodeType === 3 && range.startOffset > 0) {
+      const probe = range.cloneRange();
+      probe.setStart(range.startContainer, range.startOffset - 1);
+      const widened = probe.getBoundingClientRect();
+      if (widened.width || widened.height) return widened;
+    }
+    // An empty box, or a caret somewhere with nothing to measure either side.
+    return box.getBoundingClientRect();
+  };
+
+  /** Where a popover goes, in the wrapper's coordinates rather than the page's. */
+  const posFor = (rect: DOMRect): { top: number; left: number } => {
+    const wrap = descWrap.current;
+    if (!wrap) return { top: 0, left: 0 };
+    const base = wrap.getBoundingClientRect();
+    // Held inside the wrapper, so a link at the right-hand end of a line does
+    // not open a card that runs off the side of the page.
+    const room = Math.max(0, wrap.clientWidth - LINK_POP_WIDTH);
+    return {
+      // Never above the wrapper. Whatever went wrong with the measurement, a
+      // card the instructor can see and dismiss beats one they cannot reach.
+      top: Math.max(0, rect.bottom - base.top + 8),
+      left: Math.max(0, Math.min(rect.left - base.left, room)),
+    };
+  };
+
+  /** A link's address as something a person reads: a filename, or a host. */
+  const readableTarget = (target: string): string => {
+    const name = fileNameFor(target);
+    if (name) return name;
+    const href = safeHref(target);
+    if (!href) return target;
+    const url = new URL(href);
+    const tail = url.pathname === "/" ? "" : url.pathname;
+    return `${url.host}${tail}`;
+  };
+
+  /** Open the dialog on the link the caret is in. */
+  const editLink = () => {
+    const anchor = linkNode.current;
+    if (!anchor) return;
+    setLinkBad(false);
+    setChip(null);
+    linkRange.current = null;
+    setLinking({
+      text: anchor.textContent ?? "",
+      url: anchor.dataset.target ?? "",
+      replacing: true,
+      ...posFor(anchor.getBoundingClientRect()),
+    });
+  };
+
+  /**
+   * Show or hide the bar for whatever the caret is in now.
+   *
+   * Called from the box's own click and key handlers rather than from a
+   * document-wide selectionchange listener: this only has to be right while
+   * somebody is in the box, and a global listener would fire on every selection
+   * anywhere on the page for the whole time the editor is open.
+   */
+  const refreshChip = () => {
+    const el = descRef.current;
+    const sel = window.getSelection();
+    if (!el || !sel || sel.rangeCount === 0) return setChip(null);
+    const range = sel.getRangeAt(0);
+    if (!el.contains(range.commonAncestorContainer)) return setChip(null);
+    const anchor = anchorAround(range.commonAncestorContainer, el);
+    if (!anchor) {
+      linkNode.current = null;
+      return setChip(null);
+    }
+    linkNode.current = anchor;
+    const target = anchor.dataset.target ?? "";
+    setChip({
+      ...posFor(anchor.getBoundingClientRect()),
+      label: readableTarget(target),
+      file: Boolean(filePath(target)),
+    });
+  };
 
   const openLink = () => {
     const el = descRef.current;
     if (!el) return;
-    const start = el.selectionStart ?? desc.length;
-    const end = el.selectionEnd ?? start;
+    let sel = window.getSelection();
+    // Pressed from the toolbar with the caret somewhere else on the page. Put
+    // it at the end of the description rather than doing nothing: a button that
+    // sometimes ignores you is worse than one that always writes somewhere.
+    if (!sel || sel.rangeCount === 0 || !el.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+      el.focus();
+      const end = document.createRange();
+      end.selectNodeContents(el);
+      end.collapse(false);
+      sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(end);
+    }
+    if (!sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
     setLinkBad(false);
-    setLinking({ text: desc.slice(start, end), url: "", start, end });
+
+    // Cmd-K with the caret inside a link EDITS that link, which is what every
+    // editor does and what people press it expecting. Without this the second
+    // Cmd-K nests a link inside the words of the first and breaks both.
+    const found = anchorAround(range.commonAncestorContainer, el);
+    if (found) {
+      linkNode.current = found;
+      editLink();
+      return;
+    }
+    linkNode.current = null;
+    linkRange.current = range.cloneRange();
+    setChip(null);
+    setLinking({
+      text: range.toString(),
+      url: "",
+      replacing: false,
+      ...posFor(measure(range, el)),
+    });
+  };
+
+  /**
+   * The same dialog, reached from the paperclip.
+   *
+   * With one attachment there is no choice to make, so it is made: the button
+   * says "File" and one press links the file. With several, the dialog's own
+   * list is the choice.
+   */
+  const openFileLink = () => {
+    openLink();
+    const only = held.length === 1 ? held[0] : null;
+    if (!only?.path) return;
+    const path = only.path;
+    setLinking((cur) =>
+      cur ? { ...cur, url: fileToken(path), text: cur.text.trim() ? cur.text : only.name } : cur,
+    );
+  };
+
+  /**
+   * Put the caret after a link that was just written, and read the box back.
+   *
+   * The zero-width space is doing real work: with the caret merely placed after
+   * the anchor, a browser will happily carry on typing INSIDE it and the next
+   * word joins the link. A text node of its own to land in is the reliable way
+   * out, and briefFromNode strips the character so it never reaches the column.
+   */
+  const caretAfter = (anchor: HTMLAnchorElement) => {
+    const el = descRef.current;
+    if (!el) return;
+    let after = anchor.nextSibling;
+    if (!after || after.nodeType !== 3) {
+      after = document.createTextNode(CARET_SPACE);
+      anchor.parentNode?.insertBefore(after, anchor.nextSibling);
+    }
+    const range = document.createRange();
+    range.setStart(after, (after.nodeValue ?? "").length);
+    range.collapse(true);
+    const sel = window.getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+    el.focus();
+    syncDesc();
   };
 
   const insertLink = () => {
     if (!linking) return;
-    // Checked with the SAME function the renderer uses, so the editor cannot
-    // author a link that would come out as dead text in front of the class.
-    if (!safeHref(linking.url.trim())) {
+    const target = linking.url.trim();
+    // Checked with the SAME functions the renderer uses, so the editor cannot
+    // author a link that would come out as dead text in front of the class:
+    // either a web address it will open, or a file this activity carries.
+    if (!safeHref(target) && !filePath(target)) {
       setLinkBad(true);
       return;
     }
-    const label = linking.text.trim() || linking.url.trim();
-    const md = `[${label}](${linking.url.trim()})`;
-    const next = desc.slice(0, linking.start) + md + desc.slice(linking.end);
-    setDesc(next);
+    // A link with no words falls back to the filename for an attachment and to
+    // the address for the web — in both cases the most readable thing to hand.
+    const label = linking.text.trim() || fileNameFor(target) || target;
+
+    const existing = linkNode.current;
+    if (existing) {
+      existing.textContent = label;
+      existing.dataset.target = target;
+      if (filePath(target)) existing.dataset.kind = "file";
+      else delete existing.dataset.kind;
+      setLinking(null);
+      caretAfter(existing);
+      return;
+    }
+    const range = linkRange.current;
+    if (!range) return;
+    const anchor = briefAnchor(document, label, target);
+    range.deleteContents();
+    range.insertNode(anchor);
     setLinking(null);
-    // Caret after the link, so typing carries on where the sentence was.
-    const at = linking.start + md.length;
-    window.setTimeout(() => {
-      const el = descRef.current;
-      if (!el) return;
-      el.focus();
-      el.setSelectionRange(at, at);
-    }, 0);
+    caretAfter(anchor);
+  };
+
+  /**
+   * Enter, done by hand.
+   *
+   * Left to the browser, a break taken at the end of a link is taken INSIDE it:
+   * the anchor is carried onto the new line and everything typed there comes
+   * out blue and linked to the same place. Stepping the caret past the anchor
+   * first is what stops that.
+   *
+   * The break itself still goes through execCommand, which is what keeps ⌘Z
+   * working — and it does not matter whether the browser writes a newline, a
+   * <br> or a <div>, because briefFromNode reads all three as one line break.
+   */
+  const newLine = () => {
+    const el = descRef.current;
+    const sel = window.getSelection();
+    if (!el || !sel || sel.rangeCount === 0) return;
+    const range = sel.getRangeAt(0);
+    // Only for a caret. A selection spanning a link is being REPLACED by the
+    // break, so where it starts is not where the new line belongs.
+    if (range.collapsed) {
+      const anchor = anchorAround(range.commonAncestorContainer, el);
+      if (anchor) {
+        const out = document.createRange();
+        out.setStartAfter(anchor);
+        out.collapse(true);
+        sel.removeAllRanges();
+        sel.addRange(out);
+      }
+    }
+    document.execCommand("insertText", false, "\n");
+    syncDesc();
+    setChip(null);
+  };
+
+  /** Unwrap a link back to its words, leaving the sentence intact. */
+  const removeLink = () => {
+    const anchor = linkNode.current;
+    const el = descRef.current;
+    if (!anchor || !el) return;
+    anchor.parentNode?.replaceChild(document.createTextNode(anchor.textContent ?? ""), anchor);
+    setLinking(null);
+    setChip(null);
+    syncDesc();
+    el.focus();
+  };
+
+  /** Point the dialog at one of the activity's attachments. */
+  const pickFile = (ref: FileRef) => {
+    if (!linking || !ref.path) return;
+    setLinkBad(false);
+    setLinking({
+      ...linking,
+      url: fileToken(ref.path),
+      // Only when nothing was selected and nothing typed: a phrase the
+      // instructor chose always outranks a filename.
+      text: linking.text.trim() ? linking.text : ref.name,
+    });
   };
 
   const openEditor = (opts?: { blankTitle?: boolean }) => {
@@ -862,15 +1127,20 @@ export function ActivityDetail(props: {
     el.setSelectionRange(end, end);
   }, [editing]);
 
-  // A description with no box needs its height to follow its content, or the
-  // seam shows: a fixed three rows either clips what is written or leaves a
-  // hole under a one-line blurb.
+  // Fill the box, once, when the editor opens — turning the stored
+  // `[label](target)` into the anchors somebody can actually read.
+  //
+  // Deliberately NOT keyed on `desc`. That is rewritten on every keystroke, and
+  // refilling the box would put the caret back at the start of it each time;
+  // the box owns its own contents while the editor is open, and syncDesc reads
+  // them back out. Keyed on the activity as well as on `editing` so moving
+  // between activities cannot leave the previous one's words behind.
   useEffect(() => {
     const el = descRef.current;
     if (!editing || !el) return;
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight}px`;
-  }, [editing, desc]);
+    el.replaceChildren(briefToFragment(document, activity.source_text ?? ""));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing, activity.id]);
 
   /** The visibility switch writes this one column and nothing else. */
   const setOpensAt = async (next: string | null) => {
@@ -1149,31 +1419,235 @@ export function ActivityDetail(props: {
               either: the student side stopped inventing one for the same
               reason. */}
           {editing ? (
-            <textarea
-              id="fv-ed-desc"
-              ref={descRef}
-              className="fv-descin"
-              style={{ marginTop: 20, maxWidth: "64ch" }}
-              rows={2}
-              aria-label="Description"
-              placeholder="Describe what they do. Leave it empty and students see no description."
-              value={desc}
-              onChange={(e) => setDesc(e.target.value)}
-              onKeyDown={(e) => {
-                // The shortcut every editor uses for this, so nobody has to be
-                // told it exists. Meta on a Mac, Ctrl elsewhere.
-                if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+            /* The description and everything that acts on it, in one positioned
+               box so the two popovers can sit beside the words they are about
+               rather than at the bottom of the page. */
+            <div className="fv-descwrap" ref={descWrap}>
+              {/* The toolbar carries the whole explanation. A chain and a
+                  paperclip are the two marks everyone already reads as "link"
+                  and "file", the shortcut is printed on the button that owns it
+                  rather than in a sentence underneath, and the paperclip says
+                  for itself that it is unavailable until something is attached.
+                  The paragraph of instructions this replaces was the tell that
+                  none of it was findable. */}
+              <div className="fv-descbar">
+                <button
+                  type="button"
+                  className="fv-descbtn"
+                  onClick={openLink}
+                  // The selection has to survive the press, and a button takes
+                  // focus on mousedown — which collapses it before the click.
+                  onMouseDown={(e) => e.preventDefault()}
+                  title="Turn the selected words into a link"
+                >
+                  <FIcon name="link" size={15} />
+                  Link
+                  <kbd className="fv-kbd">⌘K</kbd>
+                </button>
+                <button
+                  type="button"
+                  className="fv-descbtn"
+                  onClick={openFileLink}
+                  onMouseDown={(e) => e.preventDefault()}
+                  disabled={!held.length}
+                  title={
+                    held.length
+                      ? "Link the selected words to a file — students click the words and it downloads"
+                      : "Attach a file below first, then you can link words to it"
+                  }
+                >
+                  <FIcon name="attachFile" size={15} />
+                  File
+                </button>
+              </div>
+
+              <div
+                id="fv-ed-desc"
+                ref={descRef}
+                className="fv-descin"
+                contentEditable
+                suppressContentEditableWarning
+                role="textbox"
+                aria-multiline="true"
+                aria-label="Description"
+                data-placeholder="Describe what they do. Leave it empty and students see no description."
+                // UNCONTROLLED on purpose. Re-rendering the box's children from
+                // state on every keystroke puts the caret back at the start on
+                // every keystroke; the effect above fills it once when the
+                // editor opens, and the DOM is the live copy until it is read
+                // back.
+                data-empty={desc ? undefined : "true"}
+                onInput={() => {
+                  syncDesc();
+                  refreshChip();
+                }}
+                onBlur={syncDesc}
+                onClick={refreshChip}
+                onKeyUp={refreshChip}
+                onKeyDown={(e) => {
+                  // The shortcut every editor uses for this, so nobody has to
+                  // be told it exists. Meta on a Mac, Ctrl elsewhere.
+                  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+                    e.preventDefault();
+                    openLink();
+                    return;
+                  }
+                  // Shift-Enter too: in a box with no paragraphs, both mean
+                  // "next line", and only one of them working is a papercut.
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    newLine();
+                  }
+                }}
+                onPaste={(e) => {
+                  // Paste the WORDS, never the markup. A paste out of a web
+                  // page otherwise arrives with its spans, its styling and its
+                  // own anchors, and a brief slowly turns into somebody's
+                  // stylesheet. execCommand is the deprecated call every
+                  // browser still implements and the only one that keeps the
+                  // native undo stack — losing ⌘Z in a writing box is worse
+                  // than the deprecation.
                   e.preventDefault();
-                  openLink();
-                }
-              }}
-            />
+                  document.execCommand("insertText", false, e.clipboardData.getData("text/plain"));
+                }}
+              />
+
+              {/* Put the caret in a link and this says where it goes and offers
+                  the only two things anyone wants to do to it. Nothing to know
+                  and nothing to read first. */}
+              {chip && !linking ? (
+                <div className="fv-linkchip" style={{ top: chip.top, left: chip.left }}>
+                  <FIcon name={chip.file ? "attachFile" : "link"} size={13} />
+                  <span className="fv-linkchipname" title={chip.label}>
+                    {chip.label}
+                  </span>
+                  <button
+                    type="button"
+                    className="fv-chipbtn"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={editLink}
+                  >
+                    Change
+                  </button>
+                  <button
+                    type="button"
+                    className="fv-chipbtn"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={removeLink}
+                  >
+                    <FIcon name="linkOff" size={13} />
+                    Remove
+                  </button>
+                </div>
+              ) : null}
+
+              {linking ? (
+                <div className="fv-linkpop" style={{ top: linking.top, left: linking.left }}>
+                  <div className="fv-linkrow">
+                    <span className="fv-linkkey">Text</span>
+                    <input
+                      className="fv-in"
+                      placeholder="Words students will see"
+                      value={linking.text}
+                      onChange={(e) => setLinking({ ...linking, text: e.target.value })}
+                      // Enter and Escape work from EITHER field. Having them on
+                      // only one is how a dialog feels half-finished: you tab
+                      // back to fix the words, press Enter, and nothing happens.
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") insertLink();
+                        if (e.key === "Escape") setLinking(null);
+                      }}
+                    />
+                  </div>
+                  <div className="fv-linkrow">
+                    <span className="fv-linkkey">Link</span>
+                    <input
+                      className="fv-in"
+                      placeholder="Paste a web address"
+                      autoFocus
+                      // A file's token is machine-written and unreadable, so the
+                      // field shows the filename instead. What is stored
+                      // underneath is unchanged.
+                      value={fileNameFor(linking.url) ?? linking.url}
+                      readOnly={Boolean(filePath(linking.url))}
+                      onChange={(e) => {
+                        setLinkBad(false);
+                        setLinking({ ...linking, url: e.target.value });
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") insertLink();
+                        if (e.key === "Escape") setLinking(null);
+                        // Backspace on a chosen file clears it rather than
+                        // doing nothing, so there is a way back out.
+                        if (e.key === "Backspace" && filePath(linking.url)) {
+                          e.preventDefault();
+                          setLinking({ ...linking, url: "" });
+                        }
+                      }}
+                    />
+                  </div>
+
+                  {held.length ? (
+                    <div className="fv-linkfiles">
+                      {held.map((ref, i) => {
+                        const chosen = Boolean(ref.path) && linking.url === fileToken(ref.path ?? "");
+                        return (
+                          <button
+                            key={ref.path ?? `${i}:${ref.name}`}
+                            type="button"
+                            className={`fv-filechip${chosen ? " on" : ""}`}
+                            // A ref written before 0012 has a name and no bytes
+                            // anywhere, so there is nothing for a link to reach.
+                            disabled={!ref.path}
+                            title={ref.path ? ref.name : "No file was stored for this one."}
+                            onClick={() => pickFile(ref)}
+                          >
+                            <FIcon name="attachFile" size={12} />
+                            {ref.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+
+                  {linkBad ? (
+                    <div className="fv-linkbad">
+                      That is not a web address this will open — links have to start with http or
+                      https. To point at a file, pick one above.
+                    </div>
+                  ) : null}
+
+                  <div className="fv-linkactions">
+                    <button type="button" className="fv-btn primary sm" onClick={insertLink}>
+                      {linking.replacing ? "Save" : "Add link"}
+                    </button>
+                    <button
+                      type="button"
+                      className="fv-btn ghost sm"
+                      onClick={() => setLinking(null)}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
           ) : brief ? (
-            <p style={{ margin: "20px 0 0", fontSize: 16, lineHeight: 1.65, maxWidth: "64ch" }}>
+            <p
+              style={{
+                margin: "20px 0 0",
+                fontSize: 16,
+                lineHeight: 1.65,
+                maxWidth: "64ch",
+                // Matches the student card: the line breaks typed into the box
+                // above are kept, so what is written here is what the class reads.
+                whiteSpace: "pre-wrap",
+              }}
+            >
               {/* Same renderer the class reads it through, so a link that works
                   here works there and one that was refused is visibly dead to
                   the only person who can fix it. */}
-              <BriefText text={brief} />
+              <BriefText text={brief} files={linkableFiles} />
             </p>
           ) : (
             <p
@@ -1189,68 +1663,6 @@ export function ActivityDetail(props: {
             </p>
           )}
 
-          {editing ? (
-            <div
-              className="fv-sub"
-              style={{ marginTop: 6, fontSize: "var(--fv-2xs)", display: "flex", gap: 8 }}
-            >
-              <button type="button" className="fv-btn ghost sm" onClick={openLink}>
-                <FIcon name="copy" size={13} />
-                Add link
-              </button>
-              <span style={{ alignSelf: "center" }}>
-                Select a word and press ⌘K — students see the word, not the address.
-              </span>
-            </div>
-          ) : null}
-
-          {linking ? (
-            <div className="fv-card" style={{ marginTop: 10, padding: "12px 14px", maxWidth: "48ch" }}>
-              <div className="fv-eyebrow" style={{ marginBottom: 8 }}>
-                Add a link
-              </div>
-              <input
-                className="fv-in"
-                style={{ width: "100%" }}
-                placeholder="Words students will see"
-                value={linking.text}
-                onChange={(e) => setLinking({ ...linking, text: e.target.value })}
-              />
-              <input
-                className="fv-in"
-                style={{ width: "100%", marginTop: 8 }}
-                placeholder="https://…"
-                autoFocus
-                value={linking.url}
-                onChange={(e) => {
-                  setLinkBad(false);
-                  setLinking({ ...linking, url: e.target.value });
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") insertLink();
-                  if (e.key === "Escape") setLinking(null);
-                }}
-              />
-              {linkBad ? (
-                <div
-                  className="fv-sub"
-                  style={{ marginTop: 6, fontSize: "var(--fv-2xs)", color: "var(--fv-amber)" }}
-                >
-                  That is not a web address this will open. Links have to start with http or
-                  https — anything else is left as plain text when students read it.
-                </div>
-              ) : null}
-              <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                <button type="button" className="fv-btn primary sm" onClick={insertLink}>
-                  Add it
-                </button>
-                <button type="button" className="fv-btn ghost sm" onClick={() => setLinking(null)}>
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : null}
-
           {/* Under the brief, because that is what they belong to: the sheet
               the description is describing, the photograph of the board it
               refers to. A TF reads them here too — they mark against them. */}
@@ -1259,6 +1671,7 @@ export function ActivityDetail(props: {
             editing={editing}
             canEdit={data.can.author}
             onChanged={onChanged}
+            signed={signedFiles}
           />
 
           {editing ? null : (

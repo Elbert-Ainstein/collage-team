@@ -17,6 +17,9 @@
   /* ink */
   --fv-navy: rgb(0, 35, 65);
   --fv-navy-700: rgb(31, 102, 163);
+  /* Links in a brief. Aliased rather than used directly because the renderer is
+     shared with the student app, which names the same blue differently. */
+  --brief-link: rgb(31, 102, 163);
   --fv-muted: rgb(93, 114, 136);
 
   /* lines & neutrals */
@@ -1182,6 +1185,11 @@
   outline-offset: 3px;
   border-radius: 4px;
 }
+/* The description box. A contentEditable div rather than a textarea, because a
+   textarea can only hold characters — and a link written as [words](address) is
+   unreadable in the middle of a sentence, especially a file link, whose address
+   is a UUID and a timestamp. This holds real anchors, and richBrief.ts turns
+   them back into the stored text on the way out. */
 .fv-descin {
   display: block;
   width: 100%;
@@ -1189,18 +1197,208 @@
   background: transparent;
   padding: 0;
   margin: 0;
-  resize: none;
-  overflow: hidden;
   font: inherit;
   font-size: var(--fv-base);
   line-height: 1.65;
   color: var(--fv-navy);
+  /* The typed line breaks are the instructor's, exactly as on the page the
+     class reads. Also what lets a stored "\n" render without a <br>. */
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  /* An empty box is invisible and unclickable without this. */
+  min-height: 1.65em;
 }
-.fv-descin::placeholder {
+/* A div has no placeholder attribute, so it gets drawn. Not focusable, not
+   selectable — it must never end up in what gets read back out. */
+.fv-descin[data-empty]::before {
+  content: attr(data-placeholder);
   color: var(--fv-neutral-400);
+  pointer-events: none;
 }
 .fv-descin:focus {
   outline: none;
+}
+/* A link WHILE it is being written, matching what the class will see. The
+   editor is the only place the difference between a web link and a file is
+   worth showing, so a file carries a small arrow saying it downloads. */
+.fv-brieflink {
+  color: var(--brief-link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.fv-brieflink[data-kind="file"]::after {
+  content: " ↓";
+  font-size: 0.85em;
+}
+
+/* ---- the description editor ------------------------------------------ */
+
+/* Positioned, so the link bar and the link dialog can sit beside the words
+   they are about instead of at the bottom of the page. */
+.fv-descwrap {
+  position: relative;
+  margin-top: 20px;
+  max-width: 64ch;
+}
+
+/* The toolbar. It is the whole instruction sheet: two marks everyone already
+   reads, and the shortcut printed on the button that owns it. */
+.fv-descbar {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 8px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--fv-neutral-200);
+}
+.fv-descbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 7px;
+  padding: 5px 9px;
+  background: transparent;
+  color: var(--fv-navy);
+  font: inherit;
+  font-size: var(--fv-xs);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.fv-descbtn:hover:not(:disabled) {
+  background: var(--fv-cream-300);
+}
+.fv-descbtn:disabled {
+  /* Says for itself that there is nothing to link to yet — which is why the
+     button stays on screen rather than disappearing until a file arrives. */
+  color: var(--fv-neutral-400);
+  cursor: not-allowed;
+}
+.fv-kbd {
+  font: inherit;
+  font-size: var(--fv-2xs);
+  color: var(--fv-muted);
+  border: 1px solid var(--fv-neutral-200);
+  border-radius: 4px;
+  padding: 0 4px;
+  line-height: 1.5;
+}
+.fv-descbtn:disabled .fv-kbd {
+  border-color: transparent;
+}
+
+/* The bar that appears when the caret lands in a link: where it goes, and the
+   only two things anybody wants to do to it. */
+.fv-linkchip,
+.fv-linkpop {
+  position: absolute;
+  z-index: 20;
+  background: var(--fv-cream-100);
+  border: 1px solid var(--fv-neutral-200);
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgb(0 35 65 / 12%);
+}
+.fv-linkchip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  max-width: 100%;
+  font-size: var(--fv-2xs);
+  color: var(--fv-muted);
+}
+.fv-linkchipname {
+  max-width: 22ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--fv-navy);
+}
+.fv-chipbtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  padding: 3px 6px;
+  border-radius: 6px;
+  font: inherit;
+  font-size: var(--fv-2xs);
+  color: var(--brief-link);
+  cursor: pointer;
+}
+.fv-chipbtn:hover {
+  background: var(--fv-cream-300);
+}
+
+/* The dialog. Every field is labelled where it sits, so nothing has to be
+   explained above or below it. */
+.fv-linkpop {
+  width: 320px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.fv-linkrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fv-linkkey {
+  width: 34px;
+  flex: none;
+  font-size: var(--fv-2xs);
+  color: var(--fv-muted);
+}
+.fv-linkrow .fv-in {
+  flex: 1;
+  min-width: 0;
+}
+.fv-linkfiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding-left: 42px;
+}
+.fv-filechip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  border: 1px solid var(--fv-neutral-200);
+  border-radius: 999px;
+  padding: 3px 9px 3px 7px;
+  background: transparent;
+  font: inherit;
+  font-size: var(--fv-2xs);
+  color: var(--fv-navy);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fv-filechip:hover:not(:disabled) {
+  background: var(--fv-cream-300);
+}
+.fv-filechip.on {
+  background: var(--fv-navy);
+  border-color: var(--fv-navy);
+  color: var(--fv-cream-100);
+}
+.fv-filechip:disabled {
+  color: var(--fv-neutral-400);
+  cursor: not-allowed;
+}
+.fv-linkbad {
+  font-size: var(--fv-2xs);
+  color: var(--fv-amber);
+}
+.fv-linkactions {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
 }
 .fv-in.quiet,
 .fv-ta.quiet {

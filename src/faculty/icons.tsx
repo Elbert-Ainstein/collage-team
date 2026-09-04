@@ -1,5 +1,5 @@
-// The twelve icons the faculty handoff names, drawn inline on a 24px grid so
-// the app fetches nothing at runtime. Same stroked style as the student set.
+// The icons the faculty view draws, inline on a 24px grid so the app fetches
+// nothing at runtime. Same stroked style as the student set.
 const P: Record<string, string> = {
   assignment:
     '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M8.5 10h7M8.5 13.5h7M8.5 17h4"/>',
@@ -32,6 +32,19 @@ const P: Record<string, string> = {
     '<path d="M12 16V4"/><path d="M8 7.5L12 3.5l4 4"/><path d="M4.5 15v3.5A1.5 1.5 0 0 0 6 20h12a1.5 1.5 0 0 0 1.5-1.5V15"/>',
   openInNew:
     '<path d="M14 4h6v6"/><path d="M20 4l-8.5 8.5"/><path d="M18.5 13.5V19a1.5 1.5 0 0 1-1.5 1.5H5A1.5 1.5 0 0 1 3.5 19V7A1.5 1.5 0 0 1 5 5.5h5.5"/>',
+  // A chain, the same one every editor puts on its link button. Two links
+  // rather than an abstract mark, because this is the one control in the
+  // description that has to be recognised without being read.
+  link:
+    '<path d="M10.6 13.4a3.6 3.6 0 0 0 5.1 0l2.6-2.6a3.6 3.6 0 1 0-5.1-5.1l-1.5 1.5"/>' +
+    '<path d="M13.4 10.6a3.6 3.6 0 0 0-5.1 0l-2.6 2.6a3.6 3.6 0 1 0 5.1 5.1l1.5-1.5"/>',
+  // The same chain, broken — for the button that takes a link off.
+  linkOff:
+    '<path d="M9.8 14.2l-1.5 1.5a3.6 3.6 0 0 1-5.1-5.1l2.6-2.6"/>' +
+    '<path d="M14.2 9.8l1.5-1.5a3.6 3.6 0 0 1 5.1 5.1l-2.6 2.6"/><path d="M4 4l16 16"/>',
+  // A paperclip: the mark for "a file rides along with this".
+  attachFile:
+    '<path d="M17.8 10.6l-7.4 7.4a3.7 3.7 0 0 1-5.2-5.2l8.4-8.4a2.4 2.4 0 0 1 3.4 3.4l-8.3 8.3a1.2 1.2 0 0 1-1.7-1.7l7.5-7.5"/>',
 };
 
 export type IconName = keyof typeof P;

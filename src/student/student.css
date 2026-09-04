@@ -13,6 +13,8 @@
   /* ink */
   --navy: rgb(0, 35, 65);
   --navy-700: rgb(31, 102, 163);
+  /* Links in a brief — see the same alias in faculty.css. */
+  --brief-link: rgb(31, 102, 163);
   --muted-foreground: rgb(93, 114, 136);
 
   /* lines & neutrals */
