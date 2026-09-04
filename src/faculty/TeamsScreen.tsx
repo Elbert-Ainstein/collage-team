@@ -192,11 +192,22 @@ export function TeamsScreen(props: {
   // Removing a student cascades away every submission and mark of theirs. Say
   // how much before the confirming click, not after it.
   const [removeCost, setRemoveCost] = useState<string | null>(null);
-  // The big dropzone is the empty state. Once there are students it stops being
-  // the point of the screen and becomes a wall between the instructor and the
-  // roster, so it collapses to a link — late enrolments still happen, so it
-  // folds away rather than disappearing.
-  const [importOpen, setImportOpen] = useState(false);
+  // WHAT IS OPEN, and never more than one thing.
+  //
+  // The class code, the Canvas export and the importer used to be three cards
+  // stacked permanently above the roster — the code and the export always
+  // expanded, the export carrying four paragraphs of prose about how Canvas
+  // matches rows. Between the heading and the first student's name there could
+  // be most of a screen of things nobody had asked for, and the roster, which
+  // is what this page IS, started below the fold.
+  //
+  // None of it is gone; all three are a press away on the toolbar, and opening
+  // one closes the others so the page never grows a second wall. The dropzone
+  // still opens itself when the roster is empty, because then it IS the point
+  // of the screen.
+  const [panel, setPanel] = useState<"code" | "grades" | "import" | null>(null);
+  const importOpen = panel === "import";
+  const closePanel = () => setPanel(null);
   const [armedClear, setArmedClear] = useState<string | null>(null);
   /** Only addresses being edited right now. Everything else reads the props,
    *  so a saved — or deleted — address is never shadowed by a stale draft. */
@@ -496,7 +507,7 @@ export function TeamsScreen(props: {
         });
         setNote(`${done} Everyone in the file is on the roster now — check the teams below.`);
       } else {
-        setImportOpen(false);
+        closePanel();
         setNote(done);
         setPending(null);
         setPaste("");
@@ -517,7 +528,7 @@ export function TeamsScreen(props: {
     setError(null);
     try {
       const out = await applyTeamPlan(course.id, p.plan);
-      setImportOpen(false);
+      closePanel();
       setNote(
         `${plural(out.moved, "student is", "students are")} on the teams from ${p.source}` +
           (out.created ? `, and ${plural(out.created, "team was", "teams were")} added` : "") +
@@ -687,9 +698,61 @@ export function TeamsScreen(props: {
           {course.code ?? course.name} · {plural(roster.length, "student", "students")} — teams are
           assigned by faculty; self-selection is not offered.
         </span>
-        <span style={{ flex: 1 }} />
-        {canEdit ? (
-          <div className="fv-headbtns">
+      </div>
+
+      <FacultyError error={error} onClear={() => setError(null)} />
+
+      <div className="fv-scroll">
+        {/* One row, above the roster, holding everything this page can do that
+            is not the roster itself. Each button opens its panel underneath and
+            closes whichever was open, so the distance from the heading to the
+            first student stays one line no matter what is going on. */}
+        <div className="fv-toolrow">
+          {data.can.isOwner ? (
+            <button
+              type="button"
+              className={`fv-btn ${panel === "code" ? "line" : "outline"} sm`}
+              aria-expanded={panel === "code"}
+              onClick={() => setPanel(panel === "code" ? null : "code")}
+            >
+              <FIcon name="copy" size={15} />
+              Class code
+              {/* The one number worth carrying on the button: rows that were
+                  typed in and that nobody has claimed by joining. */}
+              {notJoined > 0 ? <span className="fv-toolcount">{notJoined}</span> : null}
+            </button>
+          ) : null}
+
+          {data.can.grade && gradeWeek != null ? (
+            <button
+              type="button"
+              className={`fv-btn ${panel === "grades" ? "line" : "outline"} sm`}
+              aria-expanded={panel === "grades"}
+              onClick={() => setPanel(panel === "grades" ? null : "grades")}
+            >
+              <FIcon name="fileUpload" size={15} />
+              Grades out
+            </button>
+          ) : null}
+
+          {/* Not while the roster is empty: the dropzone shows itself then, and
+              a button claiming to open what is already open — and appearing to
+              close what will not close — is worse than no button. */}
+          {canEdit && roster.length > 0 ? (
+            <button
+              type="button"
+              className={`fv-btn ${importOpen ? "line" : "outline"} sm`}
+              aria-expanded={importOpen}
+              onClick={() => setPanel(importOpen ? null : "import")}
+            >
+              <FIcon name="add" size={15} />
+              Add students
+            </button>
+          ) : null}
+
+          <span style={{ flex: 1 }} />
+
+          {canEdit ? (
             <button
               type="button"
               className="fv-btn outline sm"
@@ -704,18 +767,12 @@ export function TeamsScreen(props: {
               <FIcon name="groups" size={15} />
               Form teams
             </button>
-          </div>
-        ) : null}
-      </div>
+          ) : null}
+        </div>
 
-      <FacultyError error={error} onClear={() => setError(null)} />
-
-      <div className="fv-scroll">
-        {/* Above the roster because the roster is what it produces: the code
-            goes out, the rows underneath are who used it. A TF gets this screen
-            too and must not see it — and would not anyway, since course_invites
-            has no read policy but the owner's. */}
-        {data.can.isOwner ? (
+        {/* A TF gets this screen too and must not see the code — and would not
+            anyway, since course_invites has no read policy but the owner's. */}
+        {data.can.isOwner && panel === "code" ? (
           <InviteCodeCard
             courseId={course.id}
             courseName={course.name}
@@ -725,10 +782,7 @@ export function TeamsScreen(props: {
           />
         ) : null}
 
-        {/* Between the code and the roster on purpose: the code fills the list,
-            the list is what this adds up, and the email column it matches on is
-            the next thing on the page. */}
-        {data.can.grade && gradeWeek != null ? (
+        {data.can.grade && gradeWeek != null && panel === "grades" ? (
           <div className="fv-card" style={{ padding: 16, marginBottom: 14 }}>
             <div className="fv-eyebrow">Grades out</div>
 
@@ -1069,18 +1123,9 @@ export function TeamsScreen(props: {
             </div>
           ) : null}
 
-          {canEdit && roster.length > 0 && !importOpen ? (
-            <button
-              type="button"
-              className="fv-btn outline sm"
-              style={{ marginTop: 4 }}
-              onClick={() => setImportOpen(true)}
-            >
-              <FIcon name="add" size={15} />
-              Add more students
-            </button>
-          ) : null}
-
+          {/* "Add more students" used to live here, at the bottom of the
+              roster, which is the far end of the list you have just scrolled
+              past. It is on the toolbar now, where the other two are. */}
           {canEdit && (roster.length === 0 || importOpen) ? (
             <>
           {importOpen ? (
@@ -1089,7 +1134,7 @@ export function TeamsScreen(props: {
                 type="button"
                 className="fv-btn ghost sm"
                 onClick={() => {
-                  setImportOpen(false);
+                  closePanel();
                   setPending(null);
                 }}
               >

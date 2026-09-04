@@ -233,7 +233,8 @@ describe("typing one in", () => {
 describe("importing one", () => {
   it("warns in the preview instead of blocking", async () => {
     await mount();
-    await act(async () => buttonsSaying("Add more students")[0].click());
+    // On the toolbar above the roster now, not at the bottom of the list.
+    await act(async () => buttonsSaying("Add students")[0].click());
 
     const paste = host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Paste students"]');
     if (!paste) throw new Error("no paste box");

@@ -1231,6 +1231,35 @@
   font-size: 0.85em;
 }
 
+/* ---- the roster toolbar ------------------------------------------------ */
+
+/* Everything the roster page can do that is not the roster, on one line above
+   it. Wraps rather than scrolls: on a narrow window a second row of buttons is
+   readable and a horizontal scrollbar over four buttons is not. */
+.fv-toolrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+/* A count on the button, for the rows nobody has claimed yet. Sits on the
+   button rather than in a card, so the number survives the panel being shut. */
+.fv-toolcount {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  margin-left: 2px;
+  border-radius: 999px;
+  background: var(--fv-cream-400);
+  color: var(--fv-navy);
+  font-size: var(--fv-2xs);
+  font-weight: 600;
+}
+
 /* ---- the description editor ------------------------------------------ */
 
 /* Positioned, so the link bar and the link dialog can sit beside the words
