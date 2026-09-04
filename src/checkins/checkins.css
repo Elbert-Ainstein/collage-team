@@ -127,6 +127,22 @@
    inputs and the show/hide button already use, so a keyboard still has
    somewhere visible to be. */
 .t-textlink:focus-visible{outline:1px solid var(--purple);outline-offset:2px;border-radius:3px}
+/* The destructive one. Amber rather than red: this is a question, not a
+   refusal — every one of these asks before it does anything. */
+.t-textlink.danger{color:var(--amber)}
+.t-textlink.danger:hover{color:var(--amber)}
+.t-textlink:disabled{color:var(--ink3);cursor:not-allowed;text-decoration:none}
+
+/* The team builder's toolbar. Three groups: shape the teams, read where you
+   are, commit — left, middle, right. Wraps rather than scrolls, so a narrow
+   window gets a second line of controls instead of a hidden one. */
+.t-teambar{border:1px solid var(--line);background:var(--paper2);border-radius:10px;padding:11px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+/* The size and the two shaping buttons, held together — they are one job. */
+.t-teambar-group{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.t-teambar-size{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink2);margin-right:2px}
+/* A question about deleting a term's work, on its own line and given room to
+   be read rather than wrapped between two buttons. */
+.t-confirmbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;border:1px solid var(--amber);background:var(--amberBg);border-radius:10px;padding:9px 11px;margin:-4px 0 14px}
 .t-card{border:1px solid var(--line);background:var(--paper2);border-radius:10px;padding:13px}
 .t-in{border:1px solid var(--line);background:var(--paper);border-radius:10px;padding:5px 7px;font-size:13px;color:var(--ink)}
 .t-in:focus{outline:1px solid var(--purple)}

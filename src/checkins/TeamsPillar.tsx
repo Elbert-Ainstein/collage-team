@@ -598,54 +598,52 @@ export function TeamsPillar(props: PillarProps) {
         </div>
       )}
 
-      {/* toolbar */}
-      <div
-        style={{
-          border: "1px solid var(--line)",
-          background: "var(--paper2)",
-          borderRadius: 10,
-          padding: 11,
-          display: "flex",
-          gap: 10,
-          flexWrap: "wrap",
-          alignItems: "center",
-          marginBottom: 14,
-        }}
-      >
-        <label
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            fontSize: 12,
-            color: "var(--ink2)",
-          }}
-        >
-          Team size
-          <input
-            type="number"
-            min={2}
-            max={8}
-            className="t-in t-num"
-            style={{ width: 56, padding: "4px 6px" }}
-            value={sizeInput}
-            disabled={busy}
-            onChange={(e) => setSizeInput(e.target.value)}
-            onBlur={commitSize}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") e.currentTarget.blur();
-            }}
-          />
-        </label>
-        <span style={{ fontSize: 11.5, color: "var(--ink3)" }}>
-          changing the size re-forms the teams for this set
+      {/* The toolbar.
+          It used to be one flat row of four equal buttons with a sentence of
+          explanation wedged between them, and Delete set — the one action here
+          that destroys a term's photographs — sitting at the same weight, and
+          directly beside, the one everybody presses. Three groups now, in the
+          order the work happens: SHAPE the teams on the left, read where you
+          are in the middle, COMMIT on the right. Delete leaves the row of
+          buttons entirely.
+
+          Team size and Auto-form are one control, because they are one action:
+          both call reformOrConfirm, one at the number in the box and one at the
+          number already saved. Sitting together they explain each other, which
+          is what retired the sentence — it is the input's tooltip now. */}
+      <div className="t-teambar">
+        <div className="t-teambar-group">
+          <label className="t-teambar-size">
+            Team size
+            <input
+              type="number"
+              min={2}
+              max={8}
+              className="t-in t-num"
+              style={{ width: 56, padding: "4px 6px" }}
+              value={sizeInput}
+              disabled={busy}
+              title="Changing the size re-forms the teams for this set. You are asked first."
+              onChange={(e) => setSizeInput(e.target.value)}
+              onBlur={commitSize}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.currentTarget.blur();
+              }}
+            />
+          </label>
+          <button className="t-btn line" onClick={onAutoForm} disabled={busy}>
+            Auto-form teams
+          </button>
+          <button className="t-btn line" onClick={onAddTeam} disabled={busy}>
+            + Add team
+          </button>
+        </div>
+
+        <span className="t-spacer" />
+
+        <span className="t-num" style={{ fontSize: 11.5, color: "var(--ink2)" }}>
+          {status}
         </span>
-        <button className="t-btn line" onClick={onAutoForm} disabled={busy}>
-          Auto-form teams
-        </button>
-        <button className="t-btn line" onClick={onAddTeam} disabled={busy}>
-          + Add team
-        </button>
         <button
           className={activeSet?.locked ? "t-btn green" : "t-btn primary"}
           onClick={onPublish}
@@ -653,102 +651,72 @@ export function TeamsPillar(props: PillarProps) {
         >
           {activeSet?.locked ? "✓ Published · Locked" : "Publish teams"}
         </button>
-        {confirmReform ? (
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              flexWrap: "wrap",
-              border: "1px solid var(--amber)",
-              background: "var(--amberBg)",
-              borderRadius: 10,
-              padding: "4px 6px 4px 11px",
-            }}
-          >
-            <span style={{ fontSize: 11.5, color: "var(--amber)" }}>
-              {confirmReform.counted
-                ? `Re-forming teams deletes the current ones — ${costPhrase(
-                    confirmReform.scores,
-                    confirmReform.photos,
-                  )} would go with them, from every week, for good.`
-                : "Re-forming teams deletes the current ones, and every score and photo they " +
-                  "hold, from every week, for good. We could not reach the database to say how " +
-                  "much that is — so check before you go ahead."}
-            </span>
-            <button
-              className="t-btn amber"
-              onClick={() => void doReform(confirmReform.n)}
-              disabled={busy}
-            >
-              Re-form anyway
-            </button>
-            <button
-              className="t-btn ghost"
-              style={{ border: "1px solid var(--line)" }}
-              onClick={() => {
-                setConfirmReform(null);
-                setSizeInput(String(activeSetSize));
-              }}
-              disabled={busy}
-            >
-              Cancel
-            </button>
-          </span>
-        ) : confirmDeleteSet ? (
-          <span
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-              flexWrap: "wrap",
-              border: "1px solid var(--amber)",
-              background: "var(--amberBg)",
-              borderRadius: 10,
-              padding: "4px 6px 4px 11px",
-            }}
-          >
-            <span style={{ fontSize: 11.5, color: "var(--amber)" }}>
-              Delete this set and its {teams.length} team{teams.length === 1 ? "" : "s"}.{" "}
-              {setCost ?? "Checking what would go with them…"} Students stay on the roster.
-            </span>
-            {/* Disabled until the count lands: the whole point of this bar is
-                the number in it, and a click that beats it is the unwarned
-                delete all over again. */}
-            <button
-              className="t-btn amber"
-              onClick={onDeleteSet}
-              disabled={busy || setCost === null}
-            >
-              {busy ? "Deleting…" : "Delete set"}
-            </button>
-            <button
-              className="t-btn ghost"
-              style={{ border: "1px solid var(--line)" }}
-              onClick={() => {
-                setConfirmDeleteSet(false);
-                setSetCost(null);
-              }}
-              disabled={busy}
-            >
-              Cancel
-            </button>
-          </span>
-        ) : (
-          <button
-            className="t-btn ghost"
-            style={{ border: "1px solid var(--line)", color: "var(--amber)" }}
-            onClick={armDeleteSet}
-            disabled={busy}
-          >
+        {/* Reachable, and no longer dressed as a peer of Publish. A link is the
+            right shape for it: rare, deliberate, and asked about before it
+            happens anyway. */}
+        {!confirmDeleteSet && !confirmReform ? (
+          <button className="t-textlink danger" onClick={armDeleteSet} disabled={busy}>
             Delete set
           </button>
-        )}
-        <span className="t-spacer" />
-        <span className="t-num" style={{ fontSize: 11.5, color: "var(--ink2)" }}>
-          {status}
-        </span>
+        ) : null}
       </div>
+
+      {/* The two questions, given their own row.
+          Wedged into the toolbar these wrapped into the buttons and were read
+          past — which is the one thing a sentence about deleting a term's
+          photographs must not be. */}
+      {confirmReform ? (
+        <div className="t-confirmbar">
+          <span style={{ fontSize: 11.5, color: "var(--amber)", flex: 1, minWidth: 240 }}>
+            {confirmReform.counted
+              ? `Re-forming teams deletes the current ones — ${costPhrase(
+                  confirmReform.scores,
+                  confirmReform.photos,
+                )} would go with them, from every week, for good.`
+              : "Re-forming teams deletes the current ones, and every score and photo they " +
+                "hold, from every week, for good. We could not reach the database to say how " +
+                "much that is — so check before you go ahead."}
+          </span>
+          <button className="t-btn amber" onClick={() => void doReform(confirmReform.n)} disabled={busy}>
+            Re-form anyway
+          </button>
+          <button
+            className="t-btn ghost"
+            style={{ border: "1px solid var(--line)" }}
+            onClick={() => {
+              setConfirmReform(null);
+              setSizeInput(String(activeSetSize));
+            }}
+            disabled={busy}
+          >
+            Cancel
+          </button>
+        </div>
+      ) : confirmDeleteSet ? (
+        <div className="t-confirmbar">
+          <span style={{ fontSize: 11.5, color: "var(--amber)", flex: 1, minWidth: 240 }}>
+            Delete this set and its {teams.length} team{teams.length === 1 ? "" : "s"}.{" "}
+            {setCost ?? "Checking what would go with them…"} Students stay on the roster.
+          </span>
+          {/* Disabled until the count lands: the whole point of this bar is the
+              number in it, and a click that beats it is the unwarned delete all
+              over again. */}
+          <button className="t-btn amber" onClick={onDeleteSet} disabled={busy || setCost === null}>
+            {busy ? "Deleting…" : "Delete set"}
+          </button>
+          <button
+            className="t-btn ghost"
+            style={{ border: "1px solid var(--line)" }}
+            onClick={() => {
+              setConfirmDeleteSet(false);
+              setSetCost(null);
+            }}
+            disabled={busy}
+          >
+            Cancel
+          </button>
+        </div>
+      ) : null}
 
       {/* bulk move bar */}
       {selIds.length > 0 && (
