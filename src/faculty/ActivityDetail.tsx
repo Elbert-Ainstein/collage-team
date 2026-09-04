@@ -796,6 +796,41 @@ export function ActivityDetail(props: {
     return held.find((r) => r.path === path)?.name ?? path.slice(path.lastIndexOf("/") + 1);
   };
 
+  /**
+   * Take out links that have lost their words.
+   *
+   * Delete the text of a link and the anchor stays behind, empty and invisible
+   * — and the bar still appears when the caret lands in it, offering to change
+   * a link that is not there. Worse, it is a link the box is only pretending to
+   * have: briefFromNode already refuses to write one with nothing legible in
+   * it, so it would vanish on save with no warning. Removing it as it empties
+   * makes the box agree with what can actually be stored.
+   *
+   * The caret keeps its place, because this fires mid-sentence while somebody
+   * is deleting, and a caret that jumps to the top of the box on the last
+   * backspace is worse than the link it was cleaning up.
+   */
+  const dropEmptyLinks = () => {
+    const el = descRef.current;
+    if (!el) return;
+    const sel = window.getSelection();
+    const caretIn =
+      sel && sel.rangeCount ? anchorAround(sel.getRangeAt(0).commonAncestorContainer, el) : null;
+    const dead = Array.from(el.querySelectorAll<HTMLAnchorElement>("a[data-target]")).filter(
+      (a) => !(a.textContent ?? "").split(CARET_SPACE).join("").trim(),
+    );
+    for (const anchor of dead) {
+      const holder = document.createTextNode(CARET_SPACE);
+      anchor.parentNode?.replaceChild(holder, anchor);
+      if (anchor !== caretIn) continue;
+      const range = document.createRange();
+      range.setStart(holder, CARET_SPACE.length);
+      range.collapse(true);
+      sel?.removeAllRanges();
+      sel?.addRange(range);
+    }
+  };
+
   /** Read the box back into the value that gets saved. */
   const syncDesc = () => {
     const el = descRef.current;
@@ -978,12 +1013,18 @@ export function ActivityDetail(props: {
     const el = descRef.current;
     if (!el) return;
     let after = anchor.nextSibling;
+    // Offset 0 of the text that already follows — the far end of it is the end
+    // of the sentence, which is not where anybody was writing.
+    let offset = 0;
     if (!after || after.nodeType !== 3) {
       after = document.createTextNode(CARET_SPACE);
       anchor.parentNode?.insertBefore(after, anchor.nextSibling);
+      // Past the spacer rather than in front of it, so the caret is clear of
+      // the link's boundary and the next word does not join it.
+      offset = CARET_SPACE.length;
     }
     const range = document.createRange();
-    range.setStart(after, (after.nodeValue ?? "").length);
+    range.setStart(after, offset);
     range.collapse(true);
     const sel = window.getSelection();
     sel?.removeAllRanges();
@@ -1478,6 +1519,9 @@ export function ActivityDetail(props: {
                 // back.
                 data-empty={desc ? undefined : "true"}
                 onInput={() => {
+                  // Order matters: clear out the empties first, so what is read
+                  // back and what the bar is drawn from are the same box.
+                  dropEmptyLinks();
                   syncDesc();
                   refreshChip();
                 }}

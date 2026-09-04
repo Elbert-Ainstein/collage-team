@@ -132,8 +132,14 @@ export function briefFromNode(root: Node): string {
       if (el.tagName === "A" && target) {
         // The label is whatever is in the anchor NOW — the words are editable,
         // and typing inside a link has to change what gets written back.
-        const label = el.textContent ?? "";
-        if (label) write(`[${label}](${target})`);
+        //
+        // A link with nothing legible in it is dropped, and the caret spaces
+        // come off BEFORE that is decided. Left in, an anchor holding only a
+        // spacer counts as having a label, gets written as `[<spacer>](url)`,
+        // and is then stripped to `[](url)` on the way out — which the link
+        // pattern does not match, so the class reads the brackets themselves.
+        const label = el.textContent?.split(CARET_SPACE).join("") ?? "";
+        if (label.trim()) write(`[${label}](${target})`);
         continue;
       }
 

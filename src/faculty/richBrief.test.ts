@@ -68,6 +68,25 @@ describe("the anchor carries the target, not an href", () => {
     expect(briefFromNode(host)).toBe("[the case study](https://a.co)");
   });
 
+  // An anchor holding only a caret spacer has no words in it. Kept, it would be
+  // written as `[](url)`, which the link pattern does not match — so the class
+  // would read the brackets and the address as characters on the page.
+  it("drops a link holding nothing but a caret spacer", () => {
+    const host = document.createElement("div");
+    const a = briefAnchor(document, "x", "https://a.co");
+    host.appendChild(a);
+    a.textContent = CARET_SPACE;
+    expect(briefFromNode(host)).toBe("");
+  });
+
+  it("drops a link whose words are only spaces", () => {
+    const host = document.createElement("div");
+    const a = briefAnchor(document, "x", "https://a.co");
+    host.appendChild(a);
+    a.textContent = "   ";
+    expect(briefFromNode(host)).toBe("");
+  });
+
   it("drops a link whose words were all deleted", () => {
     const host = document.createElement("div");
     const a = briefAnchor(document, "gone", "https://a.co");
