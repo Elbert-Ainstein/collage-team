@@ -153,6 +153,76 @@ select '0029 join a course by invite code',
                where table_schema = 'public' and table_name = 'course_invites')
             then 'applied'
             else 'NOT APPLIED — run 0028 first, then 0029_invite_codes.sql' end
+union all
+select '0026 a mark per question',
+       case when exists (
+              select 1 from information_schema.columns
+               where table_schema = 'public' and table_name = 'submission_marks'
+                 and column_name = 'question_id')
+            then 'applied'
+            else 'NOT APPLIED — run 0026_marks_by_question.sql' end
+union all
+select '0027 clear a course''s artifacts',
+       case when exists (
+              select 1 from information_schema.columns
+               where table_schema = 'public' and table_name = 'courses'
+                 and column_name = 'artifacts_cleared_at')
+            then 'applied'
+            else 'NOT APPLIED — run 0027_clear_course_artifacts.sql' end
+union all
+-- The one that decides whether a STUDENT code works at all. 0029 created
+-- join_with_code and 0030 replaced it, so the function existing proves nothing
+-- — a database holding only 0029 has the name and not the behaviour, and a
+-- student redeeming a code there is told they joined and never reaches a
+-- roster. What separates them is that only 0030's version writes the row.
+select '0030 a code puts you on the roster',
+       case when exists (
+              select 1
+                from pg_proc p
+                join pg_namespace n on n.oid = p.pronamespace
+               where n.nspname = 'public'
+                 and p.proname = 'join_with_code'
+                 and pg_get_functiondef(p.oid) ilike '%insert into students%')
+            then 'applied'
+            else 'NOT APPLIED — run 0030_join_creates_the_roster.sql' end
+union all
+select '0031 mark yourself absent',
+       case when exists (
+              select 1 from pg_policies
+               where schemaname = 'public' and tablename = 'tutorial_absences'
+                 and policyname = 'student reads own tutorial_absences')
+            then 'applied'
+            else 'NOT APPLIED — run 0031_my_own_absence.sql' end
+union all
+-- The TF half. Without this a teaching fellow invited by NAME never sees the
+-- offer: the code path still works, but my_tf_invitations() does not exist and
+-- the join screen has nothing to show them.
+select '0032 invite a TF by name',
+       case when to_regclass('public.tf_invitation_declines') is not null
+             and (select count(distinct p.proname)
+                    from pg_proc p
+                    join pg_namespace n on n.oid = p.pronamespace
+                   where n.nspname = 'public'
+                     and p.proname in
+                         ('my_tf_invitations', 'accept_tf_invitation', 'decline_tf_invitation')) = 3
+            then 'applied'
+            else 'NOT APPLIED — run 0032_tf_invitations.sql' end
+union all
+select '0033 a week can be titled',
+       case when exists (
+              select 1 from information_schema.columns
+               where table_schema = 'public' and table_name = 'course_weeks'
+                 and column_name = 'title')
+            then 'applied'
+            else 'NOT APPLIED — run 0033_week_titles.sql' end
+union all
+select '0034 a question is worth points',
+       case when exists (
+              select 1 from information_schema.columns
+               where table_schema = 'public' and table_name = 'activity_questions'
+                 and column_name = 'points')
+            then 'applied'
+            else 'NOT APPLIED — run 0034_question_points.sql' end
 order by 1;
 
 -- ------------------------------------------------------- and the buckets
