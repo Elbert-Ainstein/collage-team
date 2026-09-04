@@ -601,8 +601,8 @@ function SignIn({
             <div style={{ marginTop: -4 }}>
               <button
                 type="button"
-                className="t-btn ghost"
-                style={{ padding: "2px 0", fontSize: 12, color: "var(--ink2)" }}
+                className="t-textlink"
+                style={{ fontSize: 12 }}
                 onClick={() => goto("forgot")}
               >
                 Forgot your password?
@@ -659,8 +659,7 @@ function SignIn({
       <div style={{ marginTop: 14, fontSize: 12.5, color: "var(--ink2)" }}>
         {mode === "in" ? "No account yet?" : mode === "up" ? "Already have one?" : "Remembered it?"}{" "}
         <button
-          className="t-btn ghost"
-          style={{ padding: "2px 6px", textDecoration: "underline" }}
+          className="t-textlink"
           onClick={() => goto(mode === "in" ? "up" : "in")}
         >
           {mode === "in" ? "Create one" : "Sign in"}
@@ -837,8 +836,7 @@ function SetNewPassword({ onLeave }: { onLeave: () => void }) {
       <div style={{ marginTop: 14, fontSize: 12.5, color: "var(--ink2)" }}>
         Don&apos;t want to change it?{" "}
         <button
-          className="t-btn ghost"
-          style={{ padding: "2px 6px", textDecoration: "underline" }}
+          className="t-textlink"
           onClick={() => (armedSkip ? onLeave() : setArmedSkip(true))}
           onBlur={() => setArmedSkip(false)}
         >

@@ -113,6 +113,20 @@
 .t-btn.danger{border-color:var(--red,#dc2626);background:transparent;color:var(--red,#dc2626);box-shadow:none;white-space:nowrap}
 .t-btn.amber{border-color:var(--amber);background:var(--amberBg);color:var(--amber);box-shadow:none}
 .t-btn.sm{font-size:11px;padding:2px 8px}
+/* A control that is really a LINK inside a sentence — "Create one", "Skip",
+   "Forgot your password?". These have to stay <button>s, because they change
+   what is on screen rather than going anywhere, and a <a href="#"> that does
+   that is a link that lies to a screen reader. But t-btn gives every button a
+   border, a background and a card shadow, and three words in the middle of a
+   sentence wearing all that read as a pill somebody forgot to finish.
+   The underline is not decoration: with the border gone it is the only thing
+   left saying this can be clicked. */
+.t-textlink{font-family:inherit;font-size:inherit;border:0;background:transparent;padding:0;box-shadow:none;color:var(--ink2);text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.t-textlink:hover{color:var(--ink)}
+/* Removing the border removes the focus ring with it. Same treatment the
+   inputs and the show/hide button already use, so a keyboard still has
+   somewhere visible to be. */
+.t-textlink:focus-visible{outline:1px solid var(--purple);outline-offset:2px;border-radius:3px}
 .t-card{border:1px solid var(--line);background:var(--paper2);border-radius:10px;padding:13px}
 .t-in{border:1px solid var(--line);background:var(--paper);border-radius:10px;padding:5px 7px;font-size:13px;color:var(--ink)}
 .t-in:focus{outline:1px solid var(--purple)}
