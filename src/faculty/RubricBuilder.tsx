@@ -212,6 +212,7 @@ function QuestionHead({
   canEdit,
   scored,
   total,
+  canSub,
   onRename,
   onPoints,
   onSub,
@@ -221,6 +222,15 @@ function QuestionHead({
   canEdit: boolean;
   /** Out of points. A completion activity has no per-question worth to set. */
   scored: boolean;
+  /**
+   * Whether questions on this activity may have sub-questions at all.
+   *
+   * False for a combo, whose six questions are the shape of the thing — the
+   * rubric it is seeded with is a fixed list of six, and hanging a 2a off one
+   * of them makes a combo that no longer matches the combo everyone else is
+   * marking. Every other type keeps the button.
+   */
+  canSub: boolean;
   /** The activity total — what an unpointed question's criteria come off. */
   total: number;
   /** Returns what is wrong with the name, or null when it was accepted. */
@@ -341,7 +351,7 @@ function QuestionHead({
             </span>
           </span>
         ) : null}
-        {canEdit && !isSub ? (
+        {canEdit && canSub && !isSub ? (
           <button
             type="button"
             className="fv-btn ghost sm"
@@ -1016,7 +1026,6 @@ export function RubricBuilder({
   const [cost, setCost] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   /** Set for the one visit where the standard combo rubric was written in. */
-  const [filled, setFilled] = useState(false);
 
   /**
    * Whether this activity is a blank Combo waiting for the course's rubric.
@@ -1034,13 +1043,6 @@ export function RubricBuilder({
     questions != null &&
     items.length === 0 &&
     questions.length === 0;
-
-  // The note below belongs to one activity. This screen is reused across
-  // activities without unmounting, so without this it would follow you onto the
-  // next rubric and claim credit for something it did not write.
-  useEffect(() => {
-    setFilled(false);
-  }, [activity.id]);
 
   // Kept out of the effect's deps on purpose. Seeding has to tell the parent to
   // refetch — the activity's total moves from 0 to 20 and this screen reads it
@@ -1078,7 +1080,6 @@ export function RubricBuilder({
           (await seedRubricTemplate(activity, COMBO_TEMPLATE))
         ) {
           if (!live) return;
-          setFilled(true);
           [ladder, qs] = await Promise.all([
             ensureRubric(activity, canEdit),
             ensureQuestions(activity, canEdit),
@@ -1105,7 +1106,6 @@ export function RubricBuilder({
     seedRubricTemplate(activity, COMBO_TEMPLATE)
       .then(async (done) => {
         if (!done) return;
-        setFilled(true);
         const [ladder, qs] = await Promise.all([
           ensureRubric(activity, canEdit),
           ensureQuestions(activity, canEdit),
@@ -1445,12 +1445,17 @@ export function RubricBuilder({
             </div>
           </div>
 
-          {/* Where her questions stand against the activity total. Nothing is
-              rescaled to make them agree — a score still comes off the
-              activity's total, so the gap is reported and she decides which
-              number was wrong. Silent while no question carries points of its
-              own, which is every activity written before 0034. */}
-          {!completion && tally.balance !== "unset" ? (
+          {/* Where her questions stand against the activity total, and ONLY
+              when they do not agree. Nothing is rescaled to make them — a score
+              still comes off the activity's total, so the gap is reported and
+              she decides which number was wrong.
+              The balanced case used to say so too, with a tick. It was a line
+              of screen spent telling her that the thing she just did worked,
+              on every visit, forever — and a page that congratulates itself
+              that often is a page whose warnings get read past. Silence is the
+              all-clear now. Still silent while no question carries points of
+              its own, which is every activity written before 0034. */}
+          {!completion && tally.balance !== "unset" && tally.note ? (
             <div
               className="fv-cirow fv-sub"
               style={{
@@ -1458,41 +1463,10 @@ export function RubricBuilder({
                 alignItems: "flex-start",
                 lineHeight: 1.5,
                 borderBottom: "1px solid var(--fv-neutral-200)",
-                color: tally.note ? "var(--fv-amber)" : undefined,
+                color: "var(--fv-amber)",
               }}
             >
-              {tally.note ? null : (
-                <span style={{ flex: "none", marginTop: 1 }}>
-                  <FIcon name="check" size={14} />
-                </span>
-              )}
-              <span>
-                {tally.note ??
-                  `Your ${tally.set} questions add up to ${tally.declared}, which is what this activity is out of.`}
-              </span>
-            </div>
-          ) : null}
-
-          {/* Said once, on the visit it happened. Everything below is hers to
-              edit or delete, and somebody who did not press a button deserves
-              to be told where six named questions came from. */}
-          {filled ? (
-            <div
-              className="fv-cirow fv-sub"
-              style={{
-                gap: 8,
-                alignItems: "flex-start",
-                lineHeight: 1.5,
-                borderBottom: "1px solid var(--fv-neutral-200)",
-              }}
-            >
-              <span style={{ flex: "none", marginTop: 1 }}>
-                <FIcon name="check" size={14} />
-              </span>
-              <span>
-                Started from the standard combo rubric. Rename a question, change what it is
-                worth, edit a rung or delete any of it — none of it is fixed.
-              </span>
+              <span>{tally.note}</span>
             </div>
           ) : null}
 
@@ -1553,6 +1527,7 @@ export function RubricBuilder({
                       canEdit={canEdit && !busy}
                       scored={!completion}
                       total={total}
+                      canSub={activity.type !== "combo"}
                       onRename={(label) =>
                         g.question ? renameQ(g.question, label) : "This block has no question row."
                       }
