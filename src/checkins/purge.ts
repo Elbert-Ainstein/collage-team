@@ -223,6 +223,102 @@ export async function removeStudentWithStorage(studentId: string): Promise<void>
   await removeStudent(studentId);
 }
 
+// ---------------- the whole roster at once ----------------
+
+/** What emptying a roster costs, counted before it is asked for. */
+export interface RosterRemoval {
+  students: number;
+  /** Recorded work of theirs — what an instructor would call "their marks". */
+  work: number;
+  /** Recordings and PDFs of theirs sitting in storage. */
+  files: number;
+}
+
+/** Every student row on a course, and the result rows that hang off them. */
+async function rosterAndWork(courseId: string): Promise<{ students: string[]; results: string[] }> {
+  const students = await selectAll<{ id: string }>((from, to) =>
+    db().from("students").select("id").eq("course_id", courseId).order("id").range(from, to),
+  );
+  if (!students.length) return { students: [], results: [] };
+  const ids = students.map((s) => s.id);
+  const results = await selectAllIn<{ id: string }>(ids, (chunk, from, to) =>
+    db().from("check_in_results").select("id")
+      .in("student_id", chunk).eq("subject_type", "student")
+      .order("id").range(from, to),
+  );
+  return { students: ids, results: results.map((r) => r.id) };
+}
+
+/** The paths one set of result rows owns, in both buckets. */
+async function objectsOf(resultIds: string[]): Promise<{ audio: string[]; pdfs: string[] }> {
+  if (!resultIds.length) return { audio: [], pdfs: [] };
+  const audio = await selectAllIn<{ path: string }>(resultIds, (chunk, from, to) =>
+    db().from("recordings").select("path").in("result_id", chunk).order("id").range(from, to),
+  );
+  const pdfs = await selectAllIn<{ path: string }>(resultIds, (chunk, from, to) =>
+    db().from("submission_files").select("path").in("result_id", chunk).order("id").range(from, to),
+  );
+  return { audio: audio.map((r) => r.path), pdfs: pdfs.map((r) => r.path) };
+}
+
+/**
+ * What clearing this roster would take with it — asked before the question is
+ * put, so the confirmation can say a number instead of "everything".
+ *
+ * `work` counts only results that are actually something: a slot that was
+ * opened and never scored is status "none", and telling an instructor she is
+ * about to destroy eighty of those would be a lie about the cost.
+ */
+export async function previewRosterRemoval(courseId: string): Promise<RosterRemoval> {
+  const { students, results } = await rosterAndWork(courseId);
+  if (!students.length) return { students: 0, work: 0, files: 0 };
+  const work = await countAllIn(students, (chunk) =>
+    db().from("check_in_results").select("id", { count: "exact", head: true })
+      .in("student_id", chunk).eq("subject_type", "student").neq("status", "none"),
+  );
+  const { audio, pdfs } = await objectsOf(results);
+  return { students: students.length, work, files: audio.length + pdfs.length };
+}
+
+/**
+ * Empty a course's roster: every student, and everything that was theirs alone.
+ *
+ * Storage first and rows second, for the reason at the top of this file — both
+ * delete policies authorise by reading the result row, so an object whose row
+ * has already cascaded away can never be removed by anyone. That is the same
+ * ordering removeStudentWithStorage keeps, done once for the whole course
+ * rather than once per student: a class of eighty is a few hundred round trips
+ * the other way, on a screen that is already waiting.
+ *
+ * WHAT SURVIVES, and on purpose. Team results, team recordings and whiteboard
+ * photos belong to the TEAM, not to whoever was standing in it — deleteTeamStorage
+ * is a different call with a different confirmation. The teams themselves stay
+ * too, empty: they hold that work, and a re-imported class list binds its
+ * numbers back onto the same rows, so clearing a roster and re-importing it
+ * puts everyone back where they were rather than starting the term again.
+ */
+export async function clearRoster(courseId: string): Promise<RosterRemoval> {
+  const { students, results } = await rosterAndWork(courseId);
+  if (!students.length) return { students: 0, work: 0, files: 0 };
+
+  const work = await countAllIn(students, (chunk) =>
+    db().from("check_in_results").select("id", { count: "exact", head: true })
+      .in("student_id", chunk).eq("subject_type", "student").neq("status", "none"),
+  );
+  const { audio, pdfs } = await objectsOf(results);
+
+  let files = 0;
+  files += await removeAll("recordings", audio);
+  files += await removeAll("submissions", pdfs);
+
+  // One statement, not one per student: RLS scopes it to a course this account
+  // owns, and the rest — team seats, results, marks — cascades from the row.
+  const { error } = await db().from("students").delete().eq("course_id", courseId);
+  if (error) throw dbError(error);
+
+  return { students: students.length, work, files };
+}
+
 /**
  * The assignment document on `activities.files`.
  *

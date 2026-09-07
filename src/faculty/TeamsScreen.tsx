@@ -11,7 +11,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TeamsPillar } from "@/checkins/TeamsPillar";
 import { addStudents, setStudentEmail, setStudentName } from "@/checkins/data";
-import { removeStudentWithStorage } from "@/checkins/purge";
+import {
+  clearRoster,
+  previewRosterRemoval,
+  removeStudentWithStorage,
+  type RosterRemoval,
+} from "@/checkins/purge";
 import {
   countWorkForStudent,
   courseMemberRoles,
@@ -45,6 +50,7 @@ import {
   safeFilename,
   type CheckInGradeRow,
 } from "./exportTerm";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { InviteCodeCard } from "./InviteCodeCard";
 import { FAvatar, FIcon } from "./icons";
 import { FacultyError, type FacultyData } from "./FacultyApp";
@@ -229,6 +235,25 @@ function rosterAfterImport(
   ];
 }
 
+/** What the first confirmation says about the work that would go. */
+function wipeCostLine(cost: RosterRemoval | null, failed: boolean): string {
+  if (failed) {
+    return (
+      "Their work could not be counted just now, so this cannot say how much goes with them — " +
+      "only that it does, and that none of it comes back."
+    );
+  }
+  if (cost === null) return "Counting what would go with them…";
+  if (!cost.work && !cost.files) return "Nothing has been handed in yet, so there is no work to lose.";
+  return (
+    `Their work goes with them: ${plural(cost.work, "mark or submission", "marks and submissions")}` +
+    (cost.files
+      ? `, and ${plural(cost.files, "recording or PDF", "recordings and PDFs")} of theirs`
+      : "") +
+    ". None of it can be brought back."
+  );
+}
+
 export function TeamsScreen(props: {
   data: FacultyData;
   onChanged: () => void;
@@ -270,6 +295,21 @@ export function TeamsScreen(props: {
   const importOpen = panel === "import";
   const closePanel = () => setPanel(null);
   const [armedClear, setArmedClear] = useState<string | null>(null);
+  /**
+   * Emptying the whole roster, which is asked twice.
+   *
+   * "asked" is the question with the cost in it; "sure" is the same question
+   * with nothing left to read, because by then the only thing worth checking is
+   * whether the press was meant. Two dialogs and not one, because this is the
+   * single control on the screen that can destroy a term of work in one press,
+   * and it sits on the same row as the button she presses every week.
+   */
+  const [wiping, setWiping] = useState<null | "asked" | "sure">(null);
+  /** Null while it is still being counted — the dialog says so rather than 0. */
+  const [wipeCost, setWipeCost] = useState<RosterRemoval | null>(null);
+  /** The count itself failed. Said out loud: a dialog stuck on "counting…" is
+   *  indistinguishable from a slow one, and this question deserves better. */
+  const [wipeCountFailed, setWipeCountFailed] = useState(false);
   /** Only addresses being edited right now. Everything else reads the props,
    *  so a saved — or deleted — address is never shadowed by a stale draft. */
   const [drafts, setDrafts] = useState<Record<string, string>>({});
@@ -506,6 +546,55 @@ export function TeamsScreen(props: {
       setNote(`Removed ${s.name}.`);
       onChanged();
     } catch (e) {
+      fail(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // ---------------- the whole roster ----------------
+
+  /** Open the first question, and start counting what it is asking about. */
+  function askToWipe() {
+    setWipeCost(null);
+    setWipeCountFailed(false);
+    setWiping("asked");
+    setNote(null);
+    previewRosterRemoval(course.id)
+      .then((cost) => setWipeCost(cost))
+      .catch(() => setWipeCountFailed(true));
+  }
+
+  function stopWiping() {
+    setWiping(null);
+    setWipeCost(null);
+    setWipeCountFailed(false);
+  }
+
+  async function wipeRoster() {
+    setBusy(true);
+    setError(null);
+    try {
+      const out = await clearRoster(course.id);
+      stopWiping();
+      setNote(
+        `Removed ${plural(out.students, "student", "students")} from the roster` +
+          (out.work ? `, with ${plural(out.work, "piece", "pieces")} of their work` : "") +
+          (out.files ? ` and ${plural(out.files, "file", "files")}` : "") +
+          `. The teams are still here, empty — re-import your class list and everyone lands ` +
+          `back on the team it gives them.`,
+      );
+      onChanged();
+    } catch (e) {
+      // Closed, not left standing. The error banner lives on the page BEHIND
+      // the dialog, so a failure with the dialog still up is a failure nobody
+      // can read. The roster may be half emptied; pressing again is safe,
+      // because the whole thing re-counts from the database.
+      stopWiping();
+      setNote(
+        "The roster was not fully cleared. Some students may still be there — the numbers are " +
+          "read again each time, so clearing again is safe.",
+      );
       fail(e);
     } finally {
       setBusy(false);
@@ -963,6 +1052,22 @@ export function TeamsScreen(props: {
             >
               <FIcon name="groups" size={15} />
               Form teams
+            </button>
+          ) : null}
+
+          {/* Last on the row and destructive-coloured, because it is the one
+              control here that can take a term of work with it — and it sits a
+              few pixels from the button she presses every week. Hidden while
+              there is nobody to remove. */}
+          {canEdit && roster.length > 0 ? (
+            <button
+              type="button"
+              className="fv-btn outline sm"
+              style={{ color: "var(--fv-destructive)" }}
+              onClick={askToWipe}
+            >
+              <FIcon name="close" size={15} />
+              Clear roster
             </button>
           ) : null}
         </div>
@@ -1602,6 +1707,48 @@ export function TeamsScreen(props: {
           ) : null}
         </div>
       </div>
+
+      {/* ASKED TWICE, and the two questions are not the same question. The
+          first is the cost — how many students, how much of their work, and
+          what survives — and it is there to be read. The second has nothing
+          left to read, because by then the only thing still worth checking is
+          whether the press was meant. Cancel holds the focus in both. */}
+      {wiping === "asked" ? (
+        <ConfirmDialog
+          title={`Remove all ${plural(roster.length, "student", "students")} from the roster?`}
+          body={
+            <>
+              <p style={{ margin: 0, lineHeight: 1.6 }}>{wipeCostLine(wipeCost, wipeCountFailed)}</p>
+              <p style={{ margin: "8px 0 0", lineHeight: 1.6 }}>
+                The teams stay, empty — team photos, team recordings and team scores belong to the
+                team and survive this. Re-import your class list and everyone lands back on the
+                team it gives them. The class code still works, so anyone can join again.
+              </p>
+            </>
+          }
+          confirmLabel={`Remove all ${plural(roster.length, "student", "students")}`}
+          busy={busy}
+          onConfirm={() => setWiping("sure")}
+          onCancel={stopWiping}
+        />
+      ) : null}
+
+      {wiping === "sure" ? (
+        <ConfirmDialog
+          title="Sure? This cannot be undone."
+          body={
+            <p style={{ margin: 0, lineHeight: 1.6 }}>
+              {plural(roster.length, "student", "students")}
+              {wipeCost?.work ? ` and ${plural(wipeCost.work, "mark", "marks")}` : ""} on{" "}
+              {course.code ?? course.name} — gone, with no copy anywhere.
+            </p>
+          }
+          confirmLabel="Yes, clear the roster"
+          busy={busy}
+          onConfirm={() => void wipeRoster()}
+          onCancel={stopWiping}
+        />
+      ) : null}
     </div>
   );
 }
