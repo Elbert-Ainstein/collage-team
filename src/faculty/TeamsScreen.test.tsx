@@ -16,12 +16,14 @@ import type { Course, CourseTF, Student } from "@/checkins/types";
 import type { FacultyData } from "./FacultyApp";
 
 const setStudentEmail = vi.fn(async () => undefined);
+const setStudentName = vi.fn(async () => undefined);
 const addStudents = vi.fn(async () => []);
 
 vi.mock("@/checkins/data", () => ({
   addStudents,
   removeStudent: vi.fn(async () => undefined),
   setStudentEmail,
+  setStudentName,
 }));
 
 vi.mock("@/checkins/purge", () => ({
@@ -156,6 +158,7 @@ const badges = (text: string): Element[] =>
 
 beforeEach(() => {
   setStudentEmail.mockClear();
+  setStudentName.mockClear();
   addStudents.mockClear();
   host = document.createElement("div");
   document.body.appendChild(host);
@@ -174,8 +177,9 @@ describe("a TF's address on a student row", () => {
     // The comparison is on render, so it does not matter which screen created
     // the overlap — including the TFs screen, which this guard never touches.
     expect(badges("also a TF")).toHaveLength(1);
+    // The name is a field of its own now, so the row is identified by it.
     const row = badges("also a TF")[0].closest("div");
-    expect(row?.textContent).toContain("Ian Wu");
+    expect(row?.querySelector('input[aria-label="Name for Ian Wu"]')).toBeTruthy();
   });
 
   it("says nothing when the two rosters do not overlap", async () => {

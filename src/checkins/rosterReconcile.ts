@@ -25,6 +25,18 @@ export interface Reconciliation<T extends RosterRowLike> {
   fresh: ParsedStudent[];
   /** Existing rows that gain an address they were missing. */
   emailFills: { student: T; email: string }[];
+  /**
+   * Rows the file spells differently. Only ever from an ADDRESS match: the
+   * address says which person the row is, so the file's name is a statement
+   * about that person and not a guess at who they might be. A row matched by
+   * name cannot be here — the names agreed, that is how it matched.
+   *
+   * This is the one thing an import overwrites, and it is why: a name is the
+   * only field of a roster row that nothing else can repair, so a file that
+   * fixes a mangled or misspelled one has to be able to say so. It is never
+   * silent — the preview lists every old → new before anything is written.
+   */
+  nameFixes: { student: T; from: string; to: string }[];
   /** Rows already correct — counted so the preview can say "no change". */
   unchanged: number;
 }
@@ -38,6 +50,7 @@ export function reconcileRoster<T extends RosterRowLike>(
   const claimed = new Set<string>();
   const fresh: ParsedStudent[] = [];
   const emailFills: { student: T; email: string }[] = [];
+  const nameFixes: { student: T; from: string; to: string }[] = [];
   let unchanged = 0;
 
   // Pass 1 — email is identity. Matching these first stops a name match from
@@ -52,7 +65,12 @@ export function reconcileRoster<T extends RosterRowLike>(
     if (hit && !claimed.has(hit.id)) {
       claimed.add(hit.id);
       settled.add(p);
-      unchanged++;
+      // Same person, spelled differently. Case and spacing alone are not a
+      // rename — "ADA LOVELACE" out of an LMS is the same name shouted, and
+      // rewriting the roster to it every import would be worse than leaving it.
+      const to = p.name.trim();
+      if (to && norm(to) !== norm(hit.name)) nameFixes.push({ student: hit, from: hit.name, to });
+      else unchanged++;
     }
   }
 
@@ -76,5 +94,5 @@ export function reconcileRoster<T extends RosterRowLike>(
     }
   }
 
-  return { fresh, emailFills, unchanged };
+  return { fresh, emailFills, nameFixes, unchanged };
 }

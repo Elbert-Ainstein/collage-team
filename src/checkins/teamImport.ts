@@ -26,9 +26,12 @@
 // matches is far more likely to be a spelling than a new student. Creating them
 // here would also put a row on a team that no account will ever claim, which is
 // the roster state the instructor can see least and the app can repair least.
-// So those rows are named in the preview, nothing moves for them, and the way
-// to add them is the roster import in the same panel — after which the file
-// matches and can be imported again.
+// So those rows are named in the preview and nothing moves for them. The
+// screen keeps that promise while still making Kelly's file one press: it plans
+// against the roster the import PRODUCES — today's rows plus the ones the same
+// file is about to add — so a name/email/team file is planned against people
+// who will exist, and the students it creates are created by the roster import
+// beside this one, which is the half that knows how to preview an add.
 //
 // ANYONE THE FILE DOES NOT MENTION KEEPS THE TEAM THEY ARE ON. A file is a
 // statement about the students in it, not about the class. The late enrolment

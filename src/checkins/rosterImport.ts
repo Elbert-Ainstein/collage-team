@@ -27,6 +27,46 @@ export interface ParsedStudent {
   team?: number | null;
 }
 
+/** A file's bytes read as text, plus anything the reading itself needs to say. */
+export interface DecodedFile {
+  text: string;
+  warnings: string[];
+}
+
+/**
+ * A roster file's bytes as text.
+ *
+ * File.text() is UTF-8 and nothing else: a byte sequence that is not valid
+ * UTF-8 becomes U+FFFD, the replacement character, which renders as a black
+ * diamond and can never be turned back into the letter it replaced. A class
+ * list is exactly the kind of file that is not UTF-8 — Excel writes the
+ * machine's legacy code page unless it is told "CSV UTF-8" — and the names it
+ * mangles are the accented ones, so the students who lose their own name are
+ * the same ones every time.
+ *
+ * So: UTF-8 when the bytes really are UTF-8, and windows-1252 when they are
+ * not, which is what Excel on Windows writes. That produces a wrong letter
+ * rather than a diamond, and the warning is what makes it fixable — the name is
+ * checkable in the preview before anything is written, and an address-matched
+ * row keeps the name it already has, so the moment to fix it is before the
+ * import and not after.
+ */
+export function decodeRosterFile(bytes: ArrayBuffer): DecodedFile {
+  try {
+    return { text: new TextDecoder("utf-8", { fatal: true }).decode(bytes), warnings: [] };
+  } catch {
+    return {
+      text: new TextDecoder("windows-1252").decode(bytes),
+      warnings: [
+        "This file is not saved as UTF-8, so an accented name may come in as the wrong letter. " +
+          "Check the names below; if one is wrong, fix it in the spreadsheet and re-save as " +
+          "“CSV UTF-8” before importing — a name that is already on the roster is not changed by " +
+          "a later import.",
+      ],
+    };
+  }
+}
+
 export interface ParseResult {
   students: ParsedStudent[];
   /** Non-fatal notes to show the user (skipped rows, detected columns, …). */
@@ -509,6 +549,18 @@ export function parseRoster(text: string): ParseResult {
   const sameName = [...nameCounts.values()].filter((n) => n > 1).length;
   if (sameName) {
     warnings.push(`${sameName} name${sameName === 1 ? " is" : "s are"} shared by more than one student — both kept.`);
+  }
+
+  // Whatever produced them — a file read as UTF-8 that was not, or a paste out
+  // of a document that was already mangled — these names are wrong on screen
+  // and wrong in the gradebook, and nothing later in the app can repair them.
+  const mangled = unique.filter((s) => s.name.includes("\ufffd"));
+  if (mangled.length) {
+    warnings.push(
+      `${mangled.length} name${mangled.length === 1 ? " has" : "s have"} a character that could ` +
+        `not be read (${mangled.slice(0, 2).map((s) => `“${s.name}”`).join(", ")}` +
+        `${mangled.length > 2 ? ", …" : ""}). Fix them in the file and re-save it as “CSV UTF-8”.`,
+    );
   }
 
   const withEmail = unique.filter((s) => s.email).length;

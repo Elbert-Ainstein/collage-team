@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSupportedRosterFile, parseRoster } from "./rosterImport";
+import { decodeRosterFile, isSupportedRosterFile, parseRoster } from "./rosterImport";
 
 const names = (t: string) => parseRoster(t).students.map((s) => s.name);
 const pairs = (t: string) => parseRoster(t).students;
@@ -577,5 +577,55 @@ describe("teams that are named rather than numbered", () => {
       { name: "Grace Hopper", team: null },
     ]);
     expect(r.warnings.join(" ")).toMatch(/1 row came in with no team/i);
+  });
+});
+
+/** The shape a real class list arrives in: no header, "Last,First Middle" in
+ *  quotes with no space after the comma, an address, and the team number. */
+describe("the shape a registrar's export actually has", () => {
+  const file = [
+    '"Ashgrove,Martin Peter",martin@example.edu,1',
+    '"Del Rio Santos,Camila Rose",camila@example.edu,1',
+    '"Whitlock Jr,Desmond Earl",desmond@example.edu,2',
+    '"Ng,Wei",wei@example.edu,2',
+  ].join("\r\n");
+
+  it("flips the names, keeps the addresses and reads the teams", () => {
+    expect(parseRoster(file).students).toEqual([
+      { name: "Martin Peter Ashgrove", email: "martin@example.edu", team: 1 },
+      { name: "Camila Rose Del Rio Santos", email: "camila@example.edu", team: 1 },
+      // "Jr" is part of the surname here, not a suffix hanging off a comma.
+      { name: "Desmond Earl Whitlock Jr", email: "desmond@example.edu", team: 2 },
+      { name: "Wei Ng", email: "wei@example.edu", team: 2 },
+    ]);
+  });
+
+  it("says it guessed the team column, since the file names none of them", () => {
+    expect(parseRoster(file).warnings.join(" ")).toContain("read as the team");
+  });
+});
+
+describe("bytes that are not UTF-8", () => {
+  const line = (bytes: number[]) => new Uint8Array(bytes).buffer;
+
+  it("reads a UTF-8 file as UTF-8, and says nothing", () => {
+    const utf8 = new TextEncoder().encode("Zoë Brennan,r@x.edu,4").buffer;
+    expect(decodeRosterFile(utf8)).toEqual({ text: "Zoë Brennan,r@x.edu,4", warnings: [] });
+  });
+
+  it("falls back to windows-1252 rather than handing back a black diamond", () => {
+    // 0xD4 is not valid UTF-8; File.text() would turn it into U+FFFD, which no
+    // later import can repair.
+    // "Zo" + 0xD4 + "e"
+    const out = decodeRosterFile(line([0x5a, 0x6f, 0xd4, 0x65]));
+    expect(out.text).toBe("ZoÔe");
+    expect(out.text).not.toContain("\ufffd");
+    expect(out.warnings.join(" ")).toContain("not saved as UTF-8");
+  });
+
+  it("names the students whose names came through unreadable", () => {
+    const warnings = parseRoster("Zo\ufffd Brennan,r@x.edu\nAda Lovelace,ada@x.edu").warnings;
+    expect(warnings.join(" ")).toContain("could not be read");
+    expect(warnings.join(" ")).toContain("Zo\ufffd Brennan");
   });
 });

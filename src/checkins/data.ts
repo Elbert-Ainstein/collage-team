@@ -391,6 +391,27 @@ export async function addStudents(
   });
   return unwrap(await db().from("students").insert(rows).select()) ?? [];
 }
+/**
+ * Rename a roster row.
+ *
+ * The name is the one field of a student that nothing else can repair. An
+ * address is fixable because it identifies the row, so a later import can find
+ * the row and fill it in; a name is only ever displayed, so an import that
+ * matches on address leaves whatever is there — and a class list that was not
+ * saved as UTF-8 puts a replacement character in the middle of somebody's name
+ * for the rest of the term. Deleting the row and re-adding it takes their
+ * submissions with it, so this is the repair.
+ *
+ * user_id is untouched, which is what keeps 0028's identity guard out of it:
+ * this renames who the row is CALLED, never whose account it is.
+ */
+export async function setStudentName(id: string, name: string): Promise<void> {
+  const next = name.trim();
+  if (!next) throw new Error("A roster row needs a name.");
+  const { error } = await db().from("students").update({ name: next }).eq("id", id);
+  if (error) throw dbError(error);
+}
+
 /** Set or clear a student's email — the address their account links against. */
 export async function setStudentEmail(id: string, email: string | null): Promise<void> {
   const { error } = await db()

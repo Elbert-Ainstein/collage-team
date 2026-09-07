@@ -10,7 +10,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { TeamsPillar } from "@/checkins/TeamsPillar";
-import { addStudents, setStudentEmail } from "@/checkins/data";
+import { addStudents, setStudentEmail, setStudentName } from "@/checkins/data";
 import { removeStudentWithStorage } from "@/checkins/purge";
 import {
   countWorkForStudent,
@@ -19,6 +19,7 @@ import {
   type AccountRole,
 } from "@/faculty/facultyData";
 import {
+  decodeRosterFile,
   isSupportedRosterFile,
   parseRoster,
   type ParsedStudent,
@@ -51,6 +52,20 @@ import "@/checkins/checkins.css";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/**
+ * The most a class list can weigh. A roster of 500 with addresses is about
+ * 30 KB, so this is fifty times the biggest real one and still small enough
+ * that reading it cannot hurt.
+ *
+ * The cap exists because the wrong file is the normal accident: a video or a
+ * disk image dropped on the same target is read whole into memory, parsed line
+ * by line, and reconciled against the roster — which is quadratic in the number
+ * of rows — and the first thing the instructor sees is a tab that stops
+ * answering, with nothing to say why. Refusing it by name and size takes a
+ * sentence, and .csv on the end of a huge file does not make it a roster.
+ */
+const MAX_ROSTER_BYTES = 2 * 1024 * 1024;
+
 /** What an import would do, shown before anything is written. */
 interface Preview {
   /** Named in the summary so the user knows which input this came from. */
@@ -59,6 +74,9 @@ interface Preview {
   rows: ParsedStudent[];
   fresh: ParsedStudent[];
   emailFills: { student: Student; email: string }[];
+  /** Rows the file spells differently — see rosterReconcile. Applied only with
+   *  `fixNames` on, which is a checkbox beside the list of them. */
+  nameFixes: { student: Student; from: string; to: string }[];
   unchanged: number;
   /** Null when the file carries no team numbers, which is every roster import. */
   plan: TeamPlan | null;
@@ -172,6 +190,45 @@ function TeamPlanPreview(props: { plan: TeamPlan }): JSX.Element {
   );
 }
 
+/**
+ * The roster as the file will leave it: the rows that are there today, plus the
+ * ones this import is about to insert.
+ *
+ * The teams are planned against THIS, not against the roster on screen. Kelly's
+ * file is name, email and team number for a class that has not entered the code
+ * yet, so on the roster as it stands every row in it matches nobody: the plan
+ * came out "0 teams · 0 students placed" with a line per student saying they
+ * are not on the roster and a dead Set teams button, which reads as "this file
+ * can only do names and addresses". Nothing was wrong underneath — adding the
+ * names and pressing again did seat everyone — but the screen said the opposite
+ * of that, on the one screen where the file is the whole of the setup.
+ *
+ * The ids are placeholders and never reach the database: they exist so the plan
+ * can be drawn, and the write re-plans against the rows the insert hands back.
+ */
+function rosterAfterImport(
+  roster: Student[],
+  fresh: ParsedStudent[],
+  courseId: string,
+  startPos: number,
+): Student[] {
+  return [
+    ...roster,
+    ...fresh.map(
+      (p, i): Student => ({
+        id: `pending:${i}`,
+        user_id: null,
+        course_id: courseId,
+        name: p.name,
+        email: p.email ?? null,
+        avatar_tint: null,
+        position: startPos + i,
+        created_at: "",
+      }),
+    ),
+  ];
+}
+
 export function TeamsScreen(props: {
   data: FacultyData;
   onChanged: () => void;
@@ -186,6 +243,10 @@ export function TeamsScreen(props: {
   const [over, setOver] = useState(false);
   const [paste, setPaste] = useState("");
   const [pending, setPending] = useState<Preview | null>(null);
+  /** Whether the import also writes the names the file spells differently. On
+   *  by default — a mangled name is the usual reason one differs — and off is
+   *  one click, beside the list of exactly which names would change. */
+  const [fixNames, setFixNames] = useState(true);
   const [builder, setBuilder] = useState(false);
   /** window.confirm is suppressed here, so removals take two clicks. */
   const [armedRemove, setArmedRemove] = useState<string | null>(null);
@@ -212,6 +273,8 @@ export function TeamsScreen(props: {
   /** Only addresses being edited right now. Everything else reads the props,
    *  so a saved — or deleted — address is never shadowed by a stale draft. */
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  /** The same, for names being retyped right now. */
+  const [nameDrafts, setNameDrafts] = useState<Record<string, string>>({});
   /** Null means "whichever week the course is on" — see `gradeWeek` below. */
   const [pickedWeek, setPickedWeek] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -276,64 +339,116 @@ export function TeamsScreen(props: {
 
   const draftFor = (s: Student) => drafts[s.id] ?? s.email ?? "";
   const dirty = (s: Student) => draftFor(s).trim() !== (s.email ?? "");
+  const nameDraftFor = (s: Student) => nameDrafts[s.id] ?? s.name;
+  const renaming = (s: Student) => nameDraftFor(s).trim() !== s.name;
+  /** One Save for the row, because one row is one person. */
+  const rowDirty = (s: Student) => renaming(s) || dirty(s);
 
   const editEmail = (id: string, value: string) =>
     setDrafts((prev) => ({ ...prev, [id]: value }));
 
-  const dropDraft = (id: string) =>
-    setDrafts((prev) => {
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
+  const editName = (id: string, value: string) =>
+    setNameDrafts((prev) => ({ ...prev, [id]: value }));
 
-  async function commitEmail(s: Student) {
-    const next = draftFor(s).trim();
-    if (next === (s.email ?? "")) return;
+  const without = (prev: Record<string, string>, id: string) => {
+    const next = { ...prev };
+    delete next[id];
+    return next;
+  };
 
-    if (!next) {
-      // Clearing an address leaves an unclaimed row with nothing a join can
-      // match, so it is armed first and only cleared on the second click.
-      if (armedClear !== s.id) {
-        setArmedClear(s.id);
-        return;
-      }
-    } else if (!EMAIL_RE.test(next)) {
+  const dropDraft = (id: string) => {
+    setDrafts((prev) => without(prev, id));
+    setNameDrafts((prev) => without(prev, id));
+  };
+
+  /** Why this address cannot go on this row, or null. */
+  function emailRefusal(s: Student, next: string): string | null {
+    if (!EMAIL_RE.test(next)) {
+      return `"${next}" is not an email address — it is what matches this row to the account they join with, so it has to be exact.`;
+    }
+    // Two rows on one address means whoever signs in claims an arbitrary one.
+    const taken = roster.find(
+      (o) => o.id !== s.id && (o.email ?? "").toLowerCase() === next.toLowerCase(),
+    );
+    if (taken) return `${next} is already on ${taken.name}'s row.`;
+    // A TF's address on a student row is refused outright: nothing about it
+    // looks wrong at the time, and the damage lands later at their sign-in.
+    const tf = tfByEmail.get(next.toLowerCase());
+    if (tf) {
+      return (
+        `${next} is ${tf}'s address on this course's TF roster. At sign-in the TF list wins, so ` +
+        `they would get the teaching-fellow view of this course and this row would never be ` +
+        `claimed — it would sit on a team, ungraded, with no way to hand anything in. Take ` +
+        `them off the TF roster first if they are really taking the course.`
+      );
+    }
+    return null;
+  }
+
+  /**
+   * Save whichever of the two fields on this row has changed.
+   *
+   * The name is here at all because it is the one field of a roster row that
+   * nothing else can repair: an address identifies the row, so a later import
+   * can find it and fill it in, while a name is only ever displayed and an
+   * import that matches on address leaves whatever is there. A class list that
+   * was not saved as UTF-8 therefore put a replacement character in the middle
+   * of a student's name for the rest of the term, and the only way out was
+   * deleting the row — which takes their submissions with it.
+   */
+  async function commitRow(s: Student) {
+    const nextName = nameDraftFor(s).trim();
+    const nextEmail = draftFor(s).trim();
+    const renames = renaming(s);
+    const rewritesEmail = nextEmail !== (s.email ?? "");
+    if (!renames && !rewritesEmail) return;
+
+    if (renames && !nextName) {
       setNote(
-        `"${next}" is not an email address — it is what matches this row to the account they join with, so it has to be exact.`,
+        `Every row needs a name — it is what ${s.name} is called on the roster, on their team ` +
+          `and in the gradebook. Press Escape to put it back.`,
       );
       return;
-    } else {
-      // Two rows on one address means whoever signs in claims an arbitrary one.
-      const taken = roster.find(
-        (o) => o.id !== s.id && (o.email ?? "").toLowerCase() === next.toLowerCase(),
-      );
-      if (taken) {
-        setNote(`${next} is already on ${taken.name}'s row.`);
-        return;
-      }
-      // A TF's address on a student row is refused outright: nothing about it
-      // looks wrong at the time, and the damage lands later at their sign-in.
-      const tf = tfByEmail.get(next.toLowerCase());
-      if (tf) {
-        setNote(
-          `${next} is ${tf}'s address on this course's TF roster. At sign-in the TF list wins, so ` +
-            `they would get the teaching-fellow view of this course and this row would never be ` +
-            `claimed — it would sit on a team, ungraded, with no way to hand anything in. Take ` +
-            `them off the TF roster first if they are really taking the course.`,
-        );
-        return;
+    }
+
+    if (rewritesEmail) {
+      if (!nextEmail) {
+        // Clearing an address leaves an unclaimed row with nothing a join can
+        // match, so it is armed first and only cleared on the second click.
+        // The name goes with it — one press of Save, one confirmation.
+        if (armedClear !== s.id) {
+          setArmedClear(s.id);
+          return;
+        }
+      } else {
+        const refused = emailRefusal(s, nextEmail);
+        if (refused) {
+          setNote(refused);
+          return;
+        }
       }
     }
 
     setBusy(true);
     setError(null);
     try {
-      await setStudentEmail(s.id, next || null);
+      // The name first: it cannot be refused by anything downstream, so if the
+      // address write fails the row is at least called the right thing.
+      if (renames) await setStudentName(s.id, nextName);
+      if (rewritesEmail) await setStudentEmail(s.id, nextEmail || null);
       setArmedClear(null);
       dropDraft(s.id);
       setNote(
-        next ? `${s.name}'s row now matches ${next}.` : `Cleared ${s.name}'s address.`,
+        [
+          renames ? `${s.name} is now ${nextName}.` : "",
+          rewritesEmail
+            ? nextEmail
+              ? `${renames ? nextName : s.name}'s row now matches ${nextEmail}.`
+              : `Cleared ${renames ? nextName : s.name}'s address.`
+            : "",
+        ]
+          .filter(Boolean)
+          .join(" "),
       );
       onChanged();
     } catch (e) {
@@ -399,22 +514,35 @@ export function TeamsScreen(props: {
 
   // ---------------- import ----------------
 
-  function propose(text: string, source: string) {
+  /**
+   * `reading` is what the bytes-to-text step had to say — a file that was not
+   * UTF-8 is read anyway, and says so here rather than silently.
+   */
+  function propose(text: string, source: string, reading: string[] = []) {
     const parsed = parseRoster(text);
     const rec = reconcileRoster<Student>(roster, parsed.students);
     // A file with a team column has something to do even when every name on it
     // is already here and correct — which is the normal case now that students
     // arrive by class code, and used to be reported as "nothing to add".
+    //
+    // Planned against the roster this import PRODUCES, so a three-column file
+    // dropped on an empty course previews the teams it makes rather than a list
+    // of students who are not there yet. See rosterAfterImport.
     const plan = hasTeamNumbers(parsed.students)
-      ? planTeamImport({ roster, rows: parsed.students, teams })
+      ? planTeamImport({
+          roster: rosterAfterImport(roster, rec.fresh, course.id, nextPosition),
+          rows: parsed.students,
+          teams,
+        })
       : null;
-    if (!rec.fresh.length && !rec.emailFills.length && !plan) {
+    if (!rec.fresh.length && !rec.emailFills.length && !rec.nameFixes.length && !plan) {
       setPending(null);
       setNote(
         [
           parsed.students.length
             ? `Nothing to add — all ${plural(parsed.students.length, "name", "names")} are already on the roster.`
             : `No names found in ${source}.`,
+          ...reading,
           ...parsed.warnings,
         ].join(" "),
       );
@@ -433,15 +561,36 @@ export function TeamsScreen(props: {
       if (email && tf) tfHits.set(email.toLowerCase(), tf);
     }
 
+    // A file that had to be decoded as something other than UTF-8 may have
+    // turned one letter of one name into another. The preview counts rows and
+    // shows no names, so name the ones actually at risk — the accented ones —
+    // and she can see in a glance whether the file needs re-saving before any
+    // of it is written.
+    const accented = parsed.students
+      .map((p) => p.name)
+      .filter((n) => /[^\u0020-\u007e]/.test(n));
+    const checkTheseNames =
+      reading.length && accented.length
+        ? [
+            `${plural(accented.length, "name carries", "names carry")} an accent or a mark: ` +
+              `${accented.slice(0, 3).map((n) => `“${n}”`).join(", ")}` +
+              `${accented.length > 3 ? ", …" : ""}.`,
+          ]
+        : [];
+
     setNote(null);
+    setFixNames(true);
     setPending({
       source,
       rows: parsed.students,
       fresh: rec.fresh,
       emailFills: rec.emailFills,
+      nameFixes: rec.nameFixes,
       unchanged: rec.unchanged,
       plan,
       warnings: [
+        ...reading,
+        ...checkTheseNames,
         ...parsed.warnings,
         ...Array.from(
           tfHits,
@@ -459,8 +608,24 @@ export function TeamsScreen(props: {
       setNote(`${f.name} is not a text roster — export it as .csv and try again.`);
       return;
     }
+    if (f.size > MAX_ROSTER_BYTES) {
+      setNote(
+        `${f.name} is ${Math.round(f.size / 1024 / 1024)} MB, which is far larger than any class ` +
+          `list — a roster of 500 students is about 30 KB. Nothing was read. Check it is the ` +
+          `right file, and that it was exported as CSV rather than as a workbook.`,
+      );
+      return;
+    }
     try {
-      propose(await f.text(), f.name);
+      // The bytes, not f.text(): that call is UTF-8 only, and a class list out
+      // of Excel very often is not. See decodeRosterFile. Blob.arrayBuffer is
+      // everywhere a modern browser is, and where it is not, reading the file
+      // as UTF-8 is still better than refusing to read it at all.
+      const read =
+        typeof f.arrayBuffer === "function"
+          ? decodeRosterFile(await f.arrayBuffer())
+          : { text: await f.text(), warnings: [] };
+      propose(read.text, f.name, read.warnings);
     } catch (e) {
       fail(e);
     }
@@ -484,28 +649,60 @@ export function TeamsScreen(props: {
       for (const fillIn of p.emailFills) {
         await setStudentEmail(fillIn.student.id, fillIn.email);
       }
+      const renames = fixNames ? p.nameFixes : [];
+      for (const fix of renames) {
+        await setStudentName(fix.student.id, fix.to);
+      }
       const done = [
         p.fresh.length ? `Added ${plural(p.fresh.length, "student", "students")}.` : "",
         p.emailFills.length
           ? `Filled in ${plural(p.emailFills.length, "address", "addresses")}.`
           : "",
+        renames.length ? `Corrected ${plural(renames.length, "name", "names")}.` : "",
       ]
         .filter(Boolean)
         .join(" ");
 
       if (p.plan) {
-        // The rows just added are exactly the ones the team plan had nobody for,
-        // so re-plan and stay on the panel rather than sending her back to the
-        // file. Planned against the rows the insert HANDED BACK: `roster` is a
-        // refresh behind us and would match none of them.
-        setPending({
-          ...p,
-          fresh: [],
-          emailFills: [],
-          unchanged: p.rows.length,
-          plan: planTeamImport({ roster: after, rows: p.rows, teams }),
-        });
-        setNote(`${done} Everyone in the file is on the roster now — check the teams below.`);
+        // One press does both halves, because the file is one statement: these
+        // people, on these teams. The preview above was drawn against exactly
+        // the rows that were just inserted, so there is nothing left to review
+        // between the two writes — and stopping here to ask again was the step
+        // that made a three-column file look like it could only carry two.
+        //
+        // Re-planned against the rows the insert HANDED BACK, not against the
+        // placeholders the preview used: `roster` is a refresh behind us and
+        // would match none of them.
+        const plan = planTeamImport({ roster: after, rows: p.rows, teams });
+        let out;
+        try {
+          out = await applyTeamPlan(course.id, plan);
+        } catch (e) {
+          // The students are in and only the teams failed. Take the add half
+          // off the pending import before anything else: leaving it there
+          // means the obvious response — press it again — inserts all of them
+          // a second time, and a duplicated roster row is the one thing on
+          // this screen that cannot be undone by importing a corrected file.
+          setPending({
+            ...p,
+            fresh: [],
+            emailFills: [],
+            nameFixes: [],
+            unchanged: p.rows.length,
+            plan,
+          });
+          setNote(`${done} Nobody was put on a team — press Set teams to try that half again.`);
+          throw e;
+        }
+        closePanel();
+        setNote(
+          `${done} ${plural(out.moved, "student is", "students are")} on the teams from ` +
+            `${p.source}` +
+            (out.created ? `, and ${plural(out.created, "team was", "teams were")} added` : "") +
+            ". Nothing was deleted.",
+        );
+        setPending(null);
+        setPaste("");
       } else {
         closePanel();
         setNote(done);
@@ -900,8 +1097,12 @@ export function TeamsScreen(props: {
         <div className="fv-card" style={{ padding: 16 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 2, marginBottom: 14 }}>
             {roster.map((s) => {
-              const changed = dirty(s);
-              const cleared = !draftFor(s).trim();
+              const changed = rowDirty(s);
+              // Emptying an address that IS there — not merely an empty box.
+              // The button appears for a rename too now, and a student who has
+              // no address yet was being offered a red "Clear" for a change
+              // that does not touch their address at all.
+              const cleared = dirty(s) && !draftFor(s).trim();
               // Read from the saved address, not the draft: this is a fact about
               // the row as it stands, and the write path refuses new ones.
               const alsoTF = s.email ? tfByEmail.get(s.email.toLowerCase()) : undefined;
@@ -918,18 +1119,45 @@ export function TeamsScreen(props: {
                   }}
                 >
                   <FAvatar name={s.name} tint={s.avatar_tint} size={22} />
-                  <span
-                    style={{
-                      flex: "1 1 140px",
-                      minWidth: 0,
-                      fontSize: "var(--fv-xs)",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {s.name}
-                  </span>
+                  {/* A name, until you put the cursor in it. Quiet on purpose:
+                      the roster is a list of people to read, and renaming one
+                      is a repair, not the thing you came to do. */}
+                  {!canEdit ? (
+                    <span
+                      style={{
+                        flex: "1 1 140px",
+                        minWidth: 0,
+                        fontSize: "var(--fv-xs)",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {s.name}
+                    </span>
+                  ) : (
+                    <input
+                      className="fv-in quiet"
+                      style={{
+                        flex: "1 1 140px",
+                        minWidth: 0,
+                        height: 26,
+                        padding: "0 6px",
+                        fontSize: "var(--fv-xs)",
+                      }}
+                      aria-label={`Name for ${s.name}`}
+                      value={nameDraftFor(s)}
+                      disabled={busy}
+                      onChange={(e) => editName(s.id, e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") void commitRow(s);
+                        if (e.key === "Escape") {
+                          setArmedClear(null);
+                          dropDraft(s.id);
+                        }
+                      }}
+                    />
+                  )}
 
                   {!canEdit ? (
                     <span
@@ -965,7 +1193,7 @@ export function TeamsScreen(props: {
                       editEmail(s.id, e.target.value);
                     }}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter") void commitEmail(s);
+                      if (e.key === "Enter") void commitRow(s);
                       if (e.key === "Escape") {
                         setArmedClear(null);
                         dropDraft(s.id);
@@ -984,7 +1212,7 @@ export function TeamsScreen(props: {
                         color: cleared ? "var(--fv-destructive)" : "var(--fv-navy-700)",
                       }}
                       disabled={busy}
-                      onClick={() => void commitEmail(s)}
+                      onClick={() => void commitRow(s)}
                     >
                       {armedClear === s.id ? "Clear it?" : cleared ? "Clear" : "Save"}
                     </button>
@@ -1108,7 +1336,7 @@ export function TeamsScreen(props: {
             {roster.length === 0 ? (
               <div className="fv-sub" style={{ padding: "10px 4px", lineHeight: 1.5 }}>
                 {canEdit
-                  ? "No students yet. Names appear here as students enter the class code — you do not have to add anyone first. Paste or drop a class list below only if you want the names in place before they join."
+                  ? "No students yet. Names appear here as students enter the class code — you do not have to add anyone first. Drop a class list below to put the names in place before they join, and if it carries a team number the teams are made at the same time."
                   : "No students yet. Names appear here as students enter the class code."}
               </div>
             ) : null}
@@ -1238,8 +1466,56 @@ export function TeamsScreen(props: {
               <div style={{ fontSize: "var(--fv-xs)", marginTop: 6, lineHeight: 1.6 }}>
                 {plural(pending.fresh.length, "new student", "new students")} ·{" "}
                 {plural(pending.emailFills.length, "row gains", "rows gain")} an email ·{" "}
+                {pending.nameFixes.length
+                  ? `${plural(pending.nameFixes.length, "name is", "names are")} spelled differently · `
+                  : ""}
                 {pending.unchanged} already correct
               </div>
+
+              {/* Named one by one, old → new. This is the only thing an import
+                  overwrites, so it is never a count on its own: the reason it
+                  exists is a name nothing else can repair, and the reason it
+                  can be turned off is a name the instructor fixed by hand that
+                  the registrar's file still has wrong. */}
+              {pending.nameFixes.length ? (
+                <div style={{ marginTop: 8 }}>
+                  <label
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 7,
+                      fontSize: "var(--fv-xs)",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={fixNames}
+                      disabled={busy}
+                      onChange={(e) => setFixNames(e.target.checked)}
+                    />
+                    Correct {plural(pending.nameFixes.length, "name", "names")} on the roster
+                  </label>
+                  <ul
+                    style={{
+                      margin: "4px 0 0",
+                      paddingLeft: 18,
+                      fontSize: "var(--fv-2xs)",
+                      color: fixNames ? "var(--fv-ink)" : "var(--fv-muted)",
+                      lineHeight: 1.6,
+                    }}
+                  >
+                    {pending.nameFixes.slice(0, SHOW_MISSES).map((f) => (
+                      <li key={f.student.id}>
+                        {f.from} → <strong>{f.to}</strong>
+                      </li>
+                    ))}
+                    {pending.nameFixes.length > SHOW_MISSES ? (
+                      <li>{pending.nameFixes.length - SHOW_MISSES} more.</li>
+                    ) : null}
+                  </ul>
+                </div>
+              ) : null}
               {pending.warnings.length ? (
                 <ul
                   style={{
@@ -1257,20 +1533,37 @@ export function TeamsScreen(props: {
               ) : null}
               {pending.plan ? <TeamPlanPreview plan={pending.plan} /> : null}
               <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
-                {pending.fresh.length || pending.emailFills.length ? (
+                {/* ONE button for what the file says, not one per table it
+                    writes. A name/email/team file adds the students and seats
+                    them together — offering "Add to roster" first and "Set
+                    teams" after left the second one dead on an empty roster,
+                    which read as a file the app could only half understand. */}
+                {pending.fresh.length || pending.emailFills.length ||
+                (pending.nameFixes.length && fixNames) ? (
                   <button
                     type="button"
                     className="fv-btn primary sm"
                     disabled={busy}
                     onClick={() => void applyImport()}
                   >
-                    {busy ? "Adding…" : "Add to roster"}
+                    {busy
+                      ? pending.plan
+                        ? "Adding and seating…"
+                        : "Saving…"
+                      : pending.fresh.length
+                        ? pending.plan
+                          ? "Add to roster and set teams"
+                          : "Add to roster"
+                        : pending.plan
+                          ? "Update the roster and set teams"
+                          : "Update the roster"}
                   </button>
-                ) : null}
-                {pending.plan ? (
+                ) : pending.plan ? (
+                  // Nobody to add: the file is a re-seating of the roster that
+                  // is already here.
                   <button
                     type="button"
-                    className={`fv-btn ${pending.fresh.length ? "outline" : "primary"} sm`}
+                    className="fv-btn primary sm"
                     disabled={busy || pending.plan.placements.length === 0}
                     title={
                       pending.plan.placements.length === 0
@@ -1298,7 +1591,7 @@ export function TeamsScreen(props: {
           ) : null}
 
           {/* Outside the import panel, not inside it: notes come from the email
-              field too, and every refusal from commitEmail — a malformed
+              field too, and every refusal from commitRow — a malformed
               address, one already on another row, a TF's — used to be set into
               state and then never rendered, so pressing Enter looked like it
               had simply done nothing. */}

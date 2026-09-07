@@ -46,13 +46,16 @@ describe("re-uploading a roster to add emails", () => {
 
   it("treats re-importing the very same file as no change at all", () => {
     const roster = [row("1", "Ada Lovelace", "ada@harvard.edu"), row("2", "Grace Hopper", "grace@harvard.edu")];
-    expect(run(roster, withEmails)).toEqual({ fresh: [], emailFills: [], unchanged: 2 });
+    expect(run(roster, withEmails)).toEqual({ fresh: [], emailFills: [], nameFixes: [], unchanged: 2 });
   });
 
   it("matches on email even when the name is written differently", () => {
     const r = run([row("1", "Ada B Lovelace", "ada@harvard.edu")], "Name,Email\nAda Lovelace,ada@harvard.edu");
     expect(r.fresh).toHaveLength(0);
-    expect(r.unchanged).toBe(1);
+    // Not a second Ada, and not silently left either: the address says these
+    // are one person, so how the file spells her is offered as a correction.
+    expect(r.nameFixes.map((f) => [f.from, f.to])).toEqual([["Ada B Lovelace", "Ada Lovelace"]]);
+    expect(r.unchanged).toBe(0);
   });
 
   it("adds everyone when the roster is empty", () => {
@@ -81,12 +84,40 @@ describe("two students who share a name", () => {
       row("2", "John Smith", "john2@harvard.edu"),
     ];
     const r = run(roster, "Name,Email\nJohn Smith,john1@harvard.edu\nJohn Smith,john2@harvard.edu");
-    expect(r).toEqual({ fresh: [], emailFills: [], unchanged: 2 });
+    expect(r).toEqual({ fresh: [], emailFills: [], nameFixes: [], unchanged: 2 });
   });
 
   it("does not let one row absorb two incoming students", () => {
     const r = run([row("1", "John Smith")], "John Smith\nJohn Smith");
     // parseRoster collapses a genuine repeat with no distinguishing address.
     expect(r.fresh.length + r.emailFills.length).toBe(0);
+  });
+});
+
+describe("a name the file spells differently", () => {
+  const mangled = [row("1", "Zo\ufffd Brennan", "zoe@example.edu")];
+  const fixed = "Name,Email\nZoë Brennan,zoe@example.edu";
+
+  it("offers the corrected spelling, from the address match", () => {
+    const r = run(mangled, fixed);
+    expect(r.fresh).toHaveLength(0);
+    expect(r.nameFixes.map((f) => [f.student.id, f.to])).toEqual([["1", "Zoë Brennan"]]);
+  });
+
+  it("is not a rename when only the case or the spacing differs", () => {
+    const r = run([row("1", "Ada Lovelace", "ada@harvard.edu")], "Name,Email\nADA LOVELACE,ada@harvard.edu");
+    expect(r.nameFixes).toHaveLength(0);
+    expect(r.unchanged).toBe(1);
+  });
+
+  it("never renames a row the file matched by name — those names agreed", () => {
+    const r = run([row("1", "Ada Lovelace")], "Name,Email\nAda Lovelace,ada@harvard.edu");
+    expect(r.nameFixes).toHaveLength(0);
+    expect(r.emailFills).toHaveLength(1);
+  });
+
+  it("leaves a row alone when the file's name cell is empty", () => {
+    const r = run([row("1", "Ada Lovelace", "ada@harvard.edu")], "Name,Email\n,ada@harvard.edu");
+    expect(r.nameFixes).toHaveLength(0);
   });
 });
