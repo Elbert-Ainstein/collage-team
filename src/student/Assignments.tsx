@@ -21,7 +21,12 @@ import { BriefText } from "@/checkins/BriefText";
 import { briefFiles } from "@/checkins/briefLinks";
 import { ensureTeamResult } from "@/checkins/studentData";
 import { getMyMarks, SCALE_LABEL, type StudentMark } from "@/checkins/tutorial";
-import { listTeamResources, resourceUrls, type TeamResource } from "@/checkins/resources";
+import {
+  listTeamResources,
+  previewable,
+  resourceUrls,
+  type TeamResource,
+} from "@/checkins/resources";
 import { RESIGN_MS } from "@/checkins/storage";
 import { listMyQuestions } from "@/checkins/studentData";
 import type { Assignment, AssignmentStatus, Enrolment } from "@/checkins/studentData";
@@ -792,8 +797,9 @@ function ResourceStrip({
         if (!alive) return;
         setItems(rows);
         // Only what is shown gets a signed URL — the strip is a preview of the
-        // folder, not the folder.
-        const shown = rows.slice(-STRIP_MAX);
+        // folder, not the folder. And only the PICTURES: a folder can hold a
+        // PDF now, and a signed URL for one would buy a grey box either way.
+        const shown = rows.slice(-STRIP_MAX).filter((r) => previewable(r.mime, r.path));
         setUrls(await resourceUrls(shown.map((r) => r.path)));
       })
       // Silent: the folder is one click away and says what went wrong there.
@@ -815,7 +821,7 @@ function ResourceStrip({
     <div className="sv-card" style={{ marginTop: 12 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
         <div className="sv-eyebrow" style={{ flex: 1 }}>
-          Team resources
+          Team files
         </div>
         <button
           type="button"
@@ -823,7 +829,7 @@ function ResourceStrip({
           onClick={onOpenResources}
           style={{ color: "var(--navy-700)" }}
         >
-          {items.length ? (more > 0 ? `Open all · ${items.length}` : "Open all") : "Add a photo"}
+          {items.length ? (more > 0 ? `Open all · ${items.length}` : "Open all") : "Add files"}
         </button>
       </div>
 
@@ -842,7 +848,7 @@ function ResourceStrip({
           }}
         >
           {teamId
-            ? "Nothing here yet. Photos of a whiteboard your team worked on go in Team resources, filed under this activity."
+            ? "Nothing here yet. Whatever your team keeps for this activity — a whiteboard photo, the data you worked from — goes in Team files, in this assignment's folder."
             : "You are not on a team yet, and these belong to a team."}
         </p>
       ) : (
@@ -854,7 +860,7 @@ function ResourceStrip({
                 key={r.id}
                 type="button"
                 onClick={onOpenResources}
-                title={`Open ${r.title} in Team resources`}
+                title={`Open ${r.title} in Team files`}
                 style={{
                   width: 150,
                   padding: 0,
@@ -869,13 +875,22 @@ function ResourceStrip({
               >
                 <span
                   style={{
-                    display: "block",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                     height: 62,
+                    fontSize: "var(--text-2xs)",
+                    letterSpacing: "var(--tracking-wide)",
+                    color: "var(--muted-foreground)",
                     background: url
                       ? `var(--neutral-100) url("${url}") center/cover no-repeat`
                       : "var(--neutral-100)",
                   }}
-                />
+                >
+                  {/* A file that is not a picture says what it is, rather than
+                      sitting there as an empty grey rectangle. */}
+                  {url ? "" : (/\.([a-z0-9]{1,5})$/i.exec(r.path)?.[1] ?? "file").toUpperCase()}
+                </span>
                 <span style={{ display: "block", padding: "8px 10px" }}>
                   <span
                     className="sv-ellip"

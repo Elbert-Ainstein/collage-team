@@ -131,12 +131,26 @@ export async function stillThere(bucket: Bucket, path: string): Promise<boolean>
 }
 
 /** A short-lived URL for one object. Every bucket in this app is private. */
+/**
+ * `download` asks the CDN for Content-Disposition: attachment, so the browser
+ * SAVES the file instead of rendering it.
+ *
+ * That is a security control, not a convenience. Objects are served from the
+ * Supabase project's own origin, so anything the browser will execute as a
+ * document — an .html page, an .svg with a script in it — becomes a page
+ * running on that origin, handed round by a link the app itself produced.
+ * Uploads refuse those types (see resources.ts), and this is the second lock:
+ * a file nobody can preview is a file nobody's browser will run.
+ */
 export async function signedUrl(
   bucket: Bucket,
   path: string,
   seconds = SIGNED_SECONDS,
+  download = false,
 ): Promise<{ url: string | null; error: StorageFailure | null }> {
-  const res = await db().storage.from(bucket).createSignedUrl(path, seconds);
+  const res = await db()
+    .storage.from(bucket)
+    .createSignedUrl(path, seconds, download ? { download: true } : undefined);
   if (res.error) return { url: null, error: { message: res.error.message } };
   return { url: res.data?.signedUrl ?? null, error: null };
 }
@@ -146,11 +160,14 @@ export async function signedUrls(
   bucket: Bucket,
   paths: string[],
   seconds = SIGNED_SECONDS,
+  download = false,
 ): Promise<{ urls: Map<string, string>; error: StorageFailure | null }> {
   const urls = new Map<string, string>();
   if (!paths.length) return { urls, error: null };
 
-  const res = await db().storage.from(bucket).createSignedUrls(paths, seconds);
+  const res = await db()
+    .storage.from(bucket)
+    .createSignedUrls(paths, seconds, download ? { download: true } : undefined);
   if (res.error) return { urls, error: { message: res.error.message } };
   for (const row of res.data ?? []) {
     // A row per requested path; ones the backend could not sign come back with

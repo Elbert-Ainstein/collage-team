@@ -807,7 +807,12 @@ export async function openResultsFor(
       status: "none",
     })),
   );
-  if (error) throw dbError(error);
+  // 23505 = unique_violation against uniq_result_student (0001). Somebody else
+  // opened the same screen, or the student opened their own work, in the
+  // moment between the read above and this write — and the row existing is the
+  // whole of what this function wanted. Two graders on one activity is a
+  // normal Tuesday, and an error banner over a screen that is working is not.
+  if (error && !/duplicate key|23505/i.test(error.message)) throw dbError(error);
   return missing.length;
 }
 

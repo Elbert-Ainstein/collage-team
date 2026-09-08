@@ -136,6 +136,18 @@ begin
        select 1 from team_folders f where f.id = new.folder_id and f.team_id = new.team_id) then
     raise exception 'That folder belongs to another team';
   end if;
+  -- Nor is an assignment on somebody else's course. Nothing about activity_id
+  -- was checked before, because it could not move and the upload set it from
+  -- the screen the student was standing on; now that it can move, the same
+  -- rule resource_path_matches applies to the path applies to the row.
+  if new.activity_id is not null and not exists (
+       select 1
+         from teams t
+         join team_sets ts on ts.id = t.team_set_id
+         join activities a on a.id = new.activity_id
+        where t.id = new.team_id and a.course_id = ts.course_id) then
+    raise exception 'That assignment belongs to another course';
+  end if;
   return new;
 end $$;
 

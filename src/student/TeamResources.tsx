@@ -29,7 +29,8 @@ import {
   listTeamFolders,
   renameTeamFolder,
   renameTeamResource,
-  resourceUrls,
+  resourceUrlsByKind,
+  previewable,
   uploadTeamResource,
   type TeamFolder,
   type TeamResource,
@@ -60,19 +61,6 @@ function weekLabel(a: Assignment): string {
 
 function countLabel(n: number): string {
   return n === 0 ? "Nothing yet" : `${n} ${n === 1 ? "item" : "items"}`;
-}
-
-/**
- * Can this be shown as a picture?
- *
- * The drive takes anything since 0035, and a PDF in an <img> is a broken icon
- * in a lightbox with no way out to the actual file. Mime first, because that is
- * what the upload recorded; the extension is the fallback for rows written
- * before there was one.
- */
-function isImage(r: TeamResource): boolean {
-  if (r.mime) return /^image\//i.test(r.mime);
-  return /\.(png|jpe?g|webp|gif|heic|heif|avif)$/i.test(r.path);
 }
 
 /** "PDF", "CSV" — what to print on a tile that cannot be a thumbnail. */
@@ -688,7 +676,7 @@ function Folder({
       setItems(rows);
       // One round trip for the whole set rather than one per thumbnail: a
       // session's photos would otherwise be a dozen separate requests.
-      const signed = await resourceUrls(rows.map((r) => r.path));
+      const signed = await resourceUrlsByKind(rows);
       if (live.current) setUrls(signed);
     } catch (e) {
       if (live.current) setError(message(e, "Could not open this folder."));
@@ -1088,7 +1076,7 @@ function Folder({
             const url = urls.get(r.path);
             return (
               <div key={r.id} className="sv-tr-tile">
-                {url && isImage(r) ? (
+                {url && previewable(r.mime, r.path) ? (
                   <button
                     type="button"
                     className="sv-tr-thumb"

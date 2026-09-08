@@ -43,6 +43,13 @@ vi.mock("@/checkins/resources", () => ({
   renameTeamFolder,
   renameTeamResource: vi.fn(async () => undefined),
   resourceUrls: vi.fn(async (paths: string[]) => new Map(paths.map((p) => [p, `signed:${p}`]))),
+  // The real ones: what may be shown in the page, and a URL per file. Kept
+  // faithful because the tiles below are exactly this decision rendered.
+  previewable: (mime: string | null, path: string) =>
+    mime ? /^image\/(png|jpe?g|webp|gif|heic|heif|avif)$/i.test(mime) : /\.(png|jpe?g)$/i.test(path),
+  resourceUrlsByKind: vi.fn(
+    async (rows: TeamResource[]) => new Map(rows.map((r) => [r.path, `signed:${r.path}`])),
+  ),
   uploadTeamResource,
 }));
 

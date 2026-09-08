@@ -250,6 +250,38 @@ export async function countResourcesForTeams(teamIds: string[]): Promise<number>
   }
 }
 
+/**
+ * File types a browser runs as a document, which this drive will not hold.
+ *
+ * Storage objects are served from the Supabase project's own origin. An .html
+ * page or an .svg carrying a script is therefore a page executing on that
+ * origin the moment anybody opens the link — and the app hands that link to
+ * every teammate and to course staff. 0017's images-only rule made this
+ * impossible by accident; taking the rule off for a drive puts it back, so it
+ * is refused on purpose here.
+ *
+ * Everything else a class actually shares is unaffected: PDFs, images, data,
+ * documents, archives, and anything with no registered type at all.
+ */
+const EXECUTABLE_TYPE = /^(text\/html|application\/xhtml\+xml|image\/svg\+xml|text\/xml|application\/xml)$/i;
+const EXECUTABLE_EXT = /\.(html?|xhtml|shtml|svgz?|mht|mhtml|xml)$/i;
+
+function refusedForSafety(file: File): string | null {
+  if (EXECUTABLE_TYPE.test(file.type) || EXECUTABLE_EXT.test(file.name)) {
+    return (
+      `“${file.name}” is a web page, and a web page kept here would run in the browser of ` +
+      `everyone you shared it with. Put it in a PDF, or paste a link to it instead.`
+    );
+  }
+  return null;
+}
+
+/** Can this be shown in the page rather than saved? Images, and nothing else. */
+export function previewable(mime: string | null, path: string): boolean {
+  if (mime) return /^image\/(png|jpe?g|webp|gif|heic|heif|avif)$/i.test(mime);
+  return /\.(png|jpe?g|webp|gif|heic|heif|avif)$/i.test(path);
+}
+
 /** The file extension to store under, from the name or the type. Always something. */
 function extensionFor(file: File): string {
   const fromName = /\.([a-z0-9]{1,5})$/i.exec(file.name)?.[1];
@@ -284,8 +316,12 @@ export async function uploadTeamResource(
   const folderId = where.folderId ?? null;
 
   // Any kind of file, since 0035 — a drive that takes only photographs is a
-  // drive nobody can put their data in. The size cap is the one rule left, and
-  // it lands here rather than after the whole thing has crossed a room's wifi.
+  // drive nobody can put their data in — except the ones a browser executes.
+  const refused = refusedForSafety(file);
+  if (refused) throw new Error(refused);
+
+  // The size cap lands here rather than after the whole thing has crossed a
+  // room's wifi.
   if (file.size > MAX_BYTES) {
     throw new Error(
       `“${file.name}” is ${Math.round(file.size / (1024 * 1024))} MB, over the 100 MB limit.`,
@@ -357,4 +393,29 @@ export async function resourceUrls(paths: string[]): Promise<Map<string, string>
   const { urls, error } = await signedUrls(BUCKET, paths);
   if (error) throw storageError(error, "read");
   return urls;
+}
+
+/**
+ * URLs for a mixed set of files: pictures signed to be SHOWN, everything else
+ * signed to be SAVED.
+ *
+ * The second half is the security half. What a browser does with a link is
+ * decided by the response, not by the file, so a link that renders is a link
+ * that can run something — and these objects come off the Supabase project's
+ * own origin. Uploads already refuse the types that would exploit that; this
+ * makes the ones already in a bucket, or any type nobody thought of, harmless
+ * as well.
+ */
+export async function resourceUrlsByKind(rows: TeamResource[]): Promise<Map<string, string>> {
+  const show = rows.filter((r) => previewable(r.mime, r.path)).map((r) => r.path);
+  const save = rows.filter((r) => !previewable(r.mime, r.path)).map((r) => r.path);
+  const [shown, saved] = await Promise.all([
+    show.length ? signedUrls(BUCKET, show) : Promise.resolve({ urls: new Map(), error: null }),
+    save.length
+      ? signedUrls(BUCKET, save, undefined, true)
+      : Promise.resolve({ urls: new Map(), error: null }),
+  ]);
+  if (shown.error) throw storageError(shown.error, "read");
+  if (saved.error) throw storageError(saved.error, "read");
+  return new Map([...shown.urls, ...saved.urls]);
 }
