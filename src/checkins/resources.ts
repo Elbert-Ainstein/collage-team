@@ -1,12 +1,19 @@
-// Team resources: the whiteboard photos a team takes during a session, filed
-// under the activity they came from.
+// The team's drive: whatever a team keeps together — the whiteboard photos it
+// takes during a session, and since 0035 anything else it is working from.
 //
-// Storage holds the image; one table holds what it is and what the team called
-// it. Paths are {course}/{activity}/{team}/{uuid}.ext — the same convention 0013
-// and 0015 use, with the team in segment 3, so the storage policies authorise
-// from the path alone.
+// Two kinds of folder, and only one of them is a row. An ASSIGNMENT folder is
+// made by the course: every activity has one, always, whether or not anything
+// has been put in it, so a photo taken in week 3 is filed under week 3 without
+// anybody deciding to file it. A folder the team MADE is a team_folders row.
+// The screen shows them side by side; the model keeps them apart because one
+// of them cannot be renamed, deleted, or made twice.
 //
-// Needs supabase/migrations/0017_team_resources.sql.
+// Storage holds the file; one table holds what it is and what the team called
+// it. Paths are {course}/{activity | "files"}/{team}/{uuid}.ext — the same
+// convention 0013 and 0015 use, with the team in segment 3, so the storage
+// policies authorise from the path alone.
+//
+// Needs supabase/migrations/0017_team_resources.sql and 0035_team_files.sql.
 
 import { requireSupabase } from "@/lib/supabaseClient";
 import { countAllIn, dbError } from "./data";
@@ -25,12 +32,27 @@ const MAX_BYTES = 100 * 1024 * 1024;
 
 export interface TeamResource {
   id: string;
-  activity_id: string;
+  /**
+   * The assignment folder this file sits in, when it sits in one. Null for a
+   * file in a folder of the team's own, or loose at the top level — see 0035.
+   */
+  activity_id: string | null;
+  /** A folder the team made. Null for an assignment folder or the top level. */
+  folder_id: string | null;
   team_id: string;
   title: string;
   path: string;
   mime: string | null;
   size_bytes: number | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+/** A folder a team made for itself. Assignment folders are not rows — see below. */
+export interface TeamFolder {
+  id: string;
+  team_id: string;
+  name: string;
   created_by: string | null;
   created_at: string;
 }
@@ -43,14 +65,16 @@ function unwrap<T>(res: { data: T | null; error: { message: string } | null }): 
 }
 
 function missing(e: unknown): boolean {
-  return /team_resources|0017/.test(String((e as Error)?.message ?? e));
+  return /team_resources|team_folders|0017|0035/.test(String((e as Error)?.message ?? e));
 }
 
 export class ResourcesNotInstalledError extends Error {
   constructor() {
     super(
-      "This project has no team resources table yet — run " +
-        "supabase/migrations/0017_team_resources.sql in the Supabase SQL editor.",
+      "This project's team files are not set up yet — run " +
+        "supabase/migrations/0017_team_resources.sql and then 0035_team_files.sql in the " +
+        "Supabase SQL editor. 0035 is the one that adds folders; without it the drive can " +
+        "read nothing, because every file it looks for is filed under a folder.",
     );
     this.name = "ResourcesNotInstalledError";
   }
@@ -100,6 +124,89 @@ export async function listTeamResources(
     if (missing(e)) throw new ResourcesNotInstalledError();
     throw e;
   }
+}
+
+/**
+ * Everything this team holds, in one read.
+ *
+ * The drive shows folders side by side — the assignment ones and the team's
+ * own — so it needs the whole set to count and group them. Per-activity
+ * fetching was right when the screen opened one activity at a time; asking it
+ * twelve times to draw one page is not.
+ */
+export async function listAllTeamResources(teamId: string): Promise<TeamResource[]> {
+  try {
+    return (
+      (unwrap(
+        await db().from("team_resources").select("*").eq("team_id", teamId).order("created_at"),
+      ) as TeamResource[] | null) ?? []
+    );
+  } catch (e) {
+    if (missing(e)) throw new ResourcesNotInstalledError();
+    throw e;
+  }
+}
+
+/** The folders this team made. Newest last, which is the order they appear in. */
+export async function listTeamFolders(teamId: string): Promise<TeamFolder[]> {
+  try {
+    return (
+      (unwrap(
+        await db().from("team_folders").select("*").eq("team_id", teamId).order("created_at"),
+      ) as TeamFolder[] | null) ?? []
+    );
+  } catch (e) {
+    if (missing(e)) throw new ResourcesNotInstalledError();
+    throw e;
+  }
+}
+
+export async function createTeamFolder(teamId: string, name: string): Promise<TeamFolder> {
+  const named = name.trim();
+  if (!named) throw new Error("A folder needs a name — that is the whole of what it is.");
+  const rows = await db().from("team_folders").insert({ team_id: teamId, name: named }).select();
+  if (rows.error) {
+    if (missing(rows.error)) throw new ResourcesNotInstalledError();
+    throw dbError(rows.error);
+  }
+  return (rows.data as TeamFolder[])[0];
+}
+
+export async function renameTeamFolder(id: string, name: string): Promise<void> {
+  const named = name.trim();
+  if (!named) throw new Error("A folder needs a name — that is the whole of what it is.");
+  const { error } = await db().from("team_folders").update({ name: named }).eq("id", id);
+  if (error) throw dbError(error);
+}
+
+/**
+ * Remove the folder. What was in it is NOT removed — 0035 sets those rows'
+ * folder_id to null, so the files land at the top level of the drive.
+ *
+ * The alternative is one press destroying work nobody can photograph twice.
+ */
+export async function deleteTeamFolder(id: string): Promise<void> {
+  const { error } = await db().from("team_folders").delete().eq("id", id);
+  if (error) throw dbError(error);
+}
+
+/**
+ * Move a file into an assignment folder, into one of the team's own, or out to
+ * the top level.
+ *
+ * The row moves and the object does not: what a storage policy authorises on
+ * is the team in the path, which is not what changes here. 0035 relaxed 0017's
+ * guard for exactly this, and still pins team, path and who filed it.
+ */
+export async function moveTeamResource(
+  id: string,
+  to: { activityId?: string | null; folderId?: string | null },
+): Promise<void> {
+  const { error } = await db()
+    .from("team_resources")
+    .update({ activity_id: to.activityId ?? null, folder_id: to.folderId ?? null })
+    .eq("id", id);
+  if (error) throw dbError(error);
 }
 
 /** How many this team has filed against each activity — for the folder counts. */
@@ -157,19 +264,28 @@ export function defaultTitle(file: File): string {
   return base || "Whiteboard photo";
 }
 
+/** Where a file goes: an assignment folder, a folder of the team's own, or neither. */
+export interface ResourceHome {
+  courseId: string;
+  teamId: string;
+  /** The assignment folder. Null everywhere else. */
+  activityId?: string | null;
+  /** One of the team's own folders. Null for the top level. */
+  folderId?: string | null;
+}
+
 export async function uploadTeamResource(
-  where: { courseId: string; activityId: string; teamId: string },
+  where: ResourceHome,
   file: File,
   title: string,
 ): Promise<TeamResource> {
-  const { courseId, activityId, teamId } = where;
+  const { courseId, teamId } = where;
+  const activityId = where.activityId ?? null;
+  const folderId = where.folderId ?? null;
 
-  if (!/^image\//i.test(file.type)) {
-    throw new Error(
-      `“${file.name}” isn't an image. Photos of a whiteboard work — PNG, JPEG, WebP, GIF ` +
-        "or a HEIC straight off a phone.",
-    );
-  }
+  // Any kind of file, since 0035 — a drive that takes only photographs is a
+  // drive nobody can put their data in. The size cap is the one rule left, and
+  // it lands here rather than after the whole thing has crossed a room's wifi.
   if (file.size > MAX_BYTES) {
     throw new Error(
       `“${file.name}” is ${Math.round(file.size / (1024 * 1024))} MB, over the 100 MB limit.`,
@@ -181,17 +297,22 @@ export async function uploadTeamResource(
   // Uploaded exactly as the camera wrote it. A photo of a whiteboard is
   // evidence a marker reads — a re-encode that saves bytes also softens the one
   // faint line somebody needed, and there is no way to get it back afterwards.
-  const path = `${courseId}/${activityId}/${teamId}/${crypto.randomUUID()}.${extensionFor(file)}`;
+  //
+  // "files" is the segment for anything not filed under an assignment. It
+  // cannot collide with an activity id, which is a uuid; see 0035.
+  const home = activityId ?? "files";
+  const path = `${courseId}/${home}/${teamId}/${crypto.randomUUID()}.${extensionFor(file)}`;
 
-  const failed = await put(BUCKET, path, file, file.type);
+  const failed = await put(BUCKET, path, file, file.type || "application/octet-stream");
   if (failed) throw storageError(failed, "upload");
 
   const rows = await db().from("team_resources").insert({
     activity_id: activityId,
+    folder_id: folderId,
     team_id: teamId,
     title: named,
     path,
-    mime: file.type,
+    mime: file.type || null,
     size_bytes: file.size,
   }).select();
 

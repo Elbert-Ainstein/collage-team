@@ -223,6 +223,19 @@ select '0034 a question is worth points',
                  and column_name = 'points')
             then 'applied'
             else 'NOT APPLIED — run 0034_question_points.sql' end
+union all
+-- Two facts, because 0035 does two things and half of it is not visible in the
+-- other: a team may make folders, and a file may belong to no activity.
+select '0035 team files are a drive',
+       case when exists (
+              select 1 from information_schema.tables
+               where table_schema = 'public' and table_name = 'team_folders')
+             and exists (
+              select 1 from information_schema.columns
+               where table_schema = 'public' and table_name = 'team_resources'
+                 and column_name = 'activity_id' and is_nullable = 'YES')
+            then 'applied'
+            else 'NOT APPLIED — run 0035_team_files.sql' end
 order by 1;
 
 -- ------------------------------------------------------- and the buckets

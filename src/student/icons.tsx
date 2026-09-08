@@ -12,6 +12,9 @@ const P: Record<string, string> = {
   check: '<path d="M4.5 12.5l5 5L20 6.5"/>',
   play: '<path d="M8 5.5l10 6.5-10 6.5z"/>',
   folder: '<path d="M3.5 6.5a1.5 1.5 0 0 1 1.5-1.5h4l2 2.2h8a1.5 1.5 0 0 1 1.5 1.5v9.8a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5z"/>',
+  // A page with a folded corner — what a file that is not a picture looks like
+  // on its tile in Team files.
+  file: '<path d="M13.5 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9z"/><path d="M13.5 3.5V9H19"/>',
   image:
     '<rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M4.5 17l4.4-4.2 3.1 2.9 3-2.6 4.5 3.9"/>',
   addPhoto:

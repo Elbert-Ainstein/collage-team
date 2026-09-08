@@ -22,7 +22,7 @@ import { SCOPE_OF, type Student } from "@/checkins/types";
 import { SIcon } from "./icons";
 import { Assignments } from "./Assignments";
 import { MyWork } from "./MyWork";
-import { TeamResources } from "./TeamResources";
+import { assignmentKey, TeamResources } from "./TeamResources";
 import { SubmitScreen } from "./SubmitScreen";
 import "./student.css";
 
@@ -891,7 +891,7 @@ export function StudentApp({
             }}
           >
             <SIcon name="groups" size={18} />
-            <span className="lbl">Team resources</span>
+            <span className="lbl">Team files</span>
           </button>
         </nav>
 
@@ -1158,7 +1158,9 @@ export function StudentApp({
         setScreen("submit");
       }}
       onOpenResources={() => {
-        setTrId(selId);
+        // The assignment's own folder in Team files, named the way the drive
+        // names one: a bare id there means the top level.
+        setTrId(selId ? assignmentKey(selId) : null);
         setScreen("trDetail");
       }}
     />,
