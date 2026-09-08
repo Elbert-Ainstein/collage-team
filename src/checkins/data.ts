@@ -764,6 +764,53 @@ export async function saveResult(input: {
     }).select().single(),
   );
 }
+/**
+ * Give every named student a row on this check-in, for a half that is answered
+ * on another platform.
+ *
+ * Grading reads the people who handed something in, which is the right rule
+ * everywhere a hand-in is what happens — and no rule at all on an Amplify
+ * individual half, where nothing is ever handed in here and the marker is
+ * reading the answers on Amplify. Without a row there is nothing for a mark to
+ * be filed against, so the screen shows an empty class and the half cannot be
+ * graded at all.
+ *
+ * The rows go in at status "none", which is the same empty row a student makes
+ * by opening their hand-in: it holds nothing, it is not "work" to any count or
+ * export (those all ask for status <> 'none'), and the first mark fills it in.
+ *
+ * Only the missing ones, so this is safe to run whenever the screen opens.
+ */
+export async function openResultsFor(
+  checkInId: string,
+  studentIds: string[],
+): Promise<number> {
+  if (!studentIds.length) return 0;
+  const sb = db();
+  const existing = await selectAllIn<{ student_id: string | null }>(
+    studentIds,
+    (chunk, from, to) =>
+      sb.from("check_in_results").select("student_id")
+        .eq("check_in_id", checkInId).in("student_id", chunk)
+        .order("student_id").range(from, to),
+  );
+  const have = new Set(existing.map((r) => r.student_id));
+  const missing = studentIds.filter((id) => !have.has(id));
+  if (!missing.length) return 0;
+
+  const { error } = await sb.from("check_in_results").insert(
+    missing.map((student_id) => ({
+      check_in_id: checkInId,
+      subject_type: "student",
+      student_id,
+      team_id: null,
+      status: "none",
+    })),
+  );
+  if (error) throw dbError(error);
+  return missing.length;
+}
+
 export async function deleteResult(id: string): Promise<void> {
   const { error } = await db().from("check_in_results").delete().eq("id", id);
   if (error) throw dbError(error);

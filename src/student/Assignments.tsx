@@ -34,7 +34,7 @@ import type {
   Scope,
   Student,
 } from "@/checkins/types";
-import { SCOPE_LABEL, SCOPE_OF, TYPE_LABEL } from "@/checkins/types";
+import { INDIV_ELSEWHERE, SCOPE_LABEL, SCOPE_OF, TYPE_LABEL } from "@/checkins/types";
 // The activity's attachments are the instructor's file, read here rather than
 // written: the rules and the signing live with the side that uploads them, and
 // a second copy of "is this a PDF" on the reading side is how the two surfaces
@@ -65,10 +65,34 @@ const STATUS_BADGE: Record<AssignmentStatus, string> = {
   "Turned in": "sky",
   Late: "warning",
   "Not started": "outline",
+  // Neutral, not amber: there is nothing here for the student to act on.
+  "Answered elsewhere": "outline",
   Graded: "success",
   Discussing: "warning",
   Excused: "secondary",
 };
+
+/**
+ * Where the individual half is answered, when it is not here — "Amplify".
+ * Null for everything a student hands in through this app.
+ */
+function elsewhereName(a: Assignment): string | null {
+  if (SCOPE_OF[a.activity.type] === "team") return null;
+  return INDIV_ELSEWHERE[a.activity.type];
+}
+
+/**
+ * The badge's words.
+ *
+ * The status is generic — the model has no opinion about which platform — and
+ * a badge reading "Answered elsewhere" would make a student go looking for the
+ * elsewhere. Name it.
+ */
+function statusLabel(a: Assignment): string {
+  if (a.status !== "Answered elsewhere") return a.status;
+  const place = elsewhereName(a);
+  return place ? `Answered in ${place}` : a.status;
+}
 
 /**
  * What the marker wrote back, if anything, and only once it is theirs to read.
@@ -131,6 +155,8 @@ function inFilter(f: Filter, s: AssignmentStatus): boolean {
     case "all":
       return true;
     case "todo":
+      // "Answered elsewhere" is deliberately absent: To do is the list of
+      // things the student still has to do, and this is not one of them.
       return s === "Not started" || s === "Late";
     case "submitted":
       return s === "Turned in" || s === "Discussing";
@@ -269,6 +295,9 @@ function statusStamp(a: Assignment): string {
   const when = submittedAt(a);
   if (when) return `Submitted ${when}`;
   if (a.status === "Graded") return "Marked in session";
+  // Nothing came here, and nothing was meant to.
+  const place = elsewhereName(a);
+  if (place) return `Answered in ${place} — nothing to hand in here`;
   // Including "Late": saying "submitted late" over work that never came would
   // tell a student the deadline is behind them when it is the thing they still
   // have to act on.
@@ -369,7 +398,7 @@ function ActivityRow({ a, onSelect }: { a: Assignment; onSelect: (id: string) =>
         <span className="sv-rowdue">{dueLine(a)}</span>
       </span>
 
-      <span className={`sv-badge ${STATUS_BADGE[a.status]} sv-rowstatus`}>{a.status}</span>
+      <span className={`sv-badge ${STATUS_BADGE[a.status]} sv-rowstatus`}>{statusLabel(a)}</span>
 
       <span className="sv-num sv-rowgrade">{a.grade}</span>
 
@@ -887,7 +916,7 @@ function StatusCard({ a, scope }: { a: Assignment; scope: Scope }) {
     <div className="sv-card" style={{ padding: "16px 18px" }}>
       <Eyebrow>Status</Eyebrow>
       <div style={{ marginTop: 8 }}>
-        <span className={`sv-badge ${STATUS_BADGE[a.status]}`}>{a.status}</span>
+        <span className={`sv-badge ${STATUS_BADGE[a.status]}`}>{statusLabel(a)}</span>
       </div>
       {/* The stamp and the late marker sit together because they are one fact:
           the badge above says the work is in, and this says when — and whether
@@ -1143,6 +1172,8 @@ function AssignmentDetail({
 }) {
   const act = a.activity;
   const scope = SCOPE_OF[act.type];
+  /** Named when the individual half is answered on another platform. */
+  const elsewhere = elsewhereName(a);
   // Tab state is ignored for single-scope activities, so it can never strand
   // the student on a tab that does not exist.
   const effective: "indiv" | "team" = scope === "both" ? tab : scope;
@@ -1346,23 +1377,40 @@ function AssignmentDetail({
               {/* One door to the individual half: the hand-in. "Open my work"
                   sat beside it and led to a second screen for a written note,
                   which is two places to go for one piece of work and a question
-                  ("which one am I meant to press?") with no good answer. */}
-              <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 14 }}>
-                <button
-                  type="button"
-                  className="sv-btn primary"
-                  onClick={() => onOpenSubmit(act.id)}
-                  disabled={!a.indivCheckIn}
-                  title={
-                    a.indivCheckIn
-                      ? "Upload your work as a PDF and mark which pages answer which question"
-                      : "Your instructor has not opened this for submissions yet"
-                  }
-                >
-                  {arrivedIndiv ? "View submission" : "Submit assignment"}
-                </button>
-                <span className="sv-sub">{savedLine}</span>
-              </div>
+                  ("which one am I meant to press?") with no good answer.
+
+                  Unless the answers are not here at all. An Amplify half is
+                  answered on Amplify and marked from Amplify, so a hand-in
+                  button would be asking for the same work a second time — and
+                  the students who obliged would be uploading a screenshot of
+                  what the marker is already looking at. */}
+              {elsewhere ? (
+                <div className="sv-card" style={{ marginTop: 14 }}>
+                  <div className="sv-eyebrow">Where this one is answered</div>
+                  <p style={CARD_BODY}>
+                    You answer these questions in <strong>{elsewhere}</strong>. There is nothing to
+                    hand in here — your instructor marks this half from your answers there, and the
+                    grade appears on this page once it is released.
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginTop: 14 }}>
+                  <button
+                    type="button"
+                    className="sv-btn primary"
+                    onClick={() => onOpenSubmit(act.id)}
+                    disabled={!a.indivCheckIn}
+                    title={
+                      a.indivCheckIn
+                        ? "Upload your work as a PDF and mark which pages answer which question"
+                        : "Your instructor has not opened this for submissions yet"
+                    }
+                  >
+                    {arrivedIndiv ? "View submission" : "Submit assignment"}
+                  </button>
+                  <span className="sv-sub">{savedLine}</span>
+                </div>
+              )}
             </div>
           ) : null}
 

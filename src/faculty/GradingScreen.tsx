@@ -11,9 +11,10 @@
 // recomputes it from the marks (migration 0007), so there is one writer and the
 // number can't drift from what produced it.
 
-import type { ResultRow } from "@/checkins/data";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { openResultsFor, type ResultRow } from "@/checkins/data";
 import {
+  INDIV_ELSEWHERE,
   isCompletion,
   SCOPE_OF,
   type Activity,
@@ -190,16 +191,54 @@ export function GradingScreen({
     setHalf(scope === "team" ? "team" : "individual");
   }, [scope]);
 
+  const kind: "individual" | "team" =
+    scope === "both" ? half : scope === "team" ? "team" : "individual";
+  const checkIn =
+    data.checkIns.find((c) => c.activity_id === activity.id && c.kind === kind) ?? null;
+  /**
+   * Named when this half is answered on another platform — an Amplify
+   * individual half, where the answers are on Amplify and nothing is handed in
+   * here. The team half of the same activity is unaffected.
+   */
+  const elsewhere = kind === "individual" ? INDIV_ELSEWHERE[activity.type] : null;
+
+  /**
+   * Somewhere for a mark to go.
+   *
+   * Nobody hands in, so nobody has a row, so without this the class is empty
+   * and the half cannot be graded at all — which is the whole of what the
+   * marker came here to do. Only the missing rows are written, and they go in
+   * empty, so opening this screen twice writes nothing the second time.
+   */
+  useEffect(() => {
+    if (!elsewhere || !checkIn || !data.roster.length) return;
+    let live = true;
+    openResultsFor(
+      checkIn.id,
+      data.roster.map((s) => s.id),
+    )
+      .then((made) => {
+        if (live && made) onChanged();
+      })
+      .catch(onError);
+    return () => {
+      live = false;
+    };
+  }, [elsewhere, checkIn?.id, data.roster, onChanged, onError]);
+
   // Scope decides who is graded: a team activity is marked once per team.
   const subjects: Subject[] = useMemo(() => {
-    const kind = scope === "both" ? half : scope === "team" ? "team" : "individual";
-    const checkIn = data.checkIns.find((c) => c.activity_id === activity.id && c.kind === kind);
     if (!checkIn) return [];
 
     const handedIn = (r: Pick<ResultRow, "status">) =>
       r.status === "submitted" || r.status === "needs_review" || r.status === "scored";
 
-    const rows = data.results.filter((r) => r.check_in_id === checkIn.id && handedIn(r));
+    // Handing in is what puts somebody on this list — except where handing in
+    // is not the arrangement. On a half answered elsewhere the whole roster is
+    // gradeable the moment the instructor has the other platform open.
+    const rows = data.results.filter(
+      (r) => r.check_in_id === checkIn.id && (elsewhere !== null || handedIn(r)),
+    );
     const out: Subject[] = [];
     if (kind === "team") {
       for (const t of data.teams) {
@@ -213,7 +252,7 @@ export function GradingScreen({
       }
     }
     return out.sort((a, b) => a.name.localeCompare(b.name));
-  }, [activity.id, data.checkIns, data.results, data.roster, data.teams, scope, half]);
+  }, [checkIn, data.results, data.roster, data.teams, kind, elsewhere]);
 
   const subject = subjects[stIdx] ?? null;
 
@@ -575,8 +614,11 @@ export function GradingScreen({
             Nothing to grade yet
           </div>
           <p className="fv-sub" style={{ marginTop: 8, lineHeight: 1.6, maxWidth: "56ch" }}>
-            No {half === "team" ? "team has" : "student has"} handed this in. Once work arrives it
-            will appear here.
+            {elsewhere
+              ? `This half is answered in ${elsewhere}, so there is nothing to hand in — but there ` +
+                `is nobody on the roster yet either, and a mark has to belong to somebody.`
+              : `No ${half === "team" ? "team has" : "student has"} handed this in. Once work ` +
+                `arrives it will appear here.`}
           </p>
         </div>
       </div>
@@ -599,7 +641,12 @@ export function GradingScreen({
               Question {question?.label ?? qIdx + 1}
             </span>
             <span className="fv-num" style={{ fontSize: "var(--fv-2xs)", color: "var(--fv-muted)" }}>
-              {stamp(subject.result.submitted_at ?? subject.result.updated_at)}
+              {/* Not the row's updated_at when nothing was handed in: that is
+                  the moment this screen created the row, and printing it beside
+                  a student's name reads as the time they submitted. */}
+              {elsewhere && !subject.result.submitted_at
+                ? `answered in ${elsewhere}`
+                : stamp(subject.result.submitted_at ?? subject.result.updated_at)}
             </span>
             <span style={{ flex: 1 }} />
             {scope === "both" ? (
@@ -625,12 +672,29 @@ export function GradingScreen({
           {/* The student's OWN pages, at the question being marked. This was a
               placeholder — grey bars and "assigned to Question 1" — while the
               real PDF and its page mapping sat one query away. Collecting the
-              mapping and then not using it is the whole feature not landing. */}
+              mapping and then not using it is the whole feature not landing.
+
+              There are no pages at all when the half is answered elsewhere, and
+              SubmissionPages would say "nothing handed in" once per student for
+              a class of eighty — a fault report for the arrangement working as
+              intended. Say where the answers are instead. */}
+          {elsewhere ? (
+            <div className="fv-card" style={{ padding: 20, margin: 14, maxWidth: 560 }}>
+              <div className="fv-eyebrow">Answered in {elsewhere}</div>
+              <p className="fv-sub" style={{ marginTop: 8, lineHeight: 1.6, maxWidth: "58ch" }}>
+                Nothing is handed in here for this half — students answer in {elsewhere}, so open
+                their {elsewhere} report alongside this and record what you see. The marks, the
+                feedback and the release all work exactly as they do anywhere else, and the grade
+                reaches the gradebook and the Canvas export the same way.
+              </p>
+            </div>
+          ) : (
           <SubmissionPages
             resultId={subject.result.id}
             questionId={question && !question.id.startsWith("synthetic-") ? question.id : null}
             questionLabel={question?.label ?? String(qIdx + 1)}
           />
+          )}
         </div>
 
         {/* ----------------------------------------------------- the panel */}
@@ -1011,7 +1075,15 @@ export function GradingScreen({
                 everything below counts only the people who handed something in
                 — so the two disagree unless somebody says why. They do not
                 contradict: nine of twelve simply have nothing to mark yet. */}
-            {stat && stat.total > stat.submitted ? (
+            {elsewhere ? (
+              <div
+                className="fv-sub"
+                style={{ marginTop: 6, fontSize: "var(--fv-2xs)", lineHeight: 1.5 }}
+              >
+                Nothing is handed in here — the whole class is gradeable from their {elsewhere}
+                {" "}answers.
+              </div>
+            ) : stat && stat.total > stat.submitted ? (
               <div
                 className="fv-sub"
                 style={{ marginTop: 6, fontSize: "var(--fv-2xs)", lineHeight: 1.5 }}

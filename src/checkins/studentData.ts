@@ -9,7 +9,7 @@
 
 import { requireSupabase } from "@/lib/supabaseClient";
 import { dbError } from "./data";
-import { SCOPE_OF } from "./types";
+import { INDIV_ELSEWHERE, SCOPE_OF } from "./types";
 import type {
   Activity,
   ActivityQuestion,
@@ -126,8 +126,16 @@ export async function getEnrolment(): Promise<Enrolment | null> {
 }
 
 // ------------------------------------------------------------ assignments
+/**
+ * "Answered elsewhere" is not a state of the work, it is a statement about
+ * where the work lives: an Amplify individual half has nothing to hand in
+ * here, so an empty row means the student is done as far as this app is
+ * concerned and is waiting on a mark. Without it that row read "Late", which
+ * accused them of missing a deadline that does not exist.
+ */
 export type AssignmentStatus =
   | "Not started"
+  | "Answered elsewhere"
   | "Turned in"
   | "Late"
   | "Graded"
@@ -173,6 +181,20 @@ export function statusOf(r: CheckInResult | null, stage: number): AssignmentStat
     default:
       return "Not started";
   }
+}
+
+/**
+ * The same, for a half that is answered on another platform.
+ *
+ * Only the two states that mean "nothing has arrived" are rewritten — Late and
+ * Not started — because on an Amplify individual half nothing ever arrives
+ * here and neither word is true of a student who answered on Amplify last
+ * week. Everything the marker records still reads exactly as it does anywhere
+ * else: once it is scored this says Graded, like the rest.
+ */
+export function statusOfElsewhere(r: CheckInResult | null, stage: number): AssignmentStatus {
+  const status = statusOf(r, stage);
+  return status === "Late" || status === "Not started" ? "Answered elsewhere" : status;
 }
 
 /**
@@ -272,6 +294,9 @@ export async function listAssignments(enrolment: Enrolment): Promise<Assignment[
     const teamOnly = SCOPE_OF[activity.type] === "team";
     const lead = teamOnly ? teamResult : myResult;
     const leadCheckIn = teamOnly ? teamCheckIn : indivCheckIn;
+    // ...unless that individual half is answered on another platform, in which
+    // case an empty row is the normal state of it and not a missed deadline.
+    const elsewhere = !teamOnly && INDIV_ELSEWHERE[activity.type] !== null;
 
     return {
       activity,
@@ -279,7 +304,9 @@ export async function listAssignments(enrolment: Enrolment): Promise<Assignment[
       teamCheckIn,
       myResult,
       teamResult,
-      status: statusOf(lead, activity.stage),
+      status: elsewhere
+        ? statusOfElsewhere(lead, activity.stage)
+        : statusOf(lead, activity.stage),
       grade: gradeOf(lead, leadCheckIn),
       teamGrade: gradeOf(teamResult, teamCheckIn),
       submitted: lead?.updated_at ?? null,

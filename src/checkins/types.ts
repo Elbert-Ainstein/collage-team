@@ -50,6 +50,31 @@ export const SCOPE_OF: Record<ActivityType, Scope> = {
   amplify: "both",
 };
 
+/**
+ * Types whose INDIVIDUAL half is answered somewhere other than this app, and
+ * the name of the place. Null — every other type — means the student hands
+ * their work in here.
+ *
+ * Amplify's questions live on Amplify. Students answer them there, and the
+ * instructor marks from the report on that platform, so asking for a PDF here
+ * is asking for the same work twice: the ones who bother upload a screenshot
+ * of an answer already sitting in front of the marker, and the rest are told
+ * they are Late for a hand-in that was never theirs to make.
+ *
+ * This does NOT make the half disappear. The check-in stays, the mark is still
+ * recorded here, and it still reaches the gradebook and the Canvas export —
+ * only the handing-in moves. Which is why this is its own fact and not a
+ * change to SCOPE_OF: scope says which halves EXIST, this says where one of
+ * them is done, and folding the two together would delete the grade to remove
+ * the upload button.
+ */
+export const INDIV_ELSEWHERE: Record<ActivityType, string | null> = {
+  challenge: null,
+  combo: null,
+  skills: null,
+  amplify: "Amplify",
+};
+
 export const TYPE_LABEL: Record<ActivityType, string> = {
   challenge: "Challenge",
   combo: "Combo",
