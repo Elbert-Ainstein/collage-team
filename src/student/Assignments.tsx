@@ -927,6 +927,17 @@ function StatusCard({ a, scope }: { a: Assignment; scope: Scope }) {
   const when = submittedAt(a);
   const arrived = handedIn(a);
   const late = lateHandIn(a);
+  /**
+   * Nothing was handed in HERE, so nothing here may talk about one.
+   *
+   * Three lines did. "Submitted Tue Sep 8, 3:25pm" was the worst of them: no
+   * submission exists, so the stamp fell back to the row's updated_at, and the
+   * time it printed was the moment the INSTRUCTOR marked it — a hand-in the
+   * student never made, at a time they were nowhere near it. "Open your work to
+   * replace it" points at a screen this half does not have, and the team
+   * discussion is the other tab's business.
+   */
+  const elsewhere = elsewhereName(a) !== null;
   return (
     <div className="sv-card" style={{ padding: "16px 18px" }}>
       <Eyebrow>Status</Eyebrow>
@@ -937,15 +948,19 @@ function StatusCard({ a, scope }: { a: Assignment; scope: Scope }) {
           the badge above says the work is in, and this says when — and whether
           that was in time. Late here is not the "Late" status, which means
           nothing came at all. */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
-        <span
-          className="sv-num"
-          style={{ fontSize: "var(--text-xs)", color: "var(--muted-foreground)" }}
+      {elsewhere ? null : (
+        <div
+          style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 8, flexWrap: "wrap" }}
         >
-          {statusStamp(a)}
-        </span>
-        {late ? <span className="sv-badge warning">Late</span> : null}
-      </div>
+          <span
+            className="sv-num"
+            style={{ fontSize: "var(--text-xs)", color: "var(--muted-foreground)" }}
+          >
+            {statusStamp(a)}
+          </span>
+          {late ? <span className="sv-badge warning">Late</span> : null}
+        </div>
+      )}
 
       {/* Nothing about a grade until something has actually been handed in.
           "Pending — released after grading" over work that was never submitted
@@ -969,13 +984,17 @@ function StatusCard({ a, scope }: { a: Assignment; scope: Scope }) {
               {a.grade === "—" ? "Pending" : a.grade}
             </span>
           </div>
-          <div style={{ fontSize: "var(--text-xs)", color: "var(--muted-foreground)", marginTop: 4 }}>
-            {GRADE_NOTE[scope]}
-          </div>
+          {elsewhere ? null : (
+            <div
+              style={{ fontSize: "var(--text-xs)", color: "var(--muted-foreground)", marginTop: 4 }}
+            >
+              {GRADE_NOTE[scope]}
+            </div>
+          )}
 
           <MarkerNote result={a.myResult} />
 
-          {when ? (
+          {when && !elsewhere ? (
             <div
               style={{
                 fontSize: "var(--text-2xs)",
@@ -998,7 +1017,9 @@ function StatusCard({ a, scope }: { a: Assignment; scope: Scope }) {
             lineHeight: 1.55,
           }}
         >
-          Nothing has been handed in yet, so there is no mark to wait for.
+          {elsewhere
+            ? "Your instructor marks this from your answers, and the grade appears here once it is released."
+            : "Nothing has been handed in yet, so there is no mark to wait for."}
         </div>
       )}
     </div>
@@ -1403,9 +1424,8 @@ function AssignmentDetail({
                 <div className="sv-card" style={{ marginTop: 14 }}>
                   <div className="sv-eyebrow">Where this one is answered</div>
                   <p style={CARD_BODY}>
-                    You answer these questions in <strong>{elsewhere}</strong>. There is nothing to
-                    hand in here — your instructor marks this half from your answers there, and the
-                    grade appears on this page once it is released.
+                    You answer these questions in <strong>{elsewhere}.</strong> Be sure to put
+                    effort on every slide and click &ldquo;Hand in&rdquo; on the final slide.
                   </p>
                 </div>
               ) : (

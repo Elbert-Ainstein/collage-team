@@ -109,7 +109,10 @@ describe("an Amplify's individual half", () => {
 
     expect(buttonSaying("Submit assignment")).toBeFalsy();
     expect(host.textContent).toContain("You answer these questions in");
-    expect(host.textContent).toContain("nothing to hand in here");
+    expect(host.textContent).toContain("Amplify.");
+    // The instructor's own words, including what a student has to do there.
+    expect(host.textContent).toContain("effort on every slide");
+    expect(host.textContent).toContain("Hand in");
   });
 
   it("names the platform rather than saying 'elsewhere'", async () => {
@@ -131,6 +134,26 @@ describe("an Amplify's individual half", () => {
     expect(host.textContent).toContain("8/10");
     expect(buttonSaying("Submit assignment")).toBeFalsy();
   });
+
+  it("says nothing about a hand-in that never happened here", async () => {
+    // The stamp used to fall back to the row's updated_at, so a graded Amplify
+    // read "Submitted Tue Sep 8, 3:25pm" — the moment the INSTRUCTOR marked it.
+    const scored = { id: "r1", status: "scored", updated_at: "2026-09-08T15:25:00Z" };
+    const a = assignment("amplify", scored as CheckInResult);
+    await show({
+      ...a,
+      status: "Graded",
+      grade: "Complete",
+      submitted: "2026-09-08T15:25:00Z",
+    } as Assignment);
+
+    expect(host.textContent).not.toContain("Submitted");
+    expect(host.textContent).not.toContain("Handed in");
+    expect(host.textContent).not.toContain("Open your work to replace it");
+    expect(host.textContent).not.toContain("plus the team discussion");
+    // The grade itself still stands.
+    expect(host.textContent).toContain("Complete");
+  });
 });
 
 describe("every other type is untouched", () => {
@@ -138,6 +161,22 @@ describe("every other type is untouched", () => {
     await show(assignment("challenge"));
 
     expect(buttonSaying("Submit assignment")).toBeTruthy();
-    expect(host.textContent).not.toContain("nothing to hand in here");
+    expect(host.textContent).not.toContain("effort on every slide");
+  });
+
+  it("a Challenge keeps the lines that are true of it", async () => {
+    const scored = { id: "r1", status: "scored" } as CheckInResult;
+    const a = assignment("challenge", scored);
+    await show({
+      ...a,
+      status: "Graded",
+      grade: "8/10",
+      submitted: "2026-09-08T15:25:00Z",
+    } as Assignment);
+
+    // Deleting these for Amplify must not delete them where a hand-in is real.
+    expect(host.textContent).toContain("Submitted");
+    expect(host.textContent).toContain("Open your work to replace it");
+    expect(host.textContent).toContain("plus the team discussion");
   });
 });
