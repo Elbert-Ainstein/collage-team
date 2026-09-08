@@ -111,6 +111,35 @@ describe("an Amplify individual half", () => {
     expect(openResultsFor).toHaveBeenCalledWith("ci-i", ["s1", "s2"]);
   });
 
+  it("has the class ready to mark rather than counted as missing", async () => {
+    const rows = [
+      { id: "r1", check_in_id: "ci-i", student_id: "s1", team_id: null, status: "submitted" },
+      { id: "r2", check_in_id: "ci-i", student_id: "s2", team_id: null, status: "submitted" },
+    ];
+    await mount(facultyData("amplify", rows));
+
+    expect(host.textContent).toContain("Everyone is ready to mark");
+    expect(host.textContent).not.toContain("haven't handed in yet");
+  });
+
+  it("still shows the pages of a student who really did hand one in", async () => {
+    // Amplify was a normal upload half until now, so those PDFs exist.
+    const rows = [
+      {
+        id: "r1",
+        check_in_id: "ci-i",
+        student_id: "s1",
+        team_id: null,
+        status: "submitted",
+        submitted_at: "2026-09-01T10:00:00Z",
+      },
+    ];
+    await mount(facultyData("amplify", rows));
+
+    expect(host.textContent).toContain("PAGES VIEWER");
+    expect(host.textContent).not.toContain("open their Amplify report alongside");
+  });
+
   it("grades the whole class, not only the people who handed in", async () => {
     // The rows openResultsFor just made: empty, and nobody has handed in.
     const rows = [

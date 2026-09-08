@@ -678,7 +678,12 @@ export function GradingScreen({
               SubmissionPages would say "nothing handed in" once per student for
               a class of eighty — a fault report for the arrangement working as
               intended. Say where the answers are instead. */}
-          {elsewhere ? (
+          {/* ...unless this student really did hand something in. Amplify was a
+              normal upload half until now, so those PDFs exist, and hiding one
+              behind a card explaining that nothing is handed in would be the
+              app lying about work a student actually did. submitted_at is the
+              tell: the rows this screen opens have none. */}
+          {elsewhere && !subject.result.submitted_at ? (
             <div className="fv-card" style={{ padding: 20, margin: 14, maxWidth: 560 }}>
               <div className="fv-eyebrow">Answered in {elsewhere}</div>
               <p className="fv-sub" style={{ marginTop: 8, lineHeight: 1.6, maxWidth: "58ch" }}>
@@ -1080,8 +1085,8 @@ export function GradingScreen({
                 className="fv-sub"
                 style={{ marginTop: 6, fontSize: "var(--fv-2xs)", lineHeight: 1.5 }}
               >
-                Nothing is handed in here — the whole class is gradeable from their {elsewhere}
-                {" "}answers.
+                Everyone is ready to mark: the answers are in {elsewhere}, so nothing has to be
+                handed in here first.
               </div>
             ) : stat && stat.total > stat.submitted ? (
               <div

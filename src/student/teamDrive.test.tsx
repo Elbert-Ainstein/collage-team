@@ -244,14 +244,52 @@ describe("inside a folder", () => {
     expect(deleteTeamFolder).toHaveBeenCalledWith("f1");
   });
 
-  it("shows a file it cannot preview as a file, not a broken thumbnail", async () => {
+  it("shows a file it cannot thumbnail as a file, naming what it is", async () => {
     files.push(file({ id: "r1", title: "spectra.csv", path: "c1/files/t1/x.csv", mime: "text/csv" }));
     await show(DRIVE_ROOT);
 
-    const tile = host.querySelector<HTMLAnchorElement>("a.sv-tr-filetile");
+    const tile = host.querySelector<HTMLButtonElement>("button.sv-tr-filetile");
     expect(tile).toBeTruthy();
     expect(tile?.textContent).toContain("CSV");
-    expect(tile?.getAttribute("href")).toBe("signed:c1/files/t1/x.csv");
+  });
+
+  it("opens a file in the app rather than making you download it", async () => {
+    const csv = "wavelength,intensity\n480,0.42\n520,0.71";
+    const fetched: string[] = [];
+    vi.stubGlobal("fetch", async (u: string) => {
+      fetched.push(u);
+      return { ok: true, status: 200, text: async () => csv } as unknown as Response;
+    });
+
+    files.push(file({ id: "r1", title: "spectra.csv", path: "c1/files/t1/x.csv", mime: "text/csv" }));
+    await show(DRIVE_ROOT);
+    await act(async () => host.querySelector<HTMLButtonElement>("button.sv-tr-filetile")?.click());
+    await act(async () => undefined);
+
+    // Read here, in a dialog — not handed to the operating system.
+    const viewer = host.querySelector('[role="dialog"]');
+    expect(viewer).toBeTruthy();
+    expect(viewer?.textContent).toContain("wavelength,intensity");
+    expect(viewer?.textContent).toContain("520,0.71");
+    // The bytes came through the app; nothing navigated to them.
+    expect(fetched).toEqual(["signed:c1/files/t1/x.csv"]);
+    // Downloading is still offered, as a choice.
+    expect(viewer?.querySelector("a[href='signed:c1/files/t1/x.csv']")).toBeTruthy();
+    vi.unstubAllGlobals();
+  });
+
+  it("closes the viewer on Escape", async () => {
+    vi.stubGlobal("fetch", async () => ({ ok: true, status: 200, text: async () => "x" }) as never);
+    files.push(file({ id: "r1", title: "notes.txt", path: "c1/files/t1/x.txt", mime: "text/plain" }));
+    await show(DRIVE_ROOT);
+    await act(async () => host.querySelector<HTMLButtonElement>("button.sv-tr-filetile")?.click());
+    expect(host.querySelector('[role="dialog"]')).toBeTruthy();
+
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+    });
+    expect(host.querySelector('[role="dialog"]')).toBeFalsy();
+    vi.unstubAllGlobals();
   });
 
   it("still shows a photo as a photo", async () => {

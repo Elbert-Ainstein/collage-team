@@ -775,9 +775,13 @@ export async function saveResult(input: {
  * be filed against, so the screen shows an empty class and the half cannot be
  * graded at all.
  *
- * The rows go in at status "none", which is the same empty row a student makes
- * by opening their hand-in: it holds nothing, it is not "work" to any count or
- * export (those all ask for status <> 'none'), and the first mark fills it in.
+ * The rows go in at "submitted", and that is not a fiction: the work IS in,
+ * it is on Amplify, and the marker is looking at it. Everything downstream
+ * reads that word to mean "there is something here to mark" — the progress
+ * bar, the release list, the class counter — so an empty row would have shown
+ * a class of eighty as nobody having handed in, next to a screen listing all
+ * eighty as ready. submitted_at stays null, because no hand-in happened HERE
+ * and a date would be inventing one.
  *
  * Only the missing ones, so this is safe to run whenever the screen opens.
  */
@@ -804,7 +808,7 @@ export async function openResultsFor(
       subject_type: "student",
       student_id,
       team_id: null,
-      status: "none",
+      status: "submitted",
     })),
   );
   // 23505 = unique_violation against uniq_result_student (0001). Somebody else

@@ -52,8 +52,13 @@ describe("the status of a half nobody hands in", () => {
   it("reports the mark exactly as everywhere else once it is made", () => {
     expect(statusOfElsewhere(result("scored"), OVERDUE)).toBe("Graded");
     expect(statusOfElsewhere(result("excused"), OVERDUE)).toBe("Excused");
-    // Not reachable on Amplify today, but the rule is "only the empty states
-    // are rewritten" and that is worth pinning rather than assuming.
-    expect(statusOfElsewhere(result("submitted"), OVERDUE)).toBe("Turned in");
+  });
+
+  it("does not tell a student they turned something in here", () => {
+    // The grading screen opens these rows as "submitted" so the class shows as
+    // ready to mark — which is true of the work and not of this app. The
+    // student's side must not read that back as a hand-in they made.
+    expect(statusOfElsewhere(result("submitted"), OVERDUE)).toBe("Answered elsewhere");
+    expect(statusOfElsewhere(result("submitted"), OPEN)).toBe("Answered elsewhere");
   });
 });

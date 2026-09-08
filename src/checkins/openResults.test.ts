@@ -56,14 +56,23 @@ beforeEach(() => {
 });
 
 describe("openResultsFor", () => {
-  it("writes one empty row per student who has none", async () => {
+  it("writes a row per student, already standing as submitted", async () => {
+    // "submitted" and not "none": the work IS in — it is on Amplify — and
+    // every count downstream reads that word to decide whether there is
+    // anything to mark. An empty row showed a class of eighty as nobody
+    // having handed in, beside a list of all eighty ready to grade.
     const made = await openResultsFor("ci1", ["s1", "s2"]);
 
     expect(made).toBe(2);
     expect(calls[0].rows).toEqual([
-      { check_in_id: "ci1", subject_type: "student", student_id: "s1", team_id: null, status: "none" },
-      { check_in_id: "ci1", subject_type: "student", student_id: "s2", team_id: null, status: "none" },
+      { check_in_id: "ci1", subject_type: "student", student_id: "s1", team_id: null, status: "submitted" },
+      { check_in_id: "ci1", subject_type: "student", student_id: "s2", team_id: null, status: "submitted" },
     ]);
+  });
+
+  it("stamps no submitted_at, because no hand-in happened here", async () => {
+    await openResultsFor("ci1", ["s1"]);
+    expect(calls[0].rows?.[0]).not.toHaveProperty("submitted_at");
   });
 
   it("writes nothing at all when everyone already has one", async () => {

@@ -186,15 +186,21 @@ export function statusOf(r: CheckInResult | null, stage: number): AssignmentStat
 /**
  * The same, for a half that is answered on another platform.
  *
- * Only the two states that mean "nothing has arrived" are rewritten — Late and
- * Not started — because on an Amplify individual half nothing ever arrives
- * here and neither word is true of a student who answered on Amplify last
- * week. Everything the marker records still reads exactly as it does anywhere
- * else: once it is scored this says Graded, like the rest.
+ * Three states are rewritten, and they are the three that describe a hand-in
+ * to this app. Late and Not started, because nothing ever arrives here and
+ * neither word is true of a student who answered on Amplify last week. And
+ * Turned in, because the row saying "submitted" is the GRADER's screen putting
+ * it there — the work is in, on Amplify — and telling the student they turned
+ * something in here would be the same lie in the opposite direction.
+ *
+ * Everything the marker records still reads exactly as it does anywhere else:
+ * once it is scored this says Graded, like the rest.
  */
 export function statusOfElsewhere(r: CheckInResult | null, stage: number): AssignmentStatus {
   const status = statusOf(r, stage);
-  return status === "Late" || status === "Not started" ? "Answered elsewhere" : status;
+  return status === "Late" || status === "Not started" || status === "Turned in"
+    ? "Answered elsewhere"
+    : status;
 }
 
 /**

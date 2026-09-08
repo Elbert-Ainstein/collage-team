@@ -20,6 +20,7 @@ import { TYPE_LABEL, type ActivityType } from "@/checkins/types";
 import type { Assignment, Enrolment } from "@/checkins/studentData";
 import { keepRecording, listKeptRecordings, recordingUrl, type Recording } from "@/checkins/audio";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { FileViewer } from "./FileViewer";
 import {
   defaultTitle,
   createTeamFolder,
@@ -122,6 +123,22 @@ const CSS = `
   background:var(--cream-100); box-shadow:var(--shadow); }
 .sv-tr-thumb { display:block; width:100%; aspect-ratio:4/3; padding:0; border:0;
   background:var(--neutral-100) center/cover no-repeat; cursor:zoom-in; }
+/* Naming a folder, and renaming one. The student view has no text-field class
+   of its own, and the browser's default — a 2px blue ring in a cream page —
+   was the only thing on this screen not drawn by the design system. */
+.sv-tr-field { font:inherit; font-size:var(--text-sm); color:var(--navy);
+  background:var(--cream-100); border:1px solid var(--neutral-200);
+  border-radius:var(--radius-md); padding:0 10px; height:32px; min-width:0; }
+.sv-tr-field::placeholder { color:var(--muted-foreground); }
+.sv-tr-field:hover { border-color:var(--neutral-300); }
+.sv-tr-field:focus { outline:none; border-color:var(--navy-700);
+  box-shadow:0 0 0 3px rgba(0,48,88,.10); background:var(--cream-100); }
+/* The whole naming control reads as one thing: an icon, the field, the verbs. */
+.sv-tr-namer { display:flex; align-items:center; gap:8px; padding:7px 9px;
+  border:1px solid var(--neutral-200); border-radius:var(--radius-lg);
+  background:var(--cream-200); box-shadow:var(--shadow); }
+.sv-tr-namer .sv-tr-icon { display:flex; color:var(--muted-foreground); flex:none; }
+
 .sv-tr-name { width:100%; font:inherit; font-size:var(--text-xs);
   font-weight:var(--weight-semibold); color:var(--navy); background:transparent;
   border:1px solid transparent; border-radius:var(--radius-md); padding:4px 6px; }
@@ -136,6 +153,24 @@ const CSS = `
   text-decoration:none; }
 .sv-tr-filetile:hover { background:var(--cream-300); color:var(--foreground); }
 .sv-tr-lightbox img { max-width:100%; max-height:100%; border-radius:var(--radius-lg); }
+/* The viewer: a bar that names the file and lets you out, and a body that
+   scrolls — a PDF is several pages and a CSV is longer than the screen. */
+.sv-fv-frame { display:flex; flex-direction:column; width:min(1000px, 94vw);
+  max-height:92vh; background:var(--cream-100); border-radius:var(--radius-lg);
+  box-shadow:0 24px 60px rgba(0,0,0,.35); overflow:hidden; }
+.sv-fv-bar { display:flex; align-items:center; gap:8px; padding:10px 12px;
+  border-bottom:1px solid var(--neutral-200); background:var(--cream-200);
+  font-size:var(--text-sm); color:var(--navy); flex:none; }
+.sv-fv-body { overflow:auto; padding:14px; display:flex; flex-direction:column;
+  align-items:center; gap:12px; }
+.sv-fv-body img { max-width:100%; height:auto; border-radius:var(--radius-md);
+  box-shadow:var(--shadow); }
+.sv-fv-text { width:100%; margin:0; white-space:pre-wrap; word-break:break-word;
+  font-family:var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+  font-size:var(--text-xs); line-height:1.55; color:var(--navy);
+  background:var(--cream-200); border:1px solid var(--neutral-200);
+  border-radius:var(--radius-md); padding:12px; }
+.sv-fv-note { margin:0; font-size:var(--text-xs); color:var(--muted-foreground); }
 .sv-tr-audio { height:32px; max-width:260px; }
 
 @media (max-width: 760px) {
@@ -342,13 +377,19 @@ export function TeamResources(props: {
             folder it belongs in, which is the question a drive asks first. */}
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 18 }}>
           {naming ? (
-            <>
+            // In place of the button that opened it, so the folder appears
+            // where the thing that makes folders was.
+            <span className="sv-tr-namer">
+              <span className="sv-tr-icon">
+                <SIcon name="folder" size={17} />
+              </span>
               <input
-                className="sv-in"
+                className="sv-tr-field"
                 autoFocus
-                style={{ width: 220 }}
+                style={{ width: 210 }}
                 placeholder="Folder name"
                 aria-label="New folder name"
+                maxLength={80}
                 value={newName}
                 disabled={busy}
                 onChange={(e) => setNewName(e.target.value)}
@@ -366,7 +407,7 @@ export function TeamResources(props: {
                 disabled={busy || !newName.trim()}
                 onClick={() => void makeFolder()}
               >
-                Create
+                {busy ? "Creating…" : "Create"}
               </button>
               <button
                 type="button"
@@ -379,25 +420,24 @@ export function TeamResources(props: {
               >
                 Cancel
               </button>
-            </>
+            </span>
           ) : (
             <button type="button" className="sv-btn outline sm" onClick={() => setNaming(true)}>
-              <SIcon name="folder" size={16} />
+              <SIcon name="add" size={16} />
               New folder
             </button>
           )}
-          <span style={{ flex: 1 }} />
-          <button
-            type="button"
-            className="sv-btn outline sm"
-            onClick={() => onOpen(DRIVE_ROOT)}
-            title="Files that are not in any folder"
-          >
-            {loose.length ? `${countLabel(loose.length)} loose` : "Add files"}
+
+          {/* Adding a file is a verb; "3 items loose" was a count wearing a
+              button's clothes, and it changed what it said depending on what
+              was in there. Where those files LIVE is a folder tile below. */}
+          <button type="button" className="sv-btn outline sm" onClick={() => onOpen(DRIVE_ROOT)}>
+            <SIcon name="addPhoto" size={16} />
+            Add files
           </button>
         </div>
 
-        {folders.length ? (
+        {folders.length || loose.length ? (
           <>
             <div className="sv-eyebrow" style={{ marginTop: 20 }}>
               Your folders
@@ -410,6 +450,67 @@ export function TeamResources(props: {
                 marginTop: 8,
               }}
             >
+              {/* The top level, as a folder, because that is where a person
+                  goes looking for a file they did not file. Only once there
+                  is something in it — an empty one is a tile that explains a
+                  concept nobody asked about. */}
+              {loose.length ? (
+                <div
+                  className="sv-tr-folder"
+                  style={{
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 11,
+                    padding: "11px 12px",
+                    border: "1px dashed var(--neutral-300)",
+                    background: "var(--cream-100)",
+                    borderRadius: "var(--radius-lg)",
+                  }}
+                >
+                  <button
+                    type="button"
+                    className="sv-tr-hit"
+                    onClick={() => onOpen(DRIVE_ROOT)}
+                    aria-label="Open files in no folder"
+                  >
+                    <span
+                      style={{
+                        display: "flex",
+                        flex: "none",
+                        color: "var(--muted-foreground)",
+                        marginTop: 1,
+                      }}
+                    >
+                      <SIcon name="file" size={20} />
+                    </span>
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span
+                        className="sv-ellip"
+                        style={{
+                          display: "block",
+                          fontFamily: "var(--font-serif)",
+                          fontSize: "var(--text-base)",
+                          fontWeight: "var(--weight-bold)",
+                          letterSpacing: "var(--tracking-tight)",
+                        }}
+                      >
+                        Not in a folder
+                      </span>
+                      <span
+                        style={{
+                          display: "block",
+                          fontSize: "var(--text-xs)",
+                          color: "var(--muted-foreground)",
+                          marginTop: 2,
+                        }}
+                      >
+                        {countLabel(loose.length)}
+                      </span>
+                    </span>
+                  </button>
+                </div>
+              ) : null}
+
               {folders.map((f) => (
                 <div
                   key={f.id}
@@ -851,10 +952,12 @@ function Folder({
         {ownFolder && renaming ? (
           <>
             <input
-              className="sv-in"
+              className="sv-tr-field"
               autoFocus
-              style={{ width: 240 }}
+              style={{ width: 240, fontFamily: "var(--font-serif)", fontSize: "var(--text-lg)",
+                fontWeight: "var(--weight-bold)", height: 38 }}
               aria-label="Folder name"
+              maxLength={80}
               value={folderName}
               disabled={busy}
               onChange={(e) => setFolderName(e.target.value)}
@@ -1085,18 +1188,19 @@ function Folder({
                     style={{ backgroundImage: `url("${url}")` }}
                   />
                 ) : url ? (
-                  // Not a picture, so there is nothing to zoom into: hand the
-                  // file to whatever the student opens that kind of file with.
-                  <a
+                  // Not a picture, so there is no thumbnail to press — but it
+                  // still OPENS. The viewer fetches it and draws it here: a PDF
+                  // onto a canvas, a CSV into a page of text, a clip into a
+                  // player. Downloading it is a choice, not the only way in.
+                  <button
+                    type="button"
                     className="sv-tr-thumb sv-tr-filetile"
-                    href={url}
-                    target="_blank"
-                    rel="noreferrer"
-                    aria-label={`Open ${r.title}`}
+                    onClick={() => setZoom(r)}
+                    aria-label={`View ${r.title}`}
                   >
                     <SIcon name="file" size={26} />
                     <span>{extensionLabel(r)}</span>
-                  </a>
+                  </button>
                 ) : (
                   <div className="sv-tr-thumb" aria-hidden="true" />
                 )}
@@ -1185,16 +1289,10 @@ function Folder({
         />
       ) : null}
 
-      {zoom && urls.get(zoom.path) ? (
-        <button
-          type="button"
-          className="sv-tr-lightbox"
-          aria-label={`Close ${zoom.title}`}
-          onClick={() => setZoom(null)}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={urls.get(zoom.path)} alt={zoom.title} />
-        </button>
+      {/* One viewer for every kind of file, rather than a lightbox for photos
+          and a download for the rest. */}
+      {zoom ? (
+        <FileViewer file={zoom} url={urls.get(zoom.path)} onClose={() => setZoom(null)} />
       ) : null}
     </section>
   );
