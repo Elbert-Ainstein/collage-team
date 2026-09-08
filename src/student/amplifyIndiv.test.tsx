@@ -108,10 +108,10 @@ describe("an Amplify's individual half", () => {
     await show(assignment("amplify"));
 
     expect(buttonSaying("Submit assignment")).toBeFalsy();
-    expect(host.textContent).toContain("You answer these questions in");
+    expect(host.textContent).toContain("Complete this assignment in");
     expect(host.textContent).toContain("Amplify.");
     // The instructor's own words, including what a student has to do there.
-    expect(host.textContent).toContain("effort on every slide");
+    expect(host.textContent).toContain("Put effort into every slide");
     expect(host.textContent).toContain("Hand in");
   });
 
@@ -124,6 +124,16 @@ describe("an Amplify's individual half", () => {
   it("does not tell the student nothing was submitted", async () => {
     await show(assignment("amplify"));
     expect(host.textContent).not.toContain("Nothing submitted yet");
+    expect(host.textContent).not.toContain("nothing has been handed in");
+  });
+
+  it("carries the same Grade box before it is marked, reading Not graded", async () => {
+    await show(assignment("amplify"));
+
+    expect(host.textContent).toContain("Grade");
+    expect(host.textContent).toContain("Not graded");
+    // "Pending" is about waiting on a marker who has the work in hand.
+    expect(host.textContent).not.toContain("Pending");
   });
 
   it("still shows the grade once it is released", async () => {
@@ -132,6 +142,7 @@ describe("an Amplify's individual half", () => {
     await show({ ...a, status: "Graded", grade: "8/10" } as Assignment);
 
     expect(host.textContent).toContain("8/10");
+    expect(host.textContent).not.toContain("Not graded");
     expect(buttonSaying("Submit assignment")).toBeFalsy();
   });
 
@@ -161,7 +172,7 @@ describe("every other type is untouched", () => {
     await show(assignment("challenge"));
 
     expect(buttonSaying("Submit assignment")).toBeTruthy();
-    expect(host.textContent).not.toContain("effort on every slide");
+    expect(host.textContent).not.toContain("Put effort into every slide");
   });
 
   it("a Challenge keeps the lines that are true of it", async () => {

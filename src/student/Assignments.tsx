@@ -967,7 +967,7 @@ function StatusCard({ a, scope }: { a: Assignment; scope: Scope }) {
           reads as though it is with a marker and the student is waiting, when
           in fact nothing has been sent and the deadline is still theirs to
           meet. Same for a Resubmit button with nothing to resubmit. */}
-      {arrived ? (
+      {arrived || elsewhere ? (
         <>
           <div className="sv-rule" style={{ margin: "14px 0" }} />
 
@@ -981,7 +981,10 @@ function StatusCard({ a, scope }: { a: Assignment; scope: Scope }) {
                 color: "var(--muted-foreground)",
               }}
             >
-              {a.grade === "—" ? "Pending" : a.grade}
+              {/* "Pending" is about waiting on a marker who has the work. On a
+                  half answered elsewhere nothing is with anybody yet, so this
+                  says what is true of the grade: there isn't one. */}
+              {a.grade !== "—" ? a.grade : elsewhere ? "Not graded" : "Pending"}
             </span>
           </div>
           {elsewhere ? null : (
@@ -1017,9 +1020,7 @@ function StatusCard({ a, scope }: { a: Assignment; scope: Scope }) {
             lineHeight: 1.55,
           }}
         >
-          {elsewhere
-            ? "Your instructor marks this from your answers, and the grade appears here once it is released."
-            : "Nothing has been handed in yet, so there is no mark to wait for."}
+          Nothing has been handed in yet, so there is no mark to wait for.
         </div>
       )}
     </div>
@@ -1424,8 +1425,8 @@ function AssignmentDetail({
                 <div className="sv-card" style={{ marginTop: 14 }}>
                   <div className="sv-eyebrow">Where this one is answered</div>
                   <p style={CARD_BODY}>
-                    You answer these questions in <strong>{elsewhere}.</strong> Be sure to put
-                    effort on every slide and click &ldquo;Hand in&rdquo; on the final slide.
+                    Complete this assignment in <strong>{elsewhere}.</strong> Put effort into
+                    every slide, then click &ldquo;Hand in&rdquo; on the final slide.
                   </p>
                 </div>
               ) : (
