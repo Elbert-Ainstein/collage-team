@@ -17,9 +17,24 @@
 import { useEffect, useRef, useState } from "react";
 import { SIcon } from "./icons";
 import { previewable, type TeamResource } from "@/checkins/resources";
+import {
+  readDocx,
+  readPptx,
+  readXlsx,
+  type OfficeDoc,
+} from "./officePreview";
 
 /** How a file can be shown, decided once. */
-export type Viewable = "image" | "pdf" | "text" | "audio" | "video" | "none";
+export type Viewable =
+  | "image"
+  | "pdf"
+  | "text"
+  | "audio"
+  | "video"
+  | "pptx"
+  | "docx"
+  | "xlsx"
+  | "none";
 
 const TEXTUAL =
   /\.(txt|csv|tsv|md|markdown|json|log|ya?ml|ini|conf|tex|bib|r|py|m|jl|c|h|cpp|java|js|ts|sql)$/i;
@@ -38,6 +53,11 @@ export function viewableAs(r: Pick<TeamResource, "mime" | "path">): Viewable {
   if (/^audio\//i.test(mime) || /\.(mp3|m4a|wav|ogg|oga|webm)$/i.test(r.path)) return "audio";
   if (/^video\//i.test(mime) || /\.(mp4|mov|m4v|webm)$/i.test(r.path)) return "video";
   if (/^text\//i.test(mime) || TEXTUAL.test(r.path)) return "text";
+  // Office files, by extension: the mime a browser reports for one depends on
+  // what is installed on the machine that uploaded it, and is often blank.
+  if (/\.pptx$/i.test(r.path)) return "pptx";
+  if (/\.docx$/i.test(r.path)) return "docx";
+  if (/\.xlsx$/i.test(r.path)) return "xlsx";
   return "none";
 }
 
@@ -92,6 +112,7 @@ export function FileViewer({
   const [pages, setPages] = useState<string[]>([]);
   const [text, setText] = useState<string | null>(null);
   const [media, setMedia] = useState<string | null>(null);
+  const [office, setOffice] = useState<OfficeDoc | null>(null);
   const [loading, setLoading] = useState(kind !== "image" && kind !== "none");
   const [problem, setProblem] = useState<string | null>(null);
   const cleanup = useRef<(() => void) | null>(null);
@@ -126,6 +147,19 @@ export function FileViewer({
         const bytes = await res.arrayBuffer();
         if (!live) return;
         cleanup.current = await renderPdf(bytes, (urls) => live && setPages(urls));
+        return;
+      }
+      if (kind === "pptx" || kind === "docx" || kind === "xlsx") {
+        const bytes = await res.arrayBuffer();
+        if (!live) return;
+        const read = kind === "pptx" ? readPptx : kind === "docx" ? readDocx : readXlsx;
+        const doc = await read(bytes);
+        if (!live) {
+          doc.revoke();
+          return;
+        }
+        cleanup.current = doc.revoke;
+        setOffice(doc);
         return;
       }
       // Audio and video: an object URL of the bytes, so the element decodes
@@ -195,6 +229,86 @@ export function FileViewer({
             </>
           ) : kind === "text" ? (
             <pre className="sv-fv-text">{text}</pre>
+          ) : office?.slides ? (
+            <>
+              {/* A deck, slide by slide: what is written on each one and the
+                  pictures placed on it. Not a rendering — see officePreview —
+                  so it says so rather than letting a marker believe they have
+                  seen the file. */}
+              {office.slides.map((slide, i) => (
+                <div key={i} className="sv-fv-slide">
+                  <div className="sv-fv-slideno">Slide {i + 1}</div>
+                  {slide.lines.map((line, j) => (
+                    <p key={j} className={j === 0 ? "sv-fv-slidetitle" : "sv-fv-slideline"}>
+                      {line}
+                    </p>
+                  ))}
+                  {slide.images.map((src) => (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img key={src} src={src} alt="" className="sv-fv-slideimg" />
+                  ))}
+                  {!slide.lines.length && !slide.images.length ? (
+                    <p className="sv-fv-note">Nothing on this slide but its layout.</p>
+                  ) : null}
+                </div>
+              ))}
+              <p className="sv-fv-note">
+                {office.slides.length} {office.slides.length === 1 ? "slide" : "slides"} — the
+                words and pictures, not the layout. Download it to see the deck itself.
+              </p>
+            </>
+          ) : office?.blocks ? (
+            <div className="sv-fv-doc">
+              {office.blocks.map((b, i) =>
+                b.kind === "table" ? (
+                  <table key={i} className="sv-fv-table">
+                    <tbody>
+                      {b.rows?.map((row, r) => (
+                        <tr key={r}>
+                          {row.map((cell, c) => (
+                            <td key={c}>{cell}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : b.kind === "heading" ? (
+                  <h3 key={i} className="sv-fv-h">
+                    {b.text}
+                  </h3>
+                ) : (
+                  <p key={i} className={b.kind === "bullet" ? "sv-fv-bullet" : "sv-fv-p"}>
+                    {b.text}
+                  </p>
+                ),
+              )}
+              <p className="sv-fv-note">The text, not the formatting. Download it for that.</p>
+            </div>
+          ) : office?.sheets ? (
+            <div className="sv-fv-doc">
+              {office.sheets.map((sheet) => (
+                <div key={sheet.name} style={{ width: "100%" }}>
+                  <div className="sv-fv-slideno">{sheet.name}</div>
+                  <div style={{ overflowX: "auto" }}>
+                    <table className="sv-fv-table">
+                      <tbody>
+                        {sheet.rows.map((row, r) => (
+                          <tr key={r}>
+                            {row.map((cell, c) => (
+                              <td key={c}>{cell}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {!sheet.rows.length ? <p className="sv-fv-note">This sheet is empty.</p> : null}
+                </div>
+              ))}
+              <p className="sv-fv-note">
+                Values as they are stored — a formula shows its result, not the formula.
+              </p>
+            </div>
           ) : kind === "audio" && media ? (
             <audio controls src={media} style={{ width: "100%" }} />
           ) : kind === "video" && media ? (

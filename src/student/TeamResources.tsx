@@ -171,6 +171,28 @@ const CSS = `
   background:var(--cream-200); border:1px solid var(--neutral-200);
   border-radius:var(--radius-md); padding:12px; }
 .sv-fv-note { margin:0; font-size:var(--text-xs); color:var(--muted-foreground); }
+/* A deck, slide by slide. Each one is a card so the eye can tell where a
+   slide ends, which a run of paragraphs cannot say on its own. */
+.sv-fv-slide { width:100%; border:1px solid var(--neutral-200); border-radius:var(--radius-md);
+  background:var(--cream-200); padding:14px 16px; }
+.sv-fv-slideno { font-size:var(--text-2xs); letter-spacing:var(--tracking-wide);
+  text-transform:uppercase; font-weight:var(--weight-semibold);
+  color:var(--muted-foreground); margin-bottom:6px; }
+.sv-fv-slidetitle { margin:0 0 4px; font-family:var(--font-serif); font-size:var(--text-base);
+  font-weight:var(--weight-bold); color:var(--navy); }
+.sv-fv-slideline { margin:0 0 3px; font-size:var(--text-sm); line-height:1.5; color:var(--navy); }
+.sv-fv-slideimg { margin-top:10px; max-height:320px; }
+.sv-fv-doc { width:100%; display:flex; flex-direction:column; gap:8px; }
+.sv-fv-h { margin:10px 0 2px; font-family:var(--font-serif); font-size:var(--text-lg);
+  font-weight:var(--weight-bold); color:var(--navy); }
+.sv-fv-p { margin:0; font-size:var(--text-sm); line-height:1.6; color:var(--navy); }
+.sv-fv-bullet { margin:0 0 0 18px; font-size:var(--text-sm); line-height:1.6;
+  color:var(--navy); list-style:disc; position:relative; }
+.sv-fv-bullet::before { content:"•"; position:absolute; left:-14px;
+  color:var(--muted-foreground); }
+.sv-fv-table { border-collapse:collapse; font-size:var(--text-xs); background:var(--cream-100); }
+.sv-fv-table td { border:1px solid var(--neutral-200); padding:5px 8px; vertical-align:top;
+  color:var(--navy); white-space:pre-wrap; max-width:340px; }
 .sv-tr-audio { height:32px; max-width:260px; }
 
 @media (max-width: 760px) {

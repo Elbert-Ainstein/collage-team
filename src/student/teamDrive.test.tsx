@@ -278,6 +278,40 @@ describe("inside a folder", () => {
     vi.unstubAllGlobals();
   });
 
+  it("opens a PowerPoint deck in the app, slide by slide", async () => {
+    const JSZip = (await import("jszip")).default;
+    const zip = new JSZip();
+    const slide = (t: string) =>
+      `<?xml version="1.0"?><p:sld xmlns:p="p" xmlns:a="a"><a:p><a:r><a:t>${t}</a:t></a:r></a:p></p:sld>`;
+    zip.file("ppt/slides/slide1.xml", slide("Photocatalytic water splitting"));
+    zip.file("ppt/slides/slide2.xml", slide("Method"));
+    const deck = await zip.generateAsync({ type: "arraybuffer" });
+    vi.stubGlobal("fetch", async () => ({ ok: true, status: 200, arrayBuffer: async () => deck }) as never);
+
+    files.push(
+      file({ id: "r1", title: "dnhacks26", path: "c1/files/t1/deck.pptx", mime: "" }),
+    );
+    await show(DRIVE_ROOT);
+    await act(async () => host.querySelector<HTMLButtonElement>("button.sv-tr-filetile")?.click());
+    // Unzipping is real async work, so this waits on real ticks rather than
+    // on a fixed number of microtask flushes.
+    for (let i = 0; i < 40; i++) {
+      if (host.textContent?.includes("Photocatalytic")) break;
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 10));
+      });
+    }
+
+    const viewer = host.querySelector('[role="dialog"]');
+    expect(viewer?.textContent).toContain("Photocatalytic water splitting");
+    expect(viewer?.textContent).toContain("Method");
+    expect(viewer?.textContent).toContain("2 slides");
+    // And it does not claim to be the deck itself.
+    expect(viewer?.textContent).toContain("not the layout");
+    expect(viewer?.textContent).not.toContain("can’t be shown here");
+    vi.unstubAllGlobals();
+  });
+
   it("closes the viewer on Escape", async () => {
     vi.stubGlobal("fetch", async () => ({ ok: true, status: 200, text: async () => "x" }) as never);
     files.push(file({ id: "r1", title: "notes.txt", path: "c1/files/t1/x.txt", mime: "text/plain" }));
