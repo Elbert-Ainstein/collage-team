@@ -22,6 +22,7 @@ vi.mock("./facultyData", () => ({
   listMarks: vi.fn(async () => []),
   releaseMany: vi.fn(async () => ({ released: 0, failed: 0 })),
   releaseMark: vi.fn(async () => undefined),
+  seedComboIfBlank: vi.fn(async () => false),
   setFeedback: vi.fn(async () => undefined),
   setMark: vi.fn(async () => undefined),
   updateRubricItem: vi.fn(async () => undefined),

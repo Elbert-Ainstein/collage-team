@@ -13,7 +13,10 @@ describe("the standard combo rubric", () => {
     expect(COMBO_TEMPLATE.pointsTotal).toBe(20);
   });
 
-  it("is the six questions the course marks, worth 3, 2, 3, 2, 5, 5", () => {
+  // Two challenge problems, each marked for effort and mark-up, then the two
+  // tutorial screens out of 5. The week's Amplify and Challenge completions
+  // are NOT here — comboTotal adds those on from their own pages, to make 30.
+  it("is the six questions the combo itself marks, worth 3, 2, 3, 2, 5, 5", () => {
     expect(COMBO_TEMPLATE.questions.map((q) => [q.label, q.points])).toEqual([
       ["Challenge Problem 1: At Home Effort", 3],
       ["Challenge Problem 1: Mark-up", 2],
@@ -62,11 +65,17 @@ describe("the standard combo rubric", () => {
     }
   });
 
-  // Nobody supplied these ladders, and four rungs of plausible wording would be
-  // words put in a grader's mouth that eighty transcripts then quote.
-  it("leaves the two tutorial screens without invented rungs", () => {
-    expect(COMBO_TEMPLATE.questions[4].rungs).toEqual([]);
-    expect(COMBO_TEMPLATE.questions[5].rungs).toEqual([]);
+  // Every question arrives with something to pick: a question with no rungs
+  // is one the grader cannot mark until somebody writes them.
+  it("gives every question a ladder", () => {
+    for (const q of COMBO_TEMPLATE.questions) expect(q.rungs.length).toBeGreaterThan(0);
+  });
+
+  // The two screens are marked against one ladder, six rungs from 0 to 5.
+  it("marks both tutorial screens on the same six-rung ladder", () => {
+    const [s1, s2] = COMBO_TEMPLATE.questions.slice(4);
+    expect(s1.rungs).toEqual(s2.rungs);
+    expect(s1.rungs.map((r) => r.award)).toEqual([0, 1, 2, 3, 4, 5]);
   });
 
   it("gives no two questions the same name, which the database forbids", () => {

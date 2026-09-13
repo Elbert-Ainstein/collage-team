@@ -37,6 +37,7 @@ import {
   ensureQuestions,
   ensureRubric,
   removeActivityFileAt,
+  seedComboIfBlank,
   seedRubricTemplate,
   setQuestionPoints,
   setRubricQuestion,
@@ -1066,18 +1067,15 @@ export function RubricBuilder({
 
         // Every combo in AP 50 is marked against the same rubric, so a new one
         // arrives with it already written rather than with a blank page and
-        // twenty-four rungs to retype. seedRubricTemplate refuses outright if
-        // there is anything here, so this cannot overwrite anybody's work — and
-        // everything it writes is ordinary rows, editable and deletable.
+        // twenty-eight rungs to retype. seedComboIfBlank holds the rule and refuses
+        // outright if there is anything here, so this cannot overwrite
+        // anybody's work — and everything it writes is ordinary rows, editable
+        // and deletable. The grading screen seeds on the same rule.
         if (
           live &&
-          canEdit &&
           ladder.length === 0 &&
           qs.length === 0 &&
-          activity.type === "combo" &&
-          !isCompletion(activity) &&
-          pointsTotal(activity) === 0 &&
-          (await seedRubricTemplate(activity, COMBO_TEMPLATE))
+          (await seedComboIfBlank(activity, canEdit))
         ) {
           if (!live) return;
           [ladder, qs] = await Promise.all([
@@ -1498,7 +1496,8 @@ export function RubricBuilder({
                 <span className="fv-sub">
                   Nothing here yet. Every combo in this course is marked the same way — two
                   challenge problems, each out of 3 for the work done at home and 2 for the
-                  mark-up, then the two tutorial screens at 5 apiece.
+                  mark-up, then the two tutorial screens at 5 apiece. The week&rsquo;s Amplify
+                  and Challenge completions are added on from their own pages.
                 </span>
                 <button
                   type="button"

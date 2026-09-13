@@ -29,6 +29,7 @@ import {
   listMarks,
   releaseMany,
   releaseMark,
+  seedComboIfBlank,
   setFeedback,
   setMark,
   updateRubricItem,
@@ -266,9 +267,25 @@ export function GradingScreen({
 
   useEffect(() => {
     let live = true;
-    ensureRubric(activity, data.can.author)
-      .then((rows) => live && setLadder(rows))
-      .catch(onError);
+    void (async () => {
+      try {
+        let rows = await ensureRubric(activity, data.can.author);
+        // A combo nobody has set up arrives with the course's rubric, the same
+        // way it does on the Rubric page. Without this, a combo opened straight
+        // from grading was one 0-point question with nothing to pick, and the
+        // marker had no way to find out why.
+        if (live && rows.length === 0 && (await seedComboIfBlank(activity, data.can.author))) {
+          if (!live) return;
+          rows = await ensureRubric(activity, data.can.author);
+          if (!live) return;
+          // The questions and the total moved under us; the parent holds both.
+          onChanged();
+        }
+        if (live) setLadder(rows);
+      } catch (e) {
+        if (live) onError(e);
+      }
+    })();
     return () => {
       live = false;
     };

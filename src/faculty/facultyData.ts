@@ -30,10 +30,12 @@ import {
   type FileRef,
   type RubricItem,
   type SubmissionMark,
+  isCompletion,
 } from "@/checkins/types";
 import { humanBytes, refuseFile } from "./activityFiles";
 import { deductionForAward, pointsTotal, type PointedQuestion } from "./model";
-import type { RubricTemplate } from "./comboRubric";
+import { COMBO_TEMPLATE, type RubricTemplate } from "./comboRubric";
+import { shareInFlight } from "./inFlight";
 
 const db = () => requireSupabase();
 
@@ -512,6 +514,36 @@ export async function seedRubricTemplate(
   }
 
   return true;
+}
+
+/**
+ * Hand a blank combo the course's rubric, from whichever screen reaches it first.
+ *
+ * Every combo in AP 50 is marked against the same rubric, so a new one should
+ * arrive with it already written. This used to happen only on the Rubric page,
+ * which meant a combo opened straight from grading — or from the student side —
+ * was one 0-point question with nothing under it. The rule is the same
+ * everywhere: a combo, marked for points, that nobody has priced, and that has
+ * no question or criterion yet (seedRubricTemplate refuses otherwise). Only the
+ * owner writes rubric_items, so a TF's visit changes nothing. True when it
+ * wrote something and the caller should read the activity back.
+ *
+ * One seed per activity at a time: two screens, or one effect run twice by
+ * strict mode, both read an empty rubric before either insert lands, and the
+ * later insert then trips unique (activity_id, label).
+ */
+const seeding = new Map<string, Promise<boolean>>();
+
+export function seedComboIfBlank(activity: Activity, canSeed: boolean): Promise<boolean> {
+  if (
+    !canSeed ||
+    activity.type !== "combo" ||
+    isCompletion(activity) ||
+    pointsTotal(activity) !== 0
+  ) {
+    return Promise.resolve(false);
+  }
+  return shareInFlight(seeding, activity.id, () => seedRubricTemplate(activity, COMBO_TEMPLATE));
 }
 
 export async function updateRubricItem(
