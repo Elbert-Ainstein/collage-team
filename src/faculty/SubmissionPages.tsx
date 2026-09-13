@@ -85,11 +85,18 @@ export function SubmissionPages({
   resultId,
   questionId,
   questionLabel,
+  mapped = true,
 }: {
   resultId: string;
   /** The question being marked, or null when the activity has no real questions. */
   questionId: string | null;
   questionLabel: string;
+  /**
+   * Whether students were asked to say which pages answer this question.
+   * False for a combo, where the whole PDF is the answer to every question
+   * and "nothing marked" would read as the student having missed a step.
+   */
+  mapped?: boolean;
 }): JSX.Element {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [pages, setPages] = useState<SubmissionPage[]>([]);
@@ -297,7 +304,9 @@ export function SubmissionPages({
       <div className="fv-pagebar">
         <span className="fv-eyebrow" style={{ flex: 1 }}>
           {unmapped
-            ? `Nothing marked for question ${questionLabel} — showing the whole PDF`
+            ? mapped
+              ? `Nothing marked for question ${questionLabel} — showing the whole PDF`
+              : "The whole PDF"
             : `Question ${questionLabel} · ${
                 showing.length === 1 ? "1 page" : `${showing.length} pages`
               }`}

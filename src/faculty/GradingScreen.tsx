@@ -715,6 +715,9 @@ export function GradingScreen({
             resultId={subject.result.id}
             questionId={question && !question.id.startsWith("synthetic-") ? question.id : null}
             questionLabel={question?.label ?? String(qIdx + 1)}
+            // A combo's students hand in one PDF without filing pages under
+            // questions (SubmitScreen), so the whole file is the normal case.
+            mapped={activity.type !== "combo"}
           />
           )}
         </div>

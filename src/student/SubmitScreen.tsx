@@ -80,6 +80,12 @@ export function SubmitScreen({
   }, [load]);
 
   const locked = assignment.myResult?.status === "scored";
+  // A combo is one PDF for the whole week — challenge problems and tutorial
+  // screens together — and its marker reads the whole file. Asking which page
+  // answers which of six questions is a chore that buys nothing, and the
+  // "no pages yet for…" that comes with it reads as an error on a complete
+  // hand-in. Everything below that mentions mapping is off with this.
+  const mapPages = activity.type !== "combo";
   const handedIn = assignment.myResult?.status === "submitted"
     || assignment.myResult?.status === "needs_review";
 
@@ -148,8 +154,9 @@ export function SubmitScreen({
         >
           <h1 className="sv-h1">Hand in your work</h1>
           <span className="sv-sub" style={{ flex: 1, minWidth: 220 }}>
-            One PDF, then mark which pages answer which question — so whoever grades it opens
-            straight to the right page.
+            {mapPages
+              ? "One PDF, then mark which pages answer which question — so whoever grades it opens straight to the right page."
+              : "One PDF with everything in it — your challenge problems and tutorial screens together."}
           </span>
 
           {/* Handing in is a press, not a side effect of uploading. Uploading
@@ -182,7 +189,7 @@ export function SubmitScreen({
               title={
                 !hasFile
                   ? "Upload a PDF first"
-                  : unmapped.length
+                  : mapPages && unmapped.length
                     ? `You can hand in now, but ${unmapped.length} question${
                         unmapped.length === 1 ? " has" : "s have"
                       } no pages yet.`
@@ -197,7 +204,7 @@ export function SubmitScreen({
         {/* Said, not enforced. A student who genuinely has nothing for question
             4 must still be able to hand in what they do have — blocking that
             would cost them the whole assignment over one blank. */}
-        {!handedIn && !locked && hasFile && unmapped.length ? (
+        {mapPages && !handedIn && !locked && hasFile && unmapped.length ? (
           <div
             className="sv-sub"
             style={{ marginTop: 6, color: "var(--amber-700)", fontSize: "var(--text-xs)" }}
@@ -252,6 +259,7 @@ export function SubmitScreen({
             activityId={activityId}
             questions={questions}
             locked={locked}
+            mapPages={mapPages}
             onChanged={() => {
               void readState();
               onChanged();

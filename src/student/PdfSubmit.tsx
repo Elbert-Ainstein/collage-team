@@ -92,6 +92,7 @@ export function PdfSubmit({
   activityId,
   questions,
   locked,
+  mapPages = true,
   onChanged,
 }: {
   /** The result row this hands in against. Null until one exists. */
@@ -101,6 +102,15 @@ export function PdfSubmit({
   questions: ActivityQuestion[];
   /** Graded work is closed — the database refuses the write either way. */
   locked: boolean;
+  /**
+   * Whether the student is asked which pages answer which question.
+   *
+   * Off for a combo: it is one PDF for the whole week's work and the marker
+   * reads the whole file, so the second step is a chore that buys nothing —
+   * and the "no pages yet for…" nagging that goes with it reads as an error
+   * on a hand-in that is complete. With it off the pages are a preview only.
+   */
+  mapPages?: boolean;
   onChanged: () => void;
 }): JSX.Element {
   const [file, setFile] = useState<SubmissionFile | null>(null);
@@ -277,7 +287,7 @@ export function PdfSubmit({
   if (!file) {
     return (
       <div className="sv-card" style={{ marginTop: 12 }}>
-        <div className="sv-eyebrow">Step 1 of 2 · Upload</div>
+        <div className="sv-eyebrow">{mapPages ? "Step 1 of 2 · Upload" : "Upload"}</div>
 
         {error ? (
           <div
@@ -332,15 +342,16 @@ export function PdfSubmit({
             className="sv-sub"
             style={{ maxWidth: "48ch", textAlign: "center", lineHeight: 1.5 }}
           >
-            One file for the whole assignment. Once it&rsquo;s up you&rsquo;ll mark which pages
-            answer which question, so your marker opens straight to the right page.
+            {mapPages
+              ? "One file for the whole assignment. Once it\u2019s up you\u2019ll mark which pages answer which question, so your marker opens straight to the right page."
+              : "One file for the whole assignment. Once it\u2019s up, press Submit above to hand it in."}
           </span>
         </button>
       </div>
     );
   }
 
-  const active = questions.find((q) => q.id === activeQ) ?? null;
+  const active = mapPages ? (questions.find((q) => q.id === activeQ) ?? null) : null;
   const anchor = active ? (
     <div className="sv-pdfnow">
       <span className="sv-eyebrow sv-pdfnowlbl">Filing into</span>
@@ -360,7 +371,7 @@ export function PdfSubmit({
       <style dangerouslySetInnerHTML={{ __html: CSS }} />
       <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
         <div className="sv-eyebrow" style={{ flex: 1 }}>
-          Step 2 of 2 · Which pages answer which question
+          {mapPages ? "Step 2 of 2 · Which pages answer which question" : "Your PDF"}
         </div>
         <span className="sv-sub" style={{ fontSize: "var(--text-2xs)" }}>
           {file.page_count} {file.page_count === 1 ? "page" : "pages"}
@@ -408,11 +419,13 @@ export function PdfSubmit({
               onBlur={() => setArmedReplace(false)}
               onClick={() => void replace()}
             >
-              Replace it and lose the page assignments?
+              {mapPages ? "Replace it and lose the page assignments?" : "Replace it?"}
             </button>
-            <span className="sv-sub" style={{ fontSize: "var(--text-2xs)" }}>
-              Page 3 of a new scan isn&rsquo;t page 3 of this one.
-            </span>
+            {mapPages ? (
+              <span className="sv-sub" style={{ fontSize: "var(--text-2xs)" }}>
+                Page 3 of a new scan isn&rsquo;t page 3 of this one.
+              </span>
+            ) : null}
           </>
         ) : (
           <button
@@ -426,7 +439,12 @@ export function PdfSubmit({
         )}
       </div>
 
-      {!questions.length ? (
+      {!mapPages ? (
+        <div className="sv-sub" style={{ marginTop: 14, lineHeight: 1.55, maxWidth: "62ch" }}>
+          This is what your marker will see. Press Submit above when it&rsquo;s the version you
+          want to hand in.
+        </div>
+      ) : !questions.length ? (
         <div className="sv-sub" style={{ marginTop: 14, lineHeight: 1.55, maxWidth: "62ch" }}>
           Your instructor hasn&rsquo;t listed the questions for this activity, so there is
           nothing to map pages to yet. Your PDF is handed in.
@@ -443,7 +461,7 @@ export function PdfSubmit({
           the question you were assigning to scrolled out of sight exactly when
           you needed it. */}
       <div className="sv-pdfsplit">
-        {questions.length ? (
+        {mapPages && questions.length ? (
           <div className="sv-pdfq" ref={qlist}>
             <div className="sv-eyebrow" style={{ padding: "0 2px 8px" }}>
               Questions
@@ -507,8 +525,42 @@ export function PdfSubmit({
           {loaded
             ? loaded.thumbs.map((src, i) => {
                 const page = i + 1;
-                const mine = activeQ ? (pages.get(activeQ)?.has(page) ?? false) : false;
-                const labels = assignedTo(page);
+                const mine = active ? (pages.get(active.id)?.has(page) ?? false) : false;
+                const labels = mapPages ? assignedTo(page) : [];
+                // A preview tile is not a control: nothing to press, nothing pressed.
+                if (!mapPages) {
+                  return (
+                    <div
+                      key={page}
+                      style={{
+                        padding: 4,
+                        border: "2px solid var(--neutral-200)",
+                        borderRadius: 8,
+                        background: "var(--cream-100)",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 4,
+                      }}
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={src}
+                        alt={`Page ${page}`}
+                        style={{ width: "100%", display: "block", borderRadius: 4 }}
+                      />
+                      <span
+                        className="sv-num"
+                        style={{
+                          fontSize: "var(--text-2xs)",
+                          color: "var(--muted-foreground)",
+                          textAlign: "center",
+                        }}
+                      >
+                        p{page}
+                      </span>
+                    </div>
+                  );
+                }
                 return (
                   <Fragment key={page}>
                     {/* Four tiles apart: two rows on a phone, so the question

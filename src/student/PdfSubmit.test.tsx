@@ -64,7 +64,7 @@ const questions = [
 let host: HTMLDivElement;
 let root: Root;
 
-async function mount(): Promise<string> {
+async function mount(mapPages = true): Promise<string> {
   await act(async () => {
     root.render(
       <PdfSubmit
@@ -73,6 +73,7 @@ async function mount(): Promise<string> {
         activityId="a1"
         questions={questions as never}
         locked={false}
+        mapPages={mapPages}
         onChanged={() => undefined}
       />,
     );
@@ -130,5 +131,32 @@ describe("PdfSubmit", () => {
     current.value = file;
     const text = await mount();
     expect(text).toContain("No pages yet for 1, 2");
+  });
+
+  // A combo is one PDF for the whole week's work, and its marker reads the
+  // whole file — so the step of saying which page answers which question is
+  // not asked, and nothing on the screen nags about it.
+  describe("with page mapping off", () => {
+    it("is one step: upload, with no promise of a mapping step after", async () => {
+      current.value = null;
+      const text = await mount(false);
+
+      expect(text).toContain("Upload your work as a PDF");
+      expect(text).not.toContain("Step 1 of 2");
+      expect(text).not.toContain("which pages");
+    });
+
+    it("shows the pages as a preview, with no questions to file them under", async () => {
+      current.value = file;
+      const text = await mount(false);
+
+      expect(text).toContain("3 pages");
+      expect(text).toContain("Upload a different PDF");
+      expect(text).not.toContain("Step 2 of 2");
+      expect(text).not.toContain("Pick a question");
+      expect(text).not.toContain("No pages yet");
+      expect(text).not.toContain("Every question has pages");
+      expect(host.querySelectorAll("[aria-pressed]")).toHaveLength(0);
+    });
   });
 });
