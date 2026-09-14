@@ -64,10 +64,16 @@ export type Screen =
  */
 export interface Capabilities {
   isOwner: boolean;
-  /** Create and edit activities, weeks and rubrics. */
+  /** Create and edit activities and weeks: what they are called, out of, and attach. */
   author: boolean;
   /** Put marks on submissions. */
   grade: boolean;
+  /**
+   * Write criteria and questions. Follows grading (0036): the person marking
+   * is the person who finds the rung worded wrong, and the criteria are the
+   * same judgement the grading switch already trusts, written down once.
+   */
+  rubric: boolean;
   /** Post and unpost check-ins to students, and set which week is live. */
   runCheckIns: boolean;
   /** Add, remove and email students; form teams. */
@@ -81,6 +87,7 @@ export function capabilitiesFor(course: Course, isOwner: boolean): Capabilities 
     isOwner,
     author: isOwner,
     grade: isOwner || course.tf_can_grade,
+    rubric: isOwner || course.tf_can_grade,
     runCheckIns: isOwner || course.tf_can_checkin,
     manageRoster: isOwner,
     manageTFs: isOwner,
@@ -97,9 +104,9 @@ export function capabilitiesFor(course: Course, isOwner: boolean): Capabilities 
 function tfNote(can: Capabilities): string {
   const rest = "the instructor edits activities and the roster.";
   if (can.grade && can.runCheckIns) {
-    return `You can grade submissions, post check-ins and set the live week; ${rest}`;
+    return `You can grade submissions and edit rubrics, post check-ins and set the live week; ${rest}`;
   }
-  if (can.grade) return `You can grade submissions; ${rest}`;
+  if (can.grade) return `You can grade submissions and edit rubrics; ${rest}`;
   if (can.runCheckIns) return `You can post check-ins and set the live week, but not grade; ${rest}`;
   return "Grading and check-ins are both turned off for TFs on this course, so this view is read-only.";
 }
@@ -747,7 +754,8 @@ export function FacultyApp({
         return selected ? (
           <RubricBuilder
             activity={selected}
-            canEdit={data.can.author}
+            canEdit={data.can.rubric}
+            canAuthor={data.can.author}
             wizard={fresh === selected.id}
             // Finish is what ends the sequence. Stepping back to the details
             // must not, or the strip vanishes under you halfway through.

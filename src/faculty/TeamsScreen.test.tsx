@@ -116,7 +116,7 @@ function facultyData(over: Partial<FacultyData> = {}): FacultyData {
     can: {
       isOwner: true,
       author: true,
-      grade: true,
+      grade: true, rubric: true,
       runCheckIns: true,
       manageRoster: true,
       manageTFs: true,

@@ -201,7 +201,7 @@ describe("who sees it at all", () => {
         can: {
           isOwner: false,
           author: false,
-          grade: true,
+          grade: true, rubric: true,
           runCheckIns: true,
           manageRoster: false,
           manageTFs: false,

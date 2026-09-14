@@ -1001,6 +1001,7 @@ function DocumentPane({
 export function RubricBuilder({
   activity,
   canEdit = true,
+  canAuthor = canEdit,
   wizard = false,
   onDone,
   onStep1,
@@ -1008,8 +1009,13 @@ export function RubricBuilder({
   onError,
 }: {
   activity: Activity;
-  /** Criteria and the document are the instructor's; a TF reads both. */
+  /** Criteria and questions. The owner, and a TF who may grade (0036). */
   canEdit?: boolean;
+  /**
+   * The activity itself — its total, its completion mode, its attachments.
+   * Owner-only: a TF may rewrite a ladder, not what the ladder is out of.
+   */
+  canAuthor?: boolean;
   /** Step 2 of creating an activity, rather than an edit of an existing one. */
   wizard?: boolean;
   /** Leave for good. In the wizard this is Finish, and it ends the sequence. */
@@ -1037,7 +1043,7 @@ export function RubricBuilder({
    * deleting all six questions would just re-write them on the next visit.
    */
   const blankCombo =
-    canEdit &&
+    canAuthor &&
     activity.type === "combo" &&
     !isCompletion(activity) &&
     items != null &&
@@ -1075,7 +1081,7 @@ export function RubricBuilder({
           live &&
           ladder.length === 0 &&
           qs.length === 0 &&
-          (await seedComboIfBlank(activity, canEdit))
+          (await seedComboIfBlank(activity, canAuthor))
         ) {
           if (!live) return;
           [ladder, qs] = await Promise.all([
@@ -1096,7 +1102,7 @@ export function RubricBuilder({
     return () => {
       live = false;
     };
-  }, [activity, canEdit, onError]);
+  }, [activity, canEdit, canAuthor, onError]);
 
   /** Write the standard combo rubric in by hand, for a combo that is priced. */
   const fillCombo = useCallback(() => {
@@ -1385,7 +1391,7 @@ export function RubricBuilder({
       <div className="fv-rubric">
         <DocumentPane
           activity={activity}
-          canEdit={canEdit}
+          canEdit={canAuthor}
           onChanged={onChanged}
           onError={onError}
         />
@@ -1417,7 +1423,7 @@ export function RubricBuilder({
                 role="radio"
                 aria-checked={!completion}
                 className={`fv-cichoice${!completion ? " on" : ""}`}
-                disabled={!canEdit || ciBusy}
+                disabled={!canAuthor || ciBusy}
                 onClick={() => setCi(false)}
               >
                 <span className="fv-cititle">Out of points</span>
@@ -1431,7 +1437,7 @@ export function RubricBuilder({
                 role="radio"
                 aria-checked={completion}
                 className={`fv-cichoice${completion ? " on" : ""}`}
-                disabled={!canEdit || ciBusy}
+                disabled={!canAuthor || ciBusy}
                 onClick={() => setCi(true)}
               >
                 <span className="fv-cititle">Complete / Not complete</span>
@@ -1474,8 +1480,8 @@ export function RubricBuilder({
                 Loading the rubric…
               </div>
             ) : questions.length === 0 && items.length === 0 && !canEdit ? (
-              // Only the owner may write these rows, so a TF who arrives first
-              // has nothing to seed and should be told why.
+              // Rubric editing is off for this TF, so there is nothing they
+              // can add here and they should be told why it is empty.
               <div className="fv-sub" style={{ padding: 14, lineHeight: 1.6 }}>
                 The instructor has not set up this rubric yet.
               </div>

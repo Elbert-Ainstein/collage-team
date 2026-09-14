@@ -22,6 +22,15 @@ const seeded = [
     is_custom: true,
     question_label: "Challenge Problem 1: Mark-up",
   },
+  {
+    id: "ri2",
+    activity_id: "act1",
+    row_index: 1,
+    description: "All relevant reflection prompts are thoughtfully answered",
+    deduction: 0,
+    is_custom: true,
+    question_label: "Challenge Problem 1: Mark-up",
+  },
 ];
 const ensureRubric = vi.fn(async () => [] as typeof seeded);
 const seedComboIfBlank = vi.fn(async () => false);
@@ -63,7 +72,7 @@ const blankCombo = {
   points_per_question: 0,
 } as unknown as Activity;
 
-function facultyData(author: boolean): FacultyData {
+function facultyData(author: boolean, rubric = author): FacultyData {
   return {
     course: { id: "c1", name: "AP 50", code: "AP50" },
     weeks: [],
@@ -77,7 +86,7 @@ function facultyData(author: boolean): FacultyData {
     teams: [],
     tfs: [],
     stats: new Map(),
-    can: { isOwner: author, author, grade: true, runCheckIns: true, manageRoster: true, manageTFs: true },
+    can: { isOwner: author, author, grade: true, rubric, runCheckIns: true, manageRoster: true, manageTFs: true },
   } as unknown as FacultyData;
 }
 
@@ -140,7 +149,11 @@ describe("grading a combo nobody has set up", () => {
 
     expect(ensureRubric).toHaveBeenCalledTimes(2);
     expect(host.textContent).toContain("Challenge Problem 1: Mark-up");
-    expect(host.textContent).toContain("0 / 20 pts");
+    // Nothing picked yet, so nothing earned yet: the total is a running sum
+    // of what has been awarded, not the full marks a deduction model starts
+    // from. ("0 / 20" is checked as a whole, since "20 / 20" contains it.)
+    expect(host.textContent).toMatch(/Total points0 \/ 20 pts/);
+    expect(host.textContent).not.toContain("20 / 20 pts");
     await act(async () => {
       host.querySelectorAll("button").forEach((b) => {
         if (b.textContent?.includes("Question Challenge Problem 1: Mark-up")) b.click();
@@ -165,8 +178,18 @@ describe("grading a combo nobody has set up", () => {
     // marker should see the +0 Kelly wrote, not the −2 the database holds.
     expect(host.textContent).toContain("+ 0 pts");
     expect(host.textContent).not.toContain("− 2");
-    // Unmarked, the question has no score yet — not full marks.
-    expect(host.textContent).toContain("— / 2 pts");
+
+    // Picking the +2 rung on the 2-point question moves the total to 2, and
+    // the question's own line to 2 / 2.
+    const rung = [...host.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes("All relevant reflection prompts"),
+    )!;
+    await act(async () => rung.click());
+    expect(host.textContent).toMatch(/Total points2 \/ 20 pts/);
+    expect(host.textContent).toContain("2 / 2 pts");
+    expect(host.textContent).toContain("Release 2 / 20 pts");
+    // The question still unmarked has no score yet — not full marks.
+    expect(host.textContent).toContain("— / 3 pts");
   });
 
   it("leaves a rubric that is already written alone", async () => {
@@ -184,5 +207,50 @@ describe("grading a combo nobody has set up", () => {
     expect(seedComboIfBlank).toHaveBeenCalledWith(blankCombo, false);
     expect(ensureRubric).toHaveBeenCalledTimes(1);
     expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  // A TF who may grade may write the criteria they grade against (0036). The
+  // seed stays the owner's — it prices the activity — but once it exists, the
+  // pencil and the add button are theirs too.
+  describe("as a TF who may grade", () => {
+    it("can edit and add lines, but does not seed", async () => {
+      ensureRubric.mockResolvedValue(seeded);
+      const data = facultyData(false, true);
+      await mount({
+        ...data,
+        activities: [{ ...blankCombo, points_total: 20, question_count: 6 }],
+        questions: [
+          { id: "q2", activity_id: "act1", label: "Challenge Problem 1: Mark-up", position: 1, points: 2 },
+        ],
+      } as unknown as FacultyData);
+
+      // A rubric that exists is never re-seeded, whoever is looking.
+      expect(seedComboIfBlank).not.toHaveBeenCalled();
+      expect(host.textContent).toContain("Use the pencil to edit a line");
+      const add = [...host.querySelectorAll("button")].find((b) =>
+        b.textContent?.includes("Add rubric item"),
+      )!;
+      expect(add.disabled).toBe(false);
+      expect(host.querySelector('[aria-label="Edit this line"]')).not.toBeNull();
+    });
+
+    it("is read-only when grading is off for TFs", async () => {
+      ensureRubric.mockResolvedValue(seeded);
+      const data = facultyData(false, false);
+      await mount({
+        ...data,
+        activities: [{ ...blankCombo, points_total: 20, question_count: 6 }],
+        questions: [
+          { id: "q2", activity_id: "act1", label: "Challenge Problem 1: Mark-up", position: 1, points: 2 },
+        ],
+      } as unknown as FacultyData);
+
+      expect(host.textContent).not.toContain("Use the pencil");
+      const add = [...host.querySelectorAll("button")].find((b) =>
+        b.textContent?.includes("Add rubric item"),
+      )!;
+      expect(add.disabled).toBe(true);
+      expect(host.querySelector('[aria-label="Edit this line"]')).toBeNull();
+    });
   });
 });

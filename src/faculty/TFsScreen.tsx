@@ -547,7 +547,7 @@ export function TFsScreen(props: {
 
             {permRow(
               "Grading",
-              "Can score submissions and release marks.",
+              "Can score submissions, release marks, and edit rubric criteria and questions.",
               grading,
               () => void setPerm("tf_can_grade", !grading),
               true,

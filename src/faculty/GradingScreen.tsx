@@ -420,7 +420,23 @@ export function GradingScreen({
     }
     let taken = 0;
     for (const [, id] of picks) taken += deductionOf(id);
-    return { out, per, earned: Math.max(round2(out - taken), 0) };
+
+    // What it stands at NOW is what has been awarded so far. A deduction model
+    // starts at full marks and comes down, so a submission nobody had touched
+    // read "30 / 30" — which is not a score, it is the absence of one. Until
+    // every question has a pick, the number is the sum of the picked
+    // questions' awards; once every one does, it is the database's own
+    // arithmetic (total minus every deduction), which is what Release sends
+    // and what the student is shown. The two agree whenever the questions'
+    // worths add up to the total, which is the case the Rubric page checks.
+    const marked = questions.filter((q) => pickOf(picks, q));
+    const running = marked.reduce((n, q) => {
+      const p = per.get(keyOf(q));
+      return p ? n + (p.out - p.taken) : n;
+    }, 0);
+    const complete = questions.length > 0 && marked.length === questions.length;
+    const earned = complete ? Math.max(round2(out - taken), 0) : round2(running);
+    return { out, per, earned };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ladder, picks, questions, activity]);
 
@@ -987,7 +1003,7 @@ export function GradingScreen({
                         >
                           Pick one — what it awards is this question&rsquo;s score, out of{" "}
                           {pts(worthOf(activity, q))}.
-                          {data.can.author ? " Use the pencil to edit a line." : ""}
+                          {data.can.rubric ? " Use the pencil to edit a line." : ""}
                         </p>
 
                         {forQuestion == null ? (
@@ -1010,8 +1026,8 @@ export function GradingScreen({
                                 item={item}
                                 worth={worthOf(activity, q)}
                                 selected={pickedId === item.id}
-                                editing={data.can.author && editIdx === ri}
-                                canEdit={data.can.author}
+                                editing={data.can.rubric && editIdx === ri}
+                                canEdit={data.can.rubric}
                                 onPick={() => void pick(item)}
                                 onToggleEdit={() => setEditIdx(editIdx === ri ? null : ri)}
                                 onCommit={(patch) => void commitLine(item, patch)}
@@ -1025,11 +1041,11 @@ export function GradingScreen({
                           className="fv-btn outline sm full"
                           style={{ marginTop: 10 }}
                           onClick={() => void addLine()}
-                          disabled={!ladder || !data.can.author}
+                          disabled={!ladder || !data.can.rubric}
                           title={
-                            data.can.author
+                            data.can.rubric
                               ? "Adds a line to this question's criteria"
-                              : "Only the instructor who owns this course can change the rubric."
+                              : "Rubric editing comes with the grading permission, which is off for TFs on this course."
                           }
                         >
                           <FIcon name="add" size={14} />
