@@ -147,6 +147,26 @@ describe("grading a combo nobody has set up", () => {
       });
     });
     expect(host.textContent).toContain("Missing markup");
+
+    // The rows are an accordion: the open question folds on a second click
+    // and unfolds on the next, and stays current throughout.
+    const row = [...host.querySelectorAll("button")].find((b) =>
+      b.textContent?.includes("Question Challenge Problem 1: Mark-up"),
+    )!;
+    expect(row.getAttribute("aria-expanded")).toBe("true");
+    await act(async () => row.click());
+    expect(row.getAttribute("aria-expanded")).toBe("false");
+    expect(host.textContent).not.toContain("Missing markup");
+    await act(async () => row.click());
+    expect(row.getAttribute("aria-expanded")).toBe("true");
+    expect(host.textContent).toContain("Missing markup");
+    // Read as what it awards, the way the rubric was written: "Missing
+    // markup" is stored as a deduction of 2 on a 2-point question, and a
+    // marker should see the +0 Kelly wrote, not the −2 the database holds.
+    expect(host.textContent).toContain("+ 0 pts");
+    expect(host.textContent).not.toContain("− 2");
+    // Unmarked, the question has no score yet — not full marks.
+    expect(host.textContent).toContain("— / 2 pts");
   });
 
   it("leaves a rubric that is already written alone", async () => {

@@ -35,7 +35,10 @@ import {
   updateRubricItem,
 } from "./facultyData";
 import {
+  awardFits,
+  awardForDeduction,
   comboTotal,
+  deductionForAward,
   pointsTotal,
   questionsFor,
   worthOf,
@@ -178,6 +181,15 @@ export function GradingScreen({
   const [marks, setMarks] = useState<Map<string, Map<string, string>>>(new Map());
   const [stIdx, setStIdx] = useState(0);
   const [editIdx, setEditIdx] = useState<number | null>(null);
+  /**
+   * Whether the current question's ladder is folded away.
+   *
+   * The rows are an accordion: a click on a closed question opens it and makes
+   * it current; a click on the open one folds its ladder without changing what
+   * is current, so the pages on the left stay where they are. Stepping with the
+   * arrows always unfolds — nobody presses → to see less.
+   */
+  const [folded, setFolded] = useState(false);
   const [note, setNote] = useState("");
   const [releasing, setReleasing] = useState(false);
 
@@ -329,10 +341,12 @@ export function GradingScreen({
       // unrelated line.
       if (e.key === "ArrowLeft") {
         setEditIdx(null);
+        setFolded(false);
         setQIdx((i) => Math.max(0, i - 1));
       }
       if (e.key === "ArrowRight") {
         setEditIdx(null);
+        setFolded(false);
         setQIdx((i) => Math.min(qCount - 1, i + 1));
       }
     };
@@ -882,6 +896,7 @@ export function GradingScreen({
                 // pages on the left are never a question apart in the frame
                 // after a question is deleted.
                 const open = i === Math.min(qIdx, qCount - 1);
+                const expanded = open && !folded && !forCompletion;
                 const here = score?.per.get(keyOf(q)) ?? null;
                 const line = ladder?.find((r) => r.id === pickOf(picks, q)) ?? null;
                 return (
@@ -891,10 +906,14 @@ export function GradingScreen({
                   >
                     <button
                       type="button"
-                      aria-expanded={open}
+                      aria-expanded={expanded}
                       onClick={() => {
                         setEditIdx(null);
-                        setQIdx(i);
+                        if (open) setFolded((f) => !f);
+                        else {
+                          setFolded(false);
+                          setQIdx(i);
+                        }
                       }}
                       style={{
                         display: "flex",
@@ -937,12 +956,26 @@ export function GradingScreen({
                           className="fv-num"
                           style={{ flex: "none", fontSize: "var(--fv-xs)", fontWeight: 600 }}
                         >
-                          {num(here.out - here.taken)} / {pts(here.out)}
+                          {line ? num(here.out - here.taken) : "—"} / {pts(here.out)}
+                        </span>
+                      )}
+                      {forCompletion ? null : (
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            flex: "none",
+                            display: "inline-flex",
+                            color: "var(--fv-muted)",
+                            transform: expanded ? "rotate(90deg)" : "none",
+                            transition: "transform 120ms ease",
+                          }}
+                        >
+                          <FIcon name="chevronRight" size={15} />
                         </span>
                       )}
                     </button>
 
-                    {open && !forCompletion ? (
+                    {expanded ? (
                       <div style={{ padding: "4px 10px 12px" }}>
                         <p
                           style={{
@@ -952,8 +985,8 @@ export function GradingScreen({
                             margin: "0 4px 8px",
                           }}
                         >
-                          Pick one — its points come off the {pts(pointsTotal(activity))} this
-                          activity is out of.
+                          Pick one — what it awards is this question&rsquo;s score, out of{" "}
+                          {pts(worthOf(activity, q))}.
                           {data.can.author ? " Use the pencil to edit a line." : ""}
                         </p>
 
@@ -975,6 +1008,7 @@ export function GradingScreen({
                               <RubricRow
                                 key={item.id}
                                 item={item}
+                                worth={worthOf(activity, q)}
                                 selected={pickedId === item.id}
                                 editing={data.can.author && editIdx === ri}
                                 canEdit={data.can.author}
@@ -1204,6 +1238,7 @@ function Stepper({
 
 function RubricRow({
   item,
+  worth,
   selected,
   editing,
   canEdit,
@@ -1212,6 +1247,12 @@ function RubricRow({
   onCommit,
 }: {
   item: RubricItem;
+  /**
+   * What the question is out of. A line is STORED as a deduction and READ as
+   * what it awards — the same conversion the Rubric page makes — so "Missing
+   * markup" reads +0 here as it does there, not the −2 the row holds.
+   */
+  worth: number;
   selected: boolean;
   editing: boolean;
   /** Writing rubric_items is owner-only, so a TF must not see the pencil. */
@@ -1226,6 +1267,7 @@ function RubricRow({
   // event while `item` is still the old props. Comparing against what was last
   // written makes the duplicate a no-op instead of a second write.
   const saved = useRef({ description: item.description, deduction: item.deduction });
+  const award = awardForDeduction(worth, item.deduction);
 
   useEffect(() => {
     if (!editing) return;
@@ -1241,9 +1283,12 @@ function RubricRow({
   }, [editing]);
 
   const commit = () => {
+    // Typed as an award, stored as a deduction. Out of range is refused, not
+    // clamped, the same as the Rubric page: pulling a 5 back to 3 would store
+    // a rung nobody wrote.
     const rawNum = (numRef.current?.textContent ?? "").replace(/[^0-9.]/g, "");
     const n = Number.parseFloat(rawNum);
-    const deduction = Number.isFinite(n) && n >= 0 ? Math.min(n, 99) : saved.current.deduction;
+    const deduction = awardFits(worth, n) ? deductionForAward(worth, n) : saved.current.deduction;
     const description = (descRef.current?.textContent ?? "").trim() || saved.current.description;
 
     if (deduction === saved.current.deduction && description === saved.current.description) return;
@@ -1251,7 +1296,7 @@ function RubricRow({
     // A contentEditable is not React-controlled, so a rejected value would sit
     // on screen looking saved. Write the accepted one back.
     if (numRef.current && document.activeElement !== numRef.current) {
-      numRef.current.textContent = String(deduction);
+      numRef.current.textContent = String(awardForDeduction(worth, deduction));
     }
     onCommit({ description, deduction });
   };
@@ -1296,10 +1341,15 @@ function RubricRow({
             fontSize: "var(--fv-xs)",
             fontWeight: 600,
             fontVariantNumeric: "tabular-nums",
-            color: item.deduction === 0 ? "var(--fv-emerald)" : "var(--fv-destructive)",
+            color:
+              award >= worth
+                ? "var(--fv-emerald)"
+                : award <= 0
+                  ? "var(--fv-destructive)"
+                  : "var(--fv-navy)",
           }}
         >
-          {editing ? String(item.deduction) : `− ${item.deduction} ${item.deduction === 1 ? "pt" : "pts"}`}
+          {editing ? String(award) : `+ ${award} ${award === 1 ? "pt" : "pts"}`}
         </span>
         <span
           ref={descRef}
