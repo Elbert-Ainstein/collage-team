@@ -49,11 +49,13 @@ describe("the standard combo rubric", () => {
     expect(deductionForAward(markup.points, 1)).toBe(1);
   });
 
-  // Two rungs award +1 on purpose — two different ways of falling short that
-  // she scores the same. A mark stores the ROW, so they stay distinguishable.
-  it("keeps both of the Mark-up ladder's +1 rungs", () => {
+  // The Mark-up ladder reads 0, 1, 2, 2: partial reflection and complete
+  // reflection both pay the full 2. A mark stores the ROW it was picked from,
+  // so the two stay distinguishable on a transcript even at the same value.
+  it("pays the Mark-up ladder 0, 1, 2, 2", () => {
     const markup = COMBO_TEMPLATE.questions[1];
-    expect(markup.rungs.filter((r) => r.award === 1)).toHaveLength(2);
+    expect(markup.rungs.map((r) => r.award)).toEqual([0, 1, 2, 2]);
+    expect(markup.rungs[2].description).toMatch(/^Some effort to reflect/);
     expect(new Set(markup.rungs.map((r) => r.description)).size).toBe(markup.rungs.length);
   });
 

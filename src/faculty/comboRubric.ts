@@ -43,10 +43,10 @@ export interface RubricTemplate {
   questions: TemplateQuestion[];
 }
 
-// Verbatim from the course's Gradescope rubric. Two rungs award +1 on purpose:
-// they are two different ways of falling short that she scores the same, and a
-// mark stores the ROW it was picked from rather than its value, so the pair
-// stays distinguishable on a transcript.
+// Verbatim from the course's Gradescope rubric. The Mark-up ladder pays two
+// of its rungs the same +2 on purpose — partial reflection and complete
+// reflection — and a mark stores the ROW it was picked from rather than its
+// value, so the pair stays distinguishable on a transcript.
 const AT_HOME_EFFORT: TemplateRung[] = [
   {
     award: 0,
@@ -78,7 +78,7 @@ const MARK_UP: TemplateRung[] = [
     description: "Work is mostly missing, lacks reflection, or does not address mistakes",
   },
   {
-    award: 1,
+    award: 2,
     description:
       "Some effort to reflect or learn is shown (answers at least one prompt), but not all " +
       "required elements are included",
