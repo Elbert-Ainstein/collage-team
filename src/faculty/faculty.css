@@ -1013,6 +1013,14 @@
   gap: 12px;
   overflow-y: auto;
 }
+/* The column scrolls; its cards do not shrink to avoid it. Flex children
+   shrink by default, and the question list — a card with overflow hidden so
+   its rows can tint edge to edge — was the one that gave, crushed to a sliver
+   showing one of six questions and the first line of a ladder nobody could
+   reach. Marking IS this pane, so nothing here may be squeezed out of it. */
+.fv-gradeside > * {
+  flex: none;
+}
 .fv-navgrid {
   display: flex;
   align-items: center;
