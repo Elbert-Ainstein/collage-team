@@ -8,7 +8,7 @@
 // "Check-in N", which was "Tutorial check-in N" and is the one string a TF
 // reads while standing in the room.
 
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Activity, ActivityType } from "@/checkins/types";
@@ -99,9 +99,40 @@ afterEach(async () => {
   host.remove();
 });
 
-async function mount(data: FacultyData = facultyData()) {
+type OnOpen = (id: string | null, opts?: { correction?: boolean }) => void;
+
+/**
+ * The owner's half. Which activity is open lives in FacultyApp, on the URL, so
+ * a reload lands back on the same sheet — this stands in for it.
+ */
+function Harness({
+  data,
+  start,
+  onOpen,
+}: {
+  data: FacultyData;
+  start: string | null;
+  onOpen?: OnOpen;
+}) {
+  const [selId, setSelId] = useState<string | null>(start);
+  return (
+    <CheckInScreen
+      data={data}
+      selId={selId}
+      onOpen={(...args) => {
+        onOpen?.(...args);
+        setSelId(args[0]);
+      }}
+    />
+  );
+}
+
+async function mount(
+  data: FacultyData = facultyData(),
+  opts: { start?: string | null; onOpen?: OnOpen } = {},
+) {
   await act(async () => {
-    root.render(<CheckInScreen data={data} />);
+    root.render(<Harness data={data} start={opts.start ?? null} onOpen={opts.onOpen} />);
   });
 }
 
@@ -235,6 +266,37 @@ describe("CheckInScreen", () => {
       tiles()[1].click();
     });
     expect(score(2).getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("opens straight onto the sheet for the activity it is handed — a reload lands back on it", async () => {
+    await mount(facultyData(), { start: "a2" });
+    expect(getTutorialSheet).toHaveBeenCalledWith("a2");
+    expect(host.querySelector("table")).not.toBeNull();
+    expect(textOf()).toContain("Circuits");
+    expect(tiles()).toHaveLength(0);
+  });
+
+  it("a tile click and the back button both hand the selection up to the owner", async () => {
+    const onOpen = vi.fn();
+    await mount(facultyData(), { onOpen });
+    await act(async () => {
+      tiles()[1].click();
+    });
+    expect(onOpen).toHaveBeenLastCalledWith("a2");
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>(".fv-back")!.click();
+    });
+    expect(onOpen).toHaveBeenLastCalledWith(null);
+  });
+
+  it("an activity it cannot check in on is handed back as a correction, not a page", async () => {
+    const onOpen = vi.fn();
+    // A skills sheet is individual-only: no team half for the marks to belong to.
+    await mount(facultyData(), { start: "a3", onOpen });
+    expect(onOpen).toHaveBeenCalledWith(null, { correction: true });
+    expect(host.querySelector("table")).toBeNull();
+    expect(tiles()).toHaveLength(2);
+    expect(getTutorialSheet).not.toHaveBeenCalled();
   });
 
   it("falls back to the picker if the open activity disappears", async () => {

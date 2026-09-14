@@ -6,6 +6,9 @@
 // absent, who presented each check-in, and the two 1-5 scores. It saves as you
 // go, and what is recorded here is what the students on that team see against
 // that activity — so nothing is held in this component that a reload would lose.
+// That includes WHICH sheet is open: it belongs to FacultyApp, on the URL as
+// ?s=checkin&a=<activity>, so a reload mid-tutorial lands back on the same
+// sheet rather than on the picker, and back returns to the picker.
 //
 // The unit of MARKING is the team, because this is filled in standing up while
 // walking between them. The unit of SCORING is the student: everyone present
@@ -38,7 +41,22 @@ import type { FacultyData } from "./FacultyApp";
 import { CheckInPicker } from "./CheckInPicker";
 import { FAvatar, FIcon } from "./icons";
 
-export function CheckInScreen({ data }: { data: FacultyData }): JSX.Element {
+export function CheckInScreen({
+  data,
+  selId,
+  onOpen,
+}: {
+  data: FacultyData;
+  /** The open sheet's activity, or null for the picker. Owned by FacultyApp. */
+  selId: string | null;
+  /**
+   * Open a sheet, or null for the picker. `correction` says this is not
+   * somewhere the TF chose to go — the open activity is no longer listed — so
+   * the owner replaces the URL rather than pushing one that back would bounce
+   * off again.
+   */
+  onOpen: (activityId: string | null, opts?: { correction?: boolean }) => void;
+}): JSX.Element {
   const teams = data.teams;
 
   // Weeks with their activities, minus the ones a check-in cannot describe.
@@ -49,7 +67,6 @@ export function CheckInScreen({ data }: { data: FacultyData }): JSX.Element {
       .filter((g) => g.activities.length > 0);
   }, [data.activities, data.weeks, data.stats]);
 
-  const [selId, setSelId] = useState<string | null>(null);
   const selected: Activity | null = useMemo(
     () => groups.flatMap((g) => g.activities).find((a) => a.id === selId) ?? null,
     [groups, selId],
@@ -74,25 +91,27 @@ export function CheckInScreen({ data }: { data: FacultyData }): JSX.Element {
   openRef.current = selId;
   const stillOpen = (activityId: string) => openRef.current === activityId;
 
-  // Marks, absences and any error belong to ONE sheet. They are cleared with
-  // the selection rather than when the next load lands, so the sheet never
-  // opens on the previous activity's rows while its own are on their way.
-  const open = useCallback((id: string | null) => {
-    setSelId(id);
+  // If the open activity is deleted or changes type underneath — or a reload
+  // or pasted link names one this screen cannot list — fall back to the picker
+  // rather than showing a sheet for something that is not on it.
+  useEffect(() => {
+    if (selId && !selected) onOpen(null, { correction: true });
+  }, [selId, selected, onOpen]);
+
+  // Marks, absences and any error belong to ONE sheet. They are cleared the
+  // moment the selection changes rather than when the next load lands, so the
+  // sheet never opens on the previous activity's rows while its own are on
+  // their way. Here rather than in a click handler because the selection can
+  // also change from outside: back, forward, a reload, the sidebar.
+  //
+  // Only a LISTED activity is fetched. One that is not — bounced above — would
+  // otherwise cost a round trip the picker then throws away.
+  const listed = selected !== null;
+  const load = useCallback(async () => {
     setMarks([]);
     setAbsences([]);
     setError(null);
-  }, []);
-
-  // Nothing is opened for you: the screen starts on the picker. If the open
-  // activity is deleted or changes type underneath, fall back to the picker
-  // rather than showing a sheet for something that is no longer listed.
-  useEffect(() => {
-    if (selId && !selected) open(null);
-  }, [selId, selected, open]);
-
-  const load = useCallback(async () => {
-    if (!selId) return;
+    if (!selId || !listed) return;
     const activityId = selId;
     setLoading(true);
     try {
@@ -108,7 +127,7 @@ export function CheckInScreen({ data }: { data: FacultyData }): JSX.Element {
     } finally {
       if (stillOpen(activityId)) setLoading(false);
     }
-  }, [selId]);
+  }, [selId, listed]);
 
   useEffect(() => {
     void load();
@@ -276,7 +295,7 @@ export function CheckInScreen({ data }: { data: FacultyData }): JSX.Element {
           </div>
         </div>
         {errorBox}
-        <CheckInPicker groups={groups} onOpen={open} />
+        <CheckInPicker groups={groups} onOpen={onOpen} />
       </div>
     );
   }
@@ -288,7 +307,7 @@ export function CheckInScreen({ data }: { data: FacultyData }): JSX.Element {
           type="button"
           className="fv-back"
           aria-label="Back to all check-ins"
-          onClick={() => open(null)}
+          onClick={() => onOpen(null)}
         >
           <FIcon name="chevronLeft" size={18} />
         </button>

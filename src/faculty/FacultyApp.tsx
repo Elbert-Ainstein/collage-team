@@ -152,6 +152,12 @@ export interface FacultyData {
 }
 
 const FULL_SCREEN: Screen[] = ["detail", "rubric", "grade"];
+/**
+ * Screens where `a` on the URL is the activity being shown. The full screens,
+ * plus Check-in once a sheet is open: a reload mid-tutorial has to land back
+ * on that sheet, not on the picker.
+ */
+const WITH_ACTIVITY: Screen[] = [...FULL_SCREEN, "checkin"];
 
 const SCREENS: string[] = ["activities", "checkin", "teams", "tfs", "detail", "rubric", "grade"];
 
@@ -167,7 +173,11 @@ const SCREENS: string[] = ["activities", "checkin", "teams", "tfs", "detail", "r
  * ?join= across sign-in and spends it later; rewriting the query from scratch
  * here would eat it.
  */
-function readWhere(): { screen: Screen | null; selId: string | null; courseId: string | null } {
+export function readWhere(): {
+  screen: Screen | null;
+  selId: string | null;
+  courseId: string | null;
+} {
   const q = new URLSearchParams(window.location.search);
   const s = q.get("s") ?? "";
   return {
@@ -177,7 +187,7 @@ function readWhere(): { screen: Screen | null; selId: string | null; courseId: s
   };
 }
 
-function writeWhere(
+export function writeWhere(
   at: { screen: Screen; selId: string | null; courseId: string | null },
   mode: "push" | "replace",
 ) {
@@ -189,7 +199,7 @@ function writeWhere(
   // Only where an activity is what the screen is showing. Carrying the last
   // selection onto the week list would make a copied URL promise a page the
   // person copying it was not looking at.
-  if (at.selId && FULL_SCREEN.includes(at.screen)) q.set("a", at.selId);
+  if (at.selId && WITH_ACTIVITY.includes(at.screen)) q.set("a", at.selId);
   else q.delete("a");
   if (at.courseId) q.set("c", at.courseId);
   else q.delete("c");
@@ -680,6 +690,17 @@ export function FacultyApp({
     );
   }
 
+  /**
+   * Check-in's picker and back button. Stable, because it sits in an effect's
+   * dependencies over there — a fresh closure per render would re-run that
+   * effect on every unrelated change up here.
+   */
+  const openCheckIn = useCallback((id: string | null, opts?: { correction?: boolean }) => {
+    // Being sent back to the picker is not a place to go back to.
+    if (opts?.correction) replaceNext.current = true;
+    setSelId(id);
+  }, []);
+
   const openActivity = (id: string, opts?: { fresh?: boolean }) => {
     setSelId(id);
     // A just-created activity is a title and nothing else, so the page it lands
@@ -701,7 +722,9 @@ export function FacultyApp({
     }
     switch (screen) {
       case "checkin":
-        return data.can.runCheckIns ? <CheckInScreen data={data} /> : null;
+        return data.can.runCheckIns ? (
+          <CheckInScreen data={data} selId={selId} onOpen={openCheckIn} />
+        ) : null;
       case "teams":
         return <TeamsScreen data={data} onChanged={() => refresh().catch(fail)} onError={fail} />;
       case "tfs":
@@ -960,7 +983,14 @@ export function FacultyApp({
                 key={t.id}
                 type="button"
                 className={`fv-navbtn${screen === t.id ? " on" : ""}`}
-                onClick={() => setScreen(t.id)}
+                onClick={() => {
+                  // The tab is the picker. The activity on the URL is
+                  // whichever one was last open on a full screen, and
+                  // arriving on its sheet from a tab labelled "Check-in"
+                  // would be a sheet nobody chose.
+                  if (t.id === "checkin") setSelId(null);
+                  setScreen(t.id);
+                }}
                 title={railed ? t.label : undefined}
               >
                 <FIcon name={t.icon} size={18} />
