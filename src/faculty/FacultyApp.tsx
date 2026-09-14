@@ -30,7 +30,14 @@ import type {
   TeamWithMembers,
 } from "@/checkins/types";
 import type { ResultRow } from "@/checkins/data";
-import { duplicateActivity, listQuestionsFor, listTFs, listWeeks, myTFCourses } from "./facultyData";
+import {
+  canWriteRubric,
+  duplicateActivity,
+  listQuestionsFor,
+  listTFs,
+  listWeeks,
+  myTFCourses,
+} from "./facultyData";
 import { nextPositionIn, statFor, type ActivityStat, type PointedQuestion } from "./model";
 import { FIcon } from "./icons";
 import { ActivitiesScreen } from "./ActivitiesScreen";
@@ -82,12 +89,17 @@ export interface Capabilities {
   manageTFs: boolean;
 }
 
-export function capabilitiesFor(course: Course, isOwner: boolean): Capabilities {
+export function capabilitiesFor(
+  course: Course,
+  isOwner: boolean,
+  /** The database's own answer (0037), or null when it cannot be asked yet. */
+  rubric: boolean | null = null,
+): Capabilities {
   return {
     isOwner,
     author: isOwner,
     grade: isOwner || course.tf_can_grade,
-    rubric: isOwner || course.tf_can_grade,
+    rubric: isOwner || (rubric ?? course.tf_can_grade),
     runCheckIns: isOwner || course.tf_can_checkin,
     manageRoster: isOwner,
     manageTFs: isOwner,
@@ -103,10 +115,11 @@ export function capabilitiesFor(course: Course, isOwner: boolean): Capabilities 
  */
 function tfNote(can: Capabilities): string {
   const rest = "the instructor edits activities and the roster.";
+  const grade = can.rubric ? "grade submissions and edit rubrics" : "grade submissions";
   if (can.grade && can.runCheckIns) {
-    return `You can grade submissions and edit rubrics, post check-ins and set the live week; ${rest}`;
+    return `You can ${grade}, post check-ins and set the live week; ${rest}`;
   }
-  if (can.grade) return `You can grade submissions and edit rubrics; ${rest}`;
+  if (can.grade) return `You can ${grade}; ${rest}`;
   if (can.runCheckIns) return `You can post check-ins and set the live week, but not grade; ${rest}`;
   return "Grading and check-ins are both turned off for TFs on this course, so this view is read-only.";
 }
@@ -457,7 +470,7 @@ export function FacultyApp({
       // nobody owns anything.
       const isOwner = uid ? known.owner_id === uid : mode === "owner";
 
-      const [allCourses, roster, activities, weeks, sets, tfs] = await Promise.all([
+      const [allCourses, roster, activities, weeks, sets, tfs, rubric] = await Promise.all([
         // Re-read the course row on every refresh. It used to come only from the
         // `courses` array, which loadCourses fills once at mount — so every write
         // to the courses table (the live week, both TF permission switches) landed
@@ -473,6 +486,9 @@ export function FacultyApp({
         // A TF may only read their own row, so asking for the list would come
         // back as just them and read like the roster had been emptied.
         isOwner ? listTFs(courseId) : Promise.resolve([] as CourseTF[]),
+        // The owner always may; only a TF needs the database's answer, and a
+        // refused lookup must not sink the whole load over a pencil.
+        isOwner ? Promise.resolve(true) : canWriteRubric(courseId).catch(() => null),
       ]);
       const course = allCourses.find((c) => c.id === courseId) ?? known;
 
@@ -517,7 +533,7 @@ export function FacultyApp({
         teams,
         tfs,
         stats,
-        can: capabilitiesFor(course, isOwner),
+        can: capabilitiesFor(course, isOwner, rubric),
       });
     } finally {
       busy.current = false;

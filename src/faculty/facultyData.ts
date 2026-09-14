@@ -1503,6 +1503,25 @@ export type AccountRole = "faculty" | "student";
  * an enhancement on the roster screen, and a database without 0024 should show
  * the roster rather than an error.
  */
+/**
+ * Whether this account may write the course's rubrics — asked of the database,
+ * which is what decides (0037's can_write_rubric, the function the policies
+ * run). The app used to guess from the grading switch and show the pencil to
+ * every TF who may grade, and the database refused the ones the rule did not
+ * name with an error on click.
+ *
+ * Null when the function is not there yet — a database that has not run 0037 —
+ * so the caller falls back to the guess rather than showing nobody a pencil.
+ */
+export async function canWriteRubric(courseId: string): Promise<boolean | null> {
+  const { data, error } = await db().rpc("can_write_rubric", { cid: courseId });
+  if (error) {
+    if (/can_write_rubric|0037/.test(error.message)) return null;
+    throw dbError(error);
+  }
+  return Boolean(data);
+}
+
 export async function courseMemberRoles(courseId: string): Promise<Map<string, AccountRole>> {
   const { data, error } = await db().rpc("course_member_roles", { cid: courseId });
   if (error) {
