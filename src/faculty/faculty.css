@@ -187,9 +187,14 @@
   cursor: pointer;
   transition: background 140ms ease, color 140ms ease;
 }
-.fv-iconbtn:hover {
-  background: var(--fv-neutral-100);
-  color: var(--fv-navy);
+/* Hover-capable devices only: on iOS a tapped button keeps :hover until the
+   next tap lands somewhere else, so the die on the check-in sheet would stay
+   lit grey after every roll. */
+@media (hover: hover) {
+  .fv-iconbtn:hover {
+    background: var(--fv-neutral-100);
+    color: var(--fv-navy);
+  }
 }
 
 .fv-in,
@@ -793,8 +798,10 @@
   cursor: pointer;
   transition: background 140ms ease;
 }
-.fv-back:hover {
-  background: var(--fv-cream-400);
+@media (hover: hover) {
+  .fv-back:hover {
+    background: var(--fv-cream-400);
+  }
 }
 .fv-topbar {
   display: flex;
@@ -1669,9 +1676,11 @@
   overflow: hidden;
   transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
 }
-.fv-cktile:hover {
-  background: var(--fv-cream-300);
-  border-color: var(--fv-neutral-300);
+@media (hover: hover) {
+  .fv-cktile:hover {
+    background: var(--fv-cream-300);
+    border-color: var(--fv-neutral-300);
+  }
 }
 .fv-cktile:active {
   transform: translateY(1px);
@@ -2240,7 +2249,15 @@ button.fv-steplabel:hover { color: var(--fv-navy); }
 /* ------------------------------------------------ the check-in sheet, standing
    This is the one faculty screen with a real phone case: a TF walking between
    teams while the tutorial runs. Everything here is about being able to hit the
-   right cell without looking twice. */
+   right cell without looking twice.
+
+   The picker tweaks are width-gated — they exist to fit tiles on a narrow
+   screen. The sheet rules below them are in their own query, keyed on the
+   POINTER as well as the width: an iPad is 768-1366px wide and never matches a
+   phone breakpoint, but a finger there is no more precise than on a phone.
+   Deliberately any coarse-primary device at any width — a Surface in tablet
+   mode at full resolution wants finger targets too, and on a screen wide
+   enough to fit the whole table the scroller simply never scrolls. */
 @media (max-width: 700px) {
   .fv-ckgrid {
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -2255,7 +2272,9 @@ button.fv-steplabel:hover { color: var(--fv-navy); }
   .fv-cktile-title {
     font-size: var(--fv-sm);
   }
+}
 
+@media (max-width: 700px), (pointer: coarse) {
   /* The sheet becomes its own two-axis scroller instead of stretching the page.
      A marking table is the case WCAG 1.4.10 leaves alone — ten score columns
      cannot reflow to 320px without losing which row they belong to — so the
@@ -2272,9 +2291,9 @@ button.fv-steplabel:hover { color: var(--fv-navy); }
     overscroll-behavior: contain;
   }
   /* Sticky on the th, not on thead: thead only started sticking in Safari 16
-     and this is an iPhone screen. The second row's offset is the first row's
-     height, which is why that row's padding and line-height are pinned here
-     rather than left to the type. */
+     and this is an iPhone or iPad screen. The second row's offset is the first
+     row's height, which is why that row's padding and line-height are pinned
+     here rather than left to the type. */
   .fv-cksheet .fv-tbl thead th {
     position: sticky;
     z-index: 3;
