@@ -18,6 +18,8 @@ export function ConfirmDialog({
   confirmLabel,
   cancelLabel = "Cancel",
   busy = false,
+  busyLabel = "Deleting…",
+  tone = "danger",
   onConfirm,
   onCancel,
 }: {
@@ -27,6 +29,14 @@ export function ConfirmDialog({
   confirmLabel: string;
   cancelLabel?: string;
   busy?: boolean;
+  /** What the confirm button reads while `busy`. */
+  busyLabel?: string;
+  /**
+   * Red for something that cannot be undone. "primary" for a question that is
+   * a warning rather than a threat — releasing a grade early is a thing to be
+   * sure about, not a thing that deletes anything.
+   */
+  tone?: "danger" | "primary";
   onConfirm: () => void;
   onCancel: () => void;
 }): JSX.Element {
@@ -97,8 +107,13 @@ export function ConfirmDialog({
           >
             {cancelLabel}
           </button>
-          <button type="button" className="fv-btn danger sm" disabled={busy} onClick={onConfirm}>
-            {busy ? "Deleting…" : confirmLabel}
+          <button
+            type="button"
+            className={`fv-btn ${tone} sm`}
+            disabled={busy}
+            onClick={onConfirm}
+          >
+            {busy ? busyLabel : confirmLabel}
           </button>
         </div>
       </div>

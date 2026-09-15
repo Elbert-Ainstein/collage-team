@@ -69,6 +69,7 @@ function facultyData(type: ActivityType, results: unknown[] = []): FacultyData {
       isOwner: true,
       author: true,
       grade: true,
+      release: true,
       runCheckIns: true,
       manageRoster: true,
       manageTFs: true,

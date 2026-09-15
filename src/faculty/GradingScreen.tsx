@@ -30,6 +30,9 @@ import {
   releaseMany,
   releaseMark,
   seedComboIfBlank,
+  sendForReview,
+  sendManyForReview,
+  setActivityPoints,
   setFeedback,
   setMark,
   updateRubricItem,
@@ -41,6 +44,7 @@ import {
   deductionForAward,
   pointsTotal,
   questionsFor,
+  tallyQuestionPoints,
   worthOf,
   type ComboTotal,
   type PointedQuestion,
@@ -48,6 +52,7 @@ import {
 import type { FacultyData } from "./FacultyApp";
 import { FAvatar, FIcon } from "./icons";
 import { ActivityTeamPanel } from "./ActivityTeamPanel";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { SubmissionPages } from "./SubmissionPages";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -68,6 +73,52 @@ const pts = (n: number) => `${n} ${n === 1 ? "pt" : "pts"}`;
 // is what keeps the question rows adding up to the header.
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const num = (n: number) => String(round2(n));
+
+/** What the finish button reads. Split out so the two paths are side by side. */
+function releaseLabel(a: {
+  releasing: boolean;
+  forCompletion: boolean;
+  canRelease: boolean;
+  status: ResultRow["status"];
+  earned: number;
+  outOf: number;
+}): string {
+  if (a.releasing) return a.canRelease ? "Finalising…" : "Sending…";
+  if (a.canRelease) {
+    if (a.forCompletion) return "Finalize grade";
+    if (a.status === "scored") return "Released";
+    return `Release ${num(a.earned)} / ${pts(a.outOf)}`;
+  }
+  if (a.status === "scored") return "Released";
+  if (a.forCompletion) return a.status === "needs_review" ? "Send again" : "Send for review";
+  if (a.status === "needs_review") return "Sent for review";
+  return `Send ${num(a.earned)} / ${pts(a.outOf)} for review`;
+}
+
+/** The finish button's tooltip: why it is lit, or why it is not. */
+function releaseTitle(a: {
+  forCompletion: boolean;
+  canRelease: boolean;
+  met: boolean | null;
+  status: ResultRow["status"];
+  answeredAll: boolean;
+  qCount: number;
+}): string {
+  if (!a.canRelease && a.status === "scored") return "Released by the instructor";
+  if (a.forCompletion) {
+    if (a.met === null) return "Pick Complete or Not complete first";
+    if (a.canRelease) return a.status === "scored" ? "Finalise the change" : "Finalise this grade";
+    return a.status === "needs_review" ? "Send the change for review" : "Send this mark for review";
+  }
+  if (a.canRelease) {
+    if (a.status === "scored") return "Already released";
+    return a.answeredAll ? "Release this mark" : `Pick a line for all ${a.qCount} questions first`;
+  }
+  if (a.status === "needs_review") return "Waiting for the instructor to release it";
+  return a.answeredAll
+    ? "Send this mark to the instructor to release"
+    : `Pick a line for all ${a.qCount} questions first`;
+}
 
 /**
  * An activity with no question rows still has to be gradeable, so `questions`
@@ -138,6 +189,7 @@ interface Subject {
 export function GradingScreen({
   data,
   activity,
+  focus = null,
   onBack,
   onOpenCheckIn,
   onChanged,
@@ -145,6 +197,12 @@ export function GradingScreen({
 }: {
   data: FacultyData;
   activity: Activity;
+  /**
+   * Whose work to open on, when the screen was reached from a row that names
+   * them — the Review tab's "Open". Null starts on the first subject as
+   * always. Read once, on the way in; stepping afterwards is the stepper's.
+   */
+  focus?: { subjectId: string; kind: "individual" | "team" } | null;
   onBack: () => void;
   /** The Check-in sheet, where the team half is actually filled in. */
   onOpenCheckIn: () => void;
@@ -192,15 +250,28 @@ export function GradingScreen({
   const [folded, setFolded] = useState(false);
   const [note, setNote] = useState("");
   const [releasing, setReleasing] = useState(false);
+  /**
+   * Whether the instructor may send a grade to the student, or only send it
+   * to the instructor (0038). Everything below that says "release" reads
+   * "send for review" when this is off.
+   */
+  const canRelease = data.can.release;
+  /** The combo warning is up: a completion in the week is not marked yet. */
+  const [confirmEarly, setConfirmEarly] = useState(false);
 
   // A `both`-scope activity has TWO halves to mark, and picking "individual"
   // unconditionally meant the team half of every Challenge could never be
   // graded at all — the gradebook showed those tRATs as handed in and there was
   // no screen that would mark them.
   const [half, setHalf] = useState<"individual" | "team">(
-    scope === "team" ? "team" : "individual",
+    scope === "team" ? "team" : focus?.kind === "team" && scope === "both" ? "team" : "individual",
   );
+  // Reset only when the scope actually MOVES. An effect also runs once after
+  // mount, and resetting there would undo the half the Review tab asked for.
+  const lastScope = useRef(scope);
   useEffect(() => {
+    if (lastScope.current === scope) return;
+    lastScope.current = scope;
     setHalf(scope === "team" ? "team" : "individual");
   }, [scope]);
 
@@ -273,6 +344,18 @@ export function GradingScreen({
   useEffect(() => {
     setStIdx((i) => Math.min(i, Math.max(subjects.length - 1, 0)));
   }, [subjects.length]);
+
+  // Land on the person the Review tab named. Once: the list is built from
+  // `data`, which arrives after mount, so this waits for them to be on it and
+  // then leaves the cursor to the stepper.
+  const landed = useRef(false);
+  useEffect(() => {
+    if (landed.current || !focus) return;
+    const at = subjects.findIndex((s) => s.id === focus.subjectId);
+    if (at < 0) return;
+    landed.current = true;
+    setStIdx(at);
+  }, [focus, subjects]);
   useEffect(() => {
     setQIdx((i) => Math.min(i, qCount - 1));
   }, [qCount]);
@@ -465,6 +548,40 @@ export function GradingScreen({
   // question left Release permanently disabled with no control anywhere that
   // could enable it. Completion is the instructor's judgement, not a sum.
   const forCompletion = isCompletion(activity);
+
+  /**
+   * The combo priced at the week, not at itself.
+   *
+   * Faculty know the week is 30 and type 30 on the combo — but the completions
+   * are added from their own activities, so the combo itself is the 20 its
+   * questions add up to. Priced at 30 it shows "out of 40", and every score
+   * comes off 30 rather than 20, so a student who earned 15 reads 25. The
+   * Rubric page reports the gap in general; this is the one shape of it that
+   * has an obvious cause, said where the wrong number is on screen.
+   */
+  const pricedAtWeek = useMemo(() => {
+    if (!week) return null;
+    const tally = tallyQuestionPoints(activity, questions);
+    if (tally.balance !== "under") return null;
+    const added = week.auto.reduce((n, p) => n + p.worth, 0);
+    if (tally.declared + added !== tally.total) return null;
+    return { total: tally.total, declared: tally.declared, added };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [week, activity, questions]);
+  const [repricing, setRepricing] = useState(false);
+  /** Set the combo to what its questions add up to. The owner's write. */
+  async function reprice() {
+    if (!pricedAtWeek) return;
+    setRepricing(true);
+    try {
+      await setActivityPoints(activity.id, pricedAtWeek.declared);
+      onChanged();
+    } catch (e) {
+      onError(e);
+    } finally {
+      setRepricing(false);
+    }
+  }
   // Counted question by question, not by how many marks the row carries. A mark
   // left behind by a question deleted before 0026 still sits on the submission,
   // and counting rows let Release light up — and a grade go out — with a
@@ -536,22 +653,48 @@ export function GradingScreen({
    * complete, not reset to the friendlier default.
    */
   const [met, setMet] = useState<boolean | null>(null);
+  // A row sent for review carries its answer too: the radios have to keep
+  // showing what was sent, or the TF re-picks blind and "Send again" sends a
+  // guess over a mark that was already right.
   useEffect(() => {
     if (!subject) return;
-    setMet(subject.result.status === "scored" ? (subject.result.ci_met ?? true) : null);
+    const answered = subject.result.status === "scored" || subject.result.status === "needs_review";
+    setMet(answered ? (subject.result.ci_met ?? true) : null);
   }, [subject?.result.id, subject?.result.status, subject?.result.ci_met]);
 
   async function release(metNow?: boolean) {
     if (!subject) return;
     setReleasing(true);
+    setConfirmEarly(false);
     try {
-      await releaseMark(subject.result.id, forCompletion, metNow ?? met ?? true);
+      if (canRelease) {
+        await releaseMark(subject.result.id, forCompletion, metNow ?? met ?? true);
+      } else {
+        await sendForReview(subject.result.id, forCompletion, metNow ?? met ?? true);
+      }
       onChanged();
     } catch (e) {
       onError(e);
     } finally {
       setReleasing(false);
     }
+  }
+
+  /**
+   * The button. A combo's 30 is 20 of its own plus the week's completions,
+   * marked on their own pages — so releasing while one of those is still
+   * unmarked sends a total that is going to change. That is asked about, not
+   * refused: the instructor may well be releasing the combo first on purpose.
+   * Only asked of a release; a TF sending for review is not sending anything
+   * to a student yet.
+   */
+  const unmarked = week?.auto.filter((p) => p.earned == null) ?? [];
+  function finish() {
+    if (canRelease && !forCompletion && unmarked.length) {
+      setConfirmEarly(true);
+      return;
+    }
+    void release();
   }
 
   async function saveNote() {
@@ -779,6 +922,10 @@ export function GradingScreen({
                 <span className="fv-eyebrow" style={{ flex: "none", color: "var(--fv-emerald)" }}>
                   Released
                 </span>
+              ) : subject.result.status === "needs_review" ? (
+                <span className="fv-eyebrow" style={{ flex: "none", color: "var(--fv-amber)" }}>
+                  {canRelease ? "For your review" : "Sent for review"}
+                </span>
               ) : null}
             </div>
             {forCompletion ? null : (
@@ -832,9 +979,42 @@ export function GradingScreen({
                       }}
                     >
                       {week.pending
-                        ? "Added from this week's other activities, which are marked on their own pages. A dash is one nobody has released yet, so this total is not final."
-                        : "Added from this week's other activities. Releasing here sends this combo's marks; the completions were released on their own pages."}
+                        ? "A dash is a completion not yet released, so this total isn\u2019t final."
+                        : "The completions were released on their own pages."}
                     </p>
+                    {pricedAtWeek ? (
+                      <p
+                        role="alert"
+                        style={{
+                          fontSize: "var(--fv-2xs)",
+                          color: "var(--fv-amber)",
+                          lineHeight: 1.5,
+                          margin: "6px 0 0",
+                        }}
+                      >
+                        This combo is set to {pts(pricedAtWeek.total)} but its questions add up
+                        to {pts(pricedAtWeek.declared)} — the completions add their{" "}
+                        {pts(pricedAtWeek.added)} on top, so every score reads{" "}
+                        {pricedAtWeek.added} too high.
+                        {data.can.author
+                          ? null
+                          : ` Ask the instructor to set it to ${pts(pricedAtWeek.declared)}.`}
+                      </p>
+                    ) : null}
+                    {pricedAtWeek && data.can.author ? (
+                      <button
+                        type="button"
+                        className="fv-btn outline sm"
+                        style={{ marginTop: 8, alignSelf: "flex-start" }}
+                        disabled={repricing}
+                        onClick={() => void reprice()}
+                        // 0014's trigger re-scores everyone marked on it, which is
+                        // the point: the scores are what is wrong.
+                        title="Re-scores every submission already marked on this combo"
+                      >
+                        {repricing ? "Setting…" : `Set this combo to ${pts(pricedAtWeek.declared)}`}
+                      </button>
+                    ) : null}
                   </div>
                 ) : null}
               </div>
@@ -881,8 +1061,16 @@ export function GradingScreen({
                 }}
               >
                 {subject.result.status === "scored"
-                  ? "Released. Pick the other answer and finalise again to change it."
-                  : "Pick one, then finalise. You can change it afterwards."}
+                  ? canRelease
+                    ? "Released. Pick the other answer and finalise again to change it."
+                    : "Released by the instructor. Only they can change it now."
+                  : subject.result.status === "needs_review"
+                    ? canRelease
+                      ? "Sent for review. Finalise to release it, or pick the other answer first."
+                      : "Sent for review. Pick the other answer and send again to change it."
+                    : canRelease
+                      ? "Pick one, then finalise. You can change it afterwards."
+                      : "Pick one, then send it for review. You can change it until it is released."}
               </p>
             </div>
           ) : null}
@@ -1092,39 +1280,65 @@ export function GradingScreen({
           <button
             type="button"
             className="fv-btn primary full"
-            onClick={() => void release()}
+            onClick={finish}
             // A completion mark stays finalisable AFTER release: changing the
             // answer and finalising again is how it is corrected, and a button
             // that greys out on "Released" would make the two buttons above it
-            // decorative.
+            // decorative. A TF, though, stops at released: 0038 refuses them
+            // that write, and a button that always fails is worse than none.
             disabled={
               releasing ||
               (forCompletion
-                ? met === null
-                : !answeredAll || subject.result.status === "scored")
+                ? met === null || (!canRelease && subject.result.status === "scored")
+                : !answeredAll || subject.result.status === (canRelease ? "scored" : "needs_review") ||
+                  (!canRelease && subject.result.status === "scored"))
             }
-            title={
-              forCompletion
-                ? met === null
-                  ? "Pick Complete or Not complete first"
-                  : subject.result.status === "scored"
-                    ? "Finalise the change"
-                    : "Finalise this grade"
-                : subject.result.status === "scored"
-                  ? "Already released"
-                  : answeredAll
-                    ? "Release this mark"
-                    : `Pick a line for all ${qCount} questions first`
-            }
+            title={releaseTitle({
+              forCompletion,
+              canRelease,
+              met,
+              status: subject.result.status,
+              answeredAll,
+              qCount,
+            })}
           >
-            {releasing
-              ? "Finalising…"
-              : forCompletion
-                ? "Finalize grade"
-                : subject.result.status === "scored"
-                  ? "Released"
-                  : `Release ${num(score?.earned ?? 0)} / ${pts(pointsTotal(activity))}`}
+            {releaseLabel({
+              releasing,
+              forCompletion,
+              canRelease,
+              status: subject.result.status,
+              // The week's 30 where there is one: the same figure the header
+              // shows, so the two cannot say different things.
+              earned: week ? (week.earned ?? 0) : (score?.earned ?? 0),
+              outOf: week ? week.outOf : pointsTotal(activity),
+            })}
           </button>
+
+          {confirmEarly && subject ? (
+            <ConfirmDialog
+              title="Release before the week is fully marked?"
+              tone="primary"
+              body={
+                <>
+                  <div>Not marked yet for {subject.name}:</div>
+                  <ul style={{ margin: "8px 0 0", paddingLeft: 18 }}>
+                    {unmarked.map((p) => (
+                      <li key={p.activity.id}>{p.label}</li>
+                    ))}
+                  </ul>
+                  <div style={{ marginTop: 8 }}>
+                    Releasing now sends {num(week?.earned ?? 0)} / {pts(week?.outOf ?? 0)}, and the
+                    total will move when the rest is marked.
+                  </div>
+                </>
+              }
+              confirmLabel="Release anyway"
+              busyLabel="Releasing…"
+              busy={releasing}
+              onCancel={() => setConfirmEarly(false)}
+              onConfirm={() => void release()}
+            />
+          ) : null}
 
           {/* Where the class stands, next to the control that moves it. The
               button above finishes one person; everything below this is about
@@ -1172,6 +1386,7 @@ export function GradingScreen({
           {/* ------------------------------------------------ release in bulk */}
           <ReleaseMany
             subjects={subjects}
+            mode={canRelease ? "release" : "review"}
             forCompletion={forCompletion}
             noun={half === "team" ? "team" : "student"}
             // The same marks the question list reads, so "ready" here and a lit
@@ -1417,10 +1632,11 @@ function RubricRow({
  * it, and the count afterwards says exactly what happened.
  */
 /** Where one submission stands, for the list that decides what may go out. */
-type Readiness = "released" | "ready" | "partial" | "none";
+type Readiness = "released" | "sent" | "ready" | "partial" | "none";
 
 function ReleaseMany({
   subjects,
+  mode,
   forCompletion,
   noun,
   marks,
@@ -1429,6 +1645,11 @@ function ReleaseMany({
   onError,
 }: {
   subjects: Subject[];
+  /**
+   * "release" sends grades to students; "review" sends them to the instructor
+   * (0038). Same list, same ticks — only the verb and the write differ.
+   */
+  mode: "release" | "review";
   forCompletion: boolean;
   noun: string;
   marks: Map<string, Map<string, string>>;
@@ -1462,6 +1683,12 @@ function ReleaseMany({
         out.set(s.result.id, { at: "released", answered: qCount });
         continue;
       }
+      // Sent for review: for the instructor it is ready to go out; for the TF
+      // it is done, and re-sending it is only for a corrected mark.
+      if (s.result.status === "needs_review") {
+        out.set(s.result.id, { at: mode === "release" ? "ready" : "sent", answered: qCount });
+        continue;
+      }
       if (forCompletion) {
         out.set(s.result.id, { at: "ready", answered: 0 });
         continue;
@@ -1474,15 +1701,17 @@ function ReleaseMany({
       });
     }
     return out;
-  }, [subjects, marks, questions, qCount, forCompletion]);
+  }, [subjects, marks, questions, qCount, forCompletion, mode]);
 
   const atOf = (id: string): Readiness => state.get(id)?.at ?? "none";
 
   // Released rows stay tickable: re-releasing is how a corrected mark reaches a
   // student, and locking them would make that impossible from here. What is NOT
-  // tickable is work nobody has finished marking — that is the whole point.
+  // tickable is work nobody has finished marking — that is the whole point. A
+  // TF cannot touch a released row at all (0038), but may re-send one.
   const canPick = (id: string) => {
     const at = atOf(id);
+    if (mode === "review") return at === "ready" || at === "sent";
     return at === "ready" || at === "released";
   };
 
@@ -1514,15 +1743,23 @@ function ReleaseMany({
       // judgement about one person's work, and a checkbox list is the wrong
       // place to make twenty of them at once — so the button says so rather
       // than leaving it to be discovered.
-      const { released, failed } = await releaseMany(
-        rows.map((r) => ({ id: r.result.id, met: true })),
-        forCompletion,
-      );
+      //
+      // Except a row that already carries an answer — one sent for review as
+      // Not complete is released as what was sent, not silently upgraded.
+      const batch = rows.map((r) => ({
+        id: r.result.id,
+        met: r.result.status === "needs_review" ? (r.result.ci_met ?? true) : true,
+      }));
+      const verb = mode === "release" ? "Released" : "Sent";
+      const { done, failed } =
+        mode === "release"
+          ? await releaseMany(batch, forCompletion).then((x) => ({ done: x.released, failed: x.failed }))
+          : await sendManyForReview(batch, forCompletion).then((x) => ({ done: x.sent, failed: x.failed }));
       setPicked(new Set());
       setNote(
         failed.length
-          ? `Released ${released}. ${failed.length} did not go — reload and try those again.`
-          : `Released ${released}.`,
+          ? `${verb} ${done}. ${failed.length} did not go — reload and try those again.`
+          : `${verb} ${done}.`,
       );
       onDone();
     } catch (e) {
@@ -1545,14 +1782,16 @@ function ReleaseMany({
         onClick={() => setOpen((v) => !v)}
         style={{ justifyContent: "space-between" }}
       >
-        <span>Release grades</span>
+        <span>{mode === "release" ? "Release grades" : "Send for review"}</span>
         {/* Counts THIS list, which is only the people who handed in. */}
         <span className="fv-sub fv-num" style={{ fontSize: "var(--fv-2xs)" }}>
           {ready.length
             ? `${ready.length} ready`
             : unready.length
               ? `${unready.length} not marked`
-              : "all released"}
+              : mode === "release"
+                ? "all released"
+                : "all sent"}
         </span>
       </button>
 
@@ -1569,12 +1808,20 @@ function ReleaseMany({
             onClick={() => void release(ready)}
           >
             {busy
-              ? "Releasing…"
+              ? mode === "release"
+                ? "Releasing…"
+                : "Sending…"
               : !ready.length
-                ? "Nothing is ready to release"
-                : forCompletion
-                  ? `Mark all ${ready.length} Complete and release`
-                  : `Release all ${ready.length} graded`}
+                ? mode === "release"
+                  ? "Nothing is ready to release"
+                  : "Nothing is ready to send"
+                : mode === "review"
+                  ? forCompletion
+                    ? `Mark all ${ready.length} Complete and send for review`
+                    : `Send all ${ready.length} graded for review`
+                  : forCompletion
+                    ? `Mark all ${ready.length} Complete and release`
+                    : `Release all ${ready.length} graded`}
           </button>
 
           {unready.length && !forCompletion ? (
@@ -1620,17 +1867,27 @@ function ReleaseMany({
               const why =
                 at === "released"
                   ? "released"
-                  : at === "ready"
-                    ? forCompletion
-                      ? "ready"
-                      : "marked"
-                    : at === "partial"
-                      ? `${answered} of ${qCount} marked`
-                      : "not marked";
+                  : at === "sent"
+                    ? "sent for review"
+                    : at === "ready"
+                      ? s.result.status === "needs_review"
+                        ? "sent for review"
+                        : forCompletion
+                          ? "ready"
+                          : "marked"
+                      : at === "partial"
+                        ? `${answered} of ${qCount} marked`
+                        : "not marked";
               return (
                 <label
                   key={s.result.id}
-                  title={pickable ? undefined : "Finish marking this one before releasing it"}
+                  title={
+                    pickable
+                      ? undefined
+                      : at === "released"
+                        ? "Released by the instructor"
+                        : "Finish marking this one first"
+                  }
                   style={{
                     display: "flex",
                     alignItems: "center",
@@ -1676,9 +1933,11 @@ function ReleaseMany({
             onClick={() => void release(pickedRows)}
           >
             {busy
-              ? "Releasing…"
+              ? mode === "release"
+                ? "Releasing…"
+                : "Sending…"
               : picked.size
-                ? `Release ${picked.size} ${picked.size === 1 ? noun : noun + "s"}`
+                ? `${mode === "release" ? "Release" : "Send"} ${picked.size} ${picked.size === 1 ? noun : noun + "s"}${mode === "release" ? "" : " for review"}`
                 : `Tick a ${noun} first`}
           </button>
 

@@ -86,7 +86,7 @@ function facultyData(author: boolean, rubric = author): FacultyData {
     teams: [],
     tfs: [],
     stats: new Map(),
-    can: { isOwner: author, author, grade: true, rubric, runCheckIns: true, manageRoster: true, manageTFs: true },
+    can: { isOwner: author, author, grade: true, rubric, release: author, runCheckIns: true, manageRoster: true, manageTFs: true },
   } as unknown as FacultyData;
 }
 

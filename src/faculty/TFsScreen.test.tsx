@@ -75,7 +75,7 @@ function facultyData(roster: Student[], tfs: CourseTF[] = []): FacultyData {
     can: {
       isOwner: true,
       author: true,
-      grade: true, rubric: true,
+      grade: true, rubric: true, release: true,
       runCheckIns: true,
       manageRoster: true,
       manageTFs: true,

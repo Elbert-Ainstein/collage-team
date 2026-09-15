@@ -44,6 +44,8 @@ import { ActivitiesScreen } from "./ActivitiesScreen";
 import { ActivityDetail } from "./ActivityDetail";
 import { CheckInScreen } from "./CheckInScreen";
 import { GradingScreen } from "./GradingScreen";
+import { ReviewScreen } from "./ReviewScreen";
+import { reviewCount } from "./reviewModel";
 import { RubricBuilder } from "./RubricBuilder";
 import { TeamsScreen } from "./TeamsScreen";
 import { TFsScreen } from "./TFsScreen";
@@ -52,6 +54,7 @@ import "./faculty.css";
 export type Screen =
   | "activities"
   | "checkin"
+  | "review"
   | "teams"
   | "tfs"
   | "detail"
@@ -76,6 +79,12 @@ export interface Capabilities {
   /** Put marks on submissions. */
   grade: boolean;
   /**
+   * Send a grade to the student. The instructor's alone (0038): a TF who
+   * grades sends their marks for review, and the instructor releases them
+   * from the Review tab once they have looked.
+   */
+  release: boolean;
+  /**
    * Write criteria and questions. Follows grading (0036): the person marking
    * is the person who finds the rung worded wrong, and the criteria are the
    * same judgement the grading switch already trusts, written down once.
@@ -99,6 +108,7 @@ export function capabilitiesFor(
     isOwner,
     author: isOwner,
     grade: isOwner || course.tf_can_grade,
+    release: isOwner,
     rubric: isOwner || (rubric ?? course.tf_can_grade),
     runCheckIns: isOwner || course.tf_can_checkin,
     manageRoster: isOwner,
@@ -114,7 +124,7 @@ export function capabilitiesFor(
  * are granted is the same lie the switch itself used to tell.
  */
 function tfNote(can: Capabilities): string {
-  const rest = "the instructor edits activities and the roster.";
+  const rest = "the instructor reviews and releases grades, and edits activities and the roster.";
   const grade = can.rubric ? "grade submissions and edit rubrics" : "grade submissions";
   if (can.grade && can.runCheckIns) {
     return `You can ${grade}, post check-ins and set the live week; ${rest}`;
@@ -159,7 +169,16 @@ const FULL_SCREEN: Screen[] = ["detail", "rubric", "grade"];
  */
 const WITH_ACTIVITY: Screen[] = [...FULL_SCREEN, "checkin"];
 
-const SCREENS: string[] = ["activities", "checkin", "teams", "tfs", "detail", "rubric", "grade"];
+const SCREENS: string[] = [
+  "activities",
+  "checkin",
+  "review",
+  "teams",
+  "tfs",
+  "detail",
+  "rubric",
+  "grade",
+];
 
 /**
  * Where you are, written on the URL: /ck?s=<screen>&a=<activity>&c=<course>.
@@ -655,13 +674,17 @@ export function FacultyApp({
   useEffect(() => {
     if (!data) return;
     const shut =
-      (screen === "checkin" && !data.can.runCheckIns) || (screen === "tfs" && !data.can.manageTFs);
+      (screen === "checkin" && !data.can.runCheckIns) ||
+      (screen === "tfs" && !data.can.manageTFs) ||
+      (screen === "review" && !data.can.release);
     if (!shut) return;
     replaceNext.current = true;
     setError(
       screen === "checkin"
         ? "Check-ins are turned off for teaching fellows on this course, so that link has nothing to open."
-        : "Only the instructor can see the TF roster, so that link has nothing to open.",
+        : screen === "review"
+          ? "Only the instructor reviews and releases grades, so that link has nothing to open."
+          : "Only the instructor can see the TF roster, so that link has nothing to open.",
     );
     setScreen("activities");
   }, [screen, data]);
@@ -672,6 +695,19 @@ export function FacultyApp({
     for (const s of data.stats.values()) n += s.waiting;
     return n;
   }, [data]);
+  const toReview = useMemo(() => (data ? reviewCount(data.results) : 0), [data]);
+
+  /**
+   * Whose work the grading page opens on, when it was reached from the Review
+   * tab. Cleared on the way out so the next visit starts at the top as usual.
+   */
+  const [gradeFocus, setGradeFocus] = useState<{
+    subjectId: string;
+    kind: "individual" | "team";
+  } | null>(null);
+  useEffect(() => {
+    if (screen !== "grade") setGradeFocus(null);
+  }, [screen]);
 
   if (!isSupabaseConfigured) {
     return (
@@ -724,6 +760,20 @@ export function FacultyApp({
       case "checkin":
         return data.can.runCheckIns ? (
           <CheckInScreen data={data} selId={selId} onOpen={openCheckIn} />
+        ) : null;
+      case "review":
+        return data.can.release ? (
+          <ReviewScreen
+            data={data}
+            onOpen={(activityId, subjectId, kind) => {
+              setGradeFocus({ subjectId, kind });
+              setFresh(null);
+              setSelId(activityId);
+              setScreen("grade");
+            }}
+            onChanged={() => refreshResults().catch(fail)}
+            onError={fail}
+          />
         ) : null;
       case "teams":
         return <TeamsScreen data={data} onChanged={() => refresh().catch(fail)} onError={fail} />;
@@ -812,6 +862,7 @@ export function FacultyApp({
           <GradingScreen
             data={data}
             activity={selected}
+            focus={gradeFocus}
             onBack={() => setScreen("detail")}
             onOpenCheckIn={() => {
               setFresh(null);
@@ -966,6 +1017,9 @@ export function FacultyApp({
                 // Between Activities and Teams: it is what happens in the room,
                 // and it reads off the teams below it.
                 { id: "checkin" as const, label: "Check-in", icon: "check" },
+                // The instructor's in-tray: what the TFs have marked, waiting
+                // to go out. Sits after the marking and before the roster.
+                { id: "review" as const, label: "Review", icon: "assignment" },
                 { id: "teams" as const, label: "Teams", icon: "groups" },
                 { id: "tfs" as const, label: "TFs", icon: "school" },
               ] as const
@@ -978,6 +1032,7 @@ export function FacultyApp({
               // thing worth avoiding.
               .filter((t) => t.id !== "tfs" || (data?.can.manageTFs ?? true))
               .filter((t) => t.id !== "checkin" || (data?.can.runCheckIns ?? true))
+              .filter((t) => t.id !== "review" || (data?.can.release ?? true))
               .map((t) => (
               <button
                 key={t.id}
@@ -1004,6 +1059,12 @@ export function FacultyApp({
                         one is display:none, so it leaves the accessibility tree
                         with the pixels and nothing is announced twice. */}
                     <span className="fv-navdot" aria-label={`${toGrade} to grade`} />
+                  </>
+                ) : null}
+                {t.id === "review" && toReview > 0 ? (
+                  <>
+                    <span className="fv-navcount">{toReview} waiting</span>
+                    <span className="fv-navdot" aria-label={`${toReview} waiting for review`} />
                   </>
                 ) : null}
               </button>

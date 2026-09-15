@@ -1293,6 +1293,53 @@ export async function releaseMark(
   if (error) throw dbError(error);
 }
 
+/**
+ * Hand a marked submission to the instructor, without releasing it.
+ *
+ * The teaching fellow's finish line. `needs_review` is a status the student
+ * app already reads as "Turned in", so nothing changes for the student until
+ * the instructor releases it — and migration 0038 refuses `scored` from anyone
+ * but the course owner, so this is the only finish a TF has.
+ *
+ * The completion answer travels with it: the instructor releases what was
+ * sent, so Not complete has to be on the row before it reaches them.
+ */
+export async function sendForReview(
+  resultId: string,
+  completion: boolean,
+  /** Only read when `completion`. */
+  met = true,
+): Promise<void> {
+  const { error } = await db()
+    .from("check_in_results")
+    .update({
+      status: "needs_review",
+      is_ci: completion,
+      ci_met: completion ? met : true,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", resultId);
+  if (error) throw dbError(error);
+}
+
+/** Send many for review at once. One call per row, failures collected. */
+export async function sendManyForReview(
+  rows: { id: string; met?: boolean }[],
+  completion: boolean,
+): Promise<{ sent: number; failed: string[] }> {
+  const failed: string[] = [];
+  let sent = 0;
+  for (const r of rows) {
+    try {
+      await sendForReview(r.id, completion, r.met ?? true);
+      sent += 1;
+    } catch {
+      failed.push(r.id);
+    }
+  }
+  return { sent, failed };
+}
+
 /** Release many at once. One call per row — see the note in GradingScreen. */
 export async function releaseMany(
   rows: { id: string; met?: boolean }[],
