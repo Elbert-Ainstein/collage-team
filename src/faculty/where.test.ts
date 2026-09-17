@@ -30,6 +30,14 @@ describe("where on the URL", () => {
     expect(query()).toEqual({ s: "checkin" });
   });
 
+  it("an open review page is on the URL, and reads back", () => {
+    writeWhere({ screen: "review", selId: "a1", courseId: null }, "replace");
+    expect(query()).toEqual({ s: "review", a: "a1" });
+    expect(readWhere()).toEqual({ screen: "review", selId: "a1", courseId: null });
+    writeWhere({ screen: "review", selId: null, courseId: null }, "replace");
+    expect(query()).toEqual({ s: "review" });
+  });
+
   it("screens that do not show an activity drop it", () => {
     writeWhere({ screen: "teams", selId: "a1", courseId: "c1" }, "replace");
     expect(query()).toEqual({ s: "teams", c: "c1" });

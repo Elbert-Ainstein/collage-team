@@ -164,10 +164,11 @@ export interface FacultyData {
 const FULL_SCREEN: Screen[] = ["detail", "rubric", "grade"];
 /**
  * Screens where `a` on the URL is the activity being shown. The full screens,
- * plus Check-in once a sheet is open: a reload mid-tutorial has to land back
- * on that sheet, not on the picker.
+ * plus Check-in and Review once one activity is open: a reload mid-tutorial
+ * has to land back on that sheet, not on the picker, and the same for a
+ * reload half-way through checking one activity's marks.
  */
-const WITH_ACTIVITY: Screen[] = [...FULL_SCREEN, "checkin"];
+const WITH_ACTIVITY: Screen[] = [...FULL_SCREEN, "checkin", "review"];
 
 const SCREENS: string[] = [
   "activities",
@@ -708,6 +709,24 @@ export function FacultyApp({
   useEffect(() => {
     if (screen !== "grade") setGradeFocus(null);
   }, [screen]);
+  /**
+   * Where the grading page's back goes. From Review it goes back to Review —
+   * the instructor is checking one activity's marks and Open was a detour —
+   * and from anywhere else to the activity page, as before.
+   *
+   * Read off the screen TRANSITION rather than set by Open's click handler, so
+   * it is right however the grading page was arrived at: the browser's forward
+   * button after a back lands here without any handler running. A reload has
+   * no previous screen and falls back to the activity page.
+   */
+  const prevScreen = useRef<Screen | null>(null);
+  const gradeFrom = useRef<"review" | "detail">("detail");
+  useEffect(() => {
+    if (screen === "grade" && prevScreen.current !== "grade") {
+      gradeFrom.current = prevScreen.current === "review" ? "review" : "detail";
+    }
+    prevScreen.current = screen;
+  }, [screen]);
 
   if (!isSupabaseConfigured) {
     return (
@@ -727,11 +746,11 @@ export function FacultyApp({
   }
 
   /**
-   * Check-in's picker and back button. Stable, because it sits in an effect's
-   * dependencies over there — a fresh closure per render would re-run that
-   * effect on every unrelated change up here.
+   * Check-in's and Review's picker and back button. Stable, because it sits in
+   * an effect's dependencies over there — a fresh closure per render would
+   * re-run that effect on every unrelated change up here.
    */
-  const openCheckIn = useCallback((id: string | null, opts?: { correction?: boolean }) => {
+  const pickActivity = useCallback((id: string | null, opts?: { correction?: boolean }) => {
     // Being sent back to the picker is not a place to go back to.
     if (opts?.correction) replaceNext.current = true;
     setSelId(id);
@@ -759,12 +778,14 @@ export function FacultyApp({
     switch (screen) {
       case "checkin":
         return data.can.runCheckIns ? (
-          <CheckInScreen data={data} selId={selId} onOpen={openCheckIn} />
+          <CheckInScreen data={data} selId={selId} onOpen={pickActivity} />
         ) : null;
       case "review":
         return data.can.release ? (
           <ReviewScreen
             data={data}
+            selId={selId}
+            onSelect={pickActivity}
             onOpen={(activityId, subjectId, kind) => {
               setGradeFocus({ subjectId, kind });
               setFresh(null);
@@ -863,7 +884,7 @@ export function FacultyApp({
             data={data}
             activity={selected}
             focus={gradeFocus}
-            onBack={() => setScreen("detail")}
+            onBack={() => setScreen(gradeFrom.current)}
             onOpenCheckIn={() => {
               setFresh(null);
               setScreen("checkin");
@@ -1042,8 +1063,9 @@ export function FacultyApp({
                   // The tab is the picker. The activity on the URL is
                   // whichever one was last open on a full screen, and
                   // arriving on its sheet from a tab labelled "Check-in"
-                  // would be a sheet nobody chose.
-                  if (t.id === "checkin") setSelId(null);
+                  // — or its marks from one labelled "Review" — would be a
+                  // page nobody chose.
+                  if (t.id === "checkin" || t.id === "review") setSelId(null);
                   setScreen(t.id);
                 }}
                 title={railed ? t.label : undefined}

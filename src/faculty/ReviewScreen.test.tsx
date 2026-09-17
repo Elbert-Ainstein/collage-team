@@ -1,7 +1,14 @@
-// The Review tab: Kelly looks over what her TF sent, then releases it in one
-// press. Warned first when a combo's 30 is not final.
+// The Review tab opens on a picker, not a list.
+//
+// Faculty could not scroll the old list past the fold, and a single column of
+// every activity's table was a lot to read past on the way to the one they
+// meant to check. So it opens the way Check-in does: one tile per activity
+// with marks waiting, and the page for one activity — every student, the
+// grade they will read, the note, a way into the grading page — only once a
+// tile is clicked. Release everything from the picker, or one activity's
+// worth from its page; warned first when a combo's 30 is not final.
 
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Activity } from "@/checkins/types";
@@ -28,7 +35,11 @@ const tutorial = {
 function data(over: Partial<FacultyData> = {}): FacultyData {
   return {
     activities: [combo, tutorial],
-    roster: [{ id: "s1", name: "Ada Lovelace", avatar_tint: null }],
+    weeks: [],
+    roster: [
+      { id: "s1", name: "Ada Lovelace", avatar_tint: null },
+      { id: "s2", name: "Ben Bo", avatar_tint: null },
+    ],
     teams: [],
     checkIns: [
       { id: "ci-combo", activity_id: "combo", kind: "individual", max_points: 20 },
@@ -36,11 +47,14 @@ function data(over: Partial<FacultyData> = {}): FacultyData {
     ],
     results: [
       { id: "r1", check_in_id: "ci-combo", student_id: "s1", team_id: null, status: "needs_review", score: 18, is_ci: false, feedback: "Nice work" },
+      { id: "r2", check_in_id: "ci-combo", student_id: "s2", team_id: null, status: "submitted", score: null, is_ci: false },
       { id: "r3", check_in_id: "ci-tut", student_id: "s1", team_id: null, status: "needs_review", score: null, is_ci: true, ci_met: false },
     ],
     ...over,
   } as unknown as FacultyData;
 }
+
+type OnSelect = (id: string | null, opts?: { correction?: boolean }) => void;
 
 let host: HTMLDivElement;
 let root: Root;
@@ -59,23 +73,60 @@ afterEach(async () => {
   host.remove();
 });
 
-async function mount(d: FacultyData = data()) {
+/** Owns `selId` the way FacultyApp does, so a tile click really opens a page. */
+function Harness({
+  data,
+  start,
+  onSelect,
+}: {
+  data: FacultyData;
+  start: string | null;
+  onSelect?: OnSelect;
+}) {
+  const [selId, setSelId] = useState<string | null>(start);
+  return (
+    <ReviewScreen
+      data={data}
+      selId={selId}
+      onSelect={(...args) => {
+        onSelect?.(...args);
+        setSelId(args[0]);
+      }}
+      onOpen={onOpen}
+      onChanged={onChanged}
+      onError={onError}
+    />
+  );
+}
+
+async function mount(d: FacultyData = data(), opts: { start?: string | null; onSelect?: OnSelect } = {}) {
   await act(async () => {
-    root.render(<ReviewScreen data={d} onOpen={onOpen} onChanged={onChanged} onError={onError} />);
+    root.render(<Harness data={d} start={opts.start ?? null} onSelect={opts.onSelect} />);
   });
 }
-const button = (text: string) =>
-  [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.includes(text))!;
+const buttons = () => [...host.querySelectorAll<HTMLButtonElement>("button")];
+const button = (text: string) => buttons().find((b) => b.textContent?.includes(text))!;
+const tile = (title: string) =>
+  buttons().find((b) => b.getAttribute("aria-label") === `Review ${title}`)!;
 
-describe("ReviewScreen", () => {
-  it("lists what was sent, as the student will read it, with the note", async () => {
+describe("ReviewScreen: the picker", () => {
+  it("opens on one tile per activity with marks waiting, and Release all", async () => {
     await mount();
-    expect(host.textContent).toContain("Week 3 Combo");
-    expect(host.textContent).toContain("18 / 25 pts");
-    expect(host.textContent).toContain("not final");
-    expect(host.textContent).toContain("Not complete");
-    expect(host.textContent).toContain("Nice work");
+    expect(tile("Week 3 Combo")).toBeDefined();
+    expect(tile("Tutorial")).toBeDefined();
+    expect(tile("Week 3 Combo").textContent).toContain("1 waiting");
+    expect(tile("Week 3 Combo").textContent).toContain("1 still being marked");
     expect(button("Release all 2")).toBeDefined();
+    // No student is on the picker: that is the page's job.
+    expect(host.textContent).not.toContain("Ada Lovelace");
+    expect(host.querySelector("table")).toBeNull();
+  });
+
+  it("groups the tiles by week", async () => {
+    await mount();
+    const week = host.querySelector('section[aria-label="Week 3"]');
+    expect(week).not.toBeNull();
+    expect(week?.querySelectorAll("button").length).toBe(2);
   });
 
   it("says so when nothing is waiting", async () => {
@@ -84,17 +135,16 @@ describe("ReviewScreen", () => {
     expect(button("Nothing to release").disabled).toBe(true);
   });
 
-  it("releases one activity's rows as they were sent, and refreshes", async () => {
-    await mount();
-    await act(async () => button("Release 1").click());
-    // The tutorial group is first (position 0): released as Not complete.
-    expect(releaseMany).toHaveBeenCalledTimes(1);
-    expect(releaseMany).toHaveBeenCalledWith([{ id: "r3", met: false }], true);
-    expect(onChanged).toHaveBeenCalled();
-    expect(host.textContent).toContain("Released 1.");
+  it("a tile opens that activity's page", async () => {
+    const onSelect = vi.fn();
+    await mount(data(), { onSelect });
+    await act(async () => tile("Week 3 Combo").click());
+    expect(onSelect).toHaveBeenLastCalledWith("combo");
+    expect(host.querySelector("h1")?.textContent).toBe("Week 3 Combo");
+    expect(host.textContent).toContain("Ada Lovelace");
   });
 
-  it("warns before releasing a combo whose week is not fully marked, then goes", async () => {
+  it("warns before releasing everything when a combo's week is not fully marked, then goes", async () => {
     await mount();
     await act(async () => button("Release all 2").click());
     expect(releaseMany).not.toHaveBeenCalled();
@@ -107,10 +157,64 @@ describe("ReviewScreen", () => {
     expect(host.querySelector('[role="alertdialog"]')).toBeNull();
     expect(host.textContent).toContain("Released 2.");
   });
+});
+
+describe("ReviewScreen: one activity", () => {
+  it("lists every student sent, as they will read it, with the whole note", async () => {
+    await mount(data(), { start: "combo" });
+    expect(host.querySelector("h1")?.textContent).toBe("Week 3 Combo");
+    expect(host.textContent).toContain("Ada Lovelace");
+    expect(host.textContent).toContain("18 / 25 pts");
+    expect(host.textContent).toContain("not final");
+    expect(host.textContent).toContain("Nice work");
+    expect(host.textContent).toContain("1 still being marked");
+    // Ben is still on the TF's desk: not here.
+    expect(host.textContent).not.toContain("Ben Bo");
+    expect(button("Release 1")).toBeDefined();
+  });
+
+  it("the rows sit in the panel's scrolling region, so a long list is reachable", async () => {
+    await mount(data(), { start: "combo" });
+    expect(host.querySelector(".fv-scroll table")).not.toBeNull();
+  });
+
+  it("back returns to the picker", async () => {
+    const onSelect = vi.fn();
+    await mount(data(), { start: "tut", onSelect });
+    const back = buttons().find((b) => b.getAttribute("aria-label") === "Back to all activities")!;
+    await act(async () => back.click());
+    expect(onSelect).toHaveBeenLastCalledWith(null);
+    expect(tile("Tutorial")).toBeDefined();
+  });
+
+  it("releases this activity's rows as they were sent, and refreshes", async () => {
+    await mount(data(), { start: "tut" });
+    await act(async () => button("Release 1").click());
+    expect(releaseMany).toHaveBeenCalledTimes(1);
+    expect(releaseMany).toHaveBeenCalledWith([{ id: "r3", met: false }], true);
+    expect(onChanged).toHaveBeenCalled();
+    expect(host.textContent).toContain("Released 1.");
+  });
+
+  it("a release that fails is reported, not swallowed", async () => {
+    releaseMany.mockRejectedValueOnce(new Error("offline"));
+    await mount(data(), { start: "tut" });
+    await act(async () => button("Release 1").click());
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: "offline" }));
+    expect(onChanged).not.toHaveBeenCalled();
+    expect(button("Release 1").disabled).toBe(false);
+  });
 
   it("Open hands the activity and the person to the grading page", async () => {
-    await mount();
+    await mount(data(), { start: "tut" });
     await act(async () => button("Open").click());
     expect(onOpen).toHaveBeenCalledWith("tut", "s1", "individual");
+  });
+
+  it("an activity with nothing waiting sends you back to the picker, as a correction", async () => {
+    const onSelect = vi.fn();
+    await mount(data({ results: [] }), { start: "combo", onSelect });
+    expect(onSelect).toHaveBeenCalledWith(null, { correction: true });
+    expect(host.textContent).toContain("Nothing waiting");
   });
 });

@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import type { Activity } from "@/checkins/types";
 import type { FacultyData } from "./FacultyApp";
-import { reviewCount, reviewGroups } from "./reviewModel";
+import { reviewCount, reviewGroups, reviewWeeks } from "./reviewModel";
 
 const combo = {
   id: "combo", course_id: "c1", week: 3, title: "Week 3 Combo", type: "combo",
@@ -89,5 +89,35 @@ describe("reviewGroups", () => {
 
   it("counts every row waiting, for the badge", () => {
     expect(reviewCount(data().results)).toBe(3);
+  });
+});
+
+describe("reviewWeeks", () => {
+  it("buckets the groups by week for the picker, newest first, named as the week is", () => {
+    const groups = reviewGroups(data());
+    const weeks = reviewWeeks(groups, [
+      { id: "w3", course_id: "c1", week: 3, title: "Sprint week", dates_label: "Sep 14–18" },
+    ] as unknown as FacultyData["weeks"]);
+    expect(weeks.map((w) => w.label)).toEqual(["Sprint week", "Week 2"]);
+    expect(weeks[0].dates).toBe("Sep 14–18");
+    expect(weeks[1].dates).toBeNull();
+    expect(weeks.map((w) => w.groups.map((g) => g.activity.id))).toEqual([["tut", "combo"], ["trat"]]);
+  });
+
+  it("puts an unscheduled activity in its own bucket, last", () => {
+    const loose = { ...team, id: "loose", week: null, title: "Loose" } as unknown as Activity;
+    const d = data({
+      activities: [combo, tutorial, team, loose],
+      checkIns: [
+        ...data().checkIns,
+        { id: "ci-loose", activity_id: "loose", kind: "team", max_points: 10 },
+      ] as FacultyData["checkIns"],
+      results: [
+        ...data().results,
+        { id: "r6", check_in_id: "ci-loose", student_id: null, team_id: "t1", status: "needs_review", score: 3, is_ci: false },
+      ] as FacultyData["results"],
+    });
+    const weeks = reviewWeeks(reviewGroups(d), []);
+    expect(weeks.map((w) => w.label)).toEqual(["Week 3", "Week 2", "Unscheduled"]);
   });
 });

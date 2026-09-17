@@ -7,7 +7,7 @@
 // so what the instructor checks is what goes out, not a number they have to
 // convert in their head.
 
-import type { Activity, CheckIn } from "@/checkins/types";
+import type { Activity, CheckIn, CourseWeek } from "@/checkins/types";
 import { isCompletionMet } from "@/checkins/studentData";
 import type { ResultRow } from "@/checkins/data";
 import type { FacultyData } from "./FacultyApp";
@@ -120,6 +120,48 @@ export function reviewGroups(data: FacultyData): ReviewGroup[] {
         a.activity.position - b.activity.position ||
         a.activity.title.localeCompare(b.activity.title),
     );
+}
+
+export interface ReviewWeek {
+  week: number | null;
+  /** The week's own title when it has one, "Week N" otherwise, or Unscheduled. */
+  label: string;
+  dates: string | null;
+  groups: ReviewGroup[];
+}
+
+/**
+ * The groups bucketed by week, for the picker: newest week first, named the
+ * way the week is named on every other screen, unscheduled work last.
+ *
+ * Takes the groups rather than the data so the picker and the page share one
+ * reviewGroups() pass — the count on a tile is the count on its page.
+ */
+export function reviewWeeks(groups: ReviewGroup[], weeks: CourseWeek[]): ReviewWeek[] {
+  const rowFor = new Map<number, CourseWeek>();
+  for (const w of weeks) if (!rowFor.has(w.week)) rowFor.set(w.week, w);
+
+  const byWeek = new Map<number | null, ReviewGroup[]>();
+  // reviewGroups() already orders newest week first, so insertion order holds.
+  for (const g of groups) {
+    const key = g.activity.week ?? null;
+    byWeek.set(key, [...(byWeek.get(key) ?? []), g]);
+  }
+
+  return [...byWeek.entries()].map(([week, list]) => {
+    const row = week == null ? undefined : rowFor.get(week);
+    return {
+      week,
+      label: week == null ? "Unscheduled" : row?.title?.trim() || `Week ${week}`,
+      dates:
+        week == null
+          ? null
+          : (row?.dates_label ??
+            list.map((g) => g.activity.dates_label).find((d) => d) ??
+            null),
+      groups: list,
+    };
+  });
 }
 
 /** How many are waiting, for the tab's badge. */

@@ -16,3 +16,6 @@ dist
 
 # TypeScript incremental build cache — a build artifact, and it conflicts on every merge
 tsconfig.tsbuildinfo
+
+# Supabase CLI cache
+supabase/.temp/

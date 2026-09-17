@@ -711,6 +711,13 @@
 .fv-trstu {
   background: var(--fv-cream-100);
 }
+/* The Review page's cells. The table system leaves td padding at 0 so each
+   screen sets its own; here a name, a grade and a note sit side by side and
+   need air between them, or "not final" runs straight into the note. */
+.fv-tbl td.fv-rvcell {
+  padding: 8px 10px;
+  vertical-align: middle;
+}
 .fv-subject {
   display: flex;
   align-items: center;
@@ -1639,7 +1646,8 @@
    grouped by week. It used to be a sidebar list beside the sheet, and by the
    end of term that list was a column to scan every session. Tiles give the
    week a shape, and clicking one opens the sheet on its own — the same way a
-   document opens from a folder. */
+   document opens from a folder. Review opens on the same grid (ReviewPicker),
+   so these classes are shared: a change here moves both pickers. */
 .fv-ckdrive {
   flex: 1;
   min-height: 0;
