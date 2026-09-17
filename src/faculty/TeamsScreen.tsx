@@ -1146,7 +1146,8 @@ export function TeamsScreen(props: {
               Complete and Not complete — a gradebook adds a column, it does not read one. The
               total is the sum of the columns beside it: work that is in but not released yet is
               left blank rather than scored 0, so a mark nobody has made cannot arrive in Canvas
-              as a fail.
+              as a fail. The check-in file scores each session day as the <strong>average</strong>{" "}
+              of its marked 1&ndash;5 numbers, out of 5 — a 0 there is an absence.
             </div>
 
             {gradeCols.length ? (

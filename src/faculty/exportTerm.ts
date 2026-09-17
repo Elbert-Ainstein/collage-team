@@ -287,25 +287,30 @@ export interface CheckInGradeRow {
 const TOP = SCALE[SCALE.length - 1];
 
 /**
- * What one student's slots come to.
+ * What one student's slots come to: the AVERAGE of the marked numbers, out of
+ * the scale's 5 — Kelly's spec, verbatim: "average of the 4 scores for the
+ * day /5". Adding them (4+5+3+4 as 16 of 20) is what this used to do, and it
+ * is not the number her gradebook wants.
  *
- * Only a slot that was actually marked is on offer — an untouched check-in is
- * not a zero for anybody, so it adds nothing to the score OR to what the score
- * is out of. An absent student's numbers arrive here already zeroed by
- * studentMarks(); who was in the room is decided once, there, and re-deciding
- * it here is precisely the two-functions-one-score bug this file must not add.
+ * Only a number that was actually marked joins the average — an untouched
+ * check-in is not a zero for anybody, so it moves neither the top nor the
+ * bottom of the fraction. An absent student's numbers arrive here already
+ * zeroed by studentMarks(); who was in the room is decided once, there, and
+ * re-deciding it here is precisely the two-functions-one-score bug this file
+ * must not add. Null when nothing at all was marked.
  */
-function checkInPoints(slots: StudentMark[]): { score: number; outOf: number } {
-  let score = 0;
-  let outOf = 0;
+function checkInAverage(slots: StudentMark[]): number | null {
+  let sum = 0;
+  let marked = 0;
   for (const s of slots) {
     for (const v of [s.accuracy, s.discussion]) {
       if (v === null) continue;
-      score += v;
-      outOf += TOP;
+      sum += v;
+      marked += 1;
     }
   }
-  return { score, outOf };
+  if (!marked) return null;
+  return Math.round((sum / marked) * 100) / 100;
 }
 
 export interface CheckInGradesInput {
@@ -314,7 +319,7 @@ export interface CheckInGradesInput {
   rows: CheckInGradeRow[];
 }
 
-/** One column of the check-in file: an activity, and what it was marked out of. */
+/** One column of the check-in file: an activity, out of the scale's 5. */
 export interface CheckInColumn {
   activity: Activity;
   outOf: number;
@@ -322,10 +327,10 @@ export interface CheckInColumn {
 
 const checkInKey = (activityId: string, studentId: string) => `${activityId} ${studentId}`;
 
-function checkInScores(input: CheckInGradesInput): Map<string, { score: number; outOf: number }> {
+function checkInScores(input: CheckInGradesInput): Map<string, number | null> {
   return new Map(
     input.rows.map(
-      (r) => [checkInKey(r.activityId, r.studentId), checkInPoints(r.slots)] as const,
+      (r) => [checkInKey(r.activityId, r.studentId), checkInAverage(r.slots)] as const,
     ),
   );
 }
@@ -343,18 +348,12 @@ function checkInScores(input: CheckInGradesInput): Map<string, { score: number; 
 export function checkInColumns(input: CheckInGradesInput): CheckInColumn[] {
   const scored = checkInScores(input);
   return input.activities
-    .map((a) => ({
-      activity: a,
-      // What the best-marked student on this activity was out of. Two teams can
-      // be a slot apart mid-term and the column still needs one denominator.
-      outOf: input.students.reduce(
-        (n, s) => Math.max(n, scored.get(checkInKey(a.id, s.id))?.outOf ?? 0),
-        0,
-      ),
-    }))
     // A tutorial nobody has marked yet is not a column of zeroes, it is a column
     // that does not exist.
-    .filter((c) => c.outOf > 0)
+    .filter((a) => input.students.some((s) => scored.get(checkInKey(a.id, s.id)) != null))
+    // Out of the scale's top whatever was marked: the cell is an average, and
+    // an average has one denominator however many slots a team is behind.
+    .map((a) => ({ activity: a, outOf: TOP }))
     .sort(
       (a, b) =>
         (a.activity.week ?? 0) - (b.activity.week ?? 0) ||
@@ -363,11 +362,13 @@ export function checkInColumns(input: CheckInGradesInput): CheckInColumn[] {
 }
 
 /**
- * The live check-in, as points per student.
+ * The live check-in, one column per session day: the student's average of the
+ * day's marked numbers, out of 5. The Total adds the DAYS, so it is out of 5
+ * per column beside it.
  *
  * There is no Absent column, and that is a decision rather than an oversight:
- * both scales start at 1, so a student who was in the room cannot come out
- * below 2 on a slot that was marked at all. A 0 in this file IS the absence and
+ * both scales start at 1, so a student who was in the room cannot average
+ * below 1 on a day that was marked at all. A 0 in this file IS the absence and
  * needs no second column to say so.
  */
 export function checkInCsv(input: CheckInGradesInput): string {
@@ -386,12 +387,12 @@ export function checkInCsv(input: CheckInGradesInput): string {
   const body = [...students]
     .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name))
     .map((s) => {
-      const cells = cols.map((c) => {
-        const got = scored.get(checkInKey(c.activity.id, s.id));
-        return got && got.outOf > 0 ? got.score : null;
-      });
+      const cells = cols.map((c) => scored.get(checkInKey(c.activity.id, s.id)) ?? null);
       const marked = cells.filter((v): v is number => v !== null);
-      const total = marked.length ? marked.reduce((n, v) => n + v, 0) : null;
+      const total = marked.length
+        ? // Re-rounded: two rounded averages can still add to 8.669999….
+          Math.round(marked.reduce((n, v) => n + v, 0) * 100) / 100
+        : null;
       return [s.name, s.email ?? "", total, ...cells];
     });
 

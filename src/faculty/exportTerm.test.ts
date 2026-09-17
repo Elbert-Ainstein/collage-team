@@ -291,14 +291,26 @@ describe("canvasCsv", () => {
 });
 
 describe("checkInCsv", () => {
-  it("scores both slots out of twenty", () => {
+  // Kelly's spec, verbatim from Slack: "average of the 4 scores for the day
+  // /5". The file used to add them — 4+5+3+4 came out as 16 of 20 — and what
+  // Canvas needs is the day out of 5.
+  it("averages a day's four numbers out of 5", () => {
     const csv = checkInCsv({
       students: [kim],
       activities: [TUTORIAL],
       rows: [{ activityId: "a-tut", studentId: "s1", slots: [slot(1, 4, 5), slot(2, 3, 4)] }],
     });
-    expect(cells(csv, 0)).toEqual(["Student", "Email", "Total (20)", "Tutorial (20)"]);
-    expect(cells(csv, 1)).toEqual(["Kim", "s1@example.edu", "16", "16"]);
+    expect(cells(csv, 0)).toEqual(["Student", "Email", "Total (5)", "Tutorial (5)"]);
+    expect(cells(csv, 1)).toEqual(["Kim", "s1@example.edu", "4", "4"]);
+  });
+
+  it("rounds an uneven average to two decimals", () => {
+    const csv = checkInCsv({
+      students: [kim],
+      activities: [TUTORIAL],
+      rows: [{ activityId: "a-tut", studentId: "s1", slots: [slot(1, 5, 4), slot(2, 4, null)] }],
+    });
+    expect(cells(csv, 1)).toEqual(["Kim", "s1@example.edu", "4.33", "4.33"]);
   });
 
   // studentMarks() has already zeroed an absent member. This must not re-decide
@@ -315,16 +327,34 @@ describe("checkInCsv", () => {
     expect(cells(csv, 2)).toEqual(["Sam", "s2@example.edu", "0", "0"]);
   });
 
-  it("counts only the slots that were marked towards what a student is out of", () => {
+  it("averages only the numbers that were marked, so a slot behind does not drag", () => {
     const csv = checkInCsv({
       students: [kim],
       activities: [TUTORIAL],
       rows: [{ activityId: "a-tut", studentId: "s1", slots: [slot(1, 4, 5), slot(2, null, null)] }],
     });
-    // One team a slot behind must not shrink the column everyone else is on, so
-    // the header keeps the best-marked denominator.
-    expect(cells(csv, 0).at(-1)).toBe("Tutorial (10)");
-    expect(cells(csv, 1)).toEqual(["Kim", "s1@example.edu", "9", "9"]);
+    // The day is out of 5 whatever was marked: an average has one denominator.
+    expect(cells(csv, 0).at(-1)).toBe("Tutorial (5)");
+    expect(cells(csv, 1)).toEqual(["Kim", "s1@example.edu", "4.5", "4.5"]);
+  });
+
+  it("adds the DAYS into the total, each out of 5", () => {
+    const csv = checkInCsv({
+      students: [kim],
+      activities: [TUTORIAL, CHALLENGE],
+      rows: [
+        { activityId: "a-tut", studentId: "s1", slots: [slot(1, 4, 5), slot(2, 3, 4)] },
+        { activityId: "a-chal", studentId: "s1", slots: [slot(1, 5, 5)] },
+      ],
+    });
+    expect(cells(csv, 0)).toEqual([
+      "Student",
+      "Email",
+      "Total (10)",
+      "Tutorial (5)",
+      "CHALLENGE - Velocity (5)",
+    ]);
+    expect(cells(csv, 1)).toEqual(["Kim", "s1@example.edu", "9", "4", "5"]);
   });
 
   it("drops an activity nobody has marked rather than writing a column of zeroes", () => {
@@ -333,7 +363,7 @@ describe("checkInCsv", () => {
       activities: [TUTORIAL, CHALLENGE],
       rows: [{ activityId: "a-tut", studentId: "s1", slots: [slot(1, 4, 5)] }],
     });
-    expect(cells(csv, 0)).toEqual(["Student", "Email", "Total (10)", "Tutorial (10)"]);
+    expect(cells(csv, 0)).toEqual(["Student", "Email", "Total (5)", "Tutorial (5)"]);
   });
 
   it("leaves a student with no row blank rather than scoring them 0", () => {
@@ -385,10 +415,10 @@ describe("checkInColumns", () => {
       rows: [{ activityId: "a-tut", studentId: "s1", slots: [slot(1, 4, 5)] }],
     };
     expect(checkInColumns(input).map((c) => c.activity.id)).toEqual(["a-tut"]);
-    expect(cells(checkInCsv(input), 0)).toEqual(["Student", "Email", "Total (10)", "Tutorial (10)"]);
+    expect(cells(checkInCsv(input), 0)).toEqual(["Student", "Email", "Total (5)", "Tutorial (5)"]);
   });
 
-  it("reports the best-marked student's denominator, not the first one's", () => {
+  it("a day is out of 5 however many slots are marked — an average has one denominator", () => {
     const cols = checkInColumns({
       students: [kim, sam],
       activities: [TUTORIAL],
@@ -397,6 +427,6 @@ describe("checkInColumns", () => {
         { activityId: "a-tut", studentId: "s2", slots: [slot(1, 4, 5), slot(2, 3, 3)] },
       ],
     });
-    expect(cols).toEqual([{ activity: TUTORIAL, outOf: 20 }]);
+    expect(cols).toEqual([{ activity: TUTORIAL, outOf: 5 }]);
   });
 });
