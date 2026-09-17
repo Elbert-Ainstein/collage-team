@@ -21,6 +21,7 @@ import {
   uploadSubmissionPdf,
   type SubmissionFile,
 } from "@/checkins/submissions";
+import { renderPdfPages } from "./pdfPages";
 import { SIcon } from "./icons";
 
 // Below 760px student.css takes the question list out of `position: sticky` and
@@ -59,31 +60,10 @@ interface Loaded {
 const message = (e: unknown, fallback: string) =>
   e instanceof Error && e.message ? e.message : fallback;
 
-/** Render every page to a small canvas. Sequential: a 40-page scan at once stalls the tab. */
+/** Postage-stamp tiles for the mapping grid; see pdfPages.ts for the renderer. */
 async function renderThumbs(source: ArrayBuffer | string): Promise<Loaded> {
-  const pdfjs = await import("pdfjs-dist");
-  pdfjs.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
-
-  const doc = await pdfjs.getDocument(
-    typeof source === "string" ? { url: source } : { data: source },
-  ).promise;
-
-  const thumbs: string[] = [];
-  for (let n = 1; n <= doc.numPages; n++) {
-    const page = await doc.getPage(n);
-    const base = page.getViewport({ scale: 1 });
-    // A fixed width keeps the grid even whatever the paper size.
-    const viewport = page.getViewport({ scale: 150 / base.width });
-    const canvas = document.createElement("canvas");
-    canvas.width = Math.ceil(viewport.width);
-    canvas.height = Math.ceil(viewport.height);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) break;
-    await page.render({ canvasContext: ctx, viewport }).promise;
-    thumbs.push(canvas.toDataURL("image/jpeg", 0.7));
-  }
-  await doc.destroy();
-  return { thumbs, pageCount: doc.numPages };
+  const { pages, pageCount } = await renderPdfPages(source, 150);
+  return { thumbs: pages, pageCount };
 }
 
 export function PdfSubmit({

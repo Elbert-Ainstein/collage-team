@@ -28,7 +28,7 @@ import {
   type TeamResource,
 } from "@/checkins/resources";
 import { RESIGN_MS } from "@/checkins/storage";
-import { listMyMarks, listMyQuestions, listMyRubric } from "@/checkins/studentData";
+import { listMyQuestions } from "@/checkins/studentData";
 import type { Assignment, AssignmentStatus, Enrolment } from "@/checkins/studentData";
 import type {
   Activity,
@@ -36,10 +36,8 @@ import type {
   ActivityType,
   CheckInResult,
   FileRef,
-  RubricItem,
   Scope,
   Student,
-  SubmissionMark,
 } from "@/checkins/types";
 import { INDIV_ELSEWHERE, SCOPE_LABEL, SCOPE_OF, TYPE_LABEL } from "@/checkins/types";
 // The activity's attachments are the instructor's file, read here rather than
@@ -48,8 +46,6 @@ import { INDIV_ELSEWHERE, SCOPE_LABEL, SCOPE_OF, TYPE_LABEL } from "@/checkins/t
 // come to disagree about what a student is looking at.
 import { kindOf } from "@/faculty/activityFiles";
 import { activityFileUrls } from "@/faculty/facultyData";
-import type { PointedQuestion } from "@/faculty/model";
-import { gradedRubric, type GradedQuestionRow } from "./gradedRubric";
 import { SIcon } from "./icons";
 import { Recorder } from "./Recorder";
 
@@ -140,80 +136,6 @@ function MarkerNote({ result }: { result: CheckInResult | null }): JSX.Element |
       >
         {note}
       </p>
-    </div>
-  );
-}
-
-/**
- * The released grade, question by question: the ladder row the marker picked,
- * in the instructor's own words, with the points beside it.
- *
- * Rendered only when there are marks to show, which is also the only time the
- * database lets a student read them (0039): after release, on their own work.
- * A question nobody touched reads as full marks with nothing taken off — the
- * same reading the score trigger gives it.
- */
-export function GradedRubricCard({ rows }: { rows: GradedQuestionRow[] }): JSX.Element | null {
-  if (rows.length === 0) return null;
-  const fmt = (n: number) => String(Math.round(n * 100) / 100);
-  const points = (r: GradedQuestionRow): string | null => {
-    if (r.worth != null && r.award != null) return `${fmt(r.award)} / ${fmt(r.worth)}`;
-    if (r.deduction > 0) return `−${fmt(r.deduction)} pts`;
-    return null;
-  };
-  return (
-    <div className="sv-card" style={{ marginTop: 14 }}>
-      <div className="sv-eyebrow">How it was graded</div>
-      <div style={{ marginTop: 4 }}>
-        {rows.map((r, i) => (
-          <div
-            key={r.key}
-            style={{
-              display: "flex",
-              alignItems: "baseline",
-              gap: 12,
-              padding: "9px 0",
-              borderTop: i === 0 ? "none" : "1px solid var(--cream-500)",
-            }}
-          >
-            <span
-              className="sv-num"
-              style={{
-                flex: "none",
-                minWidth: 34,
-                fontSize: "var(--text-xs)",
-                fontWeight: "var(--weight-semibold)",
-              }}
-            >
-              {r.label}
-            </span>
-            <span
-              style={{
-                flex: 1,
-                minWidth: 0,
-                fontSize: "var(--text-xs)",
-                lineHeight: 1.5,
-                color: r.criterion ? "inherit" : "var(--muted-foreground)",
-              }}
-            >
-              {r.criterion ?? "Nothing taken off"}
-            </span>
-            {points(r) ? (
-              <span
-                className="sv-num"
-                style={{
-                  flex: "none",
-                  fontSize: "var(--text-xs)",
-                  fontWeight: "var(--weight-semibold)",
-                  whiteSpace: "nowrap",
-                }}
-              >
-                {points(r)}
-              </span>
-            ) : null}
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
@@ -1329,41 +1251,6 @@ function AssignmentDetail({
     };
   }, [act.id]);
 
-  // The graded rubric behind a released points grade — which ladder row each
-  // question got. Loaded only once there is a released, points-marked result
-  // to explain: RLS (0039) returns nothing any earlier anyway, and a
-  // completion's Complete/Not complete has no breakdown to show.
-  const gradedResultId =
-    a.myResult?.status === "scored" && !a.myResult.is_ci ? a.myResult.id : null;
-  const [gradedMarks, setGradedMarks] = useState<{ items: RubricItem[]; marks: SubmissionMark[] }>(
-    { items: [], marks: [] },
-  );
-
-  useEffect(() => {
-    setGradedMarks({ items: [], marks: [] });
-    if (!gradedResultId) return;
-    let alive = true;
-    Promise.all([listMyRubric(act.id), listMyMarks(gradedResultId)])
-      .then(([items, marks]) => {
-        if (alive) setGradedMarks({ items, marks });
-      })
-      // The grade and note already read fine without the breakdown, so a
-      // database without 0039 — or a blink of network — degrades to no card
-      // rather than taking down the page the grade is on.
-      .catch(() => undefined);
-    return () => {
-      alive = false;
-    };
-  }, [gradedResultId, act.id]);
-
-  const rubricRows = useMemo<GradedQuestionRow[]>(
-    () =>
-      gradedResultId
-        ? gradedRubric(act, questions as PointedQuestion[], gradedMarks.items, gradedMarks.marks)
-        : [],
-    [gradedResultId, act, questions, gradedMarks],
-  );
-
   // What the instructor recorded for this team in the session. Loaded on the
   // team half only, which is the only place it is shown.
   const [marks, setMarks] = useState<StudentMark[]>([]);
@@ -1555,12 +1442,15 @@ function AssignmentDetail({
                         : "Your instructor has not opened this for submissions yet"
                     }
                   >
-                    {arrivedIndiv ? "View submission" : "Submit assignment"}
+                    {a.myResult?.status === "scored" && !a.myResult.is_ci
+                      ? "View graded work"
+                      : arrivedIndiv
+                        ? "View submission"
+                        : "Submit assignment"}
                   </button>
                   <span className="sv-sub">{savedLine}</span>
                 </div>
               )}
-              <GradedRubricCard rows={rubricRows} />
             </div>
           ) : null}
 

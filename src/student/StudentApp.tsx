@@ -23,6 +23,7 @@ import { SIcon } from "./icons";
 import { Assignments } from "./Assignments";
 import { MyWork } from "./MyWork";
 import { assignmentKey, TeamResources } from "./TeamResources";
+import { GradedView } from "./GradedView";
 import { SubmitScreen } from "./SubmitScreen";
 import "./student.css";
 
@@ -1062,13 +1063,23 @@ export function StudentApp({
   }
 
   if (screen === "submit" && selected) {
+    // Released points work reads like Gradescope — the student's pages beside
+    // the rubric — rather than as a locked copy of the upload flow. A
+    // completion has no ladder to show, so its release keeps the plain
+    // locked hand-in view. Branched here, not inside SubmitScreen, so each
+    // screen keeps its own hooks whole if the status flips under it.
+    const graded = selected.myResult?.status === "scored" && !selected.myResult.is_ci;
     return shell(
-      <SubmitScreen
-        assignment={selected}
-        enrolment={enrolment}
-        onBack={() => setScreen("detail")}
-        onChanged={() => void load().catch(() => undefined)}
-      />,
+      graded ? (
+        <GradedView assignment={selected} onBack={() => setScreen("detail")} />
+      ) : (
+        <SubmitScreen
+          assignment={selected}
+          enrolment={enrolment}
+          onBack={() => setScreen("detail")}
+          onChanged={() => void load().catch(() => undefined)}
+        />
+      ),
     );
   }
 

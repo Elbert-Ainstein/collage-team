@@ -654,3 +654,115 @@
 @media (prefers-reduced-motion: reduce) {
   .sv-overlay, .sv-dialog { animation: none; }
 }
+
+/* ------------------------------------------------- the graded submission
+   Gradescope's reading shape: the student's pages on the left, big enough to
+   read, and the rubric down the right. The rubric column is sticky for the
+   same reason the hand-in's question list is — it has to stay on screen while
+   a twenty-page scan goes past beside it. */
+.sv-gsplit {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  margin-top: 14px;
+}
+.sv-gpages {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.sv-gpage {
+  position: relative;
+  border: 1px solid var(--neutral-200);
+  border-radius: var(--radius-md);
+  background: var(--cream-100);
+  padding: 6px;
+}
+.sv-gpage img { width: 100%; display: block; border-radius: 4px; }
+.sv-gpagenum {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--cream-300);
+  border: 1px solid var(--cream-500);
+  font-size: var(--text-2xs);
+  color: var(--muted-foreground);
+}
+.sv-gside {
+  flex: 0 0 300px;
+  min-width: 0;
+  align-self: flex-start;
+  position: sticky;
+  top: 0;
+  max-height: 100%;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 8px;
+}
+.sv-gq { padding: 0; overflow: hidden; }
+.sv-gqbtn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 11px 14px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.sv-gqbtn:hover { background: var(--cream-200); }
+.sv-gqlabel {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  line-height: 1.4;
+}
+.sv-gqpts { flex: none; font-size: var(--text-xs); font-weight: var(--weight-semibold); }
+.sv-gqchev {
+  flex: none;
+  display: inline-flex;
+  color: var(--muted-foreground);
+  transform: rotate(180deg); /* chevronLeft pointing right */
+  transition: transform 0.12s ease;
+}
+.sv-gqchev.open { transform: rotate(270deg); }
+.sv-gladder {
+  padding: 2px 14px 12px;
+  border-top: 1px solid var(--cream-500);
+}
+.sv-grung {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 8px;
+  margin-top: 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-size: var(--text-2xs);
+  line-height: 1.5;
+  color: var(--muted-foreground);
+}
+.sv-grung.picked {
+  border-color: var(--navy);
+  background: var(--cream-200);
+  color: inherit;
+}
+.sv-grungmark { flex: none; width: 12px; color: var(--emerald-600); font-weight: 700; }
+.sv-grungpts { flex: none; font-weight: var(--weight-semibold); white-space: nowrap; }
+.sv-grungtext { min-width: 0; }
+
+@media (max-width: 760px) {
+  /* The rubric first, then the pages: on one column the score summary is what
+     the student came for, and sticky has no second column to travel beside. */
+  .sv-gsplit { flex-direction: column-reverse; }
+  .sv-gside { position: static; width: 100%; flex: none; max-height: none; overflow: visible; }
+}
