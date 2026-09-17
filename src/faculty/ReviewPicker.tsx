@@ -9,7 +9,7 @@
 // on their desk. Nothing is chosen for you; the page for one activity only
 // opens once its tile is clicked.
 
-import type { ReviewGroup, ReviewWeek } from "./reviewModel";
+import { waitingRows, type ReviewGroup, type ReviewWeek } from "./reviewModel";
 import { FIcon } from "./icons";
 
 export function ReviewPicker({
@@ -40,6 +40,8 @@ export function ReviewPicker({
 
 function Tile({ group, onOpen }: { group: ReviewGroup; onOpen: () => void }) {
   const { activity, rows, stillMarking } = group;
+  const waiting = waitingRows(rows).length;
+  const released = rows.length - waiting;
   return (
     <button
       type="button"
@@ -53,11 +55,16 @@ function Tile({ group, onOpen }: { group: ReviewGroup; onOpen: () => void }) {
       <span className="fv-cktile-body">
         <span className="fv-cktile-title">{activity.title}</span>
         <span className="fv-badge fv-cktile-scope">
-          {rows.length} waiting
+          {waiting} waiting
         </span>
-        {stillMarking > 0 ? (
+        {released > 0 || stillMarking > 0 ? (
           <span className="fv-sub" style={{ fontSize: "var(--fv-2xs)" }}>
-            {stillMarking} still being marked
+            {[
+              released > 0 ? `${released} released` : null,
+              stillMarking > 0 ? `${stillMarking} still being marked` : null,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
           </span>
         ) : null}
       </span>

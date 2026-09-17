@@ -50,8 +50,23 @@ describe("reviewGroups", () => {
     expect(groups.map((g) => g.rows.map((r) => r.subject.name))).toEqual([
       ["Ada Lovelace"],
       ["Ada Lovelace"],
-      ["Team 1"],
+      ["Team 1", "Team 1"],
     ]);
+  });
+
+  it("keeps released rows in the group, marked, waiting rows first", () => {
+    const trat = reviewGroups(data()).find((g) => g.activity.id === "trat")!;
+    expect(trat.rows.map((r) => r.released)).toEqual([false, true]);
+    expect(trat.rows.map((r) => r.result.id)).toEqual(["r4", "r5"]);
+  });
+
+  it("an activity with everything released is done, not a group", () => {
+    const done = data({
+      results: data().results.map((r) =>
+        r.check_in_id === "ci-team" ? { ...r, status: "scored" } : r,
+      ),
+    });
+    expect(reviewGroups(done).map((g) => g.activity.id)).toEqual(["tut", "combo"]);
   });
 
   it("spells a completion as Complete or Not complete, sent as it was marked", () => {

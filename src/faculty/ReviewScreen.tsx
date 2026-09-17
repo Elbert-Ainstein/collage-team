@@ -25,7 +25,13 @@ import { isCompletion } from "@/checkins/types";
 import { pointsTotal } from "./model";
 import { ReviewPicker } from "./ReviewPicker";
 import { ReviewTable } from "./ReviewTable";
-import { reviewGroups, reviewWeeks, type ReviewGroup, type ReviewRow } from "./reviewModel";
+import {
+  reviewGroups,
+  reviewWeeks,
+  waitingRows,
+  type ReviewGroup,
+  type ReviewRow,
+} from "./reviewModel";
 
 export interface ReviewScreenProps {
   data: FacultyData;
@@ -57,7 +63,7 @@ export function ReviewScreen({
 }: ReviewScreenProps): JSX.Element {
   const groups = useMemo(() => reviewGroups(data), [data]);
   const weeks = useMemo(() => reviewWeeks(groups, data.weeks), [groups, data.weeks]);
-  const total = groups.reduce((n, g) => n + g.rows.length, 0);
+  const total = groups.reduce((n, g) => n + waitingRows(g.rows).length, 0);
   const selected: ReviewGroup | null = useMemo(
     () => groups.find((g) => g.activity.id === selId) ?? null,
     [groups, selId],
@@ -142,7 +148,7 @@ export function ReviewScreen({
   ) : null;
 
   if (!selected) {
-    const everything = groups.flatMap((g) => g.rows);
+    const everything = groups.flatMap((g) => waitingRows(g.rows));
     return (
       <div className="fv-panel">
         <div className="fv-head">
@@ -175,6 +181,10 @@ export function ReviewScreen({
   }
 
   const { activity, rows, stillMarking } = selected;
+  // Only these go out when Release is pressed: a batch released earlier stays
+  // on the page, marked, and is never sent twice.
+  const waiting = waitingRows(rows);
+  const releasedCount = rows.length - waiting.length;
   return (
     <div className="fv-panel">
       <div className="fv-topbar">
@@ -189,8 +199,9 @@ export function ReviewScreen({
         <div style={{ minWidth: 0 }}>
           <h1 className="fv-h1">{activity.title}</h1>
           <div className="fv-sub">
-            {activity.week == null ? "Unscheduled" : `Week ${activity.week}`} · {rows.length}{" "}
+            {activity.week == null ? "Unscheduled" : `Week ${activity.week}`} · {waiting.length}{" "}
             waiting
+            {releasedCount > 0 ? ` · ${releasedCount} released` : ""}
             {stillMarking > 0 ? ` · ${stillMarking} still being marked` : ""}
             {isCompletion(activity) ? "" : ` · out of ${pts(pointsTotal(activity))}`}
           </div>
@@ -199,10 +210,10 @@ export function ReviewScreen({
         <button
           type="button"
           className="fv-btn primary"
-          disabled={busy !== null}
-          onClick={() => attempt(activity.id, rows)}
+          disabled={busy !== null || waiting.length === 0}
+          onClick={() => attempt(activity.id, waiting)}
         >
-          {busy === activity.id ? "Releasing…" : `Release ${rows.length}`}
+          {busy === activity.id ? "Releasing…" : `Release ${waiting.length}`}
         </button>
       </div>
 

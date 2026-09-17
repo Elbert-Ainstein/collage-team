@@ -45,6 +45,15 @@ export function ReviewTable({ rows, onOpen }: ReviewTableProps): JSX.Element {
                     <FAvatar name={r.subject.name} tint={r.subject.tint} size={20} />
                   )}
                   <span style={{ fontSize: "var(--fv-xs)", fontWeight: 600 }}>{r.subject.name}</span>
+                  {r.released ? (
+                    <span
+                      className="fv-badge"
+                      style={{ color: "var(--fv-emerald)", borderColor: "var(--fv-emerald)" }}
+                      title="This grade is out — the student can see it. Pressing Release again skips this row."
+                    >
+                      Released
+                    </span>
+                  ) : null}
                 </div>
               </td>
               <td className="fv-rvcell" style={{ whiteSpace: "nowrap" }}>

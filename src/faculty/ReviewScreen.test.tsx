@@ -49,6 +49,7 @@ function data(over: Partial<FacultyData> = {}): FacultyData {
       { id: "r1", check_in_id: "ci-combo", student_id: "s1", team_id: null, status: "needs_review", score: 18, is_ci: false, feedback: "Nice work" },
       { id: "r2", check_in_id: "ci-combo", student_id: "s2", team_id: null, status: "submitted", score: null, is_ci: false },
       { id: "r3", check_in_id: "ci-tut", student_id: "s1", team_id: null, status: "needs_review", score: null, is_ci: true, ci_met: false },
+      { id: "r4", check_in_id: "ci-tut", student_id: "s2", team_id: null, status: "scored", score: null, is_ci: true, ci_met: true },
     ],
     ...over,
   } as unknown as FacultyData;
@@ -116,6 +117,7 @@ describe("ReviewScreen: the picker", () => {
     expect(tile("Tutorial")).toBeDefined();
     expect(tile("Week 3 Combo").textContent).toContain("1 waiting");
     expect(tile("Week 3 Combo").textContent).toContain("1 still being marked");
+    expect(tile("Tutorial").textContent).toContain("1 released");
     expect(button("Release all 2")).toBeDefined();
     // No student is on the picker: that is the page's job.
     expect(host.textContent).not.toContain("Ada Lovelace");
@@ -194,6 +196,27 @@ describe("ReviewScreen: one activity", () => {
     expect(releaseMany).toHaveBeenCalledWith([{ id: "r3", met: false }], true);
     expect(onChanged).toHaveBeenCalled();
     expect(host.textContent).toContain("Released 1.");
+  });
+
+  it("an already-released row stays listed with a mark, and Release skips it", async () => {
+    await mount(data(), { start: "tut" });
+    // Ben's grade went out in an earlier batch: still on the page, marked.
+    expect(host.textContent).toContain("Ben Bo");
+    expect(host.textContent).toContain("1 waiting · 1 released");
+    const ben = [...host.querySelectorAll("tr")].find((tr) => tr.textContent?.includes("Ben Bo"))!;
+    expect(ben.textContent).toContain("Released");
+    // The button counts only Ada, and pressing it sends only her row.
+    await act(async () => button("Release 1").click());
+    expect(releaseMany).toHaveBeenCalledTimes(1);
+    expect(releaseMany).toHaveBeenCalledWith([{ id: "r3", met: false }], true);
+  });
+
+  it("Release all from the picker also skips what already went out", async () => {
+    await mount();
+    await act(async () => button("Release all 2").click());
+    await act(async () => button("Release 2 anyway").click());
+    const sent = releaseMany.mock.calls.flatMap((c) => c[0] as { id: string }[]);
+    expect(sent.map((r) => r.id).sort()).toEqual(["r1", "r3"]);
   });
 
   it("a release that fails is reported, not swallowed", async () => {

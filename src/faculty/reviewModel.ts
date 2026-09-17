@@ -18,6 +18,12 @@ export interface ReviewRow {
   kind: "individual" | "team";
   subject: { id: string; name: string; tint: string | null };
   result: ResultRow;
+  /**
+   * Already released — the student can read it. Kept on the page rather than
+   * vanishing, so an instructor releasing in batches sees the whole class with
+   * marks on who has gone out; only the unmarked rows are released again.
+   */
+  released: boolean;
   /** "24 / 30 pts", "Complete" or "Not complete" — as the student will read it. */
   grade: string;
   /**
@@ -31,9 +37,15 @@ export interface ReviewRow {
 
 export interface ReviewGroup {
   activity: Activity;
+  /** Waiting rows and released ones together; `row.released` says which. */
   rows: ReviewRow[];
   /** Handed in and not yet sent: still on a TF's desk. */
   stillMarking: number;
+}
+
+/** The rows a Release button acts on: sent for review and not yet out. */
+export function waitingRows(rows: ReviewRow[]): ReviewRow[] {
+  return rows.filter((r) => !r.released);
 }
 
 const pts = (n: number): string => `${n} ${n === 1 ? "pt" : "pts"}`;
@@ -64,10 +76,12 @@ function gradeOf(
 }
 
 /**
- * Every row sent for review, grouped by activity, newest week first.
+ * Every row sent for review, grouped by activity, newest week first — plus,
+ * in any group with something waiting, the rows already released, so a batch
+ * release keeps the whole class on the page with marks on who went out.
  *
- * Only activities that have something waiting appear: this is a to-do list,
- * and an empty group is a line to read past on the way to the work.
+ * Only activities that have something WAITING appear: this is a to-do list,
+ * and a long-finished activity is not on it just because its grades are out.
  */
 export function reviewGroups(data: FacultyData): ReviewGroup[] {
   const groups = new Map<string, ReviewGroup>();
@@ -77,7 +91,7 @@ export function reviewGroups(data: FacultyData): ReviewGroup[] {
   const teamById = new Map(data.teams.map((t) => [t.id, t]));
 
   for (const r of data.results) {
-    if (r.status !== "needs_review") continue;
+    if (r.status !== "needs_review" && r.status !== "scored") continue;
     const checkIn = checkInById.get(r.check_in_id);
     const activity = checkIn ? activityById.get(checkIn.activity_id) : undefined;
     if (!checkIn || !activity) continue;
@@ -96,6 +110,7 @@ export function reviewGroups(data: FacultyData): ReviewGroup[] {
       kind,
       subject: { id: subject.id, name: subject.name, tint },
       result: r,
+      released: r.status === "scored",
       ...gradeOf(activity, r, kind, data),
     };
     const group = groups.get(activity.id) ?? { activity, rows: [], stillMarking: 0 };
@@ -106,12 +121,22 @@ export function reviewGroups(data: FacultyData): ReviewGroup[] {
     new Set(data.checkIns.filter((c) => c.activity_id === activityId).map((c) => c.id));
 
   return [...groups.values()]
+    // A group with nothing waiting is done: released rows appear only beside
+    // work still to be checked, never resurrect a finished activity.
+    .filter((g) => g.rows.some((r) => !r.released))
     .map((g) => {
       const ids = checkInsOf(g.activity.id);
       const stillMarking = data.results.filter(
         (r) => ids.has(r.check_in_id) && r.status === "submitted",
       ).length;
-      const rows = [...g.rows].sort((a, b) => a.subject.name.localeCompare(b.subject.name));
+      // By name, so a batch release marks rows in place rather than reordering
+      // the table under the instructor; released last only breaks ties.
+      const rows = [...g.rows].sort(
+        (a, b) =>
+          a.subject.name.localeCompare(b.subject.name) ||
+          Number(a.released) - Number(b.released) ||
+          a.result.id.localeCompare(b.result.id),
+      );
       return { ...g, rows, stillMarking };
     })
     .sort(
