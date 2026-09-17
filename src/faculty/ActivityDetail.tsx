@@ -84,7 +84,7 @@ interface Subject {
   stamp: string | null;
   /** Handed in after the individual deadline. Never true on the team list. */
   late: boolean;
-  /** What they got, on the graded list. Null everywhere else. */
+  /** What they got, on the released and sent-for-review lists. Null elsewhere. */
   grade?: string | null;
 }
 
@@ -200,6 +200,104 @@ function Stamp({ s }: { s: Subject }): JSX.Element | null {
 /** Mirrors model.statFor's notion of "handed in", so the lists and the counts agree. */
 const isIn = (r: Pick<ResultRow, "status">) =>
   r.status === "submitted" || r.status === "needs_review" || r.status === "scored";
+
+/** The collapsible heading over one pile of people: dot, label, count, chevron. */
+function PileHeader({
+  label,
+  dot,
+  count,
+  open,
+  onToggle,
+  first = false,
+}: {
+  label: string;
+  dot: string;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+  first?: boolean;
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      className="fv-group"
+      style={first ? { marginTop: 18 } : { marginTop: 12, borderTop: "1px solid var(--fv-neutral-200)" }}
+      aria-expanded={open}
+      onClick={onToggle}
+    >
+      <span className="fv-dot" style={{ background: dot }} />
+      <span style={{ flex: 1, textAlign: "left", fontWeight: 600 }}>{label}</span>
+      <span className="fv-sub fv-num">{count}</span>
+      <span className={`fv-chev${open ? " open" : ""}`} style={{ color: "var(--fv-muted)" }}>
+        <FIcon name="chevronRight" size={16} />
+      </span>
+    </button>
+  );
+}
+
+/**
+ * One pile's rows: who, when it came in, and — on the piles that have one —
+ * the mark. When it came in sits beside the mark because a grade does not
+ * stop the hand-in time mattering, and a late one is exactly the row anyone
+ * goes looking for.
+ */
+function PersonRows({
+  list,
+  empty,
+  gradeColor = "var(--fv-navy)",
+  muted = false,
+}: {
+  list: Subject[];
+  empty: string;
+  /** Navy where the grade is settled; muted where it is still waiting. */
+  gradeColor?: string;
+  muted?: boolean;
+}): JSX.Element {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 1, paddingLeft: 2 }}>
+      {list.length === 0 ? (
+        <div className="fv-sub" style={{ padding: "4px 8px" }}>
+          {empty}
+        </div>
+      ) : (
+        list.map((s) => (
+          <div
+            key={s.id}
+            className="fv-person"
+            style={muted ? { color: "var(--fv-muted)" } : undefined}
+          >
+            <FAvatar name={s.name} tint={s.tint} size={22} />
+            <span
+              style={{
+                flex: 1,
+                minWidth: 0,
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+                whiteSpace: "nowrap",
+              }}
+            >
+              {s.name}
+            </span>
+            <Stamp s={s} />
+            {s.grade ? (
+              <span
+                className="fv-num"
+                style={{
+                  fontSize: "var(--fv-2xs)",
+                  color: gradeColor,
+                  fontWeight: 600,
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {s.grade}
+              </span>
+            ) : null}
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
 
 /**
  * How an attachment is addressed on the row.
@@ -618,7 +716,7 @@ export function ActivityDetail(props: {
   // it, but rows written elsewhere can still carry "".
   const brief = activity.source_text?.trim() ?? "";
 
-  const { graded, submitted, missing } = useMemo(() => {
+  const { released, inReview, submitted, missing } = useMemo(() => {
     // A `both` activity owns two check-ins; its individual half is the one the
     // stat counts, so the lists have to read the same half.
     const kind = scope === "team" ? "team" : "individual";
@@ -659,7 +757,17 @@ export function ActivityDetail(props: {
             late: false,
           }));
 
-    const doneList: Subject[] = [];
+    const gradeOn = (r: ResultRow): string =>
+      r.is_ci
+        ? isCompletionMet(r)
+          ? "Complete"
+          : "Not complete"
+        : outOf
+          ? `${r.score ?? 0} / ${outOf}`
+          : String(r.score ?? 0);
+
+    const releasedList: Subject[] = [];
+    const reviewList: Subject[] = [];
     const inList: Subject[] = [];
     const outList: Subject[] = [];
     for (const p of people) {
@@ -674,34 +782,27 @@ export function ActivityDetail(props: {
       // student marked after the deadline into a late one.
       const arrived = r.submitted_at ? Date.parse(r.submitted_at) : NaN;
       const late = !Number.isNaN(cutoff) && !Number.isNaN(arrived) && arrived > cutoff;
-      // Graded means RELEASED — status 'scored' is the same state the student's
-      // own screen reads to show them a number. So somebody on this list can see
-      // their grade, which is the only reading of "graded" that is useful to the
-      // person deciding whether they still owe the class something.
+      // Released — status 'scored' is the same state the student's own screen
+      // reads to show them a number, so somebody on this list can see their
+      // grade. Sent for review sits between: the TF is done with it, the mark
+      // exists, and the student still reads "Turned in" until it is released.
       if (r.status === "scored") {
-        doneList.push({
-          ...p,
-          stamp,
-          late,
-          grade: r.is_ci
-            ? isCompletionMet(r)
-              ? "Complete"
-              : "Not complete"
-            : outOf
-              ? `${r.score ?? 0} / ${outOf}`
-              : String(r.score ?? 0),
-        });
+        releasedList.push({ ...p, stamp, late, grade: gradeOn(r) });
+      } else if (r.status === "needs_review") {
+        reviewList.push({ ...p, stamp, late, grade: gradeOn(r) });
       } else {
         inList.push({ ...p, stamp, late });
       }
     }
-    // Three lists, no overlap: a graded student is not also counted as waiting.
-    // The bar above still reads handed-in-at-all, which is a different question
-    // and the right one for it.
-    return { graded: doneList, submitted: inList, missing: outList };
+    // Four lists, no overlap: everyone with a row is in exactly one stage of
+    // submitted → graded and sent for review → released. The bar above still
+    // reads handed-in-at-all, which is a different question and the right one
+    // for it.
+    return { released: releasedList, inReview: reviewList, submitted: inList, missing: outList };
   }, [data.checkIns, data.results, data.roster, data.teams, activity, scope]);
 
-  const [gradedOpen, setGradedOpen] = useState(true);
+  const [releasedOpen, setReleasedOpen] = useState(true);
+  const [reviewOpen, setReviewOpen] = useState(true);
   const [subOpen, setSubOpen] = useState(true);
   const [notOpen, setNotOpen] = useState(false);
 
@@ -2000,156 +2101,62 @@ export function ActivityDetail(props: {
               <i style={{ width: `${pct}%`, background: "var(--fv-emerald)" }} />
             </div>
 
-            {/* Graded sits first because it is the pile that is DONE. Its count
-                is the list's own length, not stat.graded — the bar above counts
-                everyone who handed in at all, which is a different question and
-                the right one for a bar. */}
-            <button
-              type="button"
-              className="fv-group"
-              style={{ marginTop: 18 }}
-              aria-expanded={gradedOpen}
-              onClick={() => setGradedOpen((v) => !v)}
-            >
-              <span className="fv-dot" style={{ background: "var(--fv-navy)" }} />
-              <span style={{ flex: 1, textAlign: "left", fontWeight: 600 }}>Graded</span>
-              <span className="fv-sub fv-num">{graded.length}</span>
-              <span
-                className={`fv-chev${gradedOpen ? " open" : ""}`}
-                style={{ color: "var(--fv-muted)" }}
-              >
-                <FIcon name="chevronRight" size={16} />
-              </span>
-            </button>
-            {gradedOpen ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 1, paddingLeft: 2 }}>
-                {graded.length === 0 ? (
-                  <div className="fv-sub" style={{ padding: "4px 8px" }}>
-                    Nothing released yet. Marking is not the same as releasing — a grade reaches
-                    the student when you release it.
-                  </div>
-                ) : (
-                  graded.map((s) => (
-                    <div key={s.id} className="fv-person">
-                      <FAvatar name={s.name} tint={s.tint} size={22} />
-                      <span
-                        style={{
-                          flex: 1,
-                          minWidth: 0,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {s.name}
-                      </span>
-                      {/* When it came in sits beside what it got: a released
-                          grade does not stop the hand-in time mattering, and a
-                          late one is exactly the row anyone goes looking for. */}
-                      <Stamp s={s} />
-                      {/* The grade itself, because "who is done" and "what did they
-                          get" are the two things anyone opens this list to learn. */}
-                      <span
-                        className="fv-num"
-                        style={{
-                          fontSize: "var(--fv-2xs)",
-                          color: "var(--fv-navy)",
-                          fontWeight: 600,
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {s.grade}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
+            {/* Top to bottom is done to not-started, one pile per stage:
+                Released the class can already see; Sent for review is marked
+                and waiting on the instructor; To grade is waiting on a TF;
+                Not submitted is waiting on the student. Each count is its
+                list's own length, not stat.graded — the bar above counts
+                everyone who handed in at all, which is a different question
+                and the right one for a bar. */}
+            <PileHeader
+              label="Released"
+              dot="var(--fv-navy)"
+              count={released.length}
+              open={releasedOpen}
+              onToggle={() => setReleasedOpen((v) => !v)}
+              first
+            />
+            {releasedOpen ? (
+              <PersonRows
+                list={released}
+                empty="Nothing released yet. Marking is not the same as releasing — a grade reaches the student when you release it."
+              />
             ) : null}
 
-            <button
-              type="button"
-              className="fv-group"
-              style={{ marginTop: 12, borderTop: "1px solid var(--fv-neutral-200)" }}
-              aria-expanded={subOpen}
-              onClick={() => setSubOpen((v) => !v)}
-            >
-              <span className="fv-dot" style={{ background: "var(--fv-emerald)" }} />
-              <span style={{ flex: 1, textAlign: "left", fontWeight: 600 }}>
-                Handed in, not graded
-              </span>
-              <span className="fv-sub fv-num">{submitted.length}</span>
-              <span className={`fv-chev${subOpen ? " open" : ""}`} style={{ color: "var(--fv-muted)" }}>
-                <FIcon name="chevronRight" size={16} />
-              </span>
-            </button>
+            <PileHeader
+              label="Sent for review"
+              dot="var(--fv-sky)"
+              count={inReview.length}
+              open={reviewOpen}
+              onToggle={() => setReviewOpen((v) => !v)}
+            />
+            {reviewOpen ? (
+              <PersonRows
+                list={inReview}
+                empty="Nothing waiting on review. Grading ends with Send for review; it lands here until it is released."
+                gradeColor="var(--fv-muted)"
+              />
+            ) : null}
+
+            <PileHeader
+              label="To grade"
+              dot="var(--fv-emerald)"
+              count={submitted.length}
+              open={subOpen}
+              onToggle={() => setSubOpen((v) => !v)}
+            />
             {subOpen ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 1, paddingLeft: 2 }}>
-                {submitted.length === 0 ? (
-                  <div className="fv-sub" style={{ padding: "4px 8px" }}>
-                    Nothing waiting to be graded.
-                  </div>
-                ) : (
-                  submitted.map((s) => (
-                    <div key={s.id} className="fv-person">
-                      <FAvatar name={s.name} tint={s.tint} size={22} />
-                      <span
-                        style={{
-                          flex: 1,
-                          minWidth: 0,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {s.name}
-                      </span>
-                      <Stamp s={s} />
-                    </div>
-                  ))
-                )}
-              </div>
+              <PersonRows list={submitted} empty="Nothing waiting to be graded." />
             ) : null}
 
-            <button
-              type="button"
-              className="fv-group"
-              style={{ marginTop: 12, borderTop: "1px solid var(--fv-neutral-200)" }}
-              aria-expanded={notOpen}
-              onClick={() => setNotOpen((v) => !v)}
-            >
-              <span className="fv-dot" style={{ background: "var(--fv-neutral-300)" }} />
-              <span style={{ flex: 1, textAlign: "left", fontWeight: 600 }}>Not submitted</span>
-              <span className="fv-sub fv-num">{Math.max(stat.total - stat.submitted, 0)}</span>
-              <span className={`fv-chev${notOpen ? " open" : ""}`} style={{ color: "var(--fv-muted)" }}>
-                <FIcon name="chevronRight" size={16} />
-              </span>
-            </button>
-            {notOpen ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 1, paddingLeft: 2 }}>
-                {missing.length === 0 ? (
-                  <div className="fv-sub" style={{ padding: "4px 8px" }}>
-                    Everyone is in.
-                  </div>
-                ) : (
-                  missing.map((s) => (
-                    <div key={s.id} className="fv-person" style={{ color: "var(--fv-muted)" }}>
-                      <FAvatar name={s.name} tint={s.tint} size={22} />
-                      <span
-                        style={{
-                          flex: 1,
-                          minWidth: 0,
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {s.name}
-                      </span>
-                    </div>
-                  ))
-                )}
-              </div>
-            ) : null}
+            <PileHeader
+              label="Not submitted"
+              dot="var(--fv-neutral-300)"
+              count={Math.max(stat.total - stat.submitted, 0)}
+              open={notOpen}
+              onToggle={() => setNotOpen((v) => !v)}
+            />
+            {notOpen ? <PersonRows list={missing} empty="Everyone is in." muted /> : null}
           </div>
 
           <div
