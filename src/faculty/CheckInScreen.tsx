@@ -29,11 +29,14 @@ import {
   SLOTS,
   absentIds,
   getTutorialSheet,
+  graderFor,
   markFor,
   setTutorialAbsences,
+  setTutorialGrader,
   setTutorialMark,
   studentMarks,
   type TutorialAbsence,
+  type TutorialGrader,
   type TutorialMark,
 } from "@/checkins/tutorial";
 import { groupByWeek } from "./model";
@@ -74,6 +77,7 @@ export function CheckInScreen({
 
   const [marks, setMarks] = useState<TutorialMark[]>([]);
   const [absences, setAbsences] = useState<TutorialAbsence[]>([]);
+  const [graders, setGraders] = useState<TutorialGrader[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(0);
@@ -110,6 +114,7 @@ export function CheckInScreen({
   const load = useCallback(async () => {
     setMarks([]);
     setAbsences([]);
+    setGraders([]);
     setError(null);
     if (!selId || !listed) return;
     const activityId = selId;
@@ -119,10 +124,12 @@ export function CheckInScreen({
       if (!stillOpen(activityId)) return;
       setMarks(sheet.marks);
       setAbsences(sheet.absences);
+      setGraders(sheet.graders);
     } catch (e) {
       if (!stillOpen(activityId)) return;
       setMarks([]);
       setAbsences([]);
+      setGraders([]);
       setError(e instanceof Error ? e.message : "Could not open this activity's check-in.");
     } finally {
       if (stillOpen(activityId)) setLoading(false);
@@ -263,6 +270,38 @@ export function CheckInScreen({
 
   const absentIn = (teamId: string): string[] => absentIds(absences, teamId);
 
+  /**
+   * Pick — or clear — which TF is grading one team. Optimistic like every
+   * other cell on the sheet, restored whole on failure.
+   */
+  const writeGrader = async (teamId: string, tfId: string | null) => {
+    if (!selId || !canEdit) return;
+    const activityId = selId;
+    const before = graders;
+    setGraders((prev) => [
+      ...prev.filter((g) => g.team_id !== teamId),
+      ...(tfId ? [{ activity_id: activityId, team_id: teamId, tf_id: tfId }] : []),
+    ]);
+    setSaving((n) => n + 1);
+    setError(null);
+    try {
+      await setTutorialGrader(activityId, teamId, tfId);
+    } catch (e) {
+      if (!stillOpen(activityId)) return;
+      setGraders(before);
+      setError(e instanceof Error ? e.message : "That didn't save.");
+    } finally {
+      setSaving((n) => n - 1);
+    }
+  };
+
+  // The Grader column only exists when there are TFs to pick from. An owner
+  // with no TFs — or a database before 0040's course_tfs read policy, where a
+  // TF's list is just themselves — gets a sheet without the column rather
+  // than a dropdown holding nothing useful.
+  const tfs = data.tfs;
+  const showGraders = tfs.length > 0;
+
   const errorBox = error ? (
     <div
       role="alert"
@@ -356,6 +395,11 @@ export function CheckInScreen({
                     <th>
                       <span className="fv-eyebrow">Absent</span>
                     </th>
+                    {showGraders ? (
+                      <th>
+                        <span className="fv-eyebrow">Grading TF</span>
+                      </th>
+                    ) : null}
                     {SLOTS.map((n) => (
                       <th key={n} colSpan={3} className="fv-ckslot">
                         <span style={{ fontWeight: 600, color: "var(--fv-navy)" }}>
@@ -367,6 +411,7 @@ export function CheckInScreen({
                   <tr>
                     <th className="fv-sticky-l" />
                     <th />
+                    {showGraders ? <th /> : null}
                     {SLOTS.map((n) => (
                       <Cells key={n}>
                         <th className="fv-ckslot">
@@ -413,6 +458,27 @@ export function CheckInScreen({
                             onChange={(ids) => void writeAbsences(team.id, ids)}
                           />
                         </td>
+
+                        {showGraders ? (
+                          <td className="fv-ckcell">
+                            <select
+                              className="fv-in fv-ckpick"
+                              value={graderFor(graders, team.id) ?? ""}
+                              disabled={!canEdit}
+                              aria-label={`Which TF is grading ${team.name}`}
+                              onChange={(e) =>
+                                void writeGrader(team.id, e.target.value || null)
+                              }
+                            >
+                              <option value="">—</option>
+                              {tfs.map((tf) => (
+                                <option key={tf.id} value={tf.id}>
+                                  {tf.name}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                        ) : null}
 
                         {SLOTS.map((n) => {
                           const mark = markFor(marks, team.id, n);

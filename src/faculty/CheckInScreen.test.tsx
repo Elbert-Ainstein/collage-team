@@ -15,8 +15,11 @@ import type { Activity, ActivityType } from "@/checkins/types";
 import type { TutorialMark, TutorialSheet } from "@/checkins/tutorial";
 import type { FacultyData } from "./FacultyApp";
 
-const getTutorialSheet = vi.fn(async (): Promise<TutorialSheet> => ({ marks: [], absences: [] }));
+const getTutorialSheet = vi.fn(
+  async (): Promise<TutorialSheet> => ({ marks: [], absences: [], graders: [] }),
+);
 const setTutorialMark = vi.fn(async (): Promise<TutorialMark> => ({}) as TutorialMark);
+const setTutorialGrader = vi.fn(async (): Promise<void> => undefined);
 
 vi.mock("@/checkins/tutorial", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/checkins/tutorial")>();
@@ -24,6 +27,7 @@ vi.mock("@/checkins/tutorial", async (importOriginal) => {
     ...real,
     getTutorialSheet,
     setTutorialMark,
+    setTutorialGrader,
     setTutorialAbsences: vi.fn(async () => undefined),
   };
 });
@@ -87,8 +91,9 @@ let root: Root;
 
 beforeEach(() => {
   getTutorialSheet.mockReset();
-  getTutorialSheet.mockResolvedValue({ marks: [], absences: [] });
+  getTutorialSheet.mockResolvedValue({ marks: [], absences: [], graders: [] });
   setTutorialMark.mockReset();
+  setTutorialGrader.mockReset();
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -252,6 +257,7 @@ describe("CheckInScreen", () => {
         presenter_id: null, accuracy: 2, discussion: null, updated_at: "",
       }],
       absences: [],
+      graders: [],
     });
     getTutorialSheet.mockImplementationOnce(() => new Promise<TutorialSheet>(() => undefined));
     await mount();
@@ -309,5 +315,63 @@ describe("CheckInScreen", () => {
     await mount({ ...less, activities: less.activities.filter((a) => a.id !== "a1") });
     expect(host.querySelector("table")).toBeNull();
     expect(tiles()).toHaveLength(1);
+  });
+});
+
+describe("the Grading TF column", () => {
+  const withTFs = (): FacultyData =>
+    ({
+      ...facultyData(),
+      tfs: [
+        { id: "tf1", course_id: "c1", name: "Sam Chen", email: null, avatar_tint: null, user_id: null, position: 0, created_at: "" },
+        { id: "tf2", course_id: "c1", name: "Rae Patel", email: null, avatar_tint: null, user_id: null, position: 1, created_at: "" },
+      ],
+    }) as FacultyData;
+
+  const graderSelect = () =>
+    host.querySelector<HTMLSelectElement>('select[aria-label="Which TF is grading Team 1"]')!;
+
+  it("offers the course's TFs per team, and saves the pick", async () => {
+    await mount(withTFs(), { start: "a1" });
+    expect(textOf()).toContain("Grading TF");
+    const sel = graderSelect();
+    expect([...sel.options].map((o) => o.textContent)).toEqual(["—", "Sam Chen", "Rae Patel"]);
+    await act(async () => {
+      sel.value = "tf2";
+      sel.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(setTutorialGrader).toHaveBeenCalledWith("a1", "t1", "tf2");
+    expect(graderSelect().value).toBe("tf2");
+  });
+
+  it("shows what the sheet already recorded, and clears back to nobody", async () => {
+    getTutorialSheet.mockResolvedValue({
+      marks: [],
+      absences: [],
+      graders: [{ activity_id: "a1", team_id: "t1", tf_id: "tf1" }],
+    });
+    await mount(withTFs(), { start: "a1" });
+    expect(graderSelect().value).toBe("tf1");
+    await act(async () => {
+      graderSelect().value = "";
+      graderSelect().dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(setTutorialGrader).toHaveBeenCalledWith("a1", "t1", null);
+  });
+
+  it("a course with no TFs has no column to fill in", async () => {
+    await mount(facultyData(), { start: "a1" });
+    expect(textOf()).not.toContain("Grading TF");
+  });
+
+  it("a failed save restores the previous pick and says so", async () => {
+    setTutorialGrader.mockRejectedValueOnce(new Error("offline"));
+    await mount(withTFs(), { start: "a1" });
+    await act(async () => {
+      graderSelect().value = "tf1";
+      graderSelect().dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(graderSelect().value).toBe("");
+    expect(host.querySelector('[role="alert"]')?.textContent).toContain("offline");
   });
 });

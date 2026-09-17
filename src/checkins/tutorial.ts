@@ -33,6 +33,14 @@ export interface TutorialAbsence {
   student_id: string;
 }
 
+/** Which TF is grading one team's work on one activity (0040). */
+export interface TutorialGrader {
+  activity_id: string;
+  team_id: string;
+  /** A course_tfs row — the TF as the TFs tab manages them, signed up or not. */
+  tf_id: string;
+}
+
 /** How many check-ins one tutorial carries. Two, per the sheet. */
 export const SLOTS = [1, 2] as const;
 /** Both scales. */
@@ -81,18 +89,31 @@ export class TutorialNotInstalledError extends Error {
 export interface TutorialSheet {
   marks: TutorialMark[];
   absences: TutorialAbsence[];
+  graders: TutorialGrader[];
 }
 
 /** Everything recorded for one activity, across every team. */
 export async function getTutorialSheet(activityId: string): Promise<TutorialSheet> {
   try {
-    const [marks, absences] = await Promise.all([
+    const [marks, absences, graders] = await Promise.all([
       db().from("tutorial_marks").select("*").eq("activity_id", activityId).order("slot"),
       db().from("tutorial_absences").select("*").eq("activity_id", activityId),
+      // Newer than the sheet itself (0040): on a database without it the
+      // sheet still works, minus the Grader column, rather than telling a TF
+      // mid-session the whole tab is not installed.
+      db()
+        .from("tutorial_graders")
+        .select("activity_id,team_id,tf_id")
+        .eq("activity_id", activityId)
+        .then(
+          (r) => (r.error ? [] : ((r.data as TutorialGrader[] | null) ?? [])),
+          () => [] as TutorialGrader[],
+        ),
     ]);
     return {
       marks: (unwrap(marks) as TutorialMark[] | null) ?? [],
       absences: (unwrap(absences) as TutorialAbsence[] | null) ?? [],
+      graders,
     };
   } catch (e) {
     if (missingTable(e)) throw new TutorialNotInstalledError();
@@ -273,6 +294,57 @@ export async function setTutorialAbsences(
     if (missingTable(e)) throw new TutorialNotInstalledError();
     throw e;
   }
+}
+
+/**
+ * Set — or clear, with null — which TF is grading one team on one activity.
+ *
+ * Upsert on the natural key for the same reason setTutorialMark is: two people
+ * can have the sheet open, and read-then-write would fail the second one on
+ * the primary key instead of updating what the first one wrote.
+ */
+export async function setTutorialGrader(
+  activityId: string,
+  teamId: string,
+  tfId: string | null,
+): Promise<void> {
+  try {
+    if (tfId === null) {
+      const { error } = await db()
+        .from("tutorial_graders")
+        .delete()
+        .eq("activity_id", activityId)
+        .eq("team_id", teamId);
+      if (error) throw dbError(error);
+      return;
+    }
+    const { error } = await db().from("tutorial_graders").upsert(
+      {
+        activity_id: activityId,
+        team_id: teamId,
+        tf_id: tfId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "activity_id,team_id" },
+    );
+    if (error) throw dbError(error);
+  } catch (e) {
+    if (/tutorial_graders/.test(String((e as Error)?.message ?? e))) {
+      throw new Error(
+        "The Grader column needs supabase/migrations/0040_checkin_graders.sql — " +
+          "run it in the Supabase SQL editor.",
+      );
+    }
+    throw e;
+  }
+}
+
+/** The grading TF for one team, or null when nobody is picked. */
+export function graderFor(
+  graders: TutorialGrader[],
+  teamId: string,
+): string | null {
+  return graders.find((g) => g.team_id === teamId)?.tf_id ?? null;
 }
 
 /** The mark for one team's slot, or undefined. */

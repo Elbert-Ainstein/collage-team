@@ -513,9 +513,14 @@ export function FacultyApp({
         listActivities(courseId),
         listWeeks(courseId),
         listTeamSets(courseId),
-        // A TF may only read their own row, so asking for the list would come
-        // back as just them and read like the roster had been emptied.
-        isOwner ? listTFs(courseId) : Promise.resolve([] as CourseTF[]),
+        // The owner always may; a TF with check-in permission may too (0040),
+        // because the sheet's Grader column is a pick from this list. A TF
+        // WITHOUT that permission still only reads their own row (0007), and
+        // handing that one-name list to screens would read like the TF roster
+        // had been emptied — so they get none.
+        isOwner || known.tf_can_checkin
+          ? listTFs(courseId).catch(() => [] as CourseTF[])
+          : Promise.resolve([] as CourseTF[]),
         // The owner always may; only a TF needs the database's answer, and a
         // refused lookup must not sink the whole load over a pencil.
         isOwner ? Promise.resolve(true) : canWriteRubric(courseId).catch(() => null),
