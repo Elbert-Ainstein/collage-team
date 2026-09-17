@@ -18,7 +18,9 @@ import type {
   Course,
   Profile,
   Role,
+  RubricItem,
   Student,
+  SubmissionMark,
   Team,
 } from "./types";
 
@@ -452,6 +454,41 @@ export async function listMyQuestions(activityId: string): Promise<ActivityQuest
     if (/activity_questions/.test(String((e as Error)?.message ?? e))) return [];
     throw e;
   }
+}
+
+/**
+ * The activity's marking ladder, as far as this student may read it.
+ *
+ * RLS (0039) only returns rows once the student has a RELEASED result on the
+ * activity, and a database that has not run 0039 returns none at all — so an
+ * empty list means "nothing to show", never an error. The graded-rubric card
+ * is an enhancement on top of a grade that already reads fine without it.
+ */
+export async function listMyRubric(activityId: string): Promise<RubricItem[]> {
+  return (
+    (unwrap(
+      await db().from("rubric_items").select("*")
+        .eq("activity_id", activityId)
+        .order("row_index"),
+    ) as RubricItem[] | null) ?? []
+  );
+}
+
+/**
+ * Which ladder rows were picked on one of this student's results.
+ *
+ * Same visibility story as listMyRubric: RLS (0039) yields rows only for a
+ * released result of their own or their team's, and none on an un-migrated
+ * database.
+ */
+export async function listMyMarks(resultId: string): Promise<SubmissionMark[]> {
+  return (
+    (unwrap(
+      await db().from("submission_marks").select("*")
+        .eq("result_id", resultId)
+        .order("question_index"),
+    ) as SubmissionMark[] | null) ?? []
+  );
 }
 
 /**
