@@ -2479,3 +2479,22 @@ button.fv-steplabel:hover { color: var(--fv-navy); }
   line-height: 1.5;
   color: var(--fv-destructive);
 }
+
+/* A pile row that opens somebody's work on the grading page. Same shape as
+   the plain row; the hover is the only tell, and it is a button so the
+   keyboard reaches it. */
+button.fv-person-open {
+  width: 100%;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  border-radius: 6px;
+  cursor: pointer;
+}
+button.fv-person-open:hover,
+button.fv-person-open:focus-visible {
+  background: var(--fv-cream-300);
+  outline: none;
+}

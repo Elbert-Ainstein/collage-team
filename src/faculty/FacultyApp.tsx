@@ -135,6 +135,12 @@ function tfNote(can: Capabilities): string {
 }
 
 /** Everything the screens read. Loaded once here, refreshed on any write. */
+/** Whose work the grading page should open on: one student, or one team. */
+export interface GradeFocus {
+  subjectId: string;
+  kind: "individual" | "team";
+}
+
 export interface FacultyData {
   course: Course;
   weeks: CourseWeek[];
@@ -705,12 +711,9 @@ export function FacultyApp({
 
   /**
    * Whose work the grading page opens on, when it was reached from the Review
-   * tab. Cleared on the way out so the next visit starts at the top as usual.
+   * tab or a name on the activity page. Cleared on the way out so the next visit starts at the top as usual.
    */
-  const [gradeFocus, setGradeFocus] = useState<{
-    subjectId: string;
-    kind: "individual" | "team";
-  } | null>(null);
+  const [gradeFocus, setGradeFocus] = useState<GradeFocus | null>(null);
   useEffect(() => {
     if (screen !== "grade") setGradeFocus(null);
   }, [screen]);
@@ -831,7 +834,8 @@ export function FacultyApp({
             // it is what tells both screens they are in a sequence, and coming
             // back to step 1 has to find it still set. Finishing spends it.
             onRubric={() => setScreen("rubric")}
-            onGrade={() => {
+            onGrade={(focus) => {
+              setGradeFocus(focus ?? null);
               setFresh(null);
               setScreen("grade");
             }}

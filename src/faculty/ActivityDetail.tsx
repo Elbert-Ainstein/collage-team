@@ -8,6 +8,7 @@
 
 import type { ResultRow } from "@/checkins/data";
 import { useEffect, useMemo, useRef, useState } from "react";
+import type React from "react";
 import { deleteActivity, tintFor, updateActivity } from "@/checkins/data";
 import { deleteActivityRecordings } from "@/checkins/audio";
 import { BriefText, safeHref } from "@/checkins/BriefText";
@@ -41,7 +42,7 @@ import { pointsLabel, nextPositionIn, pointsTotal, questionCount, questionsFor, 
 import { ConfirmDialog } from "./ConfirmDialog";
 import { FAvatar, FIcon } from "./icons";
 import { linkToActivity } from "./FacultyApp";
-import type { FacultyData } from "./FacultyApp";
+import type { FacultyData, GradeFocus } from "./FacultyApp";
 import { ActivityTeamPanel } from "./ActivityTeamPanel";
 import { NEW_ACTIVITY_STEPS, Steps } from "./Steps";
 
@@ -246,12 +247,18 @@ function PersonRows({
   empty,
   gradeColor = "var(--fv-navy)",
   muted = false,
+  onOpen,
 }: {
   list: Subject[];
   empty: string;
   /** Navy where the grade is settled; muted where it is still waiting. */
   gradeColor?: string;
   muted?: boolean;
+  /**
+   * Open this one's work on the grading page. Given on the piles that have
+   * work to open and to someone allowed to grade; a row without it is text.
+   */
+  onOpen?: (s: Subject) => void;
 }): JSX.Element {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 1, paddingLeft: 2 }}>
@@ -261,11 +268,7 @@ function PersonRows({
         </div>
       ) : (
         list.map((s) => (
-          <div
-            key={s.id}
-            className="fv-person"
-            style={muted ? { color: "var(--fv-muted)" } : undefined}
-          >
+          <PersonRow key={s.id} s={s} muted={muted} onOpen={onOpen}>
             <FAvatar name={s.name} tint={s.tint} size={22} />
             <span
               style={{
@@ -292,10 +295,47 @@ function PersonRows({
                 {s.grade}
               </span>
             ) : null}
-          </div>
+          </PersonRow>
         ))
       )}
     </div>
+  );
+}
+
+/**
+ * The row itself: a button when there is somewhere to go, a div when there is
+ * not, so a name on the Not submitted pile never reads as clickable.
+ */
+function PersonRow({
+  s,
+  muted,
+  onOpen,
+  children,
+}: {
+  s: Subject;
+  muted: boolean;
+  onOpen?: (s: Subject) => void;
+  children: React.ReactNode;
+}): JSX.Element {
+  const style = muted ? { color: "var(--fv-muted)" } : undefined;
+  if (!onOpen) {
+    return (
+      <div className="fv-person" style={style}>
+        {children}
+      </div>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="fv-person fv-person-open"
+      style={style}
+      onClick={() => onOpen(s)}
+      aria-label={`Open ${s.name}'s work`}
+      title="Open on the grading page"
+    >
+      {children}
+    </button>
   );
 }
 
@@ -621,7 +661,11 @@ export function ActivityDetail(props: {
   onBack: () => void;
   /** The rubric: the assignment document, its questions and their criteria. */
   onRubric: () => void;
-  onGrade: () => void;
+  /**
+   * Grade this activity. With a focus, the grading page opens on that one
+   * student or team instead of the top of the list.
+   */
+  onGrade: (focus?: GradeFocus) => void;
   /** The Check-in tab, where the team half is actually filled in. */
   onCheckIn: () => void;
   /** Copy this activity into another week, questions and rubric included. */
@@ -686,6 +730,13 @@ export function ActivityDetail(props: {
   const dueAt = dueOf(activity);
   const dueLine = dueAt ? fmtInstant(dueAt) : null;
 
+  // A name on a pile with work behind it opens that work. Same permission as
+  // the button underneath — a TF who cannot grade gets a list they can read
+  // and nothing to press.
+  const openWork = data.can.grade
+    ? (s: Subject) => onGrade({ subjectId: s.id, kind: pileKind })
+    : undefined;
+
   // Scheduling is the check-in permission, not authoring: a TF trusted to run
   // check-ins is trusted to decide when the class sees the work.
   const canSchedule = data.can.runCheckIns;
@@ -716,10 +767,10 @@ export function ActivityDetail(props: {
   // it, but rows written elsewhere can still carry "".
   const brief = activity.source_text?.trim() ?? "";
 
-  const { released, inReview, submitted, missing } = useMemo(() => {
+  const { released, inReview, submitted, missing, pileKind } = useMemo(() => {
     // A `both` activity owns two check-ins; its individual half is the one the
     // stat counts, so the lists have to read the same half.
-    const kind = scope === "team" ? "team" : "individual";
+    const kind: GradeFocus["kind"] = scope === "team" ? "team" : "individual";
     const ids = new Set(
       data.checkIns.filter((c) => c.activity_id === activity.id && c.kind === kind).map((c) => c.id),
     );
@@ -798,7 +849,13 @@ export function ActivityDetail(props: {
     // submitted → graded and sent for review → released. The bar above still
     // reads handed-in-at-all, which is a different question and the right one
     // for it.
-    return { released: releasedList, inReview: reviewList, submitted: inList, missing: outList };
+    return {
+      released: releasedList,
+      inReview: reviewList,
+      submitted: inList,
+      missing: outList,
+      pileKind: kind,
+    };
   }, [data.checkIns, data.results, data.roster, data.teams, activity, scope]);
 
   const [releasedOpen, setReleasedOpen] = useState(true);
@@ -2120,6 +2177,7 @@ export function ActivityDetail(props: {
               <PersonRows
                 list={released}
                 empty="Nothing released yet. Marking is not the same as releasing — a grade reaches the student when you release it."
+                onOpen={openWork}
               />
             ) : null}
 
@@ -2135,6 +2193,7 @@ export function ActivityDetail(props: {
                 list={inReview}
                 empty="Nothing waiting on review. Grading ends with Send for review; it lands here until it is released."
                 gradeColor="var(--fv-muted)"
+                onOpen={openWork}
               />
             ) : null}
 
@@ -2146,7 +2205,7 @@ export function ActivityDetail(props: {
               onToggle={() => setSubOpen((v) => !v)}
             />
             {subOpen ? (
-              <PersonRows list={submitted} empty="Nothing waiting to be graded." />
+              <PersonRows list={submitted} empty="Nothing waiting to be graded." onOpen={openWork} />
             ) : null}
 
             <PileHeader
@@ -2170,7 +2229,7 @@ export function ActivityDetail(props: {
               type="button"
               className="fv-btn primary full"
               style={{ height: 40 }}
-              onClick={onGrade}
+              onClick={() => onGrade()}
               disabled={!data.can.grade}
               title={
                 data.can.grade
