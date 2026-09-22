@@ -20,6 +20,14 @@ const getTutorialSheet = vi.fn(
 );
 const setTutorialMark = vi.fn(async (): Promise<TutorialMark> => ({}) as TutorialMark);
 const setTutorialGrader = vi.fn(async (): Promise<void> => undefined);
+/** The live channel, captured so a test can play "another TF wrote something". */
+let liveChange: (() => void) | null = null;
+const watchTutorialSheet = vi.fn((_: string, onChange: () => void) => {
+  liveChange = onChange;
+  return () => {
+    liveChange = null;
+  };
+});
 
 vi.mock("@/checkins/tutorial", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/checkins/tutorial")>();
@@ -28,6 +36,7 @@ vi.mock("@/checkins/tutorial", async (importOriginal) => {
     getTutorialSheet,
     setTutorialMark,
     setTutorialGrader,
+    watchTutorialSheet,
     setTutorialAbsences: vi.fn(async () => undefined),
   };
 });
@@ -95,6 +104,8 @@ beforeEach(() => {
   getTutorialSheet.mockResolvedValue({ marks: [], absences: [], graders: [] });
   setTutorialMark.mockReset();
   setTutorialGrader.mockReset();
+  watchTutorialSheet.mockClear();
+  liveChange = null;
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
@@ -418,5 +429,56 @@ describe("the sheet's shape", () => {
     expect(host.querySelectorAll("tbody td[rowspan]")).toHaveLength(2);
     // Seven columns, not the ten that had to be scrolled sideways.
     expect(host.querySelectorAll("thead th")).toHaveLength(7);
+  });
+});
+
+// Two TFs, two iPads, one sheet. Diego marks Team 1's check-in 1; Luke's copy
+// has to show it before he puts check-in 2's marks into that row.
+describe("the sheet is live", () => {
+  const mark = (accuracy: number): TutorialMark => ({
+    id: "m1", activity_id: "a1", team_id: "t1", slot: 1,
+    presenter_id: null, accuracy, discussion: null, updated_at: "",
+  });
+  const settle = () => act(async () => { await new Promise((r) => setTimeout(r, 320)); });
+
+  it("watches the open activity, and stops when the sheet closes", async () => {
+    await mount(facultyData(), { start: "a1" });
+    expect(watchTutorialSheet).toHaveBeenCalledWith("a1", expect.any(Function));
+    expect(liveChange).not.toBeNull();
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>(".fv-back")!.click();
+    });
+    expect(liveChange).toBeNull();
+  });
+
+  it("another copy's write re-reads the sheet without blanking it", async () => {
+    await mount(facultyData(), { start: "a1" });
+    expect(getTutorialSheet).toHaveBeenCalledTimes(1);
+    getTutorialSheet.mockResolvedValueOnce({ marks: [mark(4)], absences: [], graders: [] });
+    await act(async () => { liveChange!(); liveChange!(); liveChange!(); });
+    await settle();
+    // Three events, one re-read — and the mark Diego made is on Luke's sheet.
+    expect(getTutorialSheet).toHaveBeenCalledTimes(2);
+    expect(score(4).getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("waits for this copy's own save to land before re-reading", async () => {
+    let finish: (m: TutorialMark) => void = () => undefined;
+    setTutorialMark.mockImplementationOnce(
+      () => new Promise<TutorialMark>((resolve) => { finish = resolve; }),
+    );
+    await mount(facultyData(), { start: "a1" });
+    await act(async () => { score(3).click(); });
+    // A change arrives while the tap is still in flight...
+    getTutorialSheet.mockResolvedValue({ marks: [mark(3)], absences: [], graders: [] });
+    await act(async () => { liveChange!(); });
+    await settle();
+    // ...and nothing is re-read yet: the optimistic 3 stays put.
+    expect(getTutorialSheet).toHaveBeenCalledTimes(1);
+    expect(score(3).getAttribute("aria-pressed")).toBe("true");
+    await act(async () => { finish(mark(3)); });
+    // Once it lands, the deferred re-read runs.
+    expect(getTutorialSheet).toHaveBeenCalledTimes(2);
+    expect(score(3).getAttribute("aria-pressed")).toBe("true");
   });
 });

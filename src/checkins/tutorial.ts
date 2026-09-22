@@ -403,6 +403,42 @@ export function graderFor(
   return row.instructor ? INSTRUCTOR : row.tf_id;
 }
 
+/** The three tables one activity's sheet is made of — what a live copy watches. */
+const SHEET_TABLES = ["tutorial_marks", "tutorial_absences", "tutorial_graders"] as const;
+
+/**
+ * Watch one activity's sheet for writes from ANY copy of it, and say so.
+ *
+ * Two TFs share a sheet during a session, and each holds their own copy. Diego
+ * marked Team 1's check-in 1; Luke, who had opened the sheet first, still saw
+ * that row empty and put check-in 2's marks into it. The fix is not a merge
+ * — the sheet's own loader is the merge — it is being TOLD something landed.
+ * `onChange` fires once per change on any of the three tables for this
+ * activity, and the caller re-reads the sheet.
+ *
+ * Filtered server-side on activity_id so a copy of week 3's sheet is not woken
+ * by week 4's. Delete events carry that column only under REPLICA IDENTITY
+ * FULL (0043). Realtime also honours RLS: a client is sent only rows it could
+ * select, which is exactly the sheet's own readers.
+ *
+ * Returns the unsubscribe. A database where realtime is not set up simply
+ * never fires — the sheet then behaves as it did before 0043, on reload.
+ */
+export function watchTutorialSheet(activityId: string, onChange: () => void): () => void {
+  const channel = db().channel(`tutorial-sheet:${activityId}`);
+  for (const table of SHEET_TABLES) {
+    channel.on(
+      "postgres_changes",
+      { event: "*", schema: "public", table, filter: `activity_id=eq.${activityId}` },
+      () => onChange(),
+    );
+  }
+  channel.subscribe();
+  return () => {
+    void db().removeChannel(channel);
+  };
+}
+
 /** The mark for one team's slot, or undefined. */
 export function markFor(marks: TutorialMark[], teamId: string, slot: number): TutorialMark | undefined {
   return marks.find((m) => m.team_id === teamId && m.slot === slot);

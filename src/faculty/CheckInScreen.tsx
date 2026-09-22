@@ -44,6 +44,7 @@ import {
   setTutorialGrader,
   setTutorialMark,
   studentMarks,
+  watchTutorialSheet,
   type TutorialAbsence,
   type TutorialGrader,
   type TutorialMark,
@@ -52,6 +53,9 @@ import { groupByWeek } from "./model";
 import type { FacultyData } from "./FacultyApp";
 import { CheckInPicker } from "./CheckInPicker";
 import { FAvatar, FIcon } from "./icons";
+
+/** How long a burst of live events is allowed to settle before one re-read. */
+const LIVE_COALESCE_MS = 250;
 
 export function CheckInScreen({
   data,
@@ -149,6 +153,75 @@ export function CheckInScreen({
     void load();
   }, [load]);
 
+  /**
+   * Keep this copy of the sheet current with every other open copy.
+   *
+   * Two TFs mark the same room from two iPads. Diego filled Team 1's check-in
+   * 1; Luke, who had opened the sheet earlier, still saw that row empty and put
+   * check-in 2's marks into it. So the sheet now listens (0043) and re-reads
+   * itself when anyone writes to this activity — Luke's copy fills in as Diego
+   * types, and a full row is not one he starts on.
+   *
+   * Re-read, not merged: the loader already knows how to turn rows into the
+   * sheet, and a merge here would be a second one that could disagree with it.
+   * Two guards keep the re-read from fighting the person holding this copy:
+   *   - it waits until this copy's own saves have landed. A refetch while an
+   *     optimistic row is in flight would put the OLD server row back over the
+   *     mark just tapped, and the save would then race it to the screen.
+   *   - bursts coalesce. Ticking three absences fires three events; one
+   *     re-read follows, not three.
+   * Nothing is cleared first, so the sheet never blanks under a reader.
+   */
+  const inFlight = useRef(0);
+  const wanted = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const reread = useCallback(async () => {
+    if (!selId || !listed) return;
+    const activityId = selId;
+    try {
+      const sheet = await getTutorialSheet(activityId);
+      if (!stillOpen(activityId)) return;
+      setMarks(sheet.marks);
+      setAbsences(sheet.absences);
+      setGraders(sheet.graders);
+    } catch {
+      // A live re-read failing is not worth a message: what is on screen is
+      // still what this copy last read, and the next event tries again.
+    }
+  }, [selId, listed]);
+
+  const settle = useCallback(() => {
+    if (inFlight.current > 0 || !wanted.current) return;
+    wanted.current = false;
+    void reread();
+  }, [reread]);
+
+  useEffect(() => {
+    if (!selId || !listed) return;
+    wanted.current = false;
+    const stop = watchTutorialSheet(selId, () => {
+      wanted.current = true;
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = setTimeout(settle, LIVE_COALESCE_MS);
+    });
+    return () => {
+      stop();
+      if (timer.current) clearTimeout(timer.current);
+      timer.current = null;
+    };
+  }, [selId, listed, settle]);
+
+  const beginSave = () => {
+    inFlight.current += 1;
+    setSaving((n) => n + 1);
+  };
+  const endSave = () => {
+    inFlight.current -= 1;
+    setSaving((n) => n - 1);
+    settle();
+  };
+
   const canEdit = data.can.runCheckIns;
 
   /**
@@ -187,7 +260,7 @@ export function CheckInScreen({
       return prev.map((m, i) => (i === at ? { ...m, ...patch } : m));
     });
 
-    setSaving((n) => n + 1);
+    beginSave();
     setError(null);
     try {
       // The whole slot is sent, not just the changed field: upsert writes a row,
@@ -212,7 +285,7 @@ export function CheckInScreen({
       setMarks(before);
       setError(e instanceof Error ? e.message : "That didn't save.");
     } finally {
-      setSaving((n) => n - 1);
+      endSave();
     }
   };
 
@@ -264,7 +337,7 @@ export function CheckInScreen({
       ...prev.filter((a) => a.team_id !== teamId),
       ...studentIds.map((student_id) => ({ activity_id: selId, team_id: teamId, student_id })),
     ]);
-    setSaving((n) => n + 1);
+    beginSave();
     setError(null);
     try {
       await setTutorialAbsences(activityId, teamId, studentIds);
@@ -273,7 +346,7 @@ export function CheckInScreen({
       setAbsences(before);
       setError(e instanceof Error ? e.message : "That didn't save.");
     } finally {
-      setSaving((n) => n - 1);
+      endSave();
     }
   };
 
@@ -301,7 +374,7 @@ export function CheckInScreen({
           ]
         : []),
     ]);
-    setSaving((n) => n + 1);
+    beginSave();
     setError(null);
     try {
       await setTutorialGrader(activityId, teamId, slot, pick);
@@ -310,7 +383,7 @@ export function CheckInScreen({
       setGraders(before);
       setError(e instanceof Error ? e.message : "That didn't save.");
     } finally {
-      setSaving((n) => n - 1);
+      endSave();
     }
   };
 
