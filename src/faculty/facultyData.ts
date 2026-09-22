@@ -1362,27 +1362,54 @@ export async function releaseMany(
 
 // ---------------------------------------------------------------------- TFs
 
+/** A name worth printing, or null: blank and whitespace are both "no name". */
+function named(value: string | null | undefined): string | null {
+  const t = (value ?? "").trim();
+  return t ? t : null;
+}
+
 /**
  * The instructor's name, for the Grading TF dropdown — she grades too (0041).
  *
  * The course owner is not on the TF roster and has no row to name, so the pick
- * is a sentinel and this is the only place her NAME can come from. profiles is
- * the owner's own until 0042 opens this one row to their check-in staff, so a
- * database without that migration — or an owner who never filled a name in —
- * answers null, and the dropdown says "Instructor" as it did before.
+ * is a sentinel and this is the only place her NAME can come from. Three
+ * sources, narrowing:
+ *
+ *   1. profiles.full_name — the one a TF can read, once 0042 opens the owner's
+ *      row to their check-in staff.
+ *   2. Failing that, and only when SHE is the one looking: the name on her own
+ *      session. profiles.full_name is filled by 0006's trigger from what the
+ *      sign-up form collected, so an account made before that form asked for a
+ *      name has a blank row — and the instructor should not be reading "
+ *      Instructor" on her own course because of when she signed up.
+ *   3. Her email, which is at least hers.
+ *
+ * Null only when none of those exist, and the dropdown then says the role.
  */
 export async function getInstructorName(ownerId: string | null): Promise<string | null> {
   if (!ownerId) return null;
-  const name = await db()
+
+  const fromProfile = await db()
     .from("profiles")
     .select("full_name")
     .eq("id", ownerId)
     .limit(1)
     .then(
-      (r) => (r.error ? null : ((r.data?.[0] as { full_name: string | null } | undefined)?.full_name ?? null)),
+      (r) =>
+        r.error
+          ? null
+          : named((r.data?.[0] as { full_name: string | null } | undefined)?.full_name),
       () => null,
     );
-  return name && name.trim() ? name.trim() : null;
+  if (fromProfile) return fromProfile;
+
+  // getSession, not getUser: local read, and this only picks a LABEL — nothing
+  // here authorises anything, RLS re-derives the account from the JWT.
+  const { data } = await db().auth.getSession();
+  const user = data.session?.user;
+  if (!user || user.id !== ownerId) return null;
+  const meta = (user.user_metadata as { full_name?: string | null } | null)?.full_name;
+  return named(meta) ?? named(user.email) ?? null;
 }
 
 export async function listTFs(courseId: string): Promise<CourseTF[]> {
