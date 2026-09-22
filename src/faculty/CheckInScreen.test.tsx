@@ -81,6 +81,7 @@ function facultyData(): FacultyData {
       { id: "t1", name: "Team 1", members: [student("s1", "Ada Lovelace")] },
     ],
     tfs: [],
+    instructor: "Kelly Miller",
     stats: new Map(),
     can: { runCheckIns: true },
   } as unknown as FacultyData;
@@ -334,13 +335,13 @@ describe("the Grading TF column", () => {
       `select[aria-label="Who is grading Team 1, check-in ${slot}"]`,
     )!;
 
-  it("offers the instructor and the course's TFs per check-in, and saves the pick", async () => {
+  it("names the instructor herself, next to the course's TFs", async () => {
     await mount(withTFs(), { start: "a1" });
     expect(textOf()).toContain("Grading TF");
     const sel = graderSelect(2);
     expect([...sel.options].map((o) => o.textContent)).toEqual([
       "—",
-      "Instructor",
+      "Kelly Miller",
       "Sam Chen",
       "Rae Patel",
     ]);
@@ -376,6 +377,16 @@ describe("the Grading TF column", () => {
   it("a course with no TFs still offers the instructor — she runs check-ins too", async () => {
     await mount(facultyData(), { start: "a1" });
     expect(textOf()).toContain("Grading TF");
+    expect([...graderSelect(1).options].map((o) => o.textContent)).toEqual([
+      "—",
+      "Kelly Miller",
+    ]);
+  });
+
+  // Her name comes from her profile, which a TF can only read once 0042 has
+  // run. Without it the pick still has to be there — it is half the staff.
+  it("says the role when the instructor's name cannot be read", async () => {
+    await mount({ ...facultyData(), instructor: null } as FacultyData, { start: "a1" });
     expect([...graderSelect(1).options].map((o) => o.textContent)).toEqual([
       "—",
       "Instructor",

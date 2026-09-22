@@ -315,10 +315,12 @@ export function CheckInScreen({
   };
 
   // The column is always there, because the instructor is always one of the
-  // names: a course with no TFs yet is Kelly running the check-ins herself.
-  // She is a sentinel rather than a roster row — the owner is not a TF, and a
-  // TF cannot read her profile to learn her name, so the option says the role.
+  // names: a course with no TFs yet is the instructor running the check-ins
+  // herself. She is a sentinel rather than a roster row, because the owner is
+  // not on the TF roster — but the pick reads as her NAME (0042), and falls
+  // back to the role on a database that cannot hand it over.
   const tfs = data.tfs;
+  const instructorName = data.instructor ?? "Instructor";
 
   const errorBox = error ? (
     <div
@@ -451,12 +453,10 @@ export function CheckInScreen({
                             <td className="fv-sticky-l" rowSpan={SLOTS.length}>
                               <div className="fv-subject">
                                 <FIcon name="groups" size={16} />
-                                <span style={{ fontSize: "var(--fv-xs)", fontWeight: 600 }}>
-                                  {team.name}
-                                </span>
+                                <span className="fv-ckteamname">{team.name}</span>
                                 <span
                                   className="fv-sub"
-                                  style={{ marginLeft: "auto", fontSize: "var(--fv-2xs)" }}
+                                  style={{ marginLeft: "auto", fontSize: "var(--fv-xs)" }}
                                 >
                                   {team.members.length - away.length}/{team.members.length}
                                 </span>
@@ -490,7 +490,7 @@ export function CheckInScreen({
                               }
                             >
                               <option value="">—</option>
-                              <option value={INSTRUCTOR}>Instructor</option>
+                              <option value={INSTRUCTOR}>{instructorName}</option>
                               {tfs.map((tf) => (
                                 <option key={tf.id} value={tf.id}>
                                   {tf.name}
@@ -551,13 +551,6 @@ export function CheckInScreen({
                 </tbody>
               </table>
             </div>
-
-            <p className="fv-sub" style={{ marginTop: 12, lineHeight: 1.55, maxWidth: "70ch" }}>
-              You mark the team; the score is each student&rsquo;s. Everyone who was in the
-              room gets the team&rsquo;s two numbers for that check-in, and anyone ticked
-              absent gets 0. Each student sees their own numbers and their team&rsquo;s
-              presenter — never another team&rsquo;s row, and never who else was away.
-            </p>
           </>
         )}
       </div>

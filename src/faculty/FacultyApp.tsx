@@ -33,6 +33,7 @@ import type { ResultRow } from "@/checkins/data";
 import {
   canWriteRubric,
   duplicateActivity,
+  getInstructorName,
   listQuestionsFor,
   listTFs,
   listWeeks,
@@ -162,6 +163,13 @@ export interface FacultyData {
   results: ResultRow[];
   teams: TeamWithMembers[];
   tfs: CourseTF[];
+  /**
+   * The course instructor's name, when it can be read (0042), for the check-in
+   * sheet's Grading TF pick — she grades check-ins too but is not on the TF
+   * roster. Null on an older database, or an owner with no name set: the pick
+   * is then offered as "Instructor".
+   */
+  instructor: string | null;
   /** Keyed by activity id — the one derived object both views read. */
   stats: Map<string, ActivityStat>;
   can: Capabilities;
@@ -506,7 +514,7 @@ export function FacultyApp({
       // nobody owns anything.
       const isOwner = uid ? known.owner_id === uid : mode === "owner";
 
-      const [allCourses, roster, activities, weeks, sets, tfs, rubric] = await Promise.all([
+      const [allCourses, roster, activities, weeks, sets, tfs, rubric, instructor] = await Promise.all([
         // Re-read the course row on every refresh. It used to come only from the
         // `courses` array, which loadCourses fills once at mount — so every write
         // to the courses table (the live week, both TF permission switches) landed
@@ -530,6 +538,10 @@ export function FacultyApp({
         // The owner always may; only a TF needs the database's answer, and a
         // refused lookup must not sink the whole load over a pencil.
         isOwner ? Promise.resolve(true) : canWriteRubric(courseId).catch(() => null),
+        // Whose name goes on the check-in sheet's instructor pick. A refused
+        // lookup — a database before 0042 — is a dropdown that says the role
+        // instead of the name, never a load that fails.
+        getInstructorName(known.owner_id).catch(() => null),
       ]);
       const course = allCourses.find((c) => c.id === courseId) ?? known;
 
@@ -573,6 +585,7 @@ export function FacultyApp({
         results,
         teams,
         tfs,
+        instructor,
         stats,
         can: capabilitiesFor(course, isOwner, rubric),
       });

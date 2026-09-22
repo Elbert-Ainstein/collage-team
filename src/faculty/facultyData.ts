@@ -1362,6 +1362,29 @@ export async function releaseMany(
 
 // ---------------------------------------------------------------------- TFs
 
+/**
+ * The instructor's name, for the Grading TF dropdown — she grades too (0041).
+ *
+ * The course owner is not on the TF roster and has no row to name, so the pick
+ * is a sentinel and this is the only place her NAME can come from. profiles is
+ * the owner's own until 0042 opens this one row to their check-in staff, so a
+ * database without that migration — or an owner who never filled a name in —
+ * answers null, and the dropdown says "Instructor" as it did before.
+ */
+export async function getInstructorName(ownerId: string | null): Promise<string | null> {
+  if (!ownerId) return null;
+  const name = await db()
+    .from("profiles")
+    .select("full_name")
+    .eq("id", ownerId)
+    .limit(1)
+    .then(
+      (r) => (r.error ? null : ((r.data?.[0] as { full_name: string | null } | undefined)?.full_name ?? null)),
+      () => null,
+    );
+  return name && name.trim() ? name.trim() : null;
+}
+
 export async function listTFs(courseId: string): Promise<CourseTF[]> {
   return selectAll<CourseTF>((from, to) =>
     db().from("course_tfs").select("*").eq("course_id", courseId)

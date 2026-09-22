@@ -1764,36 +1764,91 @@
 /* Which check-in this row is. Quiet — it is a label on a row, not a heading —
    but it is the thing you read to know which half of the team's tutorial the
    rest of the row is about, so it never wraps. */
+/* Which check-in this row is. It is the thing you read to know which half of
+   the team's tutorial the rest of the row is about, so it is set at the body
+   size and never wraps. */
 .fv-ckwhich {
-  padding: 6px 6px;
+  padding: 8px 8px;
   white-space: nowrap;
-  font-size: var(--fv-xs);
+  font-size: var(--fv-sm);
   font-weight: 600;
   color: var(--fv-navy);
 }
 
-/* Widths, so the whole sheet fits a laptop and an iPad in landscape without
-   scrolling sideways. Stacking the check-ins removed three columns; these
-   numbers spend what that freed on the two things a name has to be readable
-   in — the team's own column and the presenter — and take it back everywhere
-   else. Scoped to this sheet: the gradebook shares .fv-sticky-l and is a
-   laptop surface with room to spare.
-
-   The 1-5 buttons are the floor at 128px a scale. They are the target you hit
-   while walking between teams, so the columns give way to them, not the other
-   way round. On a touch screen they grow again (bottom of the file) and the
-   sheet goes back to scrolling inside its box — that trade is deliberate. */
+/* The stacked sheet reads at arm's length, and it never scrolls sideways.
+   Those two pull against each other — bigger type wants more width — so the
+   deal is: vertical space is free (the sheet scrolls down), horizontal space
+   is not. Every rule here spends height and refuses width.
+     - Names are 12px, not 10px, with room to breathe between them.
+     - Every column may SHRINK: the pickers are fluid, so a narrow window
+       squeezes them instead of pushing the last scale off the edge.
+     - The 1-5 buttons are the one fixed thing, at 118px a scale. They are the
+       target you hit while walking between teams. On a touch screen they grow
+       again (bottom of the file) and the sheet scrolls inside its own box —
+       that trade is deliberate and unchanged. */
+.fv-tbl.fv-ckstack td.fv-ckcell,
+.fv-tbl.fv-ckstack th {
+  padding: 8px 8px;
+}
 .fv-cksheet .fv-ckstack .fv-sticky-l {
-  min-width: 134px;
+  min-width: 0;
+  width: 15%;
 }
+/* No floors on the two name columns: auto table layout already keeps them at
+   their content's minimum, and a floor on top of that is what pushed the last
+   scale off the right edge. */
 .fv-tbl.fv-ckstack td.fv-ckabs {
-  min-width: 124px;
+  min-width: 0;
 }
+.fv-ckstack .fv-subject {
+  padding: 10px 8px;
+  align-items: flex-start;
+}
+.fv-ckstack .fv-ckteamname {
+  font-size: var(--fv-sm);
+  font-weight: 600;
+  line-height: 1.35;
+}
+/* Room between the names, and each one on a line you can hit with a finger.
+   At 10px in a column this narrow they ran together into a grey block. */
+.fv-ckstack .fv-absent {
+  gap: 6px;
+}
+.fv-ckstack .fv-absentrow {
+  font-size: var(--fv-xs);
+  line-height: 1.35;
+  gap: 8px;
+  align-items: flex-start;
+}
+.fv-ckstack .fv-absentrow input {
+  flex: none;
+  margin-top: 1px;
+}
+/* Fluid: the pickers give way first, and what is inside them is clipped by
+   the select rather than by the table running off the edge. */
 .fv-ckstack .fv-ckpick {
-  min-width: 94px;
+  min-width: 72px;
+  width: 100%;
+  height: 32px;
+  font-size: var(--fv-xs);
+  /* Room for the chevron the browser draws inside the control: at these
+     widths "Pick one" was running underneath it. */
+  padding: 0 22px 0 8px;
 }
-.fv-tbl.fv-ckstack td.fv-ckcell {
-  padding: 5px;
+.fv-ckstack .fv-ckpres {
+  min-width: 0;
+  gap: 8px;
+}
+.fv-ckstack .fv-ckpres .fv-ckpick {
+  flex: 1;
+}
+.fv-ckstack .fv-scale {
+  gap: 3px;
+}
+.fv-ckstack .fv-scalebtn {
+  width: 22px;
+  height: 30px;
+  font-size: var(--fv-xs);
 }
 .fv-tbl td.fv-ckabs {
   min-width: 150px;

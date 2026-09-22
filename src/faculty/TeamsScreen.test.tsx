@@ -112,6 +112,7 @@ function facultyData(over: Partial<FacultyData> = {}): FacultyData {
     results: [],
     teams: [],
     tfs: TFS,
+    instructor: null,
     stats: new Map(),
     can: {
       isOwner: true,

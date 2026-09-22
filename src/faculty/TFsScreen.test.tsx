@@ -71,6 +71,7 @@ function facultyData(roster: Student[], tfs: CourseTF[] = []): FacultyData {
     results: [],
     teams: [],
     tfs,
+    instructor: null,
     stats: new Map(),
     can: {
       isOwner: true,
