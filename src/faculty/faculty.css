@@ -2424,30 +2424,26 @@ button.fv-steplabel:hover { color: var(--fv-navy); }
     min-width: 132px;
   }
 
-  .fv-tbl td.fv-ckcell {
-    padding: 5px 6px;
-  }
-  .fv-tbl td.fv-ckabs {
+  /* Every rule from here down is written .fv-ckstack-first, and has to stay
+     that way. The sheet's own sizes are set on .fv-ckstack selectors up the
+     file; a media query adds no specificity, so an unprefixed .fv-scalebtn
+     here loses to .fv-ckstack .fv-scalebtn and the finger sizes silently do
+     nothing — which is exactly what happened the first time this was written. */
+  .fv-tbl.fv-ckstack td.fv-ckabs {
     min-width: 136px;
   }
-  .fv-ckpick {
+  .fv-ckstack .fv-ckpick {
     min-width: 132px;
     height: 40px;
   }
-  .fv-ckdie {
+  .fv-ckstack .fv-ckdie {
     width: 40px;
     height: 40px;
   }
-  .fv-absent {
-    gap: 2px;
-  }
-  .fv-absentrow {
+  .fv-ckstack .fv-absentrow {
     min-height: 36px;
-    gap: 8px;
-    font-size: var(--fv-xs);
   }
-  .fv-absentrow input {
-    flex: none;
+  .fv-ckstack .fv-absentrow input {
     width: 20px;
     height: 20px;
   }
@@ -2457,16 +2453,16 @@ button.fv-steplabel:hover { color: var(--fv-navy); }
      button reaches past itself — the targets meet and never overlap, because
      two overlapping targets on this screen is the mis-tap it is trying to
      prevent. */
-  .fv-scale {
+  .fv-ckstack .fv-scale {
     gap: 4px;
   }
-  .fv-scalebtn {
+  .fv-ckstack .fv-scalebtn {
     position: relative;
     width: 34px;
     height: 40px;
     font-size: var(--fv-sm);
   }
-  .fv-scalebtn::after {
+  .fv-ckstack .fv-scalebtn::after {
     content: "";
     position: absolute;
     inset: -2px;
@@ -2484,10 +2480,10 @@ button.fv-steplabel:hover { color: var(--fv-navy); }
   .fv-cksheet th.fv-ckdisc .fv-eyebrow {
     color: var(--fv-lavender);
   }
-  .fv-scale.disc .fv-scalebtn {
+  .fv-ckstack .fv-scale.disc .fv-scalebtn {
     border-radius: 999px;
   }
-  .fv-scale.disc .fv-scalebtn.on {
+  .fv-ckstack .fv-scale.disc .fv-scalebtn.on {
     background: var(--fv-lavender);
   }
 }
