@@ -33,13 +33,36 @@ export interface TutorialAbsence {
   student_id: string;
 }
 
-/** Which TF is grading one team's work on one activity (0040). */
+/**
+ * Who is grading one team's work on one CHECK-IN (0040, per-slot in 0041).
+ *
+ * Per slot because the room is split per check-in: teams present their sections
+ * one at a time and the staff swap between them, so one team's two check-ins
+ * can be graded by two different people.
+ */
 export interface TutorialGrader {
   activity_id: string;
   team_id: string;
-  /** A course_tfs row — the TF as the TFs tab manages them, signed up or not. */
-  tf_id: string;
+  /** Which check-in, 1 or 2 — the same slot tutorial_marks is keyed on. */
+  slot: number;
+  /**
+   * A course_tfs row — the TF as the TFs tab manages them, signed up or not —
+   * or null when the grader is the instructor, who has no row on that roster.
+   */
+  tf_id: string | null;
+  /** The course's instructor is grading this one. Exactly one of the two. */
+  instructor: boolean;
 }
+
+/**
+ * What a pick is, on the sheet: a course_tfs id, or the instructor.
+ *
+ * The instructor is a sentinel rather than an id because the owner is not on
+ * the TF roster and has no row to name — and the app cannot read their profile
+ * either, so "Instructor" is also all a TF could be shown.
+ */
+export const INSTRUCTOR = "instructor";
+export type GraderPick = string;
 
 /** How many check-ins one tutorial carries. Two, per the sheet. */
 export const SLOTS = [1, 2] as const;
@@ -92,23 +115,49 @@ export interface TutorialSheet {
   graders: TutorialGrader[];
 }
 
+/**
+ * The graders for one activity, degrading on an older database.
+ *
+ * Three shapes are live: 0041's, 0040's one-pick-per-team, and no table at all.
+ * A 0040 row was one pick meant for the whole activity — the same reading the
+ * migration takes — so it is shown against BOTH check-ins rather than vanishing
+ * from the second one. No table means no column, not a broken sheet.
+ */
+async function readGraders(activityId: string): Promise<TutorialGrader[]> {
+  const fresh = await db()
+    .from("tutorial_graders")
+    .select("activity_id,team_id,slot,tf_id,instructor")
+    .eq("activity_id", activityId)
+    .then(
+      (r) => (r.error ? null : ((r.data as TutorialGrader[] | null) ?? [])),
+      () => null,
+    );
+  if (fresh) return fresh;
+
+  const legacy = await db()
+    .from("tutorial_graders")
+    .select("activity_id,team_id,tf_id")
+    .eq("activity_id", activityId)
+    .then(
+      (r) =>
+        r.error ? [] : ((r.data as { activity_id: string; team_id: string; tf_id: string }[] | null) ?? []),
+      () => [] as { activity_id: string; team_id: string; tf_id: string }[],
+    );
+  return legacy.flatMap((g) =>
+    SLOTS.map((slot) => ({ ...g, slot, instructor: false })),
+  );
+}
+
 /** Everything recorded for one activity, across every team. */
 export async function getTutorialSheet(activityId: string): Promise<TutorialSheet> {
   try {
     const [marks, absences, graders] = await Promise.all([
       db().from("tutorial_marks").select("*").eq("activity_id", activityId).order("slot"),
       db().from("tutorial_absences").select("*").eq("activity_id", activityId),
-      // Newer than the sheet itself (0040): on a database without it the
+      // Newer than the sheet itself (0040/0041): on a database without it the
       // sheet still works, minus the Grader column, rather than telling a TF
       // mid-session the whole tab is not installed.
-      db()
-        .from("tutorial_graders")
-        .select("activity_id,team_id,tf_id")
-        .eq("activity_id", activityId)
-        .then(
-          (r) => (r.error ? [] : ((r.data as TutorialGrader[] | null) ?? [])),
-          () => [] as TutorialGrader[],
-        ),
+      readGraders(activityId),
     ]);
     return {
       marks: (unwrap(marks) as TutorialMark[] | null) ?? [],
@@ -297,7 +346,7 @@ export async function setTutorialAbsences(
 }
 
 /**
- * Set — or clear, with null — which TF is grading one team on one activity.
+ * Set — or clear, with null — who is grading one team on one check-in.
  *
  * Upsert on the natural key for the same reason setTutorialMark is: two people
  * can have the sheet open, and read-then-write would fail the second one on
@@ -306,15 +355,17 @@ export async function setTutorialAbsences(
 export async function setTutorialGrader(
   activityId: string,
   teamId: string,
-  tfId: string | null,
+  slot: number,
+  pick: GraderPick | null,
 ): Promise<void> {
   try {
-    if (tfId === null) {
+    if (pick === null) {
       const { error } = await db()
         .from("tutorial_graders")
         .delete()
         .eq("activity_id", activityId)
-        .eq("team_id", teamId);
+        .eq("team_id", teamId)
+        .eq("slot", slot);
       if (error) throw dbError(error);
       return;
     }
@@ -322,29 +373,34 @@ export async function setTutorialGrader(
       {
         activity_id: activityId,
         team_id: teamId,
-        tf_id: tfId,
+        slot,
+        tf_id: pick === INSTRUCTOR ? null : pick,
+        instructor: pick === INSTRUCTOR,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "activity_id,team_id" },
+      { onConflict: "activity_id,team_id,slot" },
     );
     if (error) throw dbError(error);
   } catch (e) {
-    if (/tutorial_graders/.test(String((e as Error)?.message ?? e))) {
+    if (/tutorial_graders|\bslot\b|instructor/.test(String((e as Error)?.message ?? e))) {
       throw new Error(
-        "The Grader column needs supabase/migrations/0040_checkin_graders.sql — " +
-          "run it in the Supabase SQL editor.",
+        "The Grading TF column needs supabase/migrations/0040_checkin_graders.sql " +
+          "and 0041_checkin_graders_per_slot.sql — run them in the Supabase SQL editor.",
       );
     }
     throw e;
   }
 }
 
-/** The grading TF for one team, or null when nobody is picked. */
+/** Who is grading one team's check-in, or null when nobody is picked. */
 export function graderFor(
   graders: TutorialGrader[],
   teamId: string,
-): string | null {
-  return graders.find((g) => g.team_id === teamId)?.tf_id ?? null;
+  slot: number,
+): GraderPick | null {
+  const row = graders.find((g) => g.team_id === teamId && g.slot === slot);
+  if (!row) return null;
+  return row.instructor ? INSTRUCTOR : row.tf_id;
 }
 
 /** The mark for one team's slot, or undefined. */

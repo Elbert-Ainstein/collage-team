@@ -10,6 +10,14 @@
 // ?s=checkin&a=<activity>, so a reload mid-tutorial lands back on the same
 // sheet rather than on the picker, and back returns to the picker.
 //
+// One ROW per check-in, stacked under its team: the team's name and who was
+// away are said once and span the pair, and everything that differs between the
+// two check-ins — who is grading it, who presented, the two scores — sits on its
+// own row. Side by side, the same sheet was ten columns wide and had to be
+// scrolled sideways to reach the second check-in at all; stacked, it is seven
+// and fits. The grading TF lives here rather than beside the team because the
+// staff split the room per check-in, not per tutorial.
+//
 // The unit of MARKING is the team, because this is filled in standing up while
 // walking between them. The unit of SCORING is the student: everyone present
 // takes the team's numbers, everyone ticked absent takes 0. That is derived from
@@ -29,6 +37,7 @@ import {
   SLOTS,
   absentIds,
   getTutorialSheet,
+  INSTRUCTOR,
   graderFor,
   markFor,
   setTutorialAbsences,
@@ -271,21 +280,31 @@ export function CheckInScreen({
   const absentIn = (teamId: string): string[] => absentIds(absences, teamId);
 
   /**
-   * Pick — or clear — which TF is grading one team. Optimistic like every
+   * Pick — or clear — who is grading one team's check-in. Optimistic like every
    * other cell on the sheet, restored whole on failure.
    */
-  const writeGrader = async (teamId: string, tfId: string | null) => {
+  const writeGrader = async (teamId: string, slot: number, pick: string | null) => {
     if (!selId || !canEdit) return;
     const activityId = selId;
     const before = graders;
     setGraders((prev) => [
-      ...prev.filter((g) => g.team_id !== teamId),
-      ...(tfId ? [{ activity_id: activityId, team_id: teamId, tf_id: tfId }] : []),
+      ...prev.filter((g) => !(g.team_id === teamId && g.slot === slot)),
+      ...(pick
+        ? [
+            {
+              activity_id: activityId,
+              team_id: teamId,
+              slot,
+              tf_id: pick === INSTRUCTOR ? null : pick,
+              instructor: pick === INSTRUCTOR,
+            },
+          ]
+        : []),
     ]);
     setSaving((n) => n + 1);
     setError(null);
     try {
-      await setTutorialGrader(activityId, teamId, tfId);
+      await setTutorialGrader(activityId, teamId, slot, pick);
     } catch (e) {
       if (!stillOpen(activityId)) return;
       setGraders(before);
@@ -295,12 +314,11 @@ export function CheckInScreen({
     }
   };
 
-  // The Grader column only exists when there are TFs to pick from. An owner
-  // with no TFs — or a database before 0040's course_tfs read policy, where a
-  // TF's list is just themselves — gets a sheet without the column rather
-  // than a dropdown holding nothing useful.
+  // The column is always there, because the instructor is always one of the
+  // names: a course with no TFs yet is Kelly running the check-ins herself.
+  // She is a sentinel rather than a roster row — the owner is not a TF, and a
+  // TF cannot read her profile to learn her name, so the option says the role.
   const tfs = data.tfs;
-  const showGraders = tfs.length > 0;
 
   const errorBox = error ? (
     <div
@@ -353,7 +371,8 @@ export function CheckInScreen({
         <div>
           <h1 className="fv-h1">{selected.title}</h1>
           <div className="fv-sub">
-            One row per team. Fill it in while the tutorial is running — it saves as you go.
+            One row per check-in, stacked under its team. Fill it in while the tutorial is
+            running — it saves as you go.
           </div>
         </div>
         <div style={{ flex: 1 }} />
@@ -373,8 +392,8 @@ export function CheckInScreen({
               No teams yet
             </div>
             <p className="fv-sub" style={{ marginTop: 8, lineHeight: 1.6, maxWidth: "56ch" }}>
-              This sheet has one row per team. Form them on the Teams tab and they will
-              appear here.
+              This sheet has a row per check-in, stacked under its team. Form them on the
+              Teams tab and they will appear here.
             </p>
           </div>
         ) : (
@@ -386,7 +405,7 @@ export function CheckInScreen({
             ) : null}
 
             <div className="fv-tblwrap">
-              <table className="fv-tbl">
+              <table className="fv-tbl fv-ckstack">
                 <thead>
                   <tr>
                     <th className="fv-sticky-l">
@@ -395,82 +414,83 @@ export function CheckInScreen({
                     <th>
                       <span className="fv-eyebrow">Absent</span>
                     </th>
-                    {showGraders ? (
-                      <th>
-                        <span className="fv-eyebrow">Grading TF</span>
-                      </th>
-                    ) : null}
-                    {SLOTS.map((n) => (
-                      <th key={n} colSpan={3} className="fv-ckslot">
-                        <span style={{ fontWeight: 600, color: "var(--fv-navy)" }}>
-                          Check-in {n}
-                        </span>
-                      </th>
-                    ))}
-                  </tr>
-                  <tr>
-                    <th className="fv-sticky-l" />
-                    <th />
-                    {showGraders ? <th /> : null}
-                    {SLOTS.map((n) => (
-                      <Cells key={n}>
-                        <th className="fv-ckslot">
-                          <span className="fv-eyebrow">Presenter</span>
-                        </th>
-                        <th>
-                          <span className="fv-eyebrow">{SCALE_LABEL.accuracy} 1–5</span>
-                        </th>
-                        <th className="fv-ckdisc">
-                          <span className="fv-eyebrow">{SCALE_LABEL.discussion} 1–5</span>
-                        </th>
-                      </Cells>
-                    ))}
+                    <th className="fv-ckslot">
+                      <span className="fv-eyebrow">Check-in</span>
+                    </th>
+                    <th>
+                      <span className="fv-eyebrow">Grading TF</span>
+                    </th>
+                    <th>
+                      <span className="fv-eyebrow">Presenter</span>
+                    </th>
+                    <th>
+                      <span className="fv-eyebrow">{SCALE_LABEL.accuracy} 1–5</span>
+                    </th>
+                    <th className="fv-ckdisc">
+                      <span className="fv-eyebrow">{SCALE_LABEL.discussion} 1–5</span>
+                    </th>
                   </tr>
                 </thead>
 
                 <tbody>
                   {teams.map((team) => {
                     const away = absentIn(team.id);
-                    return (
-                      <tr key={team.id} className="fv-trstu">
-                        <td className="fv-sticky-l">
-                          <div className="fv-subject">
-                            <FIcon name="groups" size={16} />
-                            <span style={{ fontSize: "var(--fv-xs)", fontWeight: 600 }}>
-                              {team.name}
-                            </span>
-                            <span
-                              className="fv-sub"
-                              style={{ marginLeft: "auto", fontSize: "var(--fv-2xs)" }}
-                            >
-                              {team.members.length - away.length}/{team.members.length}
-                            </span>
-                          </div>
-                        </td>
+                    // Somebody marked absent did not present. Leaving them
+                    // pickable is how a sheet ends up saying a student who was
+                    // not in the room spoke to it.
+                    const present = team.members.filter((m) => !away.includes(m.id));
+                    return SLOTS.map((n, i) => {
+                      const mark = markFor(marks, team.id, n);
+                      const first = i === 0;
+                      return (
+                        <tr key={`${team.id}:${n}`} className={`fv-trstu${first ? " fv-ckfirst" : ""}`}>
+                          {/* The team and who was away are facts about the
+                              TUTORIAL, not about one check-in, so they are said
+                              once and span both of that team's rows. */}
+                          {first ? (
+                            <td className="fv-sticky-l" rowSpan={SLOTS.length}>
+                              <div className="fv-subject">
+                                <FIcon name="groups" size={16} />
+                                <span style={{ fontSize: "var(--fv-xs)", fontWeight: 600 }}>
+                                  {team.name}
+                                </span>
+                                <span
+                                  className="fv-sub"
+                                  style={{ marginLeft: "auto", fontSize: "var(--fv-2xs)" }}
+                                >
+                                  {team.members.length - away.length}/{team.members.length}
+                                </span>
+                              </div>
+                            </td>
+                          ) : null}
 
-                        <td className="fv-ckcell fv-ckabs">
-                          <AbsentPicker
-                            team={team}
-                            away={away}
-                            marks={marks}
-                            absences={absences}
-                            disabled={!canEdit}
-                            onChange={(ids) => void writeAbsences(team.id, ids)}
-                          />
-                        </td>
+                          {first ? (
+                            <td className="fv-ckcell fv-ckabs" rowSpan={SLOTS.length}>
+                              <AbsentPicker
+                                team={team}
+                                away={away}
+                                marks={marks}
+                                absences={absences}
+                                disabled={!canEdit}
+                                onChange={(ids) => void writeAbsences(team.id, ids)}
+                              />
+                            </td>
+                          ) : null}
 
-                        {showGraders ? (
+                          <td className="fv-ckcell fv-ckslot fv-ckwhich">Check-in {n}</td>
+
                           <td className="fv-ckcell">
                             <select
                               className="fv-in fv-ckpick"
-                              value={graderFor(graders, team.id) ?? ""}
+                              value={graderFor(graders, team.id, n) ?? ""}
                               disabled={!canEdit}
-                              aria-label={`Which TF is grading ${team.name}`}
+                              aria-label={`Who is grading ${team.name}, check-in ${n}`}
                               onChange={(e) =>
-                                void writeGrader(team.id, e.target.value || null)
+                                void writeGrader(team.id, n, e.target.value || null)
                               }
                             >
                               <option value="">—</option>
+                              <option value={INSTRUCTOR}>Instructor</option>
                               {tfs.map((tf) => (
                                 <option key={tf.id} value={tf.id}>
                                   {tf.name}
@@ -478,65 +498,55 @@ export function CheckInScreen({
                               ))}
                             </select>
                           </td>
-                        ) : null}
 
-                        {SLOTS.map((n) => {
-                          const mark = markFor(marks, team.id, n);
-                          // Somebody marked absent did not present. Leaving
-                          // them pickable is how a sheet ends up saying a
-                          // student who was not in the room spoke to it.
-                          const present = team.members.filter((m) => !away.includes(m.id));
-                          return (
-                            <Cells key={n}>
-                              <td className="fv-ckcell fv-ckslot">
-                                <div className="fv-ckpres">
-                                  <PersonPicker
-                                    options={present}
-                                    value={mark?.presenter_id ?? ""}
-                                    placeholder="Pick one"
-                                    disabled={!canEdit}
-                                    onChange={(id) =>
-                                      void writeMark(team.id, n, { presenter_id: id || null })
-                                    }
-                                  />
-                                  <button
-                                    type="button"
-                                    className="fv-iconbtn fv-ckdie"
-                                    disabled={!canEdit || present.length === 0}
-                                    onClick={() => roll(team, n)}
-                                    aria-label={`Pick a presenter at random for ${team.name}, check-in ${n}`}
-                                    title={
-                                      present.length === 0
-                                        ? "Everyone on this team is marked absent."
-                                        : "Roll a presenter — skips anyone absent or who has already presented. Press again to re-roll."
-                                    }
-                                  >
-                                    <FIcon name="die" size={15} />
-                                  </button>
-                                </div>
-                              </td>
-                              <td className="fv-ckcell">
-                                <Scale
-                                  label={`${SCALE_LABEL.accuracy}, check-in ${n}, ${team.name}`}
-                                  value={mark?.accuracy ?? null}
-                                  disabled={!canEdit}
-                                  onChange={(v) => void writeMark(team.id, n, { accuracy: v })}
-                                />
-                              </td>
-                              <td className="fv-ckcell fv-ckdisc">
-                                <Scale
-                                  tone="disc"
-                                  label={`${SCALE_LABEL.discussion}, check-in ${n}, ${team.name}`}
-                                  value={mark?.discussion ?? null}
-                                  disabled={!canEdit}
-                                  onChange={(v) => void writeMark(team.id, n, { discussion: v })}
-                                />
-                              </td>
-                            </Cells>
-                          );
-                        })}
-                      </tr>
-                    );
+                          <td className="fv-ckcell">
+                            <div className="fv-ckpres">
+                              <PersonPicker
+                                options={present}
+                                value={mark?.presenter_id ?? ""}
+                                placeholder="Pick one"
+                                disabled={!canEdit}
+                                onChange={(id) =>
+                                  void writeMark(team.id, n, { presenter_id: id || null })
+                                }
+                              />
+                              <button
+                                type="button"
+                                className="fv-iconbtn fv-ckdie"
+                                disabled={!canEdit || present.length === 0}
+                                onClick={() => roll(team, n)}
+                                aria-label={`Pick a presenter at random for ${team.name}, check-in ${n}`}
+                                title={
+                                  present.length === 0
+                                    ? "Everyone on this team is marked absent."
+                                    : "Roll a presenter — skips anyone absent or who has already presented. Press again to re-roll."
+                                }
+                              >
+                                <FIcon name="die" size={15} />
+                              </button>
+                            </div>
+                          </td>
+
+                          <td className="fv-ckcell">
+                            <Scale
+                              label={`${SCALE_LABEL.accuracy}, check-in ${n}, ${team.name}`}
+                              value={mark?.accuracy ?? null}
+                              disabled={!canEdit}
+                              onChange={(v) => void writeMark(team.id, n, { accuracy: v })}
+                            />
+                          </td>
+                          <td className="fv-ckcell fv-ckdisc">
+                            <Scale
+                              tone="disc"
+                              label={`${SCALE_LABEL.discussion}, check-in ${n}, ${team.name}`}
+                              value={mark?.discussion ?? null}
+                              disabled={!canEdit}
+                              onChange={(v) => void writeMark(team.id, n, { discussion: v })}
+                            />
+                          </td>
+                        </tr>
+                      );
+                    });
                   })}
                 </tbody>
               </table>
@@ -703,9 +713,4 @@ function Scale({
       })}
     </div>
   );
-}
-
-/** A keyed fragment, so the grouped cells stay siblings inside <tr>/<thead>. */
-function Cells({ children }: { children: React.ReactNode }) {
-  return <>{children}</>;
 }

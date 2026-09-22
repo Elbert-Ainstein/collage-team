@@ -328,50 +328,84 @@ describe("the Grading TF column", () => {
       ],
     }) as FacultyData;
 
-  const graderSelect = () =>
-    host.querySelector<HTMLSelectElement>('select[aria-label="Which TF is grading Team 1"]')!;
+  /** One pick per check-in: the staff split the room a section at a time. */
+  const graderSelect = (slot: number) =>
+    host.querySelector<HTMLSelectElement>(
+      `select[aria-label="Who is grading Team 1, check-in ${slot}"]`,
+    )!;
 
-  it("offers the course's TFs per team, and saves the pick", async () => {
+  it("offers the instructor and the course's TFs per check-in, and saves the pick", async () => {
     await mount(withTFs(), { start: "a1" });
     expect(textOf()).toContain("Grading TF");
-    const sel = graderSelect();
-    expect([...sel.options].map((o) => o.textContent)).toEqual(["—", "Sam Chen", "Rae Patel"]);
+    const sel = graderSelect(2);
+    expect([...sel.options].map((o) => o.textContent)).toEqual([
+      "—",
+      "Instructor",
+      "Sam Chen",
+      "Rae Patel",
+    ]);
     await act(async () => {
       sel.value = "tf2";
       sel.dispatchEvent(new Event("change", { bubbles: true }));
     });
-    expect(setTutorialGrader).toHaveBeenCalledWith("a1", "t1", "tf2");
-    expect(graderSelect().value).toBe("tf2");
+    expect(setTutorialGrader).toHaveBeenCalledWith("a1", "t1", 2, "tf2");
+    expect(graderSelect(2).value).toBe("tf2");
+    // The other check-in is untouched — that is the whole point of the pair.
+    expect(graderSelect(1).value).toBe("");
   });
 
   it("shows what the sheet already recorded, and clears back to nobody", async () => {
     getTutorialSheet.mockResolvedValue({
       marks: [],
       absences: [],
-      graders: [{ activity_id: "a1", team_id: "t1", tf_id: "tf1" }],
+      graders: [
+        { activity_id: "a1", team_id: "t1", slot: 1, tf_id: "tf1", instructor: false },
+        { activity_id: "a1", team_id: "t1", slot: 2, tf_id: null, instructor: true },
+      ],
     });
     await mount(withTFs(), { start: "a1" });
-    expect(graderSelect().value).toBe("tf1");
+    expect(graderSelect(1).value).toBe("tf1");
+    expect(graderSelect(2).value).toBe("instructor");
     await act(async () => {
-      graderSelect().value = "";
-      graderSelect().dispatchEvent(new Event("change", { bubbles: true }));
+      graderSelect(1).value = "";
+      graderSelect(1).dispatchEvent(new Event("change", { bubbles: true }));
     });
-    expect(setTutorialGrader).toHaveBeenCalledWith("a1", "t1", null);
+    expect(setTutorialGrader).toHaveBeenCalledWith("a1", "t1", 1, null);
   });
 
-  it("a course with no TFs has no column to fill in", async () => {
+  it("a course with no TFs still offers the instructor — she runs check-ins too", async () => {
     await mount(facultyData(), { start: "a1" });
-    expect(textOf()).not.toContain("Grading TF");
+    expect(textOf()).toContain("Grading TF");
+    expect([...graderSelect(1).options].map((o) => o.textContent)).toEqual([
+      "—",
+      "Instructor",
+    ]);
   });
 
   it("a failed save restores the previous pick and says so", async () => {
     setTutorialGrader.mockRejectedValueOnce(new Error("offline"));
     await mount(withTFs(), { start: "a1" });
     await act(async () => {
-      graderSelect().value = "tf1";
-      graderSelect().dispatchEvent(new Event("change", { bubbles: true }));
+      graderSelect(1).value = "tf1";
+      graderSelect(1).dispatchEvent(new Event("change", { bubbles: true }));
     });
-    expect(graderSelect().value).toBe("");
+    expect(graderSelect(1).value).toBe("");
     expect(host.querySelector('[role="alert"]')?.textContent).toContain("offline");
+  });
+});
+
+describe("the sheet's shape", () => {
+  it("stacks the two check-ins under one team, saying the team and the absences once", async () => {
+    await mount(facultyData(), { start: "a1" });
+    const rows = [...host.querySelectorAll("tbody tr")];
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toContain("Team 1");
+    expect(rows[0].textContent).toContain("Check-in 1");
+    expect(rows[1].textContent).toContain("Check-in 2");
+    // Said once, spanning the pair — not repeated on the second row.
+    expect(rows[1].textContent).not.toContain("Team 1");
+    expect(host.querySelectorAll("tbody td[rowspan]")).toHaveLength(2);
+    // Seven columns, not the ten that had to be scrolled sideways.
+    expect(host.querySelectorAll("thead th")).toHaveLength(7);
   });
 });

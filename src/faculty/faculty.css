@@ -1746,6 +1746,55 @@
 .fv-ckslot {
   border-left: 1px solid var(--fv-neutral-200);
 }
+/* The stacked sheet: two rows per team, and the eye has to be able to see
+   where one team ends. Inside a team the rule between its check-ins is faint;
+   between teams it is the full one. The spanning cells sit against the top of
+   the pair so a five-name absent list does not push the team name into the
+   middle of nowhere. */
+.fv-ckstack tbody td {
+  border-bottom-color: var(--fv-cream-300);
+}
+.fv-ckstack tbody tr.fv-ckfirst > td {
+  border-top: 1px solid var(--fv-neutral-200);
+}
+.fv-ckstack tbody td[rowspan] {
+  vertical-align: top;
+  border-bottom-color: var(--fv-neutral-200);
+}
+/* Which check-in this row is. Quiet — it is a label on a row, not a heading —
+   but it is the thing you read to know which half of the team's tutorial the
+   rest of the row is about, so it never wraps. */
+.fv-ckwhich {
+  padding: 6px 6px;
+  white-space: nowrap;
+  font-size: var(--fv-xs);
+  font-weight: 600;
+  color: var(--fv-navy);
+}
+
+/* Widths, so the whole sheet fits a laptop and an iPad in landscape without
+   scrolling sideways. Stacking the check-ins removed three columns; these
+   numbers spend what that freed on the two things a name has to be readable
+   in — the team's own column and the presenter — and take it back everywhere
+   else. Scoped to this sheet: the gradebook shares .fv-sticky-l and is a
+   laptop surface with room to spare.
+
+   The 1-5 buttons are the floor at 128px a scale. They are the target you hit
+   while walking between teams, so the columns give way to them, not the other
+   way round. On a touch screen they grow again (bottom of the file) and the
+   sheet goes back to scrolling inside its box — that trade is deliberate. */
+.fv-cksheet .fv-ckstack .fv-sticky-l {
+  min-width: 134px;
+}
+.fv-tbl.fv-ckstack td.fv-ckabs {
+  min-width: 124px;
+}
+.fv-ckstack .fv-ckpick {
+  min-width: 94px;
+}
+.fv-tbl.fv-ckstack td.fv-ckcell {
+  padding: 5px;
+}
 .fv-tbl td.fv-ckabs {
   min-width: 150px;
 }
@@ -2284,9 +2333,9 @@ button.fv-steplabel:hover { color: var(--fv-navy); }
 
 @media (max-width: 700px), (pointer: coarse) {
   /* The sheet becomes its own two-axis scroller instead of stretching the page.
-     A marking table is the case WCAG 1.4.10 leaves alone — ten score columns
-     cannot reflow to 320px without losing which row they belong to — so the
-     deal is that it scrolls sideways INSIDE this box, the page never does, and
+     Stacking the check-ins took the sheet from ten columns to seven, so on a
+     laptop or an iPad it no longer scrolls sideways at all. On a phone it still
+     can, and when it does it scrolls INSIDE this box, the page never does, and
      both the header and the team name stay put while it does. */
   .fv-cksheet {
     display: flex;
@@ -2299,20 +2348,16 @@ button.fv-steplabel:hover { color: var(--fv-navy); }
     overscroll-behavior: contain;
   }
   /* Sticky on the th, not on thead: thead only started sticking in Safari 16
-     and this is an iPhone or iPad screen. The second row's offset is the first
-     row's height, which is why that row's padding and line-height are pinned
-     here rather than left to the type. */
+     and this is an iPhone or iPad screen. One header row now that the check-ins
+     are stacked rather than grouped across the top, so every th pins at 0. */
   .fv-cksheet .fv-tbl thead th {
     position: sticky;
     z-index: 3;
     padding: 6px 10px;
     line-height: 18px;
   }
-  .fv-cksheet .fv-tbl thead tr:first-child th {
+  .fv-cksheet .fv-tbl thead th {
     top: 0;
-  }
-  .fv-cksheet .fv-tbl thead tr:nth-child(2) th {
-    top: 31px;
   }
   .fv-cksheet .fv-tbl thead .fv-sticky-l {
     z-index: 4;
