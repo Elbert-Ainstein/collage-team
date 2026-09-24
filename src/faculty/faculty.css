@@ -1842,6 +1842,15 @@
 .fv-ckstack .fv-ckpres .fv-ckpick {
   flex: 1;
 }
+/* The picker is a flex row nested inside the cell's flex row (avatar + select,
+   then the die). Without this the inner row is sized by its content — the
+   longest name on THAT team — so the select and the die landed at a different
+   x on every team and the column read as crooked. Fill the cell, and the
+   select's own width:100% does the rest. */
+.fv-ckstack .fv-ckpres .fv-ckpicker {
+  flex: 1;
+  min-width: 0;
+}
 .fv-ckstack .fv-scale {
   gap: 3px;
 }

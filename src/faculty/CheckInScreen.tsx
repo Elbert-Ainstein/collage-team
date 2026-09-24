@@ -706,7 +706,7 @@ function PersonPicker({
 }) {
   const picked = options.find((m) => m.id === value) ?? null;
   return (
-    <div className="fv-ckpres">
+    <div className="fv-ckpres fv-ckpicker">
       {picked ? <FAvatar name={picked.name} tint={picked.avatar_tint} size={20} /> : null}
       <select
         className="fv-in fv-ckpick"
