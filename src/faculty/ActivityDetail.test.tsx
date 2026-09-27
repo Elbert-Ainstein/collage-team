@@ -132,3 +132,39 @@ describe("opening one student's work from the activity page", () => {
     expect(rowFor("Cy").tagName).toBe("DIV");
   });
 });
+
+// What the activity is out of used to live only in the editor, which a TF who
+// cannot author never opens. It is a fact about the assignment, not a setting,
+// so the read-only header states it for everyone.
+describe("what the activity is out of, on the read-only header", () => {
+  const tf = () =>
+    data({ can: { grade: false, author: false, rubric: false, release: false, runCheckIns: true } } as Partial<FacultyData>);
+  const headerLine = () => host.querySelector("h1.fv-display")?.nextElementSibling?.textContent ?? "";
+
+  it("a TF sees the total under the title", async () => {
+    await mount(tf());
+    expect(headerLine()).toContain("out of 20 pts");
+  });
+
+  it("a completion activity says so instead of a number", async () => {
+    const d = tf();
+    d.activities = [{ ...combo, completion: true } as Activity];
+    await act(async () => {
+      root.render(
+        <ActivityDetail
+          data={d}
+          activity={d.activities[0]}
+          onBack={vi.fn()}
+          onRubric={vi.fn()}
+          onGrade={onGrade}
+          onCheckIn={vi.fn()}
+          onDuplicate={vi.fn()}
+          onChanged={vi.fn()}
+          onError={vi.fn()}
+        />,
+      );
+    });
+    expect(headerLine()).toContain("Marked for completion");
+    expect(headerLine()).not.toContain("out of");
+  });
+});

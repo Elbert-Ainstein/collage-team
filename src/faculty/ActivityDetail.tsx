@@ -1549,6 +1549,13 @@ export function ActivityDetail(props: {
                 {dueLine
                   ? `${scope === "team" ? "Due" : "Individual work due"} ${dueLine}`
                   : "No due date set"}
+                {/* What it is out of, stated here for everyone. The editor's
+                    "Out of" field is the only other place this number appears,
+                    and a TF who cannot author never opens the editor — so
+                    without this line the total was a fact only the owner
+                    could see on the assignment page. */}
+                {" · "}
+                {isCompletion(activity) ? "Marked for completion" : `out of ${pointsLabel(activity)}`}
               </div>
             </>
           )}
