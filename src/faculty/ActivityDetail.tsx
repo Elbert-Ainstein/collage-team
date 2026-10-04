@@ -13,10 +13,12 @@ import { deleteActivity, tintFor, updateActivity } from "@/checkins/data";
 import { deleteActivityRecordings } from "@/checkins/audio";
 import { BriefText, safeHref } from "@/checkins/BriefText";
 import { briefFiles, fileToken, filePath } from "@/checkins/briefLinks";
+import { pastDeadline } from "@/checkins/handIn";
 import { purgeActivityStorage } from "@/checkins/purge";
 import { isCompletionMet, isOpenToStudents } from "@/checkins/studentData";
 import {
   HIDDEN_INSTANT,
+  INDIV_ELSEWHERE,
   isCompletion,
   SCOPE_LABEL,
   SCOPE_OF,
@@ -28,9 +30,12 @@ import {
 } from "@/checkins/types";
 import {
   addActivityFile,
+  closeHandIn,
   countWorkForActivity,
   ensureCheckIn,
+  listReopens,
   removeActivityFileAt,
+  reopenHandIn,
   seedRubricTemplate,
   setActivityPoints,
 } from "./facultyData";
@@ -248,6 +253,7 @@ function PersonRows({
   gradeColor = "var(--fv-navy)",
   muted = false,
   onOpen,
+  action,
 }: {
   list: Subject[];
   empty: string;
@@ -259,6 +265,12 @@ function PersonRows({
    * work to open and to someone allowed to grade; a row without it is text.
    */
   onOpen?: (s: Subject) => void;
+  /**
+   * A control at the end of the row — Reopen, Close. Only on a pile whose rows
+   * are not themselves buttons: a button inside a button is not something a
+   * browser or a screen reader can make sense of, so `onOpen` wins.
+   */
+  action?: (s: Subject) => React.ReactNode;
 }): JSX.Element {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 1, paddingLeft: 2 }}>
@@ -268,7 +280,7 @@ function PersonRows({
         </div>
       ) : (
         list.map((s) => (
-          <PersonRow key={s.id} s={s} muted={muted} onOpen={onOpen}>
+          <PersonRow key={s.id} s={s} muted={muted} onOpen={onOpen} action={action}>
             <FAvatar name={s.name} tint={s.tint} size={22} />
             <span
               style={{
@@ -310,11 +322,13 @@ function PersonRow({
   s,
   muted,
   onOpen,
+  action,
   children,
 }: {
   s: Subject;
   muted: boolean;
   onOpen?: (s: Subject) => void;
+  action?: (s: Subject) => React.ReactNode;
   children: React.ReactNode;
 }): JSX.Element {
   const style = muted ? { color: "var(--fv-muted)" } : undefined;
@@ -322,6 +336,7 @@ function PersonRow({
     return (
       <div className="fv-person" style={style}>
         {children}
+        {action?.(s)}
       </div>
     );
   }
@@ -862,6 +877,72 @@ export function ActivityDetail(props: {
   const [reviewOpen, setReviewOpen] = useState(true);
   const [subOpen, setSubOpen] = useState(true);
   const [notOpen, setNotOpen] = useState(false);
+
+  // ------------------------------------------------------ reopened hand-ins
+  //
+  // A student's own hand-in closes at the individual deadline (0044), and the
+  // instructor reopens it one student at a time. Read here, for this activity
+  // alone, rather than on the whole-course refresh: no other screen asks.
+  //
+  // Only where a hand-in can close at all. A team half is handed in at the
+  // check-in and never closes, an Amplify half is answered on Amplify, and an
+  // activity with no due date never closes — a Reopen button on any of them
+  // would open nothing.
+  const handsInHere =
+    scope !== "team" && INDIV_ELSEWHERE[activity.type] === null && indivDueOf(activity) !== null;
+  const [reopened, setReopened] = useState<Set<string>>(() => new Set());
+  const [reopenBusy, setReopenBusy] = useState<string | null>(null);
+  const [reopenError, setReopenError] = useState<string | null>(null);
+  const [reopenedOpen, setReopenedOpen] = useState(true);
+
+  useEffect(() => {
+    setReopened(new Set());
+    setReopenError(null);
+    if (!handsInHere) return;
+    let alive = true;
+    listReopens(activity.id)
+      .then((ids) => {
+        if (alive) setReopened(new Set(ids));
+      })
+      .catch((e: unknown) => {
+        if (alive) setReopenError(e instanceof Error ? e.message : "Could not read who this was reopened for.");
+      });
+    return () => {
+      alive = false;
+    };
+  }, [activity.id, handsInHere]);
+
+  // Reopen is offered once something is closed, and not before: until the
+  // deadline every student can hand in, and a button that changes nothing
+  // reads as though it does something.
+  const closedNow = handsInHere && pastDeadline(activity);
+  // The owner's alone, in 0044 as here. A TF reads the list and presses nothing.
+  const canReopen = data.can.isOwner;
+
+  async function setHandInOpen(studentId: string, open: boolean) {
+    setReopenBusy(studentId);
+    setReopenError(null);
+    try {
+      if (open) await reopenHandIn(activity.id, studentId);
+      else await closeHandIn(activity.id, studentId);
+      setReopened((prev) => {
+        const next = new Set(prev);
+        if (open) next.add(studentId);
+        else next.delete(studentId);
+        return next;
+      });
+    } catch (e) {
+      setReopenError(e instanceof Error ? e.message : "That didn't save. Try again.");
+    } finally {
+      setReopenBusy(null);
+    }
+  }
+
+  // Off the roster, not off the piles: a reopened student who has since handed
+  // in has left Not submitted, and the reopen still stands until it is closed.
+  const reopenedList: Subject[] = data.roster
+    .filter((st) => reopened.has(st.id))
+    .map((st) => ({ id: st.id, name: st.name, tint: st.avatar_tint, stamp: null, late: false }));
 
   // Which half of the activity is on screen. Scope decides which halves exist:
   // an individual-only activity has no team side to look at, and a team-only
@@ -2222,7 +2303,103 @@ export function ActivityDetail(props: {
               open={notOpen}
               onToggle={() => setNotOpen((v) => !v)}
             />
-            {notOpen ? <PersonRows list={missing} empty="Everyone is in." muted /> : null}
+            {notOpen ? (
+              <>
+                {closedNow && dueLine ? (
+                  <div className="fv-sub" style={{ padding: "2px 8px 6px", lineHeight: 1.5 }}>
+                    Hand-ins closed {dueLine}.
+                    {canReopen
+                      ? " Reopen lets one student hand in late — it will show as Late."
+                      : ""}
+                  </div>
+                ) : null}
+                <PersonRows
+                  list={missing}
+                  empty="Everyone is in."
+                  muted
+                  action={
+                    closedNow
+                      ? (s) =>
+                          reopened.has(s.id) ? (
+                            <span
+                              style={{
+                                fontSize: "var(--fv-2xs)",
+                                color: "var(--fv-amber)",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              Reopened
+                            </span>
+                          ) : canReopen ? (
+                            <button
+                              type="button"
+                              className="fv-btn outline sm"
+                              style={{ height: 26, padding: "0 9px" }}
+                              disabled={reopenBusy !== null}
+                              onClick={() => void setHandInOpen(s.id, true)}
+                              title={`Let ${s.name} hand this in after the deadline`}
+                            >
+                              {reopenBusy === s.id ? "Reopening…" : "Reopen"}
+                            </button>
+                          ) : null
+                      : undefined
+                  }
+                />
+              </>
+            ) : null}
+
+            {/* Every reopen that stands, wherever its student now is. One who
+                has handed in has left Not submitted, but can still replace
+                that work until the reopen is closed — so this is where it is
+                closed. */}
+            {reopenedList.length ? (
+              <>
+                <PileHeader
+                  label="Reopened"
+                  dot="var(--fv-amber)"
+                  count={reopenedList.length}
+                  open={reopenedOpen}
+                  onToggle={() => setReopenedOpen((v) => !v)}
+                />
+                {reopenedOpen ? (
+                  <>
+                    <div className="fv-sub" style={{ padding: "2px 8px 6px", lineHeight: 1.5 }}>
+                      Can hand in past the deadline until closed. What they hand in shows as Late.
+                    </div>
+                    <PersonRows
+                      list={reopenedList}
+                      empty=""
+                      action={
+                        canReopen
+                          ? (s) => (
+                              <button
+                                type="button"
+                                className="fv-btn ghost sm"
+                                style={{ height: 26, padding: "0 9px" }}
+                                disabled={reopenBusy !== null}
+                                onClick={() => void setHandInOpen(s.id, false)}
+                                title={`Stop ${s.name} handing in or changing this`}
+                              >
+                                {reopenBusy === s.id ? "Closing…" : "Close"}
+                              </button>
+                            )
+                          : undefined
+                      }
+                    />
+                  </>
+                ) : null}
+              </>
+            ) : null}
+
+            {reopenError ? (
+              <div
+                role="alert"
+                className="fv-sub"
+                style={{ padding: "8px 8px 0", color: "var(--fv-amber)", lineHeight: 1.5 }}
+              >
+                {reopenError}
+              </div>
+            ) : null}
           </div>
 
           <div

@@ -14,9 +14,11 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { Assignment, Enrolment } from "@/checkins/studentData";
-import { ensureMyResult, listMyQuestions } from "@/checkins/studentData";
+import { ensureMyResult, findMyResult, listMyQuestions } from "@/checkins/studentData";
+import { handInClosed, indivDueAt, msUntilClose, pastDeadline } from "@/checkins/handIn";
 import { getSubmissionFile, listSubmissionPages, markSubmitted } from "@/checkins/submissions";
 import type { ActivityQuestion } from "@/checkins/types";
+import { fmtWhen } from "./Assignments";
 import { PdfSubmit } from "./PdfSubmit";
 import { SIcon } from "./icons";
 
@@ -56,14 +58,33 @@ export function SubmitScreen({
   const studentId = enrolment.student.id;
   const activityId = activity.id;
 
+  // The screen can be open across the deadline — the last-minute upload is the
+  // one that matters most. Re-render at that instant, so Submit goes away when the
+  // hand-in closes rather than at the next refetch, by which time the student
+  // has pressed it and been refused.
+  const dueAt = indivDueAt(activity);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const wait = msUntilClose(dueAt);
+    if (wait === null) return;
+    const t = window.setTimeout(() => setTick((n) => n + 1), wait);
+    return () => window.clearTimeout(t);
+  }, [dueAt]);
+  const dueLine = dueAt ? (fmtWhen(dueAt) ?? dueAt) : null;
+  const closed = handInClosed(activity, assignment.reopened);
+  // Reopened, and it matters: past the deadline, so what arrives now is late.
+  const lateWindow = assignment.reopened && pastDeadline(activity);
+
   const load = useCallback(async () => {
     if (!checkInId) {
       setReady(true);
       return;
     }
     try {
+      // Closed: find what was there, never make a draft. There is nothing for
+      // one to be a draft of now, and 0044 refuses the insert.
       const [id, qs] = await Promise.all([
-        ensureMyResult(checkInId, studentId),
+        closed ? findMyResult(checkInId, studentId) : ensureMyResult(checkInId, studentId),
         listMyQuestions(activityId),
       ]);
       setResultId(id);
@@ -73,7 +94,7 @@ export function SubmitScreen({
     } finally {
       setReady(true);
     }
-  }, [checkInId, studentId, activityId]);
+  }, [checkInId, studentId, activityId, closed]);
 
   useEffect(() => {
     void load();
@@ -166,6 +187,12 @@ export function SubmitScreen({
             <span className="sv-badge success" style={{ flex: "none" }}>
               Graded
             </span>
+          ) : closed ? (
+            // No Unsubmit either. After the deadline it would take on-time work
+            // back with no way to hand it in again.
+            <span className={`sv-badge ${handedIn ? "sky" : "warning"}`} style={{ flex: "none" }}>
+              {handedIn ? "Turned in" : "Closed"}
+            </span>
           ) : handedIn ? (
             <span style={{ display: "flex", alignItems: "center", gap: 10, flex: "none" }}>
               <span className="sv-badge sky">Turned in</span>
@@ -201,10 +228,32 @@ export function SubmitScreen({
           )}
         </div>
 
+        {/* The deadline, said where the Submit button would have been. The
+            reopened case is said too: the student is about to hand in late,
+            and should know it will show as late before they do, not after. */}
+        {!locked && closed && dueLine ? (
+          <div
+            className="sv-sub"
+            style={{ marginTop: 6, color: "var(--amber-700)", fontSize: "var(--text-xs)" }}
+          >
+            {handedIn
+              ? `Hand-ins closed ${dueLine}. This is what you handed in, and it can no longer be changed.`
+              : `Hand-ins closed ${dueLine}, and nothing was handed in before then. If you need to hand it in late, ask your instructor to reopen it for you.`}
+          </div>
+        ) : !locked && lateWindow && dueLine ? (
+          <div
+            className="sv-sub"
+            style={{ marginTop: 6, color: "var(--amber-700)", fontSize: "var(--text-xs)" }}
+          >
+            Your instructor reopened this for you. It was due {dueLine}, so anything you
+            hand in now is marked late.
+          </div>
+        ) : null}
+
         {/* Said, not enforced. A student who genuinely has nothing for question
             4 must still be able to hand in what they do have — blocking that
             would cost them the whole assignment over one blank. */}
-        {mapPages && !handedIn && !locked && hasFile && unmapped.length ? (
+        {mapPages && !handedIn && !locked && !closed && hasFile && unmapped.length ? (
           <div
             className="sv-sub"
             style={{ marginTop: 6, color: "var(--amber-700)", fontSize: "var(--text-xs)" }}
@@ -258,7 +307,12 @@ export function SubmitScreen({
             courseId={enrolment.course.id}
             activityId={activityId}
             questions={questions}
-            locked={locked}
+            locked={locked || closed}
+            lockedWhy={
+              !locked && closed
+                ? "Hand-ins for this closed at the deadline, so nothing can be uploaded or changed."
+                : undefined
+            }
             mapPages={mapPages}
             onChanged={() => {
               void readState();

@@ -159,6 +159,12 @@ export interface Assignment {
   /** The team half's grade on its own, for activities that have both. */
   teamGrade: string;
   submitted: string | null;
+  /**
+   * The instructor has reopened this student's hand-in past its deadline
+   * (0044). Read with handInClosed(); on its own it says nothing about whether
+   * the deadline has passed.
+   */
+  reopened: boolean;
 }
 
 export function statusOf(r: CheckInResult | null, stage: number): AssignmentStatus {
@@ -267,11 +273,13 @@ export async function listAssignments(enrolment: Enrolment): Promise<Assignment[
   const activities = all.filter((a) => isOpenToStudents(a, now));
   if (!activities.length) return [];
 
-  const checkIns = unwrap(
-    await db().from("check_ins").select("*")
+  const [checkIns, reopened] = await Promise.all([
+    db().from("check_ins").select("*")
       .in("activity_id", activities.map((a) => a.id))
-      .order("position"),
-  ) as CheckIn[] ?? [];
+      .order("position")
+      .then((res) => unwrap(res) as CheckIn[] ?? []),
+    listMyReopens(enrolment.student.id),
+  ]);
 
   const results = checkIns.length
     ? (unwrap(
@@ -318,8 +326,26 @@ export async function listAssignments(enrolment: Enrolment): Promise<Assignment[
       grade: gradeOf(lead, leadCheckIn),
       teamGrade: gradeOf(teamResult, teamCheckIn),
       submitted: lead?.updated_at ?? null,
+      reopened: reopened.has(activity.id),
     };
   });
+}
+
+/**
+ * The activities this student's hand-in has been reopened on (0044).
+ *
+ * RLS returns only their own rows. A database without 0044 has no such table,
+ * and nothing there has been reopened because nothing closes: that one error
+ * degrades to none rather than emptying the assignment list.
+ */
+async function listMyReopens(studentId: string): Promise<Set<string>> {
+  const { data, error } = await db().from("hand_in_reopens").select("activity_id")
+    .eq("student_id", studentId);
+  if (error) {
+    if (/hand_in_reopens/.test(error.message)) return new Set();
+    throw dbError(error);
+  }
+  return new Set(((data as { activity_id: string }[] | null) ?? []).map((r) => r.activity_id));
 }
 
 /**
@@ -492,6 +518,21 @@ export async function listMyMarks(resultId: string): Promise<SubmissionMark[]> {
 }
 
 /**
+ * This student's result row for a check-in, or null. Never creates one.
+ *
+ * For a hand-in that has closed (0044): there is nothing left for a new draft
+ * to be a draft of, and the database refuses to make one, but what was handed
+ * in before the deadline is still theirs to look at.
+ */
+export async function findMyResult(checkInId: string, studentId: string): Promise<string | null> {
+  const rows = (unwrap(
+    await db().from("check_in_results").select("id")
+      .eq("check_in_id", checkInId).eq("student_id", studentId).limit(1),
+  ) as { id: string }[] | null) ?? [];
+  return rows[0]?.id ?? null;
+}
+
+/**
  * This student's result row for a check-in, creating an empty one if missing.
  *
  * A PDF has to hang off a result row, and the row was only ever created when
@@ -500,11 +541,8 @@ export async function listMyMarks(resultId: string): Promise<SubmissionMark[]> {
  * does not tell the instructor a student has submitted when they have not.
  */
 export async function ensureMyResult(checkInId: string, studentId: string): Promise<string> {
-  const existing = (unwrap(
-    await db().from("check_in_results").select("id")
-      .eq("check_in_id", checkInId).eq("student_id", studentId).limit(1),
-  ) as { id: string }[] | null) ?? [];
-  if (existing.length) return existing[0].id;
+  const existing = await findMyResult(checkInId, studentId);
+  if (existing) return existing;
 
   const rows = unwrap(
     await db().from("check_in_results").insert({

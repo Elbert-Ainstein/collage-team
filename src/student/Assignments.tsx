@@ -19,6 +19,7 @@ import type { CSSProperties, ReactNode } from "react";
 
 import { BriefText } from "@/checkins/BriefText";
 import { briefFiles } from "@/checkins/briefLinks";
+import { handInClosed, indivDueAt, pastDeadline } from "@/checkins/handIn";
 import { ensureTeamResult } from "@/checkins/studentData";
 import { getMyMarks, SCALE_LABEL, type StudentMark } from "@/checkins/tutorial";
 import {
@@ -31,7 +32,6 @@ import { RESIGN_MS } from "@/checkins/storage";
 import { listMyQuestions } from "@/checkins/studentData";
 import type { Assignment, AssignmentStatus, Enrolment } from "@/checkins/studentData";
 import type {
-  Activity,
   ActivityQuestion,
   ActivityType,
   CheckInResult,
@@ -185,7 +185,7 @@ function inFilter(f: Filter, s: AssignmentStatus): boolean {
  * separator doing both jobs turns "Due X · Y · discussion Z · W" into a list of
  * four things.
  */
-function fmtWhen(iso: string | null | undefined): string | null {
+export function fmtWhen(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
@@ -195,18 +195,6 @@ function fmtWhen(iso: string | null | undefined): string | null {
   const suffix = h24 >= 12 ? "pm" : "am";
   const h = h24 % 12 === 0 ? 12 : h24 % 12;
   return `${weekday} ${day}, ${h}:${String(d.getMinutes()).padStart(2, "0")}${suffix}`;
-}
-
-/**
- * The deadline the individual hand-in is judged against.
- *
- * due_at is what the faculty app writes (migration 0007) and it is the
- * INDIVIDUAL deadline — the editor over there says so in as many words. The
- * older per-scope column is still honoured so activities authored before 0007
- * keep their date, but it is the fallback now, not the source.
- */
-function indivDueAt(act: Activity): string | null {
-  return act.due_at ?? act.individual_due_at;
 }
 
 /** The due line under a row title, and the warning badge on the detail card. */
@@ -927,6 +915,8 @@ function StatusCard({ a, scope }: { a: Assignment; scope: Scope }) {
   const when = submittedAt(a);
   const arrived = handedIn(a);
   const late = lateHandIn(a);
+  // Past the deadline and not reopened: nothing here can be replaced or added.
+  const closed = handInClosed(a.activity, a.reopened);
   /**
    * Nothing was handed in HERE, so nothing here may talk about one.
    *
@@ -1007,7 +997,8 @@ function StatusCard({ a, scope }: { a: Assignment; scope: Scope }) {
               }}
             >
               Handed in {when}
-              {late ? ", after the deadline" : ""}. Open your work to replace it.
+              {late ? ", after the deadline" : ""}.
+              {closed ? null : " Open your work to replace it."}
             </div>
           ) : null}
         </>
@@ -1020,7 +1011,9 @@ function StatusCard({ a, scope }: { a: Assignment; scope: Scope }) {
             lineHeight: 1.55,
           }}
         >
-          Nothing has been handed in yet, so there is no mark to wait for.
+          {closed
+            ? "Nothing was handed in before the deadline, and hand-ins are now closed."
+            : "Nothing has been handed in yet, so there is no mark to wait for."}
         </div>
       )}
     </div>
@@ -1350,17 +1343,28 @@ function AssignmentDetail({
   const indivStatus = a.myResult?.status;
   const arrivedIndiv =
     indivStatus === "submitted" || indivStatus === "needs_review" || indivStatus === "scored";
+  // Past the deadline (0044). Closed shuts the door on work that never came;
+  // work that did is still there to look at. Reopened past it is open, and
+  // late — said beside the button, before they hand in, not after.
+  const closedIndiv = handInClosed(act, a.reopened);
+  const reopenedLate = a.reopened && pastDeadline(act);
 
   // Seeing an activity and being able to hand work in are separate things: an
   // activity is visible from the moment it opens, but its check-in is a
   // separate row the instructor may not have added yet.
   const savedLine = !a.indivCheckIn
     ? "Not open for submissions yet"
-    : a.myResult?.status === "draft"
-      ? `Draft saved ${fmtWhen(a.myResult.updated_at) ?? "recently"}`
-      : submittedAt(a)
-        ? `Submitted ${submittedAt(a)}${lateHandIn(a) ? " · Late" : ""}`
-        : "Nothing saved yet";
+    : closedIndiv && !arrivedIndiv
+      ? "The deadline has passed — ask your instructor if you need it reopened"
+      : a.myResult?.status === "draft"
+        ? `Draft saved ${fmtWhen(a.myResult.updated_at) ?? "recently"}${
+            reopenedLate ? " · reopened for you, marked late" : ""
+          }`
+        : submittedAt(a)
+          ? `Submitted ${submittedAt(a)}${lateHandIn(a) ? " · Late" : ""}`
+          : reopenedLate
+            ? "Reopened for you — anything you hand in now is marked late"
+            : "Nothing saved yet";
 
   return (
     <section className="sv-screen">
@@ -1435,18 +1439,22 @@ function AssignmentDetail({
                     type="button"
                     className="sv-btn primary"
                     onClick={() => onOpenSubmit(act.id)}
-                    disabled={!a.indivCheckIn}
+                    disabled={!a.indivCheckIn || (closedIndiv && !arrivedIndiv)}
                     title={
-                      a.indivCheckIn
-                        ? "Upload your work as a PDF and mark which pages answer which question"
-                        : "Your instructor has not opened this for submissions yet"
+                      !a.indivCheckIn
+                        ? "Your instructor has not opened this for submissions yet"
+                        : closedIndiv && !arrivedIndiv
+                          ? "The deadline has passed, so this can no longer be handed in"
+                          : "Upload your work as a PDF and mark which pages answer which question"
                     }
                   >
                     {a.myResult?.status === "scored" && !a.myResult.is_ci
                       ? "View graded work"
                       : arrivedIndiv
                         ? "View submission"
-                        : "Submit assignment"}
+                        : closedIndiv
+                          ? "Closed"
+                          : "Submit assignment"}
                   </button>
                   <span className="sv-sub">{savedLine}</span>
                 </div>

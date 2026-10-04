@@ -236,6 +236,18 @@ select '0035 team files are a drive',
                  and column_name = 'activity_id' and is_nullable = 'YES')
             then 'applied'
             else 'NOT APPLIED — run 0035_team_files.sql' end
+union all
+-- The table AND the trigger. The app reads the table to offer Reopen, so a
+-- project with the table but not the trigger would look finished while still
+-- taking every late hand-in a student sends.
+select '0044 hand-ins close at the deadline',
+       case when to_regclass('public.hand_in_reopens') is not null
+             and exists (
+              select 1 from pg_trigger
+               where tgname = 'trg_guard_hand_in_deadline'
+                 and tgrelid = 'public.check_in_results'::regclass)
+            then 'applied'
+            else 'NOT APPLIED — run 0044_hand_in_deadline.sql' end
 order by 1;
 
 -- ------------------------------------------------------- and the buckets
