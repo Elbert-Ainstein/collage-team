@@ -158,6 +158,7 @@ const badges = (text: string): Element[] =>
   Array.from(host.querySelectorAll(".fv-badge")).filter((b) => b.textContent?.trim() === text);
 
 beforeEach(() => {
+  window.sessionStorage.clear();
   setStudentEmail.mockClear();
   setStudentName.mockClear();
   addStudents.mockClear();
@@ -253,5 +254,48 @@ describe("importing one", () => {
     // may genuinely be both.
     expect(buttonsSaying("Add to roster")).not.toHaveLength(0);
     expect(addStudents).not.toHaveBeenCalled();
+  });
+});
+
+// The assistant rewrites a pasted list as name, email and team, and hands it
+// here rather than writing anything itself — so the preview she checks is the
+// importer's own, and the press that writes is the importer's own.
+describe("a list handed over by the assistant", () => {
+  const incoming = { text: "name,email,team\nRain Doe,,2\nNew Person,new@x.edu,2", source: "the assistant's reading of your list", key: 1 };
+
+  it("opens the importer on it, once, and writes nothing until pressed", async () => {
+    const taken = vi.fn();
+    const render = () =>
+      root.render(
+        <TeamsScreen
+          data={facultyData()}
+          onChanged={() => undefined}
+          onError={() => undefined}
+          incoming={incoming}
+          onIncomingTaken={taken}
+        />,
+      );
+    await act(async () => render());
+
+    expect(host.textContent).toContain("From the assistant's reading of your list");
+    expect(buttonsSaying("Add to roster and set teams")).toHaveLength(1);
+    expect(taken).toHaveBeenCalledTimes(1);
+    expect(addStudents).not.toHaveBeenCalled();
+
+    // The same arrival re-rendered is not a second arrival.
+    await act(async () => render());
+    expect(taken).toHaveBeenCalledTimes(1);
+  });
+
+  it("is ignored on a screen that cannot change the roster", async () => {
+    const taken = vi.fn();
+    const tfView = facultyData({ can: { ...facultyData().can, isOwner: false, manageRoster: false } });
+    await act(async () =>
+      root.render(
+        <TeamsScreen data={tfView} onChanged={() => undefined} onError={() => undefined} incoming={incoming} onIncomingTaken={taken} />,
+      ),
+    );
+    expect(host.textContent).not.toContain("From the assistant's reading of your list");
+    expect(taken).not.toHaveBeenCalled();
   });
 });

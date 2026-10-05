@@ -39,8 +39,9 @@ const createTeamSet = vi.fn(
 );
 const listTeamSets = vi.fn(async (): Promise<TeamSet[]> => []);
 const moveStudents = vi.fn(async () => undefined);
+const renameTeam = vi.fn(async () => undefined);
 
-vi.mock("./data", () => ({ createTeam, createTeamSet, listTeamSets, moveStudents }));
+vi.mock("./data", () => ({ createTeam, createTeamSet, listTeamSets, moveStudents, renameTeam }));
 
 const { applyTeamPlan, hasTeamNumbers, missReason, planTeamImport } = await import("./teamImport");
 
@@ -270,9 +271,28 @@ describe("writing it", () => {
     );
     const out = await applyTeamPlan("c1", p);
 
-    expect(out).toEqual({ setId: "ts1", created: 1, renamed: 0, moved: 2 });
+    expect(out).toMatchObject({ setId: "ts1", created: 1, renamed: 0, moved: 2 });
     expect(createTeam.mock.calls).toEqual([["ts1", "Team 3", 2]]);
     expect(createTeamSet).not.toHaveBeenCalled();
+  });
+
+  // What Undo on Roster & teams replays backwards (teamUndo.ts / importUndo.ts).
+  it("says what it wrote, so the import can be undone", async () => {
+    // Helix has no number in its name, so the file's 1 lands on it and renames it.
+    const teams = [team("t1", "Helix", 0, [ADA]), team("t2", "Team 2", 1, [GRACE])];
+    const p = plan(
+      [row("Ada Lovelace", "ada@x.edu", 1), row("Grace Hopper", "grace@x.edu", 3)],
+      teams,
+    );
+    const out = await applyTeamPlan("c1", p);
+    expect(out.record).toEqual({
+      placed: [
+        { studentId: ADA.id, to: "t1" },
+        { studentId: GRACE.id, to: "new:Team 3" },
+      ],
+      created: [{ teamId: "new:Team 3", name: "Team 3" }],
+      renamed: [{ teamId: "t1", from: "Helix", to: "Team 1" }],
+    });
   });
 
   it("clears members out of teams the file never mentions", async () => {
@@ -318,7 +338,8 @@ describe("writing it", () => {
     // behind as the only trace of an import that did nothing.
     const out = await applyTeamPlan("c1", plan([row("Nobody At All", "nobody@x.edu", 4)]));
 
-    expect(out).toEqual({ setId: null, created: 0, renamed: 0, moved: 0 });
+    expect(out).toMatchObject({ setId: null, created: 0, renamed: 0, moved: 0 });
+    expect(out.record).toEqual({ placed: [], created: [], renamed: [] });
     expect(createTeamSet).not.toHaveBeenCalled();
     expect(createTeam).not.toHaveBeenCalled();
     expect(moveStudents).not.toHaveBeenCalled();

@@ -580,6 +580,17 @@ export async function countOneTeamResults(teamId: string): Promise<number> {
   );
 }
 
+/**
+ * Check-in sheet marks for ONE team (0016) — the other thing a team delete
+ * cascades away. Separate from the results above because the sheet writes its
+ * own table.
+ */
+export async function countOneTeamMarks(teamId: string): Promise<number> {
+  return countAll(
+    db().from("tutorial_marks").select("id", { count: "exact", head: true }).eq("team_id", teamId),
+  );
+}
+
 export async function countTeamResults(teamSetId: string): Promise<number> {
   const teams = await selectAll<{ id: string }>((from, to) =>
     db().from("teams").select("id").eq("team_set_id", teamSetId).order("id").range(from, to),

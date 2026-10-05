@@ -48,8 +48,10 @@ import { GradingScreen } from "./GradingScreen";
 import { ReviewScreen } from "./ReviewScreen";
 import { reviewCount } from "./reviewModel";
 import { RubricBuilder } from "./RubricBuilder";
-import { TeamsScreen } from "./TeamsScreen";
+import { TeamsScreen, type Incoming } from "./TeamsScreen";
 import { TFsScreen } from "./TFsScreen";
+import { AssistantLauncher } from "./assistant/AssistantLauncher";
+import { AssistantPanel, SHEET_QUERY } from "./assistant/AssistantPanel";
 import "./faculty.css";
 
 export type Screen =
@@ -297,6 +299,11 @@ export function FacultyApp({
     });
   const [view, setView] = useState<"rows" | "columns">("rows");
   const [selId, setSelId] = useState<string | null>(null);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  /** Where focus goes back to when the panel closes, so a keyboard is not stranded. */
+  const launcher = useRef<HTMLButtonElement | null>(null);
+  /** A class list the assistant rewrote, on its way to the Teams importer. */
+  const [handoff, setHandoff] = useState<Incoming | null>(null);
   /** The activity that was just created, so its page can open ready to edit. */
   const [fresh, setFresh] = useState<string | null>(null);
 
@@ -818,7 +825,15 @@ export function FacultyApp({
           />
         ) : null;
       case "teams":
-        return <TeamsScreen data={data} onChanged={() => refresh().catch(fail)} onError={fail} />;
+        return (
+          <TeamsScreen
+            data={data}
+            onChanged={() => refresh().catch(fail)}
+            onError={fail}
+            incoming={handoff}
+            onIncomingTaken={() => setHandoff(null)}
+          />
+        );
       case "tfs":
         return data.can.manageTFs ? (
           <TFsScreen data={data} onChanged={() => refresh().catch(fail)} onError={fail} />
@@ -934,6 +949,21 @@ export function FacultyApp({
   };
 
   const full = FULL_SCREEN.includes(screen);
+  /** Owner only, because every change it can draft is a roster write — see verify.ts. */
+  const canAssist = Boolean(data?.can.manageRoster);
+  const closeAssistant = () => {
+    setAssistantOpen(false);
+    // After the launcher is back in the tree, which is the next frame.
+    requestAnimationFrame(() => launcher.current?.focus());
+  };
+
+  /** The assistant read a class list: open it in the Teams importer. */
+  const toImporter = (text: string, source: string) => {
+    setHandoff({ text, source, key: Date.now() });
+    setSelId(null);
+    setScreen("teams");
+    if (window.matchMedia?.(SHEET_QUERY).matches) setAssistantOpen(false);
+  };
 
   // Every screen reports failures through `fail`. Until now that state was only
   // rendered while the app was still loading, so a rejected write on Activities,
@@ -942,7 +972,7 @@ export function FacultyApp({
   const banner = <FacultyError error={error} onClear={() => setError(null)} />;
 
   return (
-    <div className="fv">
+    <div className={`fv${canAssist ? " fv-assisted" : ""}`}>
       {full ? (
         <div className="fv-gutter" />
       ) : (
@@ -1149,6 +1179,23 @@ export function FacultyApp({
         ) : null}
         {body()}
       </div>
+
+      {/* Not a screen and not in the sidebar: a panel beside whichever screen
+          is open — the full-screen ones included — opened from the same corner
+          everywhere. See AssistantLauncher for why the corner. */}
+      {data && canAssist ? (
+        <>
+          <AssistantPanel
+            key={data.course.id}
+            data={data}
+            hidden={!assistantOpen}
+            onClose={closeAssistant}
+            onChanged={() => refresh().catch(fail)}
+            onImport={toImporter}
+          />
+          {assistantOpen ? null : <AssistantLauncher ref={launcher} onOpen={() => setAssistantOpen(true)} />}
+        </>
+      ) : null}
     </div>
   );
 }

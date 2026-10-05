@@ -45,6 +45,12 @@ const P: Record<string, string> = {
   // A paperclip: the mark for "a file rides along with this".
   attachFile:
     '<path d="M17.8 10.6l-7.4 7.4a3.7 3.7 0 0 1-5.2-5.2l8.4-8.4a2.4 2.4 0 0 1 3.4 3.4l-8.3 8.3a1.2 1.2 0 0 1-1.7-1.7l7.5-7.5"/>',
+  // The assistant. Two stars rather than a robot or a chat bubble: it drafts,
+  // and the instructor decides — it is not somebody to talk to.
+  sparkle:
+    '<path d="M10.5 3.5l1.7 4.8 4.8 1.7-4.8 1.7-1.7 4.8-1.7-4.8L4 10l4.8-1.7z"/>' +
+    '<path d="M17.5 14.5l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z"/>',
+  send: '<path d="M12 19V5M6 11l6-6 6 6"/>',
 };
 
 export type IconName = keyof typeof P;

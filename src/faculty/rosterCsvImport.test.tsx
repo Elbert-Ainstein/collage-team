@@ -59,6 +59,14 @@ const moveStudents = vi.fn(async (studentIds: string[], teamId: string | null) =
   db.members = db.members.filter((m) => !studentIds.includes(m.student_id));
   if (teamId) db.members.push(...studentIds.map((student_id) => ({ team_id: teamId, student_id })));
 });
+const deleteTeam = vi.fn(async (id: string) => {
+  db.teams = db.teams.filter((t) => t.id !== id);
+  db.members = db.members.filter((m) => m.team_id !== id);
+});
+const removeStudentWithStorage = vi.fn(async (id: string) => {
+  db.students = db.students.filter((s) => s.id !== id);
+  db.members = db.members.filter((m) => m.student_id !== id);
+});
 
 vi.mock("@/checkins/data", () => ({
   addStudents,
@@ -70,11 +78,13 @@ vi.mock("@/checkins/data", () => ({
   removeStudent: vi.fn(async () => undefined),
   setStudentEmail: vi.fn(async () => undefined),
   setStudentName,
+  deleteTeam,
+  countOneTeamResults: vi.fn(async () => 0),
+  countOneTeamMarks: vi.fn(async () => 0),
 }));
 
-vi.mock("@/checkins/purge", () => ({
-  removeStudentWithStorage: vi.fn(async () => undefined),
-}));
+vi.mock("@/checkins/purge", () => ({ removeStudentWithStorage }));
+vi.mock("@/checkins/resources", () => ({ countResourcesForTeams: vi.fn(async () => 0) }));
 
 vi.mock("@/faculty/facultyData", () => ({
   countWorkForStudent: vi.fn(async () => 0),
@@ -175,6 +185,8 @@ async function pasteTheFile(): Promise<void> {
 }
 
 beforeEach(() => {
+  // The last import is remembered per tab, so one test's must not reach the next.
+  window.sessionStorage.clear();
   db.students = [];
   db.sets = [];
   db.teams = [];
@@ -539,5 +551,109 @@ describe("renaming a student on the roster", () => {
 
     expect(nameField("Zo\ufffd Brennan").value).toBe("Zo\ufffd Brennan");
     expect(setStudentName).not.toHaveBeenCalled();
+  });
+});
+
+// Undo, from the bar at the top of the page. The fake database above is what
+// it reads back, as the real screen would after its refresh.
+describe("undoing the import", () => {
+  /** The screen's data as a refresh would read it from the fake database. */
+  function refreshed(): FacultyData {
+    const roster = [...db.students];
+    return facultyData({
+      roster,
+      teams: db.teams.map((t) => ({
+        ...t,
+        created_at: "",
+        members: roster.filter((s) => db.members.some((m) => m.team_id === t.id && m.student_id === s.id)),
+      })),
+    });
+  }
+  const render = async (data: FacultyData) =>
+    act(async () => {
+      root.render(<TeamsScreen data={data} onChanged={() => undefined} onError={() => undefined} />);
+    });
+
+  it("takes back the students and the teams a one-press import made", async () => {
+    await mount();
+    await pasteTheFile();
+    await act(async () => buttonSaying("Add to roster and set teams")?.click());
+    await render(refreshed());
+
+    expect(host.textContent).toContain(
+      "Last import, from what you pasted: added 4 students, seated 4 students, made 2 teams.",
+    );
+    await act(async () => buttonSaying("Undo this import")?.click());
+    // It would take students off the roster, so it asks first.
+    expect(removeStudentWithStorage).not.toHaveBeenCalled();
+    await act(async () => buttonSaying("Undo the import")?.click());
+
+    expect(db.students).toEqual([]);
+    expect(db.teams).toEqual([]);
+    expect(db.members).toEqual([]);
+    expect(host.textContent).toContain("Import undone — removed 4 students it added, removed 2 teams it made.");
+    // The import's own note is gone with it, rather than contradicting the undo.
+    expect(host.textContent).not.toContain("Added 4 students.");
+    expect(buttonSaying("Undo this import")).toBeUndefined();
+  });
+
+  // Undo reads the roster on screen. Pressed before the refresh after the import
+  // has landed, it would find none of the students it added and do nothing —
+  // and throw the record away. So it waits for the re-read.
+  it("waits for the roster to be re-read before it can be pressed", async () => {
+    await mount();
+    await pasteTheFile();
+    await act(async () => buttonSaying("Add to roster and set teams")?.click());
+    expect(buttonSaying("Checking the roster…")?.disabled).toBe(true);
+    await render(refreshed());
+    expect(buttonSaying("Undo this import")?.disabled).toBe(false);
+  });
+
+  it("can take back the students even when the teams half failed", async () => {
+    createTeam.mockRejectedValueOnce(new Error("permission denied for table teams"));
+    const changed = vi.fn();
+    await act(async () => {
+      root.render(<TeamsScreen data={facultyData()} onChanged={changed} onError={() => undefined} />);
+    });
+    await pasteTheFile();
+    await act(async () => buttonSaying("Add to roster and set teams")?.click());
+    // The students are in, so the screen is told to re-read and show them.
+    expect(changed).toHaveBeenCalled();
+    await render(refreshed());
+    expect(host.textContent).toContain("added 4 students");
+    await act(async () => buttonSaying("Undo this import")?.click());
+    await act(async () => buttonSaying("Undo the import")?.click());
+    expect(db.students).toEqual([]);
+  });
+
+  it("is still offered after leaving the screen and coming back", async () => {
+    await mount();
+    await pasteTheFile();
+    await act(async () => buttonSaying("Add to roster and set teams")?.click());
+    await act(async () => root.unmount());
+    root = createRoot(host);
+    await render(refreshed());
+    expect(buttonSaying("Undo this import")).toBeTruthy();
+  });
+
+  it("puts a re-seating back without asking, since nobody leaves the roster", async () => {
+    const roster = [
+      student("s1", "Ada Lovelace", "ada@x.edu", 0),
+      student("s2", "Grace Hopper", "grace@x.edu", 1),
+      student("s3", "Alan Turing", "alan@x.edu", 2),
+      student("s4", "Katherine Johnson", "katherine@x.edu", 3),
+    ];
+    db.students = [...roster];
+    await mount(facultyData({ roster }));
+    await act(async () => buttonSaying("Add students")?.click());
+    await pasteTheFile();
+    await act(async () => buttonSaying("Set teams")?.click());
+    expect(db.members).toHaveLength(4);
+    await render(refreshed());
+
+    await act(async () => buttonSaying("Undo this import")?.click());
+    expect(db.members).toEqual([]);
+    expect(db.students).toHaveLength(4);
+    expect(removeStudentWithStorage).not.toHaveBeenCalled();
   });
 });
