@@ -1,0 +1,270 @@
+/* The assistant panel: docked beside the main panel on a wide screen, a sheet
+   over it on anything narrower. Like the rest of the faculty view, the page
+   never scrolls — only the conversation does. */
+
+.fv-assist {
+  flex: 0 0 384px;
+  width: 384px;
+  min-height: 0;
+  display: flex;
+  padding: 12px 12px 12px 0;
+}
+.fv-assist[hidden] {
+  display: none;
+}
+.fv-assist-card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--fv-neutral-200);
+  background: var(--fv-cream-100);
+  border-radius: var(--fv-r-xl);
+  box-shadow: var(--fv-shadow);
+  overflow: hidden;
+}
+
+.fv-as-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 14px 12px 18px;
+  border-bottom: 1px solid var(--fv-neutral-200);
+}
+.fv-as-title {
+  flex: 1;
+  font-family: var(--fv-serif);
+  font-size: var(--fv-lg);
+  font-weight: 700;
+  letter-spacing: var(--fv-tight);
+}
+
+.fv-as-log {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* A message with its own scroll (a pasted list) would otherwise be squashed to
+   a sliver as soon as the conversation outgrows the panel. */
+.fv-as-log > * {
+  flex-shrink: 0;
+}
+
+.fv-as-intro {
+  font-size: var(--fv-xs);
+  color: var(--fv-muted);
+  line-height: 1.55;
+}
+.fv-as-tries {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+.fv-as-try {
+  text-align: left;
+  border: 1px solid var(--fv-neutral-200);
+  background: var(--fv-cream-200);
+  border-radius: var(--fv-r-md);
+  padding: 8px 10px;
+  font: inherit;
+  font-size: var(--fv-xs);
+  color: var(--fv-navy);
+  cursor: pointer;
+}
+.fv-as-try:hover {
+  background: var(--fv-cream-400);
+}
+
+.fv-as-msg {
+  font-size: var(--fv-xs);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.fv-as-msg.user {
+  align-self: flex-end;
+  max-width: 88%;
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 8px 11px;
+  border-radius: var(--fv-r-lg) var(--fv-r-lg) 4px var(--fv-r-lg);
+  background: var(--fv-navy);
+  color: var(--fv-cream-100);
+}
+.fv-as-msg.error {
+  color: var(--fv-destructive);
+}
+
+.fv-as-working {
+  font-size: var(--fv-xs);
+  color: var(--fv-muted);
+}
+.fv-as-working::after {
+  content: "…";
+  display: inline-block;
+  animation: fv-as-pulse 1.2s ease-in-out infinite;
+}
+@keyframes fv-as-pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fv-as-working::after {
+    animation: none;
+  }
+}
+
+/* A draft: the summary, what changes, and the two buttons. */
+.fv-as-draft {
+  border: 1px solid var(--fv-neutral-200);
+  background: var(--fv-cream-300);
+  border-radius: var(--fv-r-md);
+  padding: 11px 12px;
+  font-size: var(--fv-xs);
+  line-height: 1.55;
+}
+.fv-as-draft ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+.fv-as-draft .fv-eyebrow {
+  display: block;
+  margin-top: 10px;
+}
+.fv-as-draft .fv-eyebrow:first-child {
+  margin-top: 0;
+}
+.fv-as-arrow {
+  color: var(--fv-muted);
+}
+.fv-as-after {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 14px;
+}
+.fv-as-after > span {
+  white-space: nowrap;
+}
+.fv-as-warn {
+  color: var(--fv-amber);
+}
+.fv-as-quiet {
+  color: var(--fv-muted);
+  font-size: var(--fv-2xs);
+}
+.fv-as-done {
+  color: var(--fv-emerald);
+  font-weight: 600;
+}
+.fv-as-btns {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.fv-as-compose {
+  border-top: 1px solid var(--fv-neutral-200);
+  padding: 10px 12px 12px;
+  background: var(--fv-cream-200);
+}
+.fv-as-compose .fv-ta {
+  width: 100%;
+  min-height: 64px;
+  max-height: 180px;
+  resize: vertical;
+}
+.fv-as-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.fv-as-hint {
+  flex: 1;
+  font-size: var(--fv-2xs);
+  color: var(--fv-muted);
+}
+
+/* The launcher: the same corner on every screen. Under the sheet (40) and under
+   a dialog's overlay (60), so it never sits on top of either. */
+.fv-as-launch {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 35;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 40px;
+  padding: 0 16px 0 13px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--fv-navy);
+  color: var(--fv-cream-100);
+  font: inherit;
+  font-size: var(--fv-sm);
+  font-weight: 600;
+  box-shadow: 0 6px 20px rgba(0, 35, 65, 0.22);
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+@media (hover: hover) {
+  .fv-as-launch:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 8px 24px rgba(0, 35, 65, 0.28);
+  }
+}
+.fv-as-launch:focus-visible {
+  outline: 2px solid var(--fv-navy-700);
+  outline-offset: 3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fv-as-launch {
+    transition: none;
+  }
+}
+
+/* Room at the end of every list that scrolls, so its last row can always be
+   brought up clear of the launcher rather than sitting underneath it. */
+.fv-assisted .fv-scroll,
+.fv-assisted .fv-gradeside,
+.fv-assisted .fv-teampanel,
+.fv-assisted .fv-cksheet,
+.fv-assisted .fv-ckdrive,
+.fv-assisted .fv-panebody {
+  padding-bottom: 72px;
+}
+
+/* Narrower than a laptop: a sheet over the right of the screen, so the screen
+   behind keeps its full width when the panel is closed. */
+@media (max-width: 1279px) {
+  .fv-assist {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    width: min(400px, 100vw);
+    padding: 12px;
+  }
+  .fv-assist-card {
+    box-shadow: 0 12px 40px rgba(0, 35, 65, 0.18);
+  }
+}
+@media (max-width: 700px) {
+  .fv-assist {
+    width: 100vw;
+    padding: 0;
+  }
+  .fv-assist-card {
+    border-radius: 0;
+    border: 0;
+  }
+}

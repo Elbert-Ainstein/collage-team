@@ -37,10 +37,11 @@ import {
   planTeamImport,
   KEEPS_THEIR_TEAM,
   NOTHING_IS_DELETED,
+  type TeamImportOutcome,
   type TeamPlan,
 } from "@/checkins/teamImport";
 import { getTutorialSheet, studentMarks } from "@/checkins/tutorial";
-import type { Student } from "@/checkins/types";
+import type { Student, TeamWithMembers } from "@/checkins/types";
 import {
   canvasColumns,
   canvasCsv,
@@ -51,6 +52,9 @@ import {
   type CheckInGradeRow,
 } from "./exportTerm";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { ImportUndoBar } from "./ImportUndoBar";
+import { importRecord } from "./importUndo";
+import { useLastImport } from "./lastImport";
 import { InviteCodeCard } from "./InviteCodeCard";
 import { FAvatar, FIcon } from "./icons";
 import { FacultyError, type FacultyData } from "./FacultyApp";
@@ -87,6 +91,20 @@ interface Preview {
   /** Null when the file carries no team numbers, which is every roster import. */
   plan: TeamPlan | null;
   warnings: string[];
+  /**
+   * The roster half, when it has already been written and only the teams are
+   * left to retry — so Undo still knows who this import added.
+   */
+  done?: RosterDone;
+}
+
+/** What the roster half of an import wrote, for Undo. See importUndo.ts. */
+interface RosterDone {
+  /** The teams as they were before the press. */
+  before: TeamWithMembers[];
+  added: Student[];
+  emails: { student: Student; email: string }[];
+  names: { student: Student; to: string }[];
 }
 
 function plural(n: number, one: string, many: string): string {
@@ -254,12 +272,26 @@ function wipeCostLine(cost: RosterRemoval | null, failed: boolean): string {
   );
 }
 
+/**
+ * A class list arriving from somewhere other than the dropzone — the assistant,
+ * which rewrites whatever was pasted into it as name, email and team. `key`
+ * tells one arrival from the next, so the same list sent twice opens twice.
+ */
+export interface Incoming {
+  text: string;
+  source: string;
+  key: number;
+}
+
 export function TeamsScreen(props: {
   data: FacultyData;
   onChanged: () => void;
   onError: (e: unknown) => void;
+  incoming?: Incoming | null;
+  /** Called once the incoming list is in the importer, so it is not taken twice. */
+  onIncomingTaken?: () => void;
 }): JSX.Element {
-  const { data, onChanged, onError } = props;
+  const { data, onChanged, onError, incoming, onIncomingTaken } = props;
   const { course, roster, activities, checkIns, results, teams, tfs } = data;
 
   const [error, setError] = useState<string | null>(null);
@@ -320,6 +352,22 @@ export function TeamsScreen(props: {
   const [exporting, setExporting] = useState(false);
   const [exportProblem, setExportProblem] = useState<string | null>(null);
   const file = useRef<HTMLInputElement | null>(null);
+  /** The last import on this course, for Undo — kept across screens and reloads. */
+  const [lastImport, setLastImport] = useLastImport(course.id);
+  /**
+   * The roster as it stood when the last import was remembered. Undo waits
+   * until the refresh after the import has replaced it: planned against the
+   * roster from BEFORE, it would find none of the students it added.
+   */
+  const importedOn = useRef<Student[] | null>(null);
+  /** What the last Undo did, shown where its button was. */
+  const [undoNote, setUndoNote] = useState<string | null>(null);
+  useEffect(() => setUndoNote(null), [course.id]);
+  /** The import preview, scrolled to when a list arrives from the assistant. */
+  const preview = useRef<HTMLDivElement | null>(null);
+  /** Which arrival is on screen, and which one has been scrolled to. */
+  const [arrived, setArrived] = useState(0);
+  const scrolledFor = useRef(0);
 
   const fail = (e: unknown) => {
     setError(String((e as Error)?.message ?? e));
@@ -374,6 +422,31 @@ export function TeamsScreen(props: {
       else root.removeAttribute("data-theme");
     };
   }, [builder]);
+
+  // A list from the assistant goes through the same door as a dropped file:
+  // propose() parses it, reconciles it with the roster and plans the teams, and
+  // the preview below is the one she already knows. Once per arrival — the key,
+  // not the text, because sending the same list again should open it again.
+  useEffect(() => {
+    if (!incoming || !data.can.manageRoster) return;
+    setBuilder(false);
+    setPanel("import");
+    setArrived(incoming.key);
+    propose(incoming.text, incoming.source);
+    onIncomingTaken?.();
+    // propose reads the roster and teams of THIS render, which is the point.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [incoming?.key]);
+
+  // The importer sits under the roster, which for a class of eighty is a long
+  // way down — so the list she just sent would otherwise be off the screen.
+  // Keyed on the arrival rather than a flag, so a list that turned out to have
+  // nothing to add does not leave a scroll waiting for her next manual drop.
+  useEffect(() => {
+    if (arrived === scrolledFor.current) return;
+    scrolledFor.current = arrived;
+    if (pending) preview.current?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+  }, [arrived, pending]);
 
   // ---------------- email ----------------
 
@@ -720,15 +793,29 @@ export function TeamsScreen(props: {
     }
   }
 
+  /** Keep what an import wrote, so the bar at the top can offer to undo it. */
+  function remember(wrote: RosterDone, placed: TeamImportOutcome["record"] | null, source: string) {
+    const record = importRecord({ ...wrote, teams: placed });
+    const any =
+      record.added.length || record.emails.length || record.names.length ||
+      record.teams.moved.length || record.teams.created.length || record.teams.renamed.length;
+    if (!any) return;
+    importedOn.current = roster;
+    setLastImport({ record, source });
+    setUndoNote(null);
+  }
+
   async function applyImport() {
     const p = pending;
     if (!p) return;
+    const before = teams;
     setBusy(true);
     setError(null);
     try {
       let after = roster;
+      let added: Student[] = [];
       if (p.fresh.length) {
-        const added = await addStudents(
+        added = await addStudents(
           course.id,
           p.fresh.map((s) => ({ name: s.name, email: s.email })),
           nextPosition,
@@ -742,6 +829,12 @@ export function TeamsScreen(props: {
       for (const fix of renames) {
         await setStudentName(fix.student.id, fix.to);
       }
+      const wrote: RosterDone = {
+        before,
+        added,
+        emails: p.emailFills,
+        names: renames.map((f) => ({ student: f.student, to: f.to })),
+      };
       const done = [
         p.fresh.length ? `Added ${plural(p.fresh.length, "student", "students")}.` : "",
         p.emailFills.length
@@ -779,10 +872,16 @@ export function TeamsScreen(props: {
             nameFixes: [],
             unchanged: p.rows.length,
             plan,
+            done: wrote,
           });
+          // The students are in, so they can be undone even if the teams
+          // never land — and the screen has to re-read to show them.
+          remember(wrote, null, p.source);
+          onChanged();
           setNote(`${done} Nobody was put on a team — press Set teams to try that half again.`);
           throw e;
         }
+        remember(wrote, out.record, p.source);
         closePanel();
         setNote(
           `${done} ${plural(out.moved, "student is", "students are")} on the teams from ` +
@@ -793,6 +892,7 @@ export function TeamsScreen(props: {
         setPending(null);
         setPaste("");
       } else {
+        remember(wrote, null, p.source);
         closePanel();
         setNote(done);
         setPending(null);
@@ -813,7 +913,11 @@ export function TeamsScreen(props: {
     setBusy(true);
     setError(null);
     try {
+      const before = teams;
       const out = await applyTeamPlan(course.id, p.plan);
+      // After a failed one-press import, the students it added are part of
+      // this same import, and Undo has to take them too.
+      remember(p.done ?? { before, added: [], emails: [], names: [] }, out.record, p.source);
       closePanel();
       setNote(
         `${plural(out.moved, "student is", "students are")} on the teams from ${p.source}` +
@@ -1071,6 +1175,51 @@ export function TeamsScreen(props: {
             </button>
           ) : null}
         </div>
+
+        {canEdit && lastImport ? (
+          <ImportUndoBar
+            last={lastImport}
+            roster={roster}
+            teams={teams}
+            stale={importedOn.current === roster}
+            onUndone={(result) => {
+              setLastImport(null);
+              setUndoNote(result);
+              // The import's own "Added 4 students…" no longer describes the roster.
+              setNote(null);
+              onChanged();
+            }}
+            onRefresh={onChanged}
+            onDismiss={() => setLastImport(null)}
+          />
+        ) : undoNote ? (
+          <div
+            role="status"
+            style={{
+              display: "flex",
+              gap: 10,
+              alignItems: "flex-start",
+              padding: "9px 12px",
+              marginBottom: 14,
+              border: "1px solid var(--fv-neutral-200)",
+              borderRadius: "var(--fv-r-md)",
+              background: "var(--fv-cream-300)",
+              fontSize: "var(--fv-xs)",
+              lineHeight: 1.5,
+            }}
+          >
+            <span style={{ flex: 1 }}>{undoNote}</span>
+            <button
+              type="button"
+              className="fv-iconbtn"
+              style={{ width: 22, height: 22 }}
+              aria-label="Hide"
+              onClick={() => setUndoNote(null)}
+            >
+              <FIcon name="close" size={14} />
+            </button>
+          </div>
+        ) : null}
 
         {/* A TF gets this screen too and must not see the code — and would not
             anyway, since course_invites has no read policy but the owner's. */}
@@ -1560,6 +1709,7 @@ export function TeamsScreen(props: {
 
           {pending ? (
             <div
+              ref={preview}
               style={{
                 marginTop: 12,
                 padding: "11px 12px",

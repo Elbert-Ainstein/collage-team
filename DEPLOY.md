@@ -88,6 +88,17 @@ Next.js embeds them in the JavaScript sent to users, and the anon key is
 database's row-level security — which is why the warning at the top of this file
 matters so much. The anon key is not the lock; RLS is.
 
+**Optional — the faculty assistant.** To switch on the Assistant panel, also add
+`ANTHROPIC_API_KEY` (from console.anthropic.com → API Keys) and
+`ASSISTANT_ALLOWED_EMAILS` — the sign-in emails of the instructors who may use
+it, comma-separated. Without that list the assistant stays off in production:
+anyone can sign up and make a course, so owning one proves nothing. The key has **no**
+`NEXT_PUBLIC_` prefix on purpose: it stays on the server, in the one route that
+talks to the model (`app/api/assistant`), and never reaches a browser. Set a
+monthly spend limit on that key in the Anthropic console — the route's rate
+limit is a brake, not a budget. Without the key the app works exactly as before
+and the panel says the assistant is not switched on.
+
 Never put the **`service_role`** key here. It bypasses all security and would
 be handed to every visitor.
 

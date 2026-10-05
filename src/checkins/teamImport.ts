@@ -116,6 +116,18 @@ export interface TeamPlan {
   notInFile: Student[];
 }
 
+/**
+ * What applyTeamPlan wrote, so Roster & teams can offer to undo it. Only ids —
+ * where each student went, which teams were made and which renamed — and
+ * nothing about where anyone WAS: the screen knows that from the teams it had
+ * on hand before the press. See importUndo.ts.
+ */
+export interface TeamPlanRecord {
+  placed: { studentId: string; to: string }[];
+  created: { teamId: string; name: string }[];
+  renamed: { teamId: string; from: string; to: string }[];
+}
+
 export interface TeamImportOutcome {
   /** Teams the file renamed, because its number is what a team is called. */
   renamed: number;
@@ -125,6 +137,7 @@ export interface TeamImportOutcome {
   created: number;
   /** Students the file actually placed. */
   moved: number;
+  record: TeamPlanRecord;
 }
 
 /** The two rules the screen has to say out loud, worded once. */
@@ -391,16 +404,19 @@ export function planTeamImport(input: {
  * course-wide set, else the newest. The roster screen prints each student's
  * team from THAT set, so an import that wrote anywhere else would look like it
  * had silently done nothing.
+ *
+ * The assistant's seating writes into the same set for the same reason, so
+ * this is exported; `size` only sizes a set created from nothing.
  */
-async function targetSet(courseId: string, plan: TeamPlan): Promise<string> {
+export async function targetSet(courseId: string, size: number): Promise<string> {
   const sets = await listTeamSets(courseId);
   const set = sets.find((s) => s.activity_id == null) ?? sets[sets.length - 1] ?? null;
   if (set) return set.id;
   const made = await createTeamSet({
     courseId,
     activityId: null,
-    name: `Whole session · teams of ${plan.size}`,
-    teamSize: plan.size,
+    name: `Whole session · teams of ${size}`,
+    teamSize: size,
   });
   return made.id;
 }
@@ -420,9 +436,11 @@ export async function applyTeamPlan(
   // A file that matched nobody has nothing to write, and going on would leave a
   // brand-new empty team set behind as the only trace of an import that did
   // nothing.
-  if (!plan.placements.length) return { setId: plan.setId, created: 0, renamed: 0, moved: 0 };
+  if (!plan.placements.length) {
+    return { setId: plan.setId, created: 0, renamed: 0, moved: 0, record: { placed: [], created: [], renamed: [] } };
+  }
 
-  const setId = plan.setId ?? (await targetSet(courseId, plan));
+  const setId = plan.setId ?? (await targetSet(courseId, plan.size));
 
   // Every team in the set, including the ones the file never names. This is
   // what moveStudents clears a student out of, so a team missing from this list
@@ -433,6 +451,7 @@ export async function applyTeamPlan(
     .filter((id): id is string => Boolean(id));
 
   const targets: { team: PlannedTeam; id: string }[] = [];
+  const record: TeamPlanRecord = { placed: [], created: [], renamed: [] };
   let position = plan.nextPosition;
   let created = 0;
   let renamed = 0;
@@ -445,6 +464,7 @@ export async function applyTeamPlan(
       // called in between.
       if (team.currentName !== team.name) {
         await renameTeam(team.existingId, team.name);
+        record.renamed.push({ teamId: team.existingId, from: team.currentName ?? "", to: team.name });
         renamed++;
       }
       targets.push({ team, id: team.existingId });
@@ -454,6 +474,7 @@ export async function applyTeamPlan(
     // numbering — creating it would leave an empty team on the screen.
     if (!team.moved.length) continue;
     const row = await createTeam(setId, team.name, position++);
+    record.created.push({ teamId: row.id, name: team.name });
     created++;
     ids.push(row.id);
     targets.push({ team, id: row.id });
@@ -463,8 +484,9 @@ export async function applyTeamPlan(
   for (const { team, id } of targets) {
     if (!team.moved.length) continue;
     await moveStudents(team.moved.map((s) => s.id), id, ids);
+    record.placed.push(...team.moved.map((s) => ({ studentId: s.id, to: id })));
     moved += team.moved.length;
   }
 
-  return { setId, created, renamed, moved };
+  return { setId, created, renamed, moved, record };
 }
