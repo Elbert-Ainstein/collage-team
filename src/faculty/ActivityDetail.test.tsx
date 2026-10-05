@@ -27,6 +27,16 @@ vi.mock("./FacultyApp", () => ({
   linkToActivity: () => "https://example.test/a",
 }));
 vi.mock("./ActivityTeamPanel", () => ({ ActivityTeamPanel: () => null }));
+// Who a hand-in was reopened for (0044). `reopens` is what the database holds.
+const reopens = { value: [] as string[] };
+const reopenHandIn = vi.fn(async () => undefined);
+const closeHandIn = vi.fn(async () => undefined);
+vi.mock("./facultyData", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  listReopens: vi.fn(async () => reopens.value),
+  reopenHandIn,
+  closeHandIn,
+}));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -77,12 +87,12 @@ afterEach(async () => {
   host.remove();
 });
 
-async function mount(d: FacultyData = data()) {
+async function mount(d: FacultyData = data(), activity: Activity = combo) {
   await act(async () => {
     root.render(
       <ActivityDetail
         data={d}
-        activity={combo}
+        activity={activity}
         onBack={vi.fn()}
         onRubric={vi.fn()}
         onGrade={onGrade}
@@ -166,5 +176,93 @@ describe("what the activity is out of, on the read-only header", () => {
     });
     expect(headerLine()).toContain("Marked for completion");
     expect(headerLine()).not.toContain("out of");
+  });
+});
+
+// A student's hand-in closes at the deadline (0044). The instructor reopens it
+// for one student at a time from the Not submitted pile, and closes it again
+// from the Reopened pile — which lists every reopen that stands, including a
+// student who has since handed in and left Not submitted.
+describe("reopening a hand-in for one student", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const dueIn = (ms: number) =>
+    ({ ...combo, due_at: new Date(Date.now() + ms).toISOString() }) as Activity;
+  const owner = () =>
+    data({ can: { isOwner: true, grade: true, author: true, rubric: true, release: true, runCheckIns: true } } as Partial<FacultyData>);
+  const tf = () =>
+    data({ can: { isOwner: false, grade: true, author: false, rubric: true, release: false, runCheckIns: true } } as Partial<FacultyData>);
+  const buttonIn = (el: HTMLElement | undefined, text: string) =>
+    [...(el?.querySelectorAll("button") ?? [])].find((b) => b.textContent?.trim() === text);
+  const openNotSubmitted = () =>
+    click([...host.querySelectorAll("button")].find((b) => b.textContent?.includes("Not submitted"))!);
+  const pile = (label: string) =>
+    [...host.querySelectorAll<HTMLElement>(".fv-group")].find((b) => b.textContent?.includes(label));
+
+  beforeEach(() => {
+    reopens.value = [];
+  });
+
+  it("offers Reopen on a missing student once the deadline has passed", async () => {
+    await mount(owner(), dueIn(-DAY));
+    await openNotSubmitted();
+
+    const reopen = buttonIn(rowFor("Di"), "Reopen");
+    expect(reopen).toBeTruthy();
+    await click(reopen!);
+
+    expect(reopenHandIn).toHaveBeenCalledWith("combo", "s4");
+    expect(rowFor("Di").textContent).toContain("Reopened");
+    expect(buttonIn(rowFor("Di"), "Reopen")).toBeFalsy();
+    expect(pile("Reopened")?.textContent).toContain("1");
+  });
+
+  it("closes it again from the Reopened pile", async () => {
+    reopens.value = ["s4"];
+    await mount(owner(), dueIn(-DAY));
+
+    const rows = [...host.querySelectorAll<HTMLElement>(".fv-person")].filter((el) =>
+      el.textContent?.includes("Di Ott"),
+    );
+    const close = rows.map((r) => buttonIn(r, "Close")).find(Boolean);
+    expect(close).toBeTruthy();
+    await click(close!);
+
+    expect(closeHandIn).toHaveBeenCalledWith("combo", "s4");
+    expect(pile("Reopened")).toBeFalsy();
+  });
+
+  it("lists a reopened student who has since handed in, so it can still be closed", async () => {
+    // Cy (s3) is on To grade, a pile of buttons, so the Close lives here.
+    reopens.value = ["s3"];
+    await mount(owner(), dueIn(-DAY));
+    expect(pile("Reopened")).toBeTruthy();
+    const closes = [...host.querySelectorAll<HTMLElement>(".fv-person")]
+      .filter((el) => el.tagName === "DIV" && el.textContent?.includes("Cy Ng"))
+      .map((r) => buttonIn(r, "Close"));
+    expect(closes.some(Boolean)).toBe(true);
+  });
+
+  it("offers nothing to reopen before the deadline, when nothing is closed", async () => {
+    await mount(owner(), dueIn(DAY));
+    await openNotSubmitted();
+    expect(buttonIn(rowFor("Di"), "Reopen")).toBeFalsy();
+  });
+
+  it("offers nothing to reopen on an activity with no due date", async () => {
+    await mount(owner(), combo);
+    await openNotSubmitted();
+    expect(buttonIn(rowFor("Di"), "Reopen")).toBeFalsy();
+  });
+
+  // 0044 lets only the course owner write a reopen. A TF reads who was let in
+  // late, and has nothing to press.
+  it("a TF sees who it was reopened for, and can neither reopen nor close", async () => {
+    reopens.value = ["s4"];
+    await mount(tf(), dueIn(-DAY));
+    await openNotSubmitted();
+
+    expect(pile("Reopened")).toBeTruthy();
+    expect([...host.querySelectorAll("button")].some((b) => b.textContent?.trim() === "Reopen")).toBe(false);
+    expect([...host.querySelectorAll("button")].some((b) => b.textContent?.trim() === "Close")).toBe(false);
   });
 });

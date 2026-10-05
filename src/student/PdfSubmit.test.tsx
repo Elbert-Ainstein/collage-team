@@ -64,7 +64,7 @@ const questions = [
 let host: HTMLDivElement;
 let root: Root;
 
-async function mount(mapPages = true): Promise<string> {
+async function mount(mapPages = true, lockedWhy?: string): Promise<string> {
   await act(async () => {
     root.render(
       <PdfSubmit
@@ -72,7 +72,8 @@ async function mount(mapPages = true): Promise<string> {
         courseId="c1"
         activityId="a1"
         questions={questions as never}
-        locked={false}
+        locked={lockedWhy !== undefined}
+        lockedWhy={lockedWhy}
         mapPages={mapPages}
         onChanged={() => undefined}
       />,
@@ -157,6 +158,29 @@ describe("PdfSubmit", () => {
       expect(text).not.toContain("No pages yet");
       expect(text).not.toContain("Every question has pages");
       expect(host.querySelectorAll("[aria-pressed]")).toHaveLength(0);
+    });
+  });
+
+  // Past the deadline (0044). A disabled dropzone still says "Upload your work
+  // as a PDF", an instruction nobody can follow, so the reason replaces it.
+  describe("closed at the deadline", () => {
+    const why = "Hand-ins for this closed at the deadline.";
+
+    it("says why in place of the dropzone when nothing is up", async () => {
+      current.value = null;
+      const text = await mount(false, why);
+
+      expect(text).toContain(why);
+      expect(text).not.toContain("Upload your work as a PDF");
+    });
+
+    it("still shows what was handed in, with no way to replace it", async () => {
+      current.value = file;
+      const text = await mount(false, why);
+
+      expect(text).toContain("3 pages");
+      expect(text).toContain(why);
+      expect(text).not.toContain("Upload a different PDF");
     });
   });
 });

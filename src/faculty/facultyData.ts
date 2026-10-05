@@ -1360,6 +1360,60 @@ export async function releaseMany(
   return { released, failed };
 }
 
+// ---------------------------------------------------------- reopened hand-ins
+//
+// A student's hand-in closes at the individual deadline (0044). The instructor
+// reopens it for one student at a time; while the row stands that student can
+// hand in, and what they hand in still reads Late against due_at.
+
+const NO_REOPENS =
+  "This project cannot reopen hand-ins yet — run supabase/migrations/0044_hand_in_deadline.sql " +
+  "in the Supabase SQL editor.";
+
+/**
+ * Who this activity's hand-in has been reopened for, as student ids.
+ *
+ * Empty on a database without 0044, rather than an error: the activity page is
+ * readable without it, and there is nothing to list because nothing closes.
+ */
+export async function listReopens(activityId: string): Promise<string[]> {
+  const { data, error } = await db().from("hand_in_reopens").select("student_id")
+    .eq("activity_id", activityId);
+  if (error) {
+    if (/hand_in_reopens/.test(error.message)) return [];
+    throw dbError(error);
+  }
+  return ((data as { student_id: string }[] | null) ?? []).map((r) => r.student_id);
+}
+
+/**
+ * Let one student hand in past the deadline. The course owner's alone (0044).
+ * Pressing it twice is not an error: the second press finds them reopened.
+ */
+export async function reopenHandIn(activityId: string, studentId: string): Promise<void> {
+  const { error } = await db().from("hand_in_reopens")
+    .insert({ activity_id: activityId, student_id: studentId });
+  if (!error || /duplicate key|23505/i.test(error.message)) return;
+  if (/hand_in_reopens/.test(error.message) && /does not exist|schema cache|could not find/i.test(error.message)) {
+    throw new Error(NO_REOPENS);
+  }
+  throw dbError(error);
+}
+
+/**
+ * Close it again. Whatever they handed in while it was open stays handed in;
+ * they just cannot change it any more.
+ */
+export async function closeHandIn(activityId: string, studentId: string): Promise<void> {
+  const { error } = await db().from("hand_in_reopens").delete()
+    .eq("activity_id", activityId).eq("student_id", studentId);
+  if (!error) return;
+  if (/hand_in_reopens/.test(error.message) && /does not exist|schema cache|could not find/i.test(error.message)) {
+    throw new Error(NO_REOPENS);
+  }
+  throw dbError(error);
+}
+
 // ---------------------------------------------------------------------- TFs
 
 /** A name worth printing, or null: blank and whitespace are both "no name". */

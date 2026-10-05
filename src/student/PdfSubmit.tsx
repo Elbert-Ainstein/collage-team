@@ -72,6 +72,7 @@ export function PdfSubmit({
   activityId,
   questions,
   locked,
+  lockedWhy,
   mapPages = true,
   onChanged,
 }: {
@@ -82,6 +83,12 @@ export function PdfSubmit({
   questions: ActivityQuestion[];
   /** Graded work is closed — the database refuses the write either way. */
   locked: boolean;
+  /**
+   * Why, when it is not because it was graded: a hand-in past its deadline
+   * (0044). Said in place of the upload controls, which would otherwise sit
+   * there disabled with nothing to explain them.
+   */
+  lockedWhy?: string;
   /**
    * Whether the student is asked which pages answer which question.
    *
@@ -100,6 +107,8 @@ export function PdfSubmit({
   const [busy, setBusy] = useState<null | "loading" | "uploading" | "saving">(null);
   const [error, setError] = useState<string | null>(null);
   const [armedReplace, setArmedReplace] = useState(false);
+  /** Which result the first look for a PDF has finished on; see the closed card. */
+  const [checkedFor, setCheckedFor] = useState<string | null>(null);
   const picker = useRef<HTMLInputElement | null>(null);
   const qlist = useRef<HTMLDivElement | null>(null);
   const live = useRef(true);
@@ -144,7 +153,10 @@ export function PdfSubmit({
     } catch (e) {
       if (live.current) setError(message(e, "Could not open your submission."));
     } finally {
-      if (live.current) setBusy(null);
+      if (live.current) {
+        setBusy(null);
+        setCheckedFor(resultId);
+      }
     }
   }, [resultId]);
 
@@ -252,7 +264,22 @@ export function PdfSubmit({
     return (
       <div className="sv-card" style={{ marginTop: 12 }}>
         <div className="sv-sub" style={{ lineHeight: 1.6 }}>
-          This activity isn&rsquo;t open for submissions yet.
+          {locked && lockedWhy ? lockedWhy : "This activity isn\u2019t open for submissions yet."}
+        </div>
+      </div>
+    );
+  }
+
+  // Closed with nothing up. A disabled dropzone still reads "Upload your work
+  // as a PDF", which is an instruction the student cannot follow. Only once the
+  // look for a PDF has come back: before that, "nothing can be uploaded" over
+  // work that is about to appear would read as though it had been lost.
+  if (!file && locked && lockedWhy) {
+    return (
+      <div className="sv-card" style={{ marginTop: 12 }}>
+        <div className="sv-eyebrow">Your PDF</div>
+        <div className="sv-sub" style={{ marginTop: 8, lineHeight: 1.6 }}>
+          {checkedFor === resultId && busy !== "loading" ? lockedWhy : "Checking for a submission\u2026"}
         </div>
       </div>
     );
@@ -388,7 +415,9 @@ export function PdfSubmit({
 
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10, flexWrap: "wrap" }}>
         {locked ? (
-          <span className="sv-sub">This has been graded, so it can no longer be changed.</span>
+          <span className="sv-sub">
+            {lockedWhy ?? "This has been graded, so it can no longer be changed."}
+          </span>
         ) : armedReplace ? (
           <>
             <button
