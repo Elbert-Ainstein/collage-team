@@ -169,6 +169,57 @@
   flex-wrap: wrap;
 }
 
+/* A form_teams draft: one line per rule, ticked or crossed. */
+.fv-as-checks {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+.fv-as-checks li {
+  padding: 2px 0;
+}
+.fv-as-checks li.ok span {
+  color: var(--fv-emerald);
+  font-weight: 700;
+}
+.fv-as-checks li.no {
+  color: var(--fv-amber);
+}
+.fv-as-checks li.no span {
+  font-weight: 700;
+}
+.fv-as-teams {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+.fv-as-teams li {
+  margin-bottom: 5px;
+}
+
+/* The file on her message, and the file waiting to go with the next one. */
+.fv-as-file {
+  margin-top: 4px;
+  font-size: var(--fv-2xs);
+  opacity: 0.85;
+}
+.fv-as-chip {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 6px 8px 6px 10px;
+  border: 1px solid var(--fv-neutral-200);
+  border-radius: var(--fv-r-md);
+  background: var(--fv-cream-100);
+  font-size: var(--fv-2xs);
+  line-height: 1.45;
+}
+.fv-as-chip span {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .fv-as-compose {
   border-top: 1px solid var(--fv-neutral-200);
   padding: 10px 12px 12px;

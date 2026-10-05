@@ -7,8 +7,8 @@ import { describe, expect, it } from "vitest";
 import { parseToolCall, TOOLS } from "./tools";
 
 describe("TOOLS", () => {
-  it("declares both proposal tools with an object schema", () => {
-    expect(TOOLS.map((t) => t.name).sort()).toEqual(["prepare_import", "seat_students"]);
+  it("declares the proposal tools with an object schema", () => {
+    expect(TOOLS.map((t) => t.name).sort()).toEqual(["form_teams", "import_attachment", "prepare_import", "seat_students"]);
     for (const t of TOOLS) {
       expect(t.schema.type).toBe("object");
       expect(t.description.length).toBeGreaterThan(40);
@@ -130,6 +130,66 @@ describe("parseToolCall — prepare_import", () => {
   it("refuses a row with no name, and an empty list", () => {
     expect(parseToolCall("prepare_import", { summary: "x", rows: [{ name: " " }] }).ok).toBe(false);
     expect(parseToolCall("prepare_import", { summary: "x", rows: [] }).ok).toBe(false);
+  });
+});
+
+describe("parseToolCall — form_teams", () => {
+  it("reads Kelly's rules as settings for the code that forms the teams", () => {
+    const out = parseToolCall("form_teams", {
+      summary: "New teams of 4, balanced, nobody with a current teammate.",
+      team_size: 4,
+      avoid_current_teammates: true,
+      name_columns: ["Name"],
+      email_column: "Email",
+      balance: [
+        { column: "Gender", kind: "category" },
+        { column: "Pre-class assessment", kind: "number" },
+        { column: "Track", kind: "category", values: ["Engineering", "Pre-med"] },
+        { column: "Year", kind: "category", values: ["Freshman"] },
+      ],
+      not_applied: ["Keep the two TAs' sections separate"],
+    });
+    expect(out).toEqual({
+      ok: true,
+      proposal: {
+        kind: "form",
+        summary: "New teams of 4, balanced, nobody with a current teammate.",
+        teamSize: 4,
+        avoidCurrent: true,
+        avoidColumns: [],
+        nameColumns: ["Name"],
+        emailColumn: "Email",
+        balance: [
+          { column: "Gender", kind: "category", values: [] },
+          { column: "Pre-class assessment", kind: "number", values: [] },
+          { column: "Track", kind: "category", values: ["Engineering", "Pre-med"] },
+          { column: "Year", kind: "category", values: ["Freshman"] },
+        ],
+        notApplied: ["Keep the two TAs' sections separate"],
+      },
+    });
+  });
+
+  it("works with no file at all — just no repeat teammates", () => {
+    const out = parseToolCall("form_teams", { summary: "x", team_size: 4, avoid_current_teammates: true });
+    expect(out.ok && out.proposal.kind === "form" && out.proposal.balance).toEqual([]);
+  });
+
+  it("refuses a team size that is not a size, and a balance kind it does not know", () => {
+    expect(parseToolCall("form_teams", { summary: "x", team_size: 1 }).ok).toBe(false);
+    expect(parseToolCall("form_teams", { summary: "x", team_size: 4.5 }).ok).toBe(false);
+    expect(
+      parseToolCall("form_teams", { summary: "x", team_size: 4, balance: [{ column: "G", kind: "vibes" }] }).ok,
+    ).toBe(false);
+  });
+});
+
+describe("parseToolCall — import_attachment", () => {
+  it("needs only a summary", () => {
+    expect(parseToolCall("import_attachment", { summary: "24 students on 6 teams." })).toEqual({
+      ok: true,
+      proposal: { kind: "import-file", summary: "24 students on 6 teams." },
+    });
   });
 });
 

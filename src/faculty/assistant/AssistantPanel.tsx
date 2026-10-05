@@ -1,7 +1,7 @@
 "use client";
 
-// The assistant: describe a change to the teams, or paste a class list, and it
-// drafts it. Nothing is written until the instructor presses the button on the
+// The assistant: describe a change to the teams, paste a class list, or attach
+// a class spreadsheet and describe the teams you want — and it drafts it. Nothing is written until the instructor presses the button on the
 // draft — see src/assistant/types.ts for why the server cannot write at all.
 //
 // Kept mounted while closed, so the conversation survives a trip to another
@@ -11,10 +11,13 @@
 import { useEffect, useRef, useState } from "react";
 import { decodeRosterFile, isSupportedRosterFile } from "@/checkins/rosterImport";
 import { MAX_MESSAGE } from "@/assistant/request";
+import type { AttachmentSummary } from "@/assistant/types";
 import type { FacultyData } from "../FacultyApp";
 import { FIcon } from "../icons";
 import { askAssistant } from "./client";
-import { ImportCard } from "./ImportCard";
+import { FileImportCard, ImportCard } from "./ImportCard";
+import { FormTeamsCard } from "./FormTeamsCard";
+import { parseTable, summarize, type Table } from "./table";
 import { emailsNotIn, rowsToCsv } from "./importRows";
 import { SeatingCard } from "./SeatingCard";
 import { buildSnapshot } from "./snapshot";
@@ -47,9 +50,12 @@ function tries(data: FacultyData): string[] {
   return [
     "Who isn't on a team yet?",
     someone && somewhere ? `Move ${someone} to ${somewhere}` : "Move a student to another team",
-    "Change the teams to match this list:\n",
+    "Make new teams of 4 so nobody is with a current teammate",
   ];
 }
+
+/** The same ceiling the Teams importer puts on a class list — see TeamsScreen. */
+const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
 /** On a touch screen Return is the only way to start a new line, so it must not send. */
 const touch = () => typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
@@ -60,6 +66,8 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  /** A class spreadsheet: read here, summarised for the model, its rows never sent. */
+  const [attached, setAttached] = useState<{ table: Table; summary: AttachmentSummary } | null>(null);
   const nextId = useRef(1);
   const inFlight = useRef<AbortController | null>(null);
   const log = useRef<HTMLDivElement | null>(null);
@@ -81,8 +89,10 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
     setEntries((prev) => prev.map((e) => (e.id === id ? { ...e, status, outcome, record: record ?? e.record } : e)));
 
   function handOff(entry: Entry) {
-    if (entry.proposal?.kind !== "import") return;
-    props.onImport(rowsToCsv(entry.proposal.rows), IMPORT_SOURCE);
+    if (entry.proposal?.kind === "import") props.onImport(rowsToCsv(entry.proposal.rows), IMPORT_SOURCE);
+    // The file itself, untouched: the importer reads it exactly as a drop would.
+    else if (entry.proposal?.kind === "import-file" && entry.table) props.onImport(entry.table.text, entry.table.name);
+    else return;
     setStatus(entry.id, "handed-off");
   }
 
@@ -95,7 +105,8 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
     }
     const { snapshot, refs } = buildSnapshot({ course: data.course, roster: data.roster, teams: data.teams });
     const history = historyFor(entries);
-    setEntries((prev) => [...prev, { id: nextId.current++, role: "user", text }]);
+    const file = attached;
+    setEntries((prev) => [...prev, { id: nextId.current++, role: "user", text, fileName: file?.table.name }]);
     setDraft("");
     setNote(null);
     setBusy(true);
@@ -103,7 +114,10 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
     inFlight.current = controller;
     const id = nextId.current++;
     try {
-      const reply = await askAssistant({ courseId: data.course.id, message: text, history, snapshot }, controller.signal);
+      const reply = await askAssistant(
+        { courseId: data.course.id, message: text, history, snapshot, ...(file ? { attachment: file.summary } : {}) },
+        controller.signal,
+      );
       // Addresses she wrote, plus the ones already on the roster: anything else
       // in a class list is the model's own spelling of somebody's login.
       const known = [text, ...entries.filter((e) => e.role === "user").map((e) => e.text)].concat(
@@ -114,7 +128,7 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
         : [];
       const entry: Entry =
         reply.kind === "proposal"
-          ? { id, role: "assistant", text: reply.text, proposal: reply.proposal, refs, status: "open", unseen }
+          ? { id, role: "assistant", text: reply.text, proposal: reply.proposal, refs, status: "open", unseen, table: file?.table }
           : { id, role: "assistant", text: reply.text };
       setEntries((prev) => [...prev, entry]);
       // A list goes straight to the importer: its preview is the next thing
@@ -123,7 +137,8 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
       // because the importer's preview counts rows and would not show it.
       // Nor while the panel is hidden: she has gone to grading or the rubric
       // while it thought, and the list can wait for her on its button.
-      if (entry.proposal?.kind === "import" && !unseen.length && !hiddenNow.current) handOff(entry);
+      const list = entry.proposal?.kind === "import" || entry.proposal?.kind === "import-file";
+      if (list && !unseen.length && !hiddenNow.current) handOff(entry);
     } catch (e) {
       if ((e as Error)?.name === "AbortError") return;
       setEntries((prev) => [...prev, { id, role: "assistant", text: "", error: String((e as Error)?.message ?? e) }]);
@@ -139,18 +154,20 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
       return;
     }
     // Before reading it: a wrong file dropped here can be gigabytes.
-    if (f.size > MAX_MESSAGE * 4) {
-      setNote(`${f.name} is too long for the assistant. Drop it on Add students, on Roster & teams.`);
+    if (f.size > MAX_FILE_BYTES) {
+      setNote(`${f.name} is far larger than a class list. Check it is the right file, saved as CSV.`);
       return;
     }
     try {
       const { text } = decodeRosterFile(await f.arrayBuffer());
-      if (text.length + draft.length > MAX_MESSAGE) {
-        setNote(`${f.name} is too long for the assistant. Drop it on Add students, on Roster & teams.`);
+      const table = parseTable(text, f.name);
+      if (!table.rows.length) {
+        setNote(`${f.name} has a header row and nothing under it.`);
         return;
       }
-      setDraft((d) => (d.trim() ? `${d.trimEnd()}\n\n${text}` : `Change the teams to match this list:\n${text}`));
-      setNote(`Attached ${f.name}. Edit the request above if you like, then send.`);
+      setAttached({ table, summary: { name: f.name, rows: table.rows.length, columns: summarize(table) } });
+      setNote(null);
+      if (!draft.trim()) setDraft("Make new teams of 4. ");
       box.current?.focus();
     } catch (e) {
       setNote(`${f.name} could not be read: ${String((e as Error)?.message ?? e)}`);
@@ -183,8 +200,9 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
         <div className="fv-as-log" ref={log} aria-live="polite">
           {!entries.length ? (
             <div className="fv-as-intro">
-              Describe a change to the teams — or paste or attach a class list — and I'll draft it. Nothing
-              changes until you press Apply on the draft.
+              Describe a change to the teams, paste a class list, or attach a class spreadsheet (gender, scores,
+              majors, year…) and describe the teams you want — I'll draft it. Nothing changes until you press
+              Apply on the draft.
               <div className="fv-as-tries">
                 {tries(data).map((t) => (
                   <button
@@ -202,7 +220,7 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
               </div>
               <p style={{ marginTop: 14 }}>
                 Each request sends this course's student names and emails to the AI provider, so it can match
-                them.
+                them. An attached spreadsheet stays in your browser: only its column names and totals are sent.
               </p>
             </div>
           ) : null}
@@ -211,6 +229,7 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
             e.role === "user" ? (
               <div key={e.id} className="fv-as-msg user">
                 {e.text}
+                {e.fileName ? <div className="fv-as-file">📎 {e.fileName}</div> : null}
               </div>
             ) : e.error ? (
               <div key={e.id} className="fv-as-msg error" role="alert">
@@ -249,6 +268,31 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
                     onOpen={() => handOff(e)}
                   />
                 ) : null}
+                {e.proposal?.kind === "import-file" && e.table ? (
+                  <FileImportCard table={e.table} status={e.status ?? "open"} onOpen={() => handOff(e)} />
+                ) : null}
+                {e.proposal?.kind === "form" ? (
+                  <FormTeamsCard
+                    courseId={data.course.id}
+                    proposal={e.proposal}
+                    table={e.table ?? null}
+                    roster={data.roster}
+                    teams={data.teams}
+                    status={e.status ?? "open"}
+                    outcome={e.outcome}
+                    record={e.record}
+                    onApplied={(outcome, record) => {
+                      setStatus(e.id, "applied", outcome, record);
+                      props.onChanged();
+                    }}
+                    onUndone={(outcome) => {
+                      setStatus(e.id, "undone", outcome);
+                      props.onChanged();
+                    }}
+                    onRefresh={props.onChanged}
+                    onDismiss={() => setStatus(e.id, "dismissed")}
+                  />
+                ) : null}
               </div>
             ),
           )}
@@ -256,6 +300,24 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
         </div>
 
         <div className="fv-as-compose">
+          {attached ? (
+            <div className="fv-as-chip">
+              <span>
+                📎 <strong>{attached.table.name}</strong> · {attached.table.rows.length} rows ·{" "}
+                {attached.table.headers.join(", ")}
+              </span>
+              <button
+                type="button"
+                className="fv-iconbtn"
+                style={{ width: 22, height: 22 }}
+                aria-label={`Remove ${attached.table.name}`}
+                disabled={busy}
+                onClick={() => setAttached(null)}
+              >
+                <FIcon name="close" size={13} />
+              </button>
+            </div>
+          ) : null}
           <textarea
             ref={box}
             className="fv-ta"
@@ -285,7 +347,7 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
           <div className="fv-as-row">
             <button type="button" className="fv-btn outline sm" disabled={busy} onClick={() => file.current?.click()}>
               <FIcon name="attachFile" size={14} />
-              Attach a list
+              Attach a file
             </button>
             <span className="fv-as-hint">{note ?? (touch() ? "" : "Enter to send · Shift+Enter for a new line")}</span>
             <button

@@ -2,6 +2,7 @@
 
 import type { Proposal, Turn } from "@/assistant/types";
 import type { SeatRecord } from "./seating";
+import type { Table } from "./table";
 import type { Refs } from "./snapshot";
 
 /** What became of a draft. Only the instructor moves it on from "open". */
@@ -21,6 +22,10 @@ export interface Entry {
   record?: SeatRecord;
   /** For a class list: addresses in it that she never wrote. See emailsNotIn. */
   unseen?: string[];
+  /** The file attached when this was asked — what a form or file-import draft works from. */
+  table?: Table;
+  /** On her message: the file she attached to it. */
+  fileName?: string;
   /** The request failed; shown in place of an answer, never sent back. */
   error?: string;
 }

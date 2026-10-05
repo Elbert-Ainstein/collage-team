@@ -5,7 +5,15 @@
 // well-formed here — the server never acts on it, it only describes the class
 // to the model — but a malformed one would make a prompt the model misreads.
 
-import type { AssistantRequest, Snapshot, SnapshotStudent, SnapshotTeam, Turn } from "./types";
+import type {
+  AssistantRequest,
+  AttachmentColumn,
+  AttachmentSummary,
+  Snapshot,
+  SnapshotStudent,
+  SnapshotTeam,
+  Turn,
+} from "./types";
 
 /** Room for a 500-student class list pasted whole, with a header and notes. */
 export const MAX_MESSAGE = 60_000;
@@ -96,6 +104,56 @@ function snapshot(v: unknown): Snapshot {
   };
 }
 
+/** A registrar export can be wide. Matches MAX_SUMMARY_COLUMNS in the browser. */
+const MAX_COLUMNS = 200;
+const MAX_VALUES = 15;
+const KINDS = new Set(["number", "category", "text"]);
+
+const count = (v: unknown, what: string): number => {
+  if (typeof v !== "number" || !Number.isInteger(v) || v < 0 || v > 100_000) bad(`${what} is not a count`);
+  return v;
+};
+const optNumber = (v: unknown, what: string): number | undefined => {
+  if (v === undefined) return undefined;
+  if (typeof v !== "number" || !Number.isFinite(v)) bad(`${what} is not a number`);
+  return v;
+};
+
+function column(v: unknown): AttachmentColumn {
+  if (!isObj(v)) bad("a file column is not an object");
+  if (typeof v.kind !== "string" || !KINDS.has(v.kind)) bad("a file column has an unknown kind");
+  const values =
+    v.values === undefined
+      ? undefined
+      : arr(v.values, "a column's values", MAX_VALUES).map((x) => {
+          if (!isObj(x)) bad("a column value is not an object");
+          return { value: str(x.value, "a column value", 80), count: count(x.count, "a value count") };
+        });
+  if (v.looksLike !== undefined && v.looksLike !== "email" && v.looksLike !== "name") bad("a column has an unknown look");
+  return {
+    name: str(v.name, "a column name", 100),
+    kind: v.kind as AttachmentColumn["kind"],
+    filled: count(v.filled, "a column's filled count"),
+    distinct: count(v.distinct, "a column's distinct count"),
+    ...(values ? { values } : {}),
+    ...(v.min !== undefined ? { min: optNumber(v.min, "a column's minimum") } : {}),
+    ...(v.max !== undefined ? { max: optNumber(v.max, "a column's maximum") } : {}),
+    ...(v.mean !== undefined ? { mean: optNumber(v.mean, "a column's average") } : {}),
+    ...(v.looksLike ? { looksLike: v.looksLike as "email" | "name" } : {}),
+  };
+}
+
+/** A SUMMARY of an attached file — never its rows; see AttachmentColumn. */
+function attachment(v: unknown): AttachmentSummary | undefined {
+  if (v === undefined || v === null) return undefined;
+  if (!isObj(v)) bad("the attachment is not an object");
+  return {
+    name: str(v.name, "the attachment's name", 200),
+    rows: count(v.rows, "the attachment's row count"),
+    columns: arr(v.columns, "the attachment's columns", MAX_COLUMNS).map(column),
+  };
+}
+
 export function parseRequest(body: unknown): ParsedRequest {
   try {
     if (!isObj(body)) bad("the request is not an object");
@@ -107,7 +165,11 @@ export function parseRequest(body: unknown): ParsedRequest {
     if (history.reduce((n, t) => n + t.text.length, 0) > MAX_HISTORY_CHARS) {
       bad("the conversation is too long — start a new one");
     }
-    return { ok: true, request: { courseId, message, history, snapshot: snapshot(body.snapshot) } };
+    const file = attachment(body.attachment);
+    return {
+      ok: true,
+      request: { courseId, message, history, snapshot: snapshot(body.snapshot), ...(file ? { attachment: file } : {}) },
+    };
   } catch (e) {
     if (e instanceof Bad) return { ok: false, error: e.message };
     throw e;

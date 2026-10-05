@@ -65,6 +65,27 @@ describe("parseRequest", () => {
     expect(parseRequest({ ...good, snapshot: bad }).ok).toBe(false);
   });
 
+  it("accepts a file summary, and refuses one that carries more than a summary", () => {
+    const attachment = {
+      name: "class.csv",
+      rows: 80,
+      columns: [
+        { name: "Gender", kind: "category", filled: 80, distinct: 3, values: [{ value: "F", count: 38 }] },
+        { name: "Score", kind: "number", filled: 78, distinct: 60, min: 30, max: 100, mean: 64 },
+        { name: "Name", kind: "text", filled: 80, distinct: 80, looksLike: "name" },
+      ],
+    };
+    const out = parseRequest({ ...good, attachment });
+    expect(out.ok && out.request.attachment?.columns).toHaveLength(3);
+    const bad = { ...attachment, columns: [{ name: "Gender", kind: "everything", filled: 1, distinct: 1 }] };
+    expect(parseRequest({ ...good, attachment: bad }).ok).toBe(false);
+    // A registrar export can be wide: 200 columns is fine, more is not.
+    const wide = { ...attachment, columns: Array.from({ length: 200 }, (_, i) => ({ ...attachment.columns[2], name: `c${i}` })) };
+    expect(parseRequest({ ...good, attachment: wide }).ok).toBe(true);
+    const tooMany = { ...attachment, columns: [{ ...attachment.columns[0], values: Array(40).fill({ value: "x", count: 1 }) }] };
+    expect(parseRequest({ ...good, attachment: tooMany }).ok).toBe(false);
+  });
+
   it("refuses a body that is not an object at all", () => {
     expect(parseRequest(null).ok).toBe(false);
     expect(parseRequest("move everyone").ok).toBe(false);

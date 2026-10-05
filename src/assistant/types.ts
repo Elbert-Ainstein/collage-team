@@ -34,6 +34,30 @@ export interface Snapshot {
   teams: SnapshotTeam[];
 }
 
+/**
+ * One column of a file the instructor attached — a SUMMARY, never its cells.
+ * Categories carry their values and counts; numbers their range; names and
+ * addresses nothing but that they are names and addresses. The rows stay in
+ * the browser, where code forms the teams (src/faculty/assistant/formTeams.ts).
+ */
+export interface AttachmentColumn {
+  name: string;
+  kind: "number" | "category" | "text";
+  filled: number;
+  distinct: number;
+  values?: { value: string; count: number }[];
+  min?: number;
+  max?: number;
+  mean?: number;
+  looksLike?: "email" | "name";
+}
+
+export interface AttachmentSummary {
+  name: string;
+  rows: number;
+  columns: AttachmentColumn[];
+}
+
 /** An earlier turn of the conversation, as plain text. */
 export interface Turn {
   role: "user" | "assistant";
@@ -45,6 +69,8 @@ export interface AssistantRequest {
   message: string;
   history: Turn[];
   snapshot: Snapshot;
+  /** The file attached to this message, summarised. */
+  attachment?: AttachmentSummary;
 }
 
 /** One student moved onto a team: an existing one by ref, or a new one by name. */
@@ -77,7 +103,33 @@ export interface ImportProposal {
   rows: ImportRow[];
 }
 
-export type Proposal = SeatProposal | ImportProposal;
+/**
+ * A whole new set of teams, formed by code from rules. The model only says
+ * which columns matter and how; formTeams.ts decides who goes where.
+ */
+export interface FormProposal {
+  kind: "form";
+  summary: string;
+  teamSize: number;
+  /** Keep apart anyone on the same team now. */
+  avoidCurrent: boolean;
+  /** Keep apart anyone sharing a value in these columns (earlier teams in the file). */
+  avoidColumns: string[];
+  /** The column(s) holding each student's name — two for First and Last. */
+  nameColumns: string[];
+  emailColumn: string | null;
+  balance: { column: string; kind: "category" | "number"; values: string[] }[];
+  /** Rules she gave that these settings cannot express, said out loud. */
+  notApplied: string[];
+}
+
+/** The attached file is a class list: open it in the Teams importer as it is. */
+export interface FileImportProposal {
+  kind: "import-file";
+  summary: string;
+}
+
+export type Proposal = SeatProposal | ImportProposal | FormProposal | FileImportProposal;
 
 export type AssistantReply =
   | { kind: "message"; text: string }

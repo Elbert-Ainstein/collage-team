@@ -131,11 +131,18 @@ async function bare(teamId: string): Promise<boolean> {
 
 /** Put students back, then names, then remove the new teams that are empty and bare. */
 export async function applyTeamUndo(plan: TeamUndoPlan): Promise<TeamUndoOutcome> {
+  // One write per team they go back to, not one per student: a whole class
+  // formed afresh comes back in a handful of calls. Out of every team in the
+  // set, onto the team they were on — or onto none, where a student who had no
+  // team before goes back to.
+  const byTeam = new Map<string | null, string[]>();
   for (const { student, to } of plan.restore) {
-    // Out of every team in the set, onto the first one they were on — or onto
-    // none, which is where a student who had no team before goes back to.
-    await moveStudents([student.id], to[0] ?? null, plan.teamIds);
-    // Somebody who was on two teams goes back on both. Insert only.
+    const key = to[0] ?? null;
+    byTeam.set(key, [...(byTeam.get(key) ?? []), student.id]);
+  }
+  for (const [teamId, ids] of byTeam) await moveStudents(ids, teamId, plan.teamIds);
+  // Somebody who was on two teams goes back on both. Insert only.
+  for (const { student, to } of plan.restore) {
     for (const extra of to.slice(1)) await moveStudents([student.id], extra, []);
   }
   for (const r of plan.renameBack) await renameTeam(r.teamId, r.to);

@@ -129,7 +129,81 @@ export const PREPARE_IMPORT: ToolSpec = {
   },
 };
 
-export const TOOLS: ToolSpec[] = [SEAT_STUDENTS, PREPARE_IMPORT];
+export const FORM_TEAMS: ToolSpec = {
+  name: "form_teams",
+  description:
+    "Form a whole new set of teams for the class by rules, using code. Use this whenever the " +
+    "instructor asks for new teams made by rules: balancing columns of an attached file (gender, a " +
+    "pre-class test, majors, year…), keeping current teammates apart, or keeping apart people who " +
+    "were together before (earlier teams in a file column). You choose only the SETTINGS — the app's " +
+    "code decides who goes where across the whole class and shows the instructor a check of every " +
+    "rule before anything is written. Works without a file too: no repeat teammates, nothing to balance.",
+  schema: {
+    type: "object",
+    properties: {
+      summary: SUMMARY,
+      team_size: { type: "integer", description: "How many students per team. Leftovers make a few teams one larger or smaller." },
+      avoid_current_teammates: {
+        type: "boolean",
+        description: "True to keep apart anyone who is on the same team now (\"nobody works with the same person twice\").",
+      },
+      avoid_together_columns: {
+        type: "array",
+        description: "Attached-file columns holding EARLIER team assignments; anyone sharing a value in any of them is kept apart.",
+        items: { type: "string" },
+      },
+      name_columns: {
+        type: "array",
+        description: "The attached file's column holding each student's name — or two, for first and last name.",
+        items: { type: "string" },
+      },
+      email_column: { type: "string", description: "The attached file's email column, if it has one." },
+      balance: {
+        type: "array",
+        description: "Columns of the attached file to balance across teams, most important first.",
+        items: {
+          type: "object",
+          properties: {
+            column: { type: "string", description: "The column's name, exactly as the file summary lists it." },
+            kind: {
+              type: "string",
+              enum: ["category", "number"],
+              description: "category: spread each value evenly (gender, major, year). number: even out team averages (a test score).",
+            },
+            values: {
+              type: "array",
+              description: "For a category, only these values matter — e.g. [\"Freshman\"] to spread freshmen, or [\"Engineering\", \"Pre-med\"]. Leave out to balance every value.",
+              items: { type: "string" },
+            },
+          },
+          required: ["column", "kind"],
+        },
+      },
+      not_applied: {
+        type: "array",
+        description: "Any rule the instructor gave that these settings cannot express. Never drop a rule silently.",
+        items: { type: "string" },
+      },
+    },
+    required: ["summary", "team_size"],
+  },
+};
+
+export const IMPORT_ATTACHMENT: ToolSpec = {
+  name: "import_attachment",
+  description:
+    "The attached file is a class list to bring in as it stands — names, emails and, if it has them, " +
+    "team numbers. Opens it in the Teams screen's importer, which shows its own preview. Use this " +
+    "instead of prepare_import whenever the list is an attached file.",
+  schema: { type: "object", properties: { summary: SUMMARY }, required: ["summary"] },
+};
+
+export const TOOLS: ToolSpec[] = [SEAT_STUDENTS, PREPARE_IMPORT, FORM_TEAMS, IMPORT_ATTACHMENT];
+
+/** What to offer: import_attachment only means something when a file is attached. */
+export function toolsFor(hasAttachment: boolean): ToolSpec[] {
+  return hasAttachment ? TOOLS : TOOLS.filter((t) => t !== IMPORT_ATTACHMENT);
+}
 
 export type ParsedCall = { ok: true; proposal: Proposal } | { ok: false; error: string };
 
@@ -213,6 +287,46 @@ function importRow(v: unknown, i: number): ImportRow {
   return { name, email: text(v.email), team };
 }
 
+const MAX_TEAM_SIZE = 20;
+const MAX_COLUMN = 100;
+
+function columnName(v: unknown, what: string): string {
+  const c = text(v);
+  if (!c) refuse(`${what} names no column`);
+  if (c.length > MAX_COLUMN) refuse(`${what} is not a column name`);
+  return c;
+}
+
+function columns(v: unknown, what: string): string[] {
+  return list(v, what, true).map((c, i) => columnName(c, `${what} ${i + 1}`)).slice(0, 20);
+}
+
+function parseForm(input: Obj): Proposal {
+  const summary = summaryOf(input);
+  const size = input.team_size;
+  if (typeof size !== "number" || !Number.isInteger(size) || size < 2 || size > MAX_TEAM_SIZE) {
+    refuse(`a team size of ${String(size)} is not one the app can make`);
+  }
+  const balance = list(input.balance, "balance", true).map((b, i) => {
+    if (!isObj(b)) refuse(`balance rule ${i + 1} is not an object`);
+    if (b.kind !== "category" && b.kind !== "number") refuse(`balance rule ${i + 1} has no kind`);
+    const values = list(b.values, `balance rule ${i + 1}'s values`, true).flatMap((x) => (text(x) ? [text(x) as string] : []));
+    const kind: "category" | "number" = b.kind === "number" ? "number" : "category";
+    return { column: columnName(b.column, `balance rule ${i + 1}`), kind, values: values.slice(0, 30) };
+  });
+  return {
+    kind: "form",
+    summary,
+    teamSize: size,
+    avoidCurrent: input.avoid_current_teammates === true,
+    avoidColumns: columns(input.avoid_together_columns, "avoid column"),
+    nameColumns: columns(input.name_columns, "name column").slice(0, 3),
+    emailColumn: text(input.email_column),
+    balance: balance.slice(0, 12),
+    notApplied: list(input.not_applied, "not_applied", true).flatMap((x) => (text(x) ? [text(x) as string] : [])).slice(0, 20),
+  };
+}
+
 function parseImport(input: Obj): Proposal {
   const summary = summaryOf(input);
   const rows = list(input.rows, "rows").map(importRow);
@@ -232,6 +346,8 @@ export function parseToolCall(name: string, input: unknown): ParsedCall {
     if (!isObj(input)) refuse("the draft came back empty");
     if (name === SEAT_STUDENTS.name) return { ok: true, proposal: parseSeat(input) };
     if (name === PREPARE_IMPORT.name) return { ok: true, proposal: parseImport(input) };
+    if (name === FORM_TEAMS.name) return { ok: true, proposal: parseForm(input) };
+    if (name === IMPORT_ATTACHMENT.name) return { ok: true, proposal: { kind: "import-file", summary: summaryOf(input) } };
     return refuse(`it asked for "${name}", which the assistant cannot do`);
   } catch (e) {
     if (e instanceof Refusal) return { ok: false, error: e.message };

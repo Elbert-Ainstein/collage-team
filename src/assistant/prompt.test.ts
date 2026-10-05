@@ -51,6 +51,23 @@ describe("systemPrompt", () => {
     const out = systemPrompt(snapshot);
     expect(out).toContain("Nothing you propose is written");
     expect(out).toContain('t1 "Team 1"');
+    expect(out).not.toContain("Attached file");
+  });
+
+  it("describes an attached file by its columns, with no student in it", () => {
+    const out = systemPrompt(snapshot, {
+      name: "class.csv",
+      rows: 80,
+      columns: [
+        { name: "Name", kind: "text", filled: 80, distinct: 80, looksLike: "name" },
+        { name: "Gender", kind: "category", filled: 80, distinct: 3, values: [{ value: "F", count: 38 }, { value: "M", count: 37 }, { value: "NB", count: 5 }] },
+        { name: "Pre-class assessment", kind: "number", filled: 78, distinct: 60, min: 30, max: 100, mean: 64 },
+      ],
+    });
+    expect(out).toContain("Attached file: class.csv (80 rows)");
+    expect(out).toContain('"Gender": category — F 38, M 37, NB 5');
+    expect(out).toContain('"Pre-class assessment": number from 30 to 100, average 64 (78 of 80 filled)');
+    expect(out).toContain('"Name": text, looks like names');
   });
 });
 

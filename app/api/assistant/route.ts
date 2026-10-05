@@ -7,6 +7,8 @@
 
 import { allowListFrom } from "@/assistant/server/allowList";
 import { anthropicModel } from "@/assistant/server/anthropic";
+import { geminiModel } from "@/assistant/server/gemini";
+import { chooseProvider } from "@/assistant/server/provider";
 import { handleAssistant, type HandlerDeps } from "@/assistant/server/handle";
 import { createRateLimiter } from "@/assistant/server/rateLimit";
 import { supabaseVerifier } from "@/assistant/server/verify";
@@ -19,9 +21,6 @@ export const maxDuration = 300;
 /** A 500-student list with a long conversation is well under this. */
 const MAX_BODY_BYTES = 1_000_000;
 
-/** Sonnet: careful with names, quick enough for a list. ASSISTANT_MODEL overrides it. */
-const DEFAULT_MODEL = "claude-sonnet-5-5";
-
 // Module scope, so the window survives between requests on a warm instance.
 const limiter = createRateLimiter({ limit: 30, windowMs: 10 * 60_000 });
 
@@ -29,7 +28,7 @@ let deps: HandlerDeps | null = null;
 
 function getDeps(): HandlerDeps {
   if (deps) return deps;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const choice = chooseProvider(process.env);
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anonKey) throw new Error("Supabase is not configured on the server.");
@@ -37,8 +36,10 @@ function getDeps(): HandlerDeps {
   deps = {
     // Off without a key, and off in production without a list of who may use it.
     model:
-      apiKey && allowList.on
-        ? anthropicModel({ apiKey, model: process.env.ASSISTANT_MODEL || DEFAULT_MODEL })
+      choice && allowList.on
+        ? choice.provider === "gemini"
+          ? geminiModel({ apiKey: choice.apiKey, model: choice.model })
+          : anthropicModel({ apiKey: choice.apiKey, model: choice.model })
         : null,
     verify: supabaseVerifier(url, anonKey),
     allowed: allowList.may,

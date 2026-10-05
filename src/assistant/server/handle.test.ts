@@ -66,8 +66,19 @@ describe("handleAssistant", () => {
     // The model is told about the class, and offered both tools.
     const sent = vi.mocked(d.model as Model).mock.calls[0][0];
     expect(sent.system).toContain('t1 "Team 1"');
-    expect(sent.tools.map((t) => t.name)).toEqual(["seat_students", "prepare_import"]);
+    expect(sent.tools.map((t) => t.name)).toEqual(["seat_students", "prepare_import", "form_teams"]);
     expect(sent.turns.at(-1)).toEqual({ role: "user", text: "Move Alan to Team 1" });
+  });
+
+  it("offers import_attachment only when a file is attached", async () => {
+    const d = deps();
+    await call(d);
+    expect(vi.mocked(d.model as Model).mock.calls[0][0].tools.map((t) => t.name)).not.toContain("import_attachment");
+    const withFile = { ...body, attachment: { name: "class.csv", rows: 2, columns: [] } };
+    await call(d, "Bearer tok", withFile);
+    const second = vi.mocked(d.model as Model).mock.calls[1][0];
+    expect(second.tools.map((t) => t.name)).toContain("import_attachment");
+    expect(second.system).toContain("Attached file: class.csv");
   });
 
   it("answers plain text as a message", async () => {
@@ -153,6 +164,12 @@ describe("handleAssistant", () => {
       kind: "message",
       text: expect.stringMatching(/too long/),
     });
+  });
+
+  it("says the request was too much when the answer ran out of room before any draft", async () => {
+    const d = deps({ model: vi.fn<Model>(async () => ({ text: "", truncated: true, toolCalls: [] })) });
+    const out = await call(d);
+    expect(out.body.ok && out.body.reply).toEqual({ kind: "message", text: expect.stringMatching(/too much/) });
   });
 
   it("says so when the sign-in check itself fails", async () => {

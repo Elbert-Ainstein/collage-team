@@ -207,6 +207,52 @@ describe("AssistantPanel", () => {
     expect(onChanged).toHaveBeenCalledTimes(2);
   });
 
+  // Kelly's flow: a class spreadsheet, a sentence of rules, teams formed by code.
+  it("forms teams from an attached file by rules — and sends only a summary of the file", async () => {
+    const csv = "Name,Email,Gender\nAda Lovelace,ada@x.edu,F\nAlan Turing,alan@x.edu,M\nGrace Hopper,grace@x.edu,F\nKatherine Johnson,kj@x.edu,F";
+    mount();
+    const input = host.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File([csv], "class.csv", { type: "text/csv" });
+    // jsdom's Blob has no arrayBuffer; the browser's does.
+    Object.defineProperty(file, "arrayBuffer", { value: async () => new TextEncoder().encode(csv).buffer });
+    Object.defineProperty(input, "files", { value: [file] });
+    await act(async () => input.dispatchEvent(new Event("change", { bubbles: true })));
+    expect(host.textContent).toContain("class.csv · 4 rows");
+
+    askAssistant.mockResolvedValue({
+      kind: "proposal",
+      text: "Teams of 2, nobody with a current teammate, gender balanced.",
+      proposal: {
+        kind: "form",
+        summary: "x",
+        teamSize: 2,
+        avoidCurrent: true,
+        avoidColumns: [],
+        nameColumns: ["Name"],
+        emailColumn: "Email",
+        balance: [{ column: "Gender", kind: "category", values: [] }],
+        notApplied: [],
+      },
+    });
+    await ask("Teams of 2, no repeat teammates, balance gender");
+
+    const [req] = askAssistant.mock.calls[0] as [{ attachment: { name: string; rows: number } }];
+    expect(req.attachment).toMatchObject({ name: "class.csv", rows: 4 });
+    const sent = JSON.stringify(req.attachment);
+    expect(sent).not.toContain("Lovelace");
+    expect(sent).not.toContain("ada@x.edu");
+
+    expect(host.textContent).toContain("✓ Nobody is on a team with a current teammate.");
+    expect(host.textContent).toMatch(/✓ Gender: F 1–2, M 0–1 per team\./);
+    await act(async () => button("Apply").click());
+    // Ada and Alan are on Team 1 now, so the new teams split them.
+    const calls = moveStudents.mock.calls as unknown as [string[], string | null, string[]][];
+    const together = calls.find(([ids]) => ids.includes(ada.id) && ids.includes(alan.id));
+    expect(together).toBeUndefined();
+    expect(moveStudents).toHaveBeenCalled();
+    expect(host.textContent).toContain("Applied —");
+  });
+
   it("writes nothing on Discard", async () => {
     askAssistant.mockResolvedValue({
       kind: "proposal",

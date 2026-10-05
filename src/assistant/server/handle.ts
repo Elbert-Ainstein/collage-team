@@ -6,7 +6,7 @@
 
 import { conversation, systemPrompt } from "../prompt";
 import { parseRequest } from "../request";
-import { parseToolCall, TOOLS } from "../tools";
+import { parseToolCall, toolsFor } from "../tools";
 import type { AssistantReply, AssistantResponse } from "../types";
 import { ModelError, type Model, type ModelResult } from "./model";
 import type { RateLimiter } from "./rateLimit";
@@ -49,6 +49,13 @@ function wait(seconds: number): string {
 function toReply(result: ModelResult, log: HandlerDeps["log"]): AssistantReply {
   const said = result.text.trim();
   const call = result.toolCalls[0];
+  if (!call && result.truncated) {
+    log("assistant: answer cut off at the output limit before any draft", { said: said.length });
+    return {
+      kind: "message",
+      text: "That was too much to work out in one go, so nothing was prepared. Try asking for part of it at a time.",
+    };
+  }
   if (!call) {
     return { kind: "message", text: said || "I don't have an answer for that. Could you put it another way?" };
   }
@@ -116,9 +123,9 @@ export async function handleAssistant(
   let result: ModelResult;
   try {
     result = await deps.model({
-      system: systemPrompt(request.snapshot),
+      system: systemPrompt(request.snapshot, request.attachment),
       turns: conversation(request.history, request.message),
-      tools: TOOLS,
+      tools: toolsFor(Boolean(request.attachment)),
     });
   } catch (e) {
     return providerFailure(e, deps.log);

@@ -15,6 +15,7 @@
 
 import { useState } from "react";
 import type { ImportProposal } from "@/assistant/types";
+import type { Table } from "./table";
 import type { DraftStatus } from "./thread";
 
 function plural(n: number, one: string, many: string): string {
@@ -76,6 +77,32 @@ export function ImportCard(props: {
         </button>
         <button type="button" className="fv-btn ghost sm" onClick={() => setListed(!listed)}>
           {listed ? "Hide the rows" : `Show the ${plural(rows.length, "row", "rows")}`}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * An attached class list going to the importer as it is — no rewriting, so
+ * nothing to check here beyond which file it was. The importer's own preview
+ * says what it will do.
+ */
+export function FileImportCard(props: { table: Table; status: DraftStatus; onOpen: () => void }): JSX.Element {
+  return (
+    <div className="fv-as-draft">
+      <span className="fv-eyebrow">
+        {props.table.name} · {plural(props.table.rows.length, "row", "rows")}
+      </span>
+      <div style={{ marginTop: 6 }}>
+        {props.status === "handed-off"
+          ? "Opened in the importer on Roster & teams. Check its preview there — nobody is added or moved " +
+            "until you press its button, and \u201CUndo this import\u201D at the top of that page takes it back."
+          : "Ready for the importer on Roster & teams."}
+      </div>
+      <div className="fv-as-btns">
+        <button type="button" className="fv-btn outline sm" onClick={props.onOpen}>
+          {props.status === "handed-off" ? "Open it again" : "Open in the importer"}
         </button>
       </div>
     </div>
