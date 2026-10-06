@@ -91,9 +91,13 @@ matters so much. The anon key is not the lock; RLS is.
 **Optional — the faculty assistant.** To switch on the Assistant panel, also add
 `GEMINI_API_KEY` (from aistudio.google.com → Get API key; or `ANTHROPIC_API_KEY`
 from console.anthropic.com — Gemini is used when both are set) and
-`ASSISTANT_ALLOWED_EMAILS` — the sign-in emails of the instructors who may use
-it, comma-separated. Without that list the assistant stays off in production:
-anyone can sign up and make a course, so owning one proves nothing. The key has **no**
+`ASSISTANT_ALLOWED_EMAILS` — who may use it, comma-separated: sign-in emails
+(`kelly@harvard.edu`), whole domains (`@harvard.edu`, subdomains included), or
+`*` for every course owner. Without it the assistant stays off in production:
+anyone can sign up and make a course, so owning one proves nothing — and `*`
+lets exactly those people spend the key, leaving the provider's spending cap as
+the only limit. A domain is as strong as Supabase's email confirmation, so keep
+"Confirm email" on. The key has **no**
 `NEXT_PUBLIC_` prefix on purpose: it stays on the server, in the one route that
 talks to the model (`app/api/assistant`), and never reaches a browser. Set a
 monthly spend limit on that key with its provider — the route's rate limit is a

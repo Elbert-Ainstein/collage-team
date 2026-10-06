@@ -17,6 +17,23 @@ describe("allowListFrom", () => {
     expect(allowed.may("kelly@harvard.edu")).toBe(false);
   });
 
+  it("lets everyone in with *, in production too — a deliberate choice, never a default", () => {
+    const allowed = allowListFrom("*", "production");
+    expect(allowed.on).toBe(true);
+    expect(allowed.may("anyone@anywhere.com")).toBe(true);
+    expect(allowed.may(null)).toBe(false);
+  });
+
+  it("lets in a whole domain with @domain, and its subdomains, but nothing that only looks like it", () => {
+    const allowed = allowListFrom("@harvard.edu, caleb@collage-ai.com", "production");
+    expect(allowed.may("kelly@harvard.edu")).toBe(true);
+    expect(allowed.may("tf@SEAS.Harvard.edu")).toBe(true);
+    expect(allowed.may("caleb@collage-ai.com")).toBe(true);
+    expect(allowed.may("someone@fakeharvard.edu")).toBe(false);
+    expect(allowed.may("someone@harvard.edu.evil.com")).toBe(false);
+    expect(allowed.may("other@collage-ai.com")).toBe(false);
+  });
+
   it("lets any course owner in while developing locally, so testing needs no setup", () => {
     const allowed = allowListFrom("", "development");
     expect(allowed.on).toBe(true);
