@@ -150,6 +150,7 @@ export function FormTeamsCard(props: FormTeamsCardProps): JSX.Element {
                       .map(([v, n]) => `${result.labels[col]?.[v] ?? v} ${n}`)
                       .join(" · ") || `no ${col.toLowerCase()} listed`,
                   ),
+                  ...Object.entries(t.capped).map(([what, n]) => `${what} ${n}`),
                   ...Object.entries(t.numbers).map(([col, m]) => (m === null ? `${col}: —` : `${col} avg ${Math.round(m)}`)),
                 ].join("  |  ")}
               </div>

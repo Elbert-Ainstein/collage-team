@@ -25,6 +25,8 @@ function proposal(over: Partial<FormProposal> = {}): FormProposal {
     nameColumns: ["Name"],
     emailColumn: "Email",
     balance: [{ column: "gender", kind: "category", values: [] }],
+    noIsolation: [],
+    atMost: [],
     notApplied: [],
     ...over,
   };
@@ -69,6 +71,44 @@ describe("planForm", () => {
   it("finds a value whatever its case", () => {
     const p = planForm(proposal({ balance: [{ column: "Gender", kind: "category", values: ["f"] }] }), table, roster, teams, 1);
     expect(p.problems).toEqual([]);
+  });
+
+  // Separately: in teams of two, "nobody the only woman" and "at most one woman"
+  // cannot both hold — the team-former would say so, which is not this test.
+  it("passes a nobody-alone rule through, by the file's own column", () => {
+    const p = planForm(proposal({ teamSize: 2, balance: [], noIsolation: ["GENDER"] }), table, roster, teams, 1);
+    expect(p.problems).toEqual([]);
+    const lone = p.result!.checks.find((c) => c.text.startsWith("Gender:"));
+    expect(lone).toEqual({ ok: true, text: "Gender: nobody is the only M or the only F on their team." });
+  });
+
+  it("passes an at-most rule through, by the file's own value", () => {
+    const p = planForm(proposal({ teamSize: 2, balance: [], atMost: [{ column: "gender", values: ["f"], max: 1 }] }), table, roster, teams, 1);
+    expect(p.problems).toEqual([]);
+    expect(p.result!.checks.find((c) => c.text.startsWith("Gender F"))).toMatchObject({ ok: true });
+  });
+
+  it("refuses an at-most value the column does not hold", () => {
+    const p = planForm(proposal({ atMost: [{ column: "Gender", values: ["Woman"], max: 1 }] }), table, roster, teams, 1);
+    expect(p.problems).toEqual(['The "Gender" column has no value "Woman" — it holds F, M.']);
+  });
+
+  it("says which students the file gives no earlier team, and places them", () => {
+    const newcomer = student("idN", "Student New", "new@x.edu", 9);
+    const withNew = parseTable(
+      ["Name,Email,Gender,Team", ...roster.map((s, i) => `${s.name},${s.email},${i % 2 ? "F" : "M"},Old ${i % 4}`), "Student New,new@x.edu,F,N/A"].join("\n"),
+      "f",
+    );
+    const p = planForm(
+      proposal({ teamSize: 3, balance: [], avoidColumns: ["Team"], avoidCurrent: false }),
+      withNew,
+      [...roster, newcomer],
+      teams,
+      1,
+    );
+    expect(p.problems).toEqual([]);
+    expect(p.result!.teams.some((t) => t.members.includes("idN"))).toBe(true);
+    expect(p.notes.join(" ")).toMatch(/Student New has no Team in the file — counted as new to the course/);
   });
 
   it("refuses a rule that needs a file when none is attached", () => {
