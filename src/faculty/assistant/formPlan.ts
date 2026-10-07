@@ -14,7 +14,7 @@
 
 import type { FormProposal, SeatProposal } from "@/assistant/types";
 import type { Student, TeamWithMembers } from "@/checkins/types";
-import { formTeams, type FormResult, type Person } from "./formTeams";
+import { formTeams, present, type FormResult, type Person } from "./formTeams";
 import type { Refs } from "./snapshot";
 import { findColumn, findValue, joinRoster, valuesIn, type Table } from "./table";
 
@@ -40,7 +40,14 @@ function preview(names: string[], max = 6): string {
 /** Every column the settings name, found in the real file — or why not. */
 function resolve(p: FormProposal, table: Table | null) {
   const problems: string[] = [];
-  const named = [...p.balance.map((b) => b.column), ...p.avoidColumns, ...p.nameColumns, ...(p.emailColumn ? [p.emailColumn] : [])];
+  const named = [
+    ...p.balance.map((b) => b.column),
+    ...p.avoidColumns,
+    ...p.noIsolation,
+    ...p.atMost.map((c) => c.column),
+    ...p.nameColumns,
+    ...(p.emailColumn ? [p.emailColumn] : []),
+  ];
   if (named.length && !table) {
     return { problems: ["These rules need the class spreadsheet, and none is attached. Attach it and ask again."], cols: null };
   }
@@ -67,6 +74,11 @@ function resolve(p: FormProposal, table: Table | null) {
       return { column, kind: b.kind, values: b.kind === "category" ? b.values.map((v) => value(column, v)) : [] };
     }),
     avoid: p.avoidColumns.map(find),
+    noLone: p.noIsolation.map(find),
+    atMost: p.atMost.map((c) => {
+      const column = find(c.column);
+      return { column, values: c.values.map((v) => value(column, v)), max: c.max };
+    }),
     name: p.nameColumns.map(find),
     email: p.emailColumn ? find(p.emailColumn) : null,
   };
@@ -119,6 +131,17 @@ export function planForm(
     if (j.ambiguous.length) {
       notes.push(`${preview(j.ambiguous)} could be more than one student — left without details. Add their emails to the file.`);
     }
+    // Students in the file with no earlier team — new since the last round.
+    // Said, because "free to join anyone" should be a fact she can check.
+    const inFile = new Set(roster.filter((s) => !j.missing.includes(s)).map((s) => s.id));
+    for (const column of cols.avoid) {
+      const fresh = j.people.filter((x) => inFile.has(x.id) && !present(x.values[column]));
+      if (!fresh.length) continue;
+      const names = fresh.map((x) => roster.find((s) => s.id === x.id)?.name ?? "a student");
+      notes.push(
+        `${preview(names)} ${fresh.length === 1 ? "has" : "have"} no ${column} in the file — counted as new to the course, free to join anyone.`,
+      );
+    }
   }
 
   const currentTeam = new Map<string, string>();
@@ -127,7 +150,14 @@ export function planForm(
     people,
     currentTeam,
     seed,
-    spec: { teamSize: p.teamSize, avoidCurrent: p.avoidCurrent, avoidColumns: cols.avoid, balance: cols.balance },
+    spec: {
+      teamSize: p.teamSize,
+      avoidCurrent: p.avoidCurrent,
+      avoidColumns: cols.avoid,
+      noLone: cols.noLone,
+      atMost: cols.atMost,
+      balance: cols.balance,
+    },
   });
   const targets = targetsFor(result.teams.length, teams);
   const proposal: SeatProposal = {

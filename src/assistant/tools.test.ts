@@ -165,9 +165,33 @@ describe("parseToolCall — form_teams", () => {
           { column: "Track", kind: "category", values: ["Engineering", "Pre-med"] },
           { column: "Year", kind: "category", values: ["Freshman"] },
         ],
+        noIsolation: [],
+        atMost: [],
         notApplied: ["Keep the two TAs' sections separate"],
       },
     });
+  });
+
+  it("reads Kelly's second-round rules: nobody alone by gender, at most one first-year", () => {
+    const out = parseToolCall("form_teams", {
+      summary: "x",
+      team_size: 4,
+      avoid_together_columns: ["Team"],
+      no_isolation_columns: ["Inferred Gender"],
+      at_most: [{ column: "First-Year", values: ["Yes"], max: 1 }],
+      balance: [{ column: "FCI Pre-Score", kind: "number" }],
+      email_column: "Email Address",
+    });
+    expect(out.ok && out.proposal.kind === "form" && out.proposal).toMatchObject({
+      avoidColumns: ["Team"],
+      noIsolation: ["Inferred Gender"],
+      atMost: [{ column: "First-Year", values: ["Yes"], max: 1 }],
+    });
+  });
+
+  it("refuses an at-most rule with no values or a cap that is not a count", () => {
+    expect(parseToolCall("form_teams", { summary: "x", team_size: 4, at_most: [{ column: "Y", values: [], max: 1 }] }).ok).toBe(false);
+    expect(parseToolCall("form_teams", { summary: "x", team_size: 4, at_most: [{ column: "Y", values: ["Yes"], max: -1 }] }).ok).toBe(false);
   });
 
   it("works with no file at all — just no repeat teammates", () => {

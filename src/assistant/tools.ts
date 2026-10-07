@@ -179,6 +179,29 @@ export const FORM_TEAMS: ToolSpec = {
           required: ["column", "kind"],
         },
       },
+      no_isolation_columns: {
+        type: "array",
+        description:
+          "Columns where nobody may be the only one of their value on a team — e.g. gender, for " +
+          "\"no student is gender-isolated\" / \"never one woman or one man alone\". Each team then has " +
+          "none of a value or at least two. Use this, not balance, for isolation rules.",
+        items: { type: "string" },
+      },
+      at_most: {
+        type: "array",
+        description:
+          "Caps: no team has more than `max` students whose column holds one of `values` — e.g. " +
+          "\"no team has more than 1 freshman\" is {column: \"First-Year\", values: [\"Yes\"], max: 1}.",
+        items: {
+          type: "object",
+          properties: {
+            column: { type: "string", description: "The column's name, exactly as the file summary lists it." },
+            values: { type: "array", description: "The values that count toward the cap.", items: { type: "string" } },
+            max: { type: "integer", description: "The most any one team may have." },
+          },
+          required: ["column", "values", "max"],
+        },
+      },
       not_applied: {
         type: "array",
         description: "Any rule the instructor gave that these settings cannot express. Never drop a rule silently.",
@@ -314,6 +337,15 @@ function parseForm(input: Obj): Proposal {
     const kind: "category" | "number" = b.kind === "number" ? "number" : "category";
     return { column: columnName(b.column, `balance rule ${i + 1}`), kind, values: values.slice(0, 30) };
   });
+  const atMost = list(input.at_most, "at_most", true).map((c, i) => {
+    if (!isObj(c)) refuse(`cap ${i + 1} is not an object`);
+    const values = list(c.values, `cap ${i + 1}'s values`, true).flatMap((x) => (text(x) ? [text(x) as string] : []));
+    if (!values.length) refuse(`cap ${i + 1} names no values`);
+    if (typeof c.max !== "number" || !Number.isInteger(c.max) || c.max < 0 || c.max > MAX_TEAM_SIZE) {
+      refuse(`cap ${i + 1}'s maximum is not a count`);
+    }
+    return { column: columnName(c.column, `cap ${i + 1}`), values: values.slice(0, 30), max: c.max };
+  });
   return {
     kind: "form",
     summary,
@@ -323,6 +355,8 @@ function parseForm(input: Obj): Proposal {
     nameColumns: columns(input.name_columns, "name column").slice(0, 3),
     emailColumn: text(input.email_column),
     balance: balance.slice(0, 12),
+    noIsolation: columns(input.no_isolation_columns, "no-isolation column"),
+    atMost: atMost.slice(0, 12),
     notApplied: list(input.not_applied, "not_applied", true).flatMap((x) => (text(x) ? [text(x) as string] : [])).slice(0, 20),
   };
 }

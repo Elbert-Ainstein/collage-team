@@ -11,9 +11,21 @@
 // spreadsheet). They are weighted so heavily that a draft with one in it is
 // only ever the best there is — and then the pair is named, never hidden.
 //
+// Two more hard rules, both from Kelly's second round:
+//   NO ONE ALONE — in a column like gender, a team holds none of a value or at
+//   least two: never one woman or one man on their own. Not the same thing as
+//   balancing, which with 23 men in 74 would spread them one to a team and
+//   leave every one of them alone.
+//   AT MOST N — no team holds more than N of a value: one first-year a team.
+//
 // BALANCE RULES spread a category (each value as evenly as the class allows) or
 // even out a number (every team's average near the class's). A student with no
 // value in a column simply does not count for it.
+//
+// TEAM SIZES. When the class does not divide evenly there are two honest
+// layouts — 74 in fours is 17 of 4 and 2 of 3, or 16 of 4 and 2 of 5 — and they
+// are not equal: a team of 3 cannot be mixed without leaving someone alone. Both
+// are searched and the better kept.
 //
 // The search is simulated annealing over swaps between teams — swaps keep the
 // sizes fixed — from a few seeded starts, then a greedy pass that takes every
@@ -41,6 +53,10 @@ export interface FormSpec {
   avoidColumns: string[];
   /** In priority order. */
   balance: BalanceRule[];
+  /** Columns where nobody may be the only one of their value on a team. */
+  noLone?: string[];
+  /** No team holds more than `max` students whose `column` is one of `values`. */
+  atMost?: { column: string; values: string[]; max: number }[];
 }
 
 export interface FormedTeam {
@@ -49,6 +65,8 @@ export interface FormedTeam {
   categories: Record<string, Record<string, number>>;
   /** Column → this team's average, or null when nobody on it has a number. */
   numbers: Record<string, number | null>;
+  /** "Column: values" → how many on this team, for each at-most rule. */
+  capped: Record<string, number>;
 }
 
 export interface Check {
@@ -77,6 +95,25 @@ export function teamSizes(n: number, size: number): number[] {
 
 const fold = (v: string | undefined) => (v ?? "").trim().toLowerCase();
 
+/**
+ * What a spreadsheet writes when there is nothing to write. A student who
+ * joined after the first round has no earlier team, and the cell says so as a
+ * blank — or None, N/A, a dash, Unassigned, TBD. Read as values, those would be
+ * a team called "None" whose members must all be kept apart, or a gender
+ * called "Unknown" that one student can be "the only one" of. They are no
+ * value, so the hard rules do not count them.
+ */
+const PLACEHOLDERS = new Set([
+  "none", "n/a", "na", "n.a.", "-", "–", "—", "tbd", "tba", "unassigned", "not assigned",
+  "no team", "new", "null", "unknown", "prefer not to say", "not specified", "unspecified",
+]);
+
+/** The cell folded, or "" when it holds nothing a rule can use. */
+export function present(v: string | undefined): string {
+  const f = fold(v);
+  return f && !PLACEHOLDERS.has(f) ? f : "";
+}
+
 /** mulberry32: small, seeded, good enough to shuffle a class. */
 function rng(seed: number): () => number {
   let a = seed >>> 0;
@@ -96,6 +133,8 @@ interface Prepared {
   n: number;
   /** n×n: 1 where the pair must be apart. */
   apart: Uint8Array;
+  lone: { column: string; values: string[]; of: Int16Array }[];
+  caps: { column: string; values: string[]; flag: Uint8Array; max: number }[];
   cats: { weight: number; column: string; values: string[]; of: Int16Array; totals: number[] }[];
   nums: { weight: number; column: string; of: Float64Array; mean: number; variance: number }[];
 }
@@ -105,7 +144,7 @@ function prepare(people: Person[], currentTeam: Map<string, string>, spec: FormS
   const apart = new Uint8Array(n * n);
   const keys = people.map((p) => [
     ...(spec.avoidCurrent && currentTeam.get(p.id) ? [`current:${currentTeam.get(p.id)}`] : []),
-    ...spec.avoidColumns.flatMap((c) => (fold(p.values[c]) ? [`${c}:${fold(p.values[c])}`] : [])),
+    ...spec.avoidColumns.flatMap((c) => (present(p.values[c]) ? [`${c}:${present(p.values[c])}`] : [])),
   ]);
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
@@ -136,7 +175,39 @@ function prepare(people: Person[], currentTeam: Map<string, string>, spec: FormS
       nums.push({ weight: weight(r), column: rule.column, of, mean, variance });
     }
   });
-  return { n, apart, cats, nums };
+  const lone = (spec.noLone ?? []).map((column) => {
+    const values = [...new Set(people.map((p) => present(p.values[column])).filter(Boolean))];
+    return { column, values, of: Int16Array.from(people, (p) => values.indexOf(present(p.values[column]))) };
+  });
+  const caps = (spec.atMost ?? []).map((c) => {
+    const wanted = c.values.map(fold);
+    return {
+      column: c.column,
+      values: c.values,
+      max: c.max,
+      flag: Uint8Array.from(people, (p) => (wanted.includes(fold(p.values[c.column])) ? 1 : 0)),
+    };
+  });
+  return { n, apart, cats, nums, lone, caps };
+}
+
+/** Teams in which someone is the only one of their value in this column. */
+function loneIn(l: Prepared["lone"][number], members: number[]): number {
+  if (members.length < 2) return 0;
+  let alone = 0;
+  for (let v = 0; v < l.values.length; v++) {
+    let count = 0;
+    for (const m of members) if (l.of[m] === v) count++;
+    if (count === 1) alone++;
+  }
+  return alone;
+}
+
+/** How far over its cap this team is. */
+function overCap(c: Prepared["caps"][number], members: number[]): number {
+  let count = 0;
+  for (const m of members) count += c.flag[m];
+  return Math.max(0, count - c.max);
 }
 
 function teamCost(p: Prepared, members: number[]): number {
@@ -145,6 +216,8 @@ function teamCost(p: Prepared, members: number[]): number {
   for (let i = 0; i < members.length; i++) {
     for (let j = i + 1; j < members.length; j++) if (apart[members[i] * n + members[j]]) cost += HARD;
   }
+  for (const l of p.lone) cost += HARD * loneIn(l, members);
+  for (const c of p.caps) cost += HARD * overCap(c, members);
   const s = members.length;
   for (const c of p.cats) {
     for (let v = 0; v < c.values.length; v++) {
@@ -256,6 +329,24 @@ function polish(p: Prepared, start: Arrangement): Arrangement {
 
 const STARTS = 3;
 
+/**
+ * The ways `n` can be split into teams of about `size`: one fewer team or one
+ * more when it does not divide, sizes as even as possible either way.
+ */
+export function sizeLayouts(n: number, size: number): number[][] {
+  if (n <= 0) return [[]];
+  const s = Math.max(1, size);
+  const counts = [...new Set([Math.floor(n / s), Math.ceil(n / s)])].filter((k) => k >= 1);
+  return counts.map((k) => {
+    const base = Math.floor(n / k);
+    const extra = n % k;
+    return Array.from({ length: k }, (_, i) => base + (i < extra ? 1 : 0));
+  });
+}
+
+/** How far a layout's sizes stray from the size asked for — the tie-breaker. */
+const stray = (sizes: number[], size: number) => sizes.reduce((d, x) => d + Math.abs(x - size), 0);
+
 export function formTeams(input: {
   people: Person[];
   currentTeam: Map<string, string>;
@@ -264,11 +355,18 @@ export function formTeams(input: {
 }): FormResult {
   const { people, currentTeam, spec } = input;
   const p = prepare(people, currentTeam, spec);
-  const sizes = teamSizes(people.length, spec.teamSize);
   let best: Arrangement | null = null;
-  for (let s = 0; s < STARTS; s++) {
-    const found = search(p, sizes, rng((input.seed ?? 1) * 7919 + s));
-    if (!best || found.cost < best.cost) best = found;
+  let bestStray = Infinity;
+  for (const sizes of sizeLayouts(people.length, spec.teamSize)) {
+    for (let s = 0; s < STARTS; s++) {
+      const found = search(p, sizes, rng((input.seed ?? 1) * 7919 + s + sizes.length * 104729));
+      const d = stray(sizes, spec.teamSize);
+      // Lower cost wins; between equals, the sizes nearer the ask.
+      if (!best || found.cost < best.cost - 1e-9 || (Math.abs(found.cost - best.cost) <= 1e-9 && d < bestStray)) {
+        best = found;
+        bestStray = d;
+      }
+    }
   }
   return describe(people, p, spec, best?.teams ?? []);
 }
@@ -294,11 +392,26 @@ function describe(people: Person[], p: Prepared, spec: FormSpec, arranged: numbe
     }
   }
 
+  // Every category a rule names is counted per team, not only the balanced
+  // ones: a gender column kept from isolation is exactly what she will want to
+  // see team by team.
+  const shown = [
+    ...p.cats.map((c) => ({ column: c.column, values: c.values, of: c.of })),
+    ...p.lone.filter((l) => !p.cats.some((c) => c.column === l.column)),
+  ];
+  for (const l of p.lone) {
+    labels[l.column] ??= {};
+    for (const person of people) {
+      const raw = (person.values[l.column] ?? "").trim();
+      if (present(raw) && !(fold(raw) in labels[l.column])) labels[l.column][fold(raw)] = raw;
+    }
+  }
   const teams: FormedTeam[] = teamsIdx.map((t) => ({
     members: t.map((i) => people[i].id),
     categories: Object.fromEntries(
-      p.cats.map((c) => [c.column, Object.fromEntries(c.values.map((v, vi) => [v, t.filter((m) => c.of[m] === vi).length]))]),
+      shown.map((c) => [c.column, Object.fromEntries(c.values.map((v, vi) => [v, t.filter((m) => c.of[m] === vi).length]))]),
     ),
+    capped: Object.fromEntries(p.caps.map((c) => [`${c.column}: ${c.values.join("/")}`, t.reduce((n, m) => n + c.flag[m], 0)])),
     numbers: Object.fromEntries(
       p.nums.map((x) => {
         const have = t.filter((m) => !Number.isNaN(x.of[m]));
@@ -307,13 +420,14 @@ function describe(people: Person[], p: Prepared, spec: FormSpec, arranged: numbe
     ),
   }));
 
-  return { teams, conflicts, checks: checks(p, spec, teams, conflicts, labels), labels };
+  return { teams, conflicts, checks: checks(p, spec, teams, teamsIdx, conflicts, labels), labels };
 }
 
 function checks(
   p: Prepared,
   spec: FormSpec,
   teams: FormedTeam[],
+  teamsIdx: number[][],
   conflicts: FormResult["conflicts"],
   labels: FormResult["labels"],
 ): Check[] {
@@ -327,6 +441,25 @@ function checks(
       conflicts.length
         ? { ok: false, text: `${conflicts.length} pairs could not be kept apart from ${who} — no arrangement avoids them all.` }
         : { ok: true, text: `Nobody is on a team with ${who}.` },
+    );
+  }
+  for (const l of p.lone) {
+    const bad = teamsIdx.filter((t) => loneIn(l, t) > 0).length;
+    const names = l.values.map((v) => labels[l.column]?.[v] ?? v);
+    out.push(
+      bad
+        ? { ok: false, text: `${l.column}: ${bad} ${bad === 1 ? "team has" : "teams have"} someone who is the only one of their kind — no arrangement avoids it.` }
+        : { ok: true, text: `${l.column}: nobody is the only ${names.join(" or the only ")} on their team.` },
+    );
+  }
+  for (const c of p.caps) {
+    const counts = teamsIdx.map((t) => t.reduce((n, m) => n + c.flag[m], 0));
+    const over = counts.filter((n) => n > c.max).length;
+    const what = `${c.column} ${c.values.join("/")}`;
+    out.push(
+      over
+        ? { ok: false, text: `${what}: ${over} ${over === 1 ? "team has" : "teams have"} more than ${c.max} — no arrangement avoids it.` }
+        : { ok: true, text: `${what}: at most ${c.max} per team (${Math.min(...counts)}–${Math.max(...counts)}).` },
     );
   }
   for (const c of p.cats) {

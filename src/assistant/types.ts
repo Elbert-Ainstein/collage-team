@@ -119,6 +119,10 @@ export interface FormProposal {
   nameColumns: string[];
   emailColumn: string | null;
   balance: { column: string; kind: "category" | "number"; values: string[] }[];
+  /** Columns where nobody may be the only one of their value on a team (gender). */
+  noIsolation: string[];
+  /** No team holds more than `max` whose column is one of `values` (one first-year). */
+  atMost: { column: string; values: string[]; max: number }[];
   /** Rules she gave that these settings cannot express, said out loud. */
   notApplied: string[];
 }

@@ -231,6 +231,8 @@ describe("AssistantPanel", () => {
         nameColumns: ["Name"],
         emailColumn: "Email",
         balance: [{ column: "Gender", kind: "category", values: [] }],
+        noIsolation: [],
+        atMost: [],
         notApplied: [],
       },
     });
