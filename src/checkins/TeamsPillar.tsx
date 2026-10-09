@@ -7,12 +7,16 @@ import {
   countTeamResults,
   createTeam,
   createTeamSet,
+  currentSetOf,
   deleteTeam,
   deleteTeamSet,
+  freshSetName,
   listTeamSets,
   listTeams,
   moveStudents,
   renameTeam,
+  renameTeamSet,
+  setCurrentTeamSet,
   setTeamSetLocked,
   setTeamSetSize,
 } from "./data";
@@ -62,7 +66,22 @@ function labelForSet(s: TeamSet, activities: Activity[]): string {
   return a ? `${weekLabel(a)} · teams` : "All-class teams";
 }
 
-export function TeamsPillar(props: PillarProps) {
+/**
+ * How a new set starts. Blank by default: a new set is a new arrangement, and
+ * starting it as a copy of the old one — which is what it used to look like,
+ * auto-formed in roster order — read as editing the old set.
+ */
+type NewSetStart = "blank" | "copy";
+
+export function TeamsPillar(
+  props: PillarProps & {
+    /**
+     * The set the class is using now (0045), as the host last read it. Absent
+     * when the host does not know; the old pick stands in.
+     */
+    currentSetId?: string | null;
+  },
+) {
   const { courseId, roster, activities, refresh } = props;
 
   const [sets, setSets] = useState<TeamSet[]>([]);
@@ -73,6 +92,17 @@ export function TeamsPillar(props: PillarProps) {
   const [sizeInput, setSizeInput] = useState(String(DEFAULT_SIZE));
   const [creatingSet, setCreatingSet] = useState(false);
   const [newSetActivity, setNewSetActivity] = useState("");
+  const [newSetName, setNewSetName] = useState("");
+  const [newSetStart, setNewSetStart] = useState<NewSetStart>("blank");
+  /** The set name as typed; saved on blur. */
+  const [setNameInput, setSetNameInput] = useState("");
+  /** Switching the class onto the open set — asked about before it happens. */
+  const [confirmSwitch, setConfirmSwitch] = useState(false);
+  /**
+   * The switch just made here, until the host's next read says the same. Without
+   * it the "in use" mark would sit on the old set until the parent refreshed.
+   */
+  const [switchedTo, setSwitchedTo] = useState<string | null>(null);
   const [loadingSets, setLoadingSets] = useState(true);
   const [loadingTeams, setLoadingTeams] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -99,7 +129,14 @@ export function TeamsPillar(props: PillarProps) {
     setTeams(ts);
   }, []);
 
+  // The host's answer has caught up with a switch made here: drop the override.
+  useEffect(() => {
+    setSwitchedTo(null);
+  }, [props.currentSetId]);
+
   // ---- load team sets for this course ----
+  // Again whenever the set in use changes: the assistant makes a new set and
+  // moves the class onto it, and this screen should then list it.
   useEffect(() => {
     let alive = true;
     setLoadingSets(true);
@@ -107,8 +144,9 @@ export function TeamsPillar(props: PillarProps) {
       .then((ss) => {
         if (!alive) return;
         setSets(ss);
+        const inUse = currentSetOf({ current_team_set_id: props.currentSetId }, ss);
         setActiveSetId((prev) =>
-          prev && ss.some((s) => s.id === prev) ? prev : (ss[0]?.id ?? null),
+          prev && ss.some((s) => s.id === prev) ? prev : (inUse?.id ?? ss[0]?.id ?? null),
         );
       })
       .catch((e: unknown) => {
@@ -120,7 +158,7 @@ export function TeamsPillar(props: PillarProps) {
     return () => {
       alive = false;
     };
-  }, [courseId]);
+  }, [courseId, props.currentSetId]);
 
   // ---- load the teams of the working set ----
   useEffect(() => {
@@ -151,6 +189,17 @@ export function TeamsPillar(props: PillarProps) {
   );
   const activeSetKey = activeSet?.id;
   const activeSetSize = activeSet?.team_size ?? DEFAULT_SIZE;
+  /** The set students, the check-in sheet and the assistant are on. */
+  const inUseId =
+    switchedTo ?? currentSetOf({ current_team_set_id: props.currentSetId }, sets)?.id ?? null;
+  const inUse = sets.find((s) => s.id === inUseId) ?? null;
+  const activeInUse = activeSet !== null && activeSet.id === inUseId;
+
+  // keep the name box in step with the set on screen
+  useEffect(() => {
+    setSetNameInput(activeSet?.name ?? "");
+    setConfirmSwitch(false);
+  }, [activeSetKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // keep the size box in step with the working set
   useEffect(() => {
@@ -251,20 +300,37 @@ export function TeamsPillar(props: PillarProps) {
   };
 
   // ---------- mutations ----------
+  const openNewSet = () => {
+    setCreatingSet((v) => !v);
+    setNewSetName(freshSetName(sets));
+    setNewSetStart("blank");
+  };
+
+  /**
+   * A new set: blank, or a copy of the set in use. NOT put in use — building
+   * the next arrangement must not move the class off this one halfway through.
+   * "Use these teams now" does that, when it is ready.
+   */
   const onCreateSet = async () => {
     const activityId = newSetActivity || null;
-    const act = activities.find((a) => a.id === activityId) ?? null;
-    const name = act
-      ? `${act.title} · teams of ${DEFAULT_SIZE}`
-      : `Whole session · teams of ${DEFAULT_SIZE}`;
+    const name = newSetName.trim() || freshSetName(sets);
+    const copyFrom = newSetStart === "copy" ? inUse : null;
     await run(async () => {
       const created = await createTeamSet({
         courseId,
         activityId,
         name,
-        teamSize: DEFAULT_SIZE,
+        teamSize: copyFrom?.team_size ?? DEFAULT_SIZE,
       });
-      if (roster.length) await autoFormTeams(created.id, roster, DEFAULT_SIZE);
+      if (copyFrom) {
+        // New team rows with the same names and members — never the old rows.
+        // Their history (marks, hand-ins, photos) stays with the set it was
+        // recorded on.
+        for (const t of await listTeams(copyFrom.id, roster)) {
+          const team = await createTeam(created.id, t.name, t.position);
+          if (t.members.length) await moveStudents(t.members.map((m) => m.id), team.id, []);
+        }
+      }
       setSets(await listTeamSets(courseId));
       setCreatingSet(false);
       setNewSetActivity("");
@@ -273,6 +339,33 @@ export function TeamsPillar(props: PillarProps) {
       await reload(created.id);
       // The parent tracks whether any team set exists (setup guide), so a
       // created/deleted set has to be reported upward.
+      await refresh();
+    });
+  };
+
+  /** Rename the set on screen, on blur. */
+  const commitSetName = async () => {
+    if (!activeSet) return;
+    const name = setNameInput.trim();
+    if (!name || name === (activeSet.name ?? "")) {
+      setSetNameInput(activeSet.name ?? "");
+      return;
+    }
+    const setIdNow = activeSet.id;
+    setSets((prev) => prev.map((s) => (s.id === setIdNow ? { ...s, name } : s)));
+    await run(async () => {
+      await renameTeamSet(setIdNow, name);
+    });
+  };
+
+  /** Move the class onto the set on screen. */
+  const onUseSet = async () => {
+    if (!activeSet) return;
+    const setIdNow = activeSet.id;
+    setConfirmSwitch(false);
+    await run(async () => {
+      await setCurrentTeamSet(courseId, setIdNow);
+      setSwitchedTo(setIdNow);
       await refresh();
     });
   };
@@ -402,6 +495,12 @@ export function TeamsPillar(props: PillarProps) {
 
   /** Arm the set delete, then go and find out what it would actually cost. */
   const armDeleteSet = () => {
+    // The set in use goes last. Deleting it would put every student on
+    // whichever set is next, unasked; switch the class first, on purpose.
+    if (activeInUse && sets.length > 1) {
+      setError("This is the set the class is using. Use another set first, then delete this one.");
+      return;
+    }
     setConfirmDeleteSet(true);
     setSetCost(null);
     if (!activeSet) return;
@@ -514,7 +613,7 @@ export function TeamsPillar(props: PillarProps) {
         </div>
         <EmptyState
           title="No team set yet"
-          body={`Create the first set and we'll form teams of ${DEFAULT_SIZE} from your ${roster.length} students. Pick the activity it belongs to, or keep it all-class. Teams are assigned by faculty — self-selection is not offered.`}
+          body={`Create the first set, then auto-form teams from your ${roster.length} students or place them yourself. Pick the activity it belongs to, or keep it all-class. Teams are assigned by faculty — self-selection is not offered.`}
           action={
             <div style={{ display: "flex", gap: 9, alignItems: "flex-end", flexWrap: "wrap" }}>
               {setPicker}
@@ -558,15 +657,13 @@ export function TeamsPillar(props: PillarProps) {
               setSel(new Set());
               setActiveSetId(s.id);
             }}
+            title={s.id === inUseId ? "The set the class is using now" : undefined}
           >
             {labelForSet(s, activities)}
+            {s.id === inUseId ? " · in use" : ""}
           </button>
         ))}
-        <button
-          className="t-pill"
-          onClick={() => setCreatingSet((v) => !v)}
-          title="Create another team set"
-        >
+        <button className="t-pill" onClick={openNewSet} title="Create another team set">
           {creatingSet ? "Cancel" : "+ New set"}
         </button>
         <span className="t-spacer" />
@@ -576,6 +673,67 @@ export function TeamsPillar(props: PillarProps) {
             : "Whole-session set — not tied to an activity"}
         </span>
       </div>
+
+      {/* The set on screen: its name, and whether the class is on it. Being able
+          to look at — and build — a set that is not in use is the point of
+          having more than one; saying which is which is what stops building
+          the next one from reading as editing this one. */}
+      {activeSet ? (
+        <div
+          className="t-card"
+          style={{ display: "flex", gap: 9, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}
+        >
+          <label className="t-fld" style={{ display: "grid", gap: 4, minWidth: 220, textAlign: "left" }}>
+            Set name
+            <input
+              className="t-in"
+              value={setNameInput}
+              placeholder={labelForSet(activeSet, activities)}
+              aria-label="Set name"
+              disabled={busy}
+              onChange={(e) => setSetNameInput(e.target.value)}
+              onBlur={() => void commitSetName()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.currentTarget.blur();
+              }}
+            />
+          </label>
+          <span className="t-spacer" />
+          {activeInUse ? (
+            <span style={{ fontSize: 12, color: "var(--ink2)", maxWidth: 420 }}>
+              <strong>In use.</strong> Students see these teams, the assistant changes them, and check-ins
+              not yet marked use them.
+            </span>
+          ) : confirmSwitch ? (
+            <>
+              <span style={{ fontSize: 12, color: "var(--amber)", maxWidth: 460 }}>
+                Students will see these teams from now on, and check-ins not yet marked will use them.
+                Check-ins already marked keep the teams they were marked with.
+              </span>
+              <button className="t-btn primary" onClick={() => void onUseSet()} disabled={busy}>
+                Switch the class
+              </button>
+              <button
+                className="t-btn ghost"
+                style={{ border: "1px solid var(--line)" }}
+                onClick={() => setConfirmSwitch(false)}
+                disabled={busy}
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <>
+              <span style={{ fontSize: 12, color: "var(--ink2)", maxWidth: 420 }}>
+                Not in use{inUse ? ` — the class is on ${labelForSet(inUse, activities)}` : ""}.
+              </span>
+              <button className="t-btn line" onClick={() => setConfirmSwitch(true)} disabled={busy}>
+                Use these teams now
+              </button>
+            </>
+          )}
+        </div>
+      ) : null}
 
       {creatingSet && (
         <div
@@ -588,12 +746,54 @@ export function TeamsPillar(props: PillarProps) {
             marginBottom: 14,
           }}
         >
+          <label className="t-fld" style={{ display: "grid", gap: 4, minWidth: 200, textAlign: "left" }}>
+            Name
+            <input
+              className="t-in"
+              value={newSetName}
+              aria-label="New set name"
+              onChange={(e) => setNewSetName(e.target.value)}
+            />
+          </label>
+          <fieldset
+            className="t-fld"
+            style={{ border: "none", padding: 0, margin: 0, display: "grid", gap: 4, textAlign: "left" }}
+          >
+            <legend style={{ padding: 0, marginBottom: 4 }}>Start with</legend>
+            <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12.5 }}>
+              <input
+                type="radio"
+                name="new-set-start"
+                checked={newSetStart === "blank"}
+                onChange={() => setNewSetStart("blank")}
+              />
+              No teams — everyone unassigned
+            </label>
+            <label
+              style={{
+                display: "flex",
+                gap: 6,
+                alignItems: "center",
+                fontSize: 12.5,
+                color: inUse ? undefined : "var(--ink3)",
+              }}
+            >
+              <input
+                type="radio"
+                name="new-set-start"
+                checked={newSetStart === "copy"}
+                disabled={!inUse}
+                onChange={() => setNewSetStart("copy")}
+              />
+              A copy of {inUse ? labelForSet(inUse, activities) : "the set in use"}
+            </label>
+          </fieldset>
           {setPicker}
           <button className="t-btn primary" onClick={onCreateSet} disabled={busy}>
-            {busy ? "Creating…" : `Create set · teams of ${DEFAULT_SIZE}`}
+            {busy ? "Creating…" : "Create set"}
           </button>
-          <span style={{ fontSize: 11.5, color: "var(--ink3)" }}>
-            teams are formed from the roster right away — you can adjust them after
+          <span style={{ fontSize: 11.5, color: "var(--ink3)", maxWidth: 360 }}>
+            The class stays on the set it is using until you choose “Use these teams now”.
           </span>
         </div>
       )}

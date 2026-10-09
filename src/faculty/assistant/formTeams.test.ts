@@ -6,7 +6,7 @@
 // as even as the class divides, and the same inputs give the same teams.
 
 import { describe, expect, it } from "vitest";
-import { formTeams, teamSizes, type Person } from "./formTeams";
+import { formTeams, layoutsFor, sizeLayouts, sizesText, teamSizes, type Person } from "./formTeams";
 
 /** A deterministic made-up class: n students, current teams of 4 in order. */
 function klass(n: number, seed = 3) {
@@ -289,5 +289,48 @@ describe("formTeams — a student new since the last round", () => {
     const people: Person[] = g.map((v, i) => ({ id: `p${i}`, values: { g: v } }));
     const r = formTeams({ people, currentTeam: new Map(), spec: { teamSize: 5, avoidCurrent: false, avoidColumns: [], noLone: ["g"], balance: [] } });
     expect(r.checks.find((c) => c.text.startsWith("g:"))?.ok).toBe(true);
+  });
+});
+
+// Kelly asked for fours with the leftovers in threes and got fives: a three is
+// harder to mix, so the optimiser never chose it. The size is hers to choose.
+describe("team sizes are the instructor's", () => {
+  it("lays out the odd teams one smaller, one larger, or tries both", () => {
+    expect(sizeLayouts(74, 4, "smaller")).toEqual([[...Array(17).fill(4), 3, 3]]);
+    expect(sizeLayouts(74, 4, "larger")).toEqual([[5, 5, ...Array(16).fill(4)]]);
+    expect(sizeLayouts(74, 4)).toHaveLength(2);
+    expect(sizeLayouts(80, 4, "smaller")).toEqual([Array(20).fill(4)]);
+  });
+
+  it("makes a number of teams, or exactly the layout written out", () => {
+    expect(layoutsFor(74, { teamSize: 4, teamCount: 10 })).toEqual([[...Array(4).fill(8), ...Array(6).fill(7)]]);
+    expect(layoutsFor(10, { teamSize: 4, layout: [{ size: 3, count: 2 }, { size: 4, count: 1 }] })).toEqual([[4, 3, 3]]);
+    // One that does not add up is never made; planForm refuses it by name first.
+    expect(layoutsFor(10, { teamSize: 4, layout: [{ size: 3, count: 2 }] })).toEqual(sizeLayouts(10, 4));
+  });
+
+  it("says the sizes in words", () => {
+    expect(sizesText([4, 4, 4, 3, 3])).toBe("3 teams of 4 and 2 of 3");
+    expect(sizesText([2])).toBe("1 team of 2");
+    expect(sizesText([5, 4, 3])).toBe("1 team of 5, 1 of 4 and 1 of 3");
+  });
+
+  it("on a class shaped like Kelly's, makes the threes when asked — and leads the checks with the sizes", () => {
+    const genders = Array.from({ length: 74 }, (_, i) => (i % 3 === 0 ? "Male" : "Female"));
+    const people: Person[] = genders.map((g, i) => ({ id: `p${i}`, values: { Gender: g } }));
+    const spec = { teamSize: 4, avoidCurrent: false, avoidColumns: [], balance: [], noLone: ["Gender"] };
+    const smaller = formTeams({ people, currentTeam: new Map(), spec: { ...spec, leftovers: "smaller" as const } });
+    expect(smaller.teams.map((t) => t.members.length).sort()).toEqual([3, 3, ...Array(17).fill(4)]);
+    expect(smaller.checks[0]).toEqual({ ok: true, text: "Sizes: 17 teams of 4 and 2 of 3." });
+    const larger = formTeams({ people, currentTeam: new Map(), spec: { ...spec, leftovers: "larger" as const } });
+    expect(larger.teams.map((t) => t.members.length).sort()).toEqual([...Array(16).fill(4), 5, 5]);
+  });
+
+  it("makes pairs and threes as readily as fours", () => {
+    const people: Person[] = Array.from({ length: 9 }, (_, i) => ({ id: `p${i}`, values: {} }));
+    const pairs = formTeams({ people, currentTeam: new Map(), spec: { teamSize: 2, leftovers: "larger", avoidCurrent: false, avoidColumns: [], balance: [] } });
+    expect(pairs.teams.map((t) => t.members.length).sort()).toEqual([2, 2, 2, 3]);
+    const threes = formTeams({ people, currentTeam: new Map(), spec: { teamSize: 3, avoidCurrent: false, avoidColumns: [], balance: [] } });
+    expect(threes.teams.map((t) => t.members.length)).toEqual([3, 3, 3]);
   });
 });

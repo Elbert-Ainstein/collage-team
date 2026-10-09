@@ -10,7 +10,7 @@
 import { useState } from "react";
 import type { Student, TeamWithMembers } from "@/checkins/types";
 import type { SeatRecord } from "./seating";
-import { applyTeamUndo, planTeamUndo, teamUndoText } from "@/checkins/teamUndo";
+import { applyTeamUndo, planTeamUndo, teamUndoText, undoNewSet } from "@/checkins/teamUndo";
 
 interface AppliedCardProps {
   status: "applied" | "undone";
@@ -36,6 +36,16 @@ export function AppliedCard(props: AppliedCardProps): JSX.Element {
     setBusy(true);
     setError(null);
     try {
+      if (record.newSet) {
+        const out = await undoNewSet(record);
+        const head = out.switchedBack
+          ? `Undone — the class is back on its previous teams${out.removed ? `, and "${record.newSet.name}" was removed` : ""}.`
+          : out.removed
+            ? `Undone — "${record.newSet.name}" was removed.`
+            : "Nothing was left to undo.";
+        props.onUndone([head, ...out.notes].join("\n"));
+        return;
+      }
       const out = await applyTeamUndo(planTeamUndo(record, roster, teams));
       props.onUndone([teamUndoText(out), ...out.notes].join("\n"));
     } catch (e) {

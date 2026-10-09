@@ -20,6 +20,9 @@ function proposal(over: Partial<FormProposal> = {}): FormProposal {
     kind: "form",
     summary: "New teams of 4.",
     teamSize: 4,
+    leftovers: "either",
+    teamCount: null,
+    layout: [],
     avoidCurrent: true,
     avoidColumns: [],
     nameColumns: ["Name"],
@@ -47,6 +50,26 @@ describe("planForm", () => {
     ]);
     expect(p.proposal.moves).toHaveLength(8);
     expect(p.proposal.moves.filter((m) => m.toNewTeam).map((m) => m.toNewTeam)).toEqual(["Team 3", "Team 3", "Team 4", "Team 4"]);
+  });
+
+  it("with teams in use, lands them in a NEW set — Team 1 to Team N, no existing row reused", () => {
+    const p = planForm(proposal({ teamSize: 2 }), table, roster, teams, 1, true);
+    expect(p.intoNewSet).toBe(true);
+    expect(p.targets).toEqual([
+      { name: "Team 1", teamId: null },
+      { name: "Team 2", teamId: null },
+      { name: "Team 3", teamId: null },
+      { name: "Team 4", teamId: null },
+    ]);
+    // Still kept apart from who they are with NOW — the set in use.
+    expect(p.result?.conflicts).toEqual([]);
+  });
+
+  it("fills the set in use when nobody is on it yet, as before", () => {
+    const empty = [team("tA", "Team 1", 0, []), team("tB", "Team 2", 1, [])];
+    const p = planForm(proposal({ teamSize: 2 }), table, roster, empty, 1, true);
+    expect(p.intoNewSet).toBe(false);
+    expect(p.targets.slice(0, 2).map((t) => t.teamId)).toEqual(["tA", "tB"]);
   });
 
   it("finds a column whatever its case — the model may not copy it exactly", () => {
@@ -129,6 +152,17 @@ describe("planForm", () => {
     const p = planForm(proposal(), short, roster, teams, 1);
     expect(p.notes.join(" ")).toMatch(/Student H/);
     expect(p.notes.join(" ")).toMatch(/Someone Else/);
+  });
+
+  it("refuses a written-out layout that does not place the whole class, saying by how much", () => {
+    const p = planForm(proposal({ layout: [{ size: 2, count: 1 }] }), table, roster, teams, 1);
+    expect(p.result).toBeNull();
+    expect(p.problems[0]).toMatch(new RegExp(`place 2 students, and the class has ${roster.length}`));
+  });
+
+  it("makes exactly the layout written out when it does add up", () => {
+    const p = planForm(proposal({ layout: [{ size: roster.length, count: 1 }] }), table, roster, teams, 1);
+    expect(p.result?.teams.map((t) => t.members.length)).toEqual([roster.length]);
   });
 
   it("gives a different arrangement for another seed", () => {

@@ -27,6 +27,14 @@
 // Only TEAM and INDIVIDUAL+TEAM activities are listed. A check-in is a team
 // presenting to the room; an individual-only activity has no team half for the
 // marks to belong to, and offering one would collect marks nothing can display.
+//
+// THE TEAMS ARE THE ACTIVITY'S, not today's (0045). The first mark freezes who
+// was on which team, and the sheet shows that ever after — so re-forming the
+// class in week 7 leaves the week 3 sheet, its scores and its export with the
+// people who were in the room in week 3. Within a few hours of the first mark
+// the sheet offers to take today's teams instead, for the session where
+// somebody is moved after marking has started; after that it does not, because
+// that same button a week later is the bug.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Activity, Student, TeamWithMembers } from "@/checkins/types";
@@ -49,10 +57,94 @@ import {
   type TutorialGrader,
   type TutorialMark,
 } from "@/checkins/tutorial";
+import {
+  allTeamsOf,
+  frozenAt,
+  frozenTeams,
+  offerResync,
+  refreezeRoster,
+  rosterDrift,
+  teamsOf,
+  type ActivityRoster,
+} from "@/checkins/rosters";
 import { groupByWeek } from "./model";
 import type { FacultyData } from "./FacultyApp";
 import { CheckInPicker } from "./CheckInPicker";
 import { FAvatar, FIcon } from "./icons";
+
+/** "Kelly, Ada and 3 more" — enough names to recognise the change. */
+function namesOf(people: Student[], max = 4): string {
+  const names = people.map((p) => p.name);
+  return names.length > max
+    ? `${names.slice(0, max).join(", ")} and ${names.length - max} more`
+    : names.join(", ");
+}
+
+/**
+ * Said when the sheet's teams are not today's teams.
+ *
+ * Most of the time it is a statement, not a question: last week's sheet keeps
+ * last week's teams, and that is the sheet working. Only in the hours after the
+ * first mark — the session itself — does it offer to take today's teams, for
+ * the student moved after marking started.
+ */
+function TeamsChangedNote(props: {
+  moved: Student[];
+  sameTeams: boolean;
+  since: string | null;
+  canResync: boolean;
+  busy: boolean;
+  onResync: () => void;
+}): JSX.Element {
+  const when = props.since
+    ? new Date(props.since).toLocaleDateString(undefined, { month: "short", day: "numeric" })
+    : null;
+  return (
+    <div
+      role="note"
+      style={{
+        display: "flex",
+        gap: 10,
+        alignItems: "flex-start",
+        flexWrap: "wrap",
+        padding: "10px 12px",
+        marginBottom: 12,
+        flex: "none",
+        border: "1px solid var(--fv-neutral-200)",
+        background: "var(--fv-cream-300)",
+        borderRadius: "var(--fv-r-md)",
+        fontSize: "var(--fv-xs)",
+        lineHeight: 1.55,
+      }}
+    >
+      <FIcon name="groups" size={15} />
+      <span style={{ flex: 1, minWidth: 240 }}>
+        {props.canResync ? (
+          <>
+            <strong>Teams have changed since this sheet was started.</strong>{" "}
+            {namesOf(props.moved)} {props.moved.length === 1 ? "is" : "are"} on a different team
+            now. The sheet keeps the teams as they were at the first mark — if the move happened
+            before or during this session, put today&apos;s teams on it.
+          </>
+        ) : (
+          <>
+            <strong>These are the teams as they were for this activity</strong>
+            {when ? ` (${when})` : ""}.{" "}
+            {props.sameTeams
+              ? `${namesOf(props.moved)} ${props.moved.length === 1 ? "has" : "have"} changed team since.`
+              : "The class has moved to a different team set since."}{" "}
+            Marks stay with the people who were in the room.
+          </>
+        )}
+      </span>
+      {props.canResync ? (
+        <button type="button" className="fv-btn outline sm" disabled={props.busy} onClick={props.onResync}>
+          {props.busy ? "Updating…" : "Use today's teams on this sheet"}
+        </button>
+      ) : null}
+    </div>
+  );
+}
 
 /** How long a burst of live events is allowed to settle before one re-read. */
 const LIVE_COALESCE_MS = 250;
@@ -61,6 +153,7 @@ export function CheckInScreen({
   data,
   selId,
   onOpen,
+  onChanged,
 }: {
   data: FacultyData;
   /** The open sheet's activity, or null for the picker. Owned by FacultyApp. */
@@ -72,8 +165,9 @@ export function CheckInScreen({
    * off again.
    */
   onOpen: (activityId: string | null, opts?: { correction?: boolean }) => void;
+  /** The sheet changed something the rest of the app reads — its teams. */
+  onChanged?: () => void;
 }): JSX.Element {
-  const teams = data.teams;
 
   // Weeks with their activities, minus the ones a check-in cannot describe.
   const groups = useMemo(() => {
@@ -91,6 +185,9 @@ export function CheckInScreen({
   const [marks, setMarks] = useState<TutorialMark[]>([]);
   const [absences, setAbsences] = useState<TutorialAbsence[]>([]);
   const [graders, setGraders] = useState<TutorialGrader[]>([]);
+  /** This activity's frozen teams as the sheet last read them; null before the first read. */
+  const [rosters, setRosters] = useState<ActivityRoster[] | null>(null);
+  const [resyncing, setResyncing] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(0);
@@ -128,6 +225,7 @@ export function CheckInScreen({
     setMarks([]);
     setAbsences([]);
     setGraders([]);
+    setRosters(null);
     setError(null);
     if (!selId || !listed) return;
     const activityId = selId;
@@ -138,6 +236,7 @@ export function CheckInScreen({
       setMarks(sheet.marks);
       setAbsences(sheet.absences);
       setGraders(sheet.graders);
+      setRosters(sheet.rosters ?? []);
     } catch (e) {
       if (!stillOpen(activityId)) return;
       setMarks([]);
@@ -185,6 +284,7 @@ export function CheckInScreen({
       setMarks(sheet.marks);
       setAbsences(sheet.absences);
       setGraders(sheet.graders);
+      setRosters(sheet.rosters ?? []);
     } catch {
       // A live re-read failing is not worth a message: what is on screen is
       // still what this copy last read, and the next event tries again.
@@ -223,6 +323,49 @@ export function CheckInScreen({
   };
 
   const canEdit = data.can.runCheckIns;
+
+  /**
+   * The teams on this sheet. Until the sheet has been read, what the app last
+   * loaded for this activity; once read, the sheet's own answer — frozen teams
+   * when it has them, today's when nothing has been recorded yet.
+   */
+  const teams = useMemo(() => {
+    if (!selId) return data.teams;
+    if (rosters === null) return teamsOf(data, selId);
+    if (!rosters.length) return data.teams;
+    return frozenTeams(rosters, allTeamsOf(data), data.roster).get(selId) ?? data.teams;
+  }, [selId, rosters, data]);
+
+  /** How the frozen teams differ from today's — null when nothing is frozen. */
+  const drift = useMemo(
+    () => (rosters?.length ? rosterDrift(teams, data.teams) : null),
+    [rosters, teams, data.teams],
+  );
+  const frozenSince = rosters?.length && selId ? frozenAt(rosters, selId) : null;
+  const canResync =
+    canEdit &&
+    drift !== null &&
+    drift.sameTeams &&
+    drift.moved.length > 0 &&
+    data.teams.length > 0 &&
+    offerResync(frozenSince);
+
+  const resync = async () => {
+    if (!selId || !canResync) return;
+    const activityId = selId;
+    setResyncing(true);
+    setError(null);
+    try {
+      await refreezeRoster(activityId, data.teams[0].team_set_id);
+      if (!stillOpen(activityId)) return;
+      await reread();
+      onChanged?.();
+    } catch (e) {
+      if (stillOpen(activityId)) setError(e instanceof Error ? e.message : "That didn't save.");
+    } finally {
+      setResyncing(false);
+    }
+  };
 
   /**
    * Write one field, and put the answer back in place of the optimistic row.
@@ -459,6 +602,17 @@ export function CheckInScreen({
       </div>
 
       {errorBox}
+
+      {drift && (drift.moved.length > 0 || !drift.sameTeams) ? (
+        <TeamsChangedNote
+          moved={drift.moved}
+          sameTeams={drift.sameTeams}
+          since={frozenSince}
+          canResync={canResync}
+          busy={resyncing}
+          onResync={() => void resync()}
+        />
+      ) : null}
 
       <div className="fv-cksheet">
         {teams.length === 0 ? (

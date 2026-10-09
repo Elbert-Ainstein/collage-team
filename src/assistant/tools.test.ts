@@ -155,6 +155,9 @@ describe("parseToolCall — form_teams", () => {
         kind: "form",
         summary: "New teams of 4, balanced, nobody with a current teammate.",
         teamSize: 4,
+        leftovers: "either",
+        teamCount: null,
+        layout: [],
         avoidCurrent: true,
         avoidColumns: [],
         nameColumns: ["Name"],
@@ -192,6 +195,32 @@ describe("parseToolCall — form_teams", () => {
   it("refuses an at-most rule with no values or a cap that is not a count", () => {
     expect(parseToolCall("form_teams", { summary: "x", team_size: 4, at_most: [{ column: "Y", values: [], max: 1 }] }).ok).toBe(false);
     expect(parseToolCall("form_teams", { summary: "x", team_size: 4, at_most: [{ column: "Y", values: ["Yes"], max: -1 }] }).ok).toBe(false);
+  });
+
+  it("reads how she wants the team sizes: leftovers, a number of teams, or a written-out layout", () => {
+    const form = (input: Record<string, unknown>) => {
+      const out = parseToolCall("form_teams", { summary: "x", team_size: 4, ...input });
+      return out.ok && out.proposal.kind === "form" ? out.proposal : null;
+    };
+    expect(form({})).toMatchObject({ leftovers: "either", teamCount: null, layout: [] });
+    expect(form({ leftovers: "smaller" })?.leftovers).toBe("smaller");
+    expect(form({ team_count: 20 })?.teamCount).toBe(20);
+    expect(form({ team_sizes: [{ size: 4, count: 16 }, { size: 3, count: 2 }] })?.layout).toEqual([
+      { size: 4, count: 16 },
+      { size: 3, count: 2 },
+    ]);
+    // A team of one is allowed only when she writes it out.
+    expect(form({ team_sizes: [{ size: 1, count: 1 }] })?.layout).toEqual([{ size: 1, count: 1 }]);
+  });
+
+  it("refuses team sizes it cannot make", () => {
+    const ok = (input: Record<string, unknown>) =>
+      parseToolCall("form_teams", { summary: "x", team_size: 4, ...input }).ok;
+    expect(ok({ leftovers: "sideways" })).toBe(false);
+    expect(ok({ team_count: 0 })).toBe(false);
+    expect(ok({ team_count: 2.5 })).toBe(false);
+    expect(ok({ team_sizes: [{ size: 0, count: 3 }] })).toBe(false);
+    expect(ok({ team_sizes: [{ size: 3 }] })).toBe(false);
   });
 
   it("works with no file at all — just no repeat teammates", () => {

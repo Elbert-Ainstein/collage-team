@@ -10,12 +10,27 @@ const moveStudents = vi.fn(async () => undefined);
 const renameTeam = vi.fn(async () => undefined);
 const deleteTeam = vi.fn(async () => undefined);
 const countOneTeamResults = vi.fn(async () => 0);
-const countOneTeamMarks = vi.fn(async () => 0);
-vi.mock("./data", () => ({ moveStudents, renameTeam, deleteTeam, countOneTeamResults, countOneTeamMarks }));
+const countOneTeamMarks = vi.fn(async (_teamId: string) => 0);
+const deleteTeamSet = vi.fn(async () => undefined);
+const setCurrentTeamSet = vi.fn(async () => undefined);
+vi.mock("./data", () => ({
+  moveStudents,
+  renameTeam,
+  deleteTeam,
+  deleteTeamSet,
+  setCurrentTeamSet,
+  countOneTeamResults,
+  countOneTeamMarks,
+}));
 const countResourcesForTeams = vi.fn(async () => 0);
 vi.mock("./resources", () => ({ countResourcesForTeams }));
 
-const { applyTeamUndo: applyUndo, planTeamUndo: planUndo, teamUndoText: undoText } = await import("./teamUndo");
+const {
+  applyTeamUndo: applyUndo,
+  planTeamUndo: planUndo,
+  teamUndoText: undoText,
+  undoNewSet,
+} = await import("./teamUndo");
 
 // After a draft that moved Alan from Team 1 to Team 2, put Katherine (no team
 // before) on a new team Helix, and renamed Team 1 to Vesicle.
@@ -113,5 +128,33 @@ describe("planUndo — a second press after an undo that failed part-way", () =>
     expect(p.renameBack).toEqual([]);
     expect(p.kept).toEqual([]);
     expect(p.remove).toEqual([{ teamId: helixAfter.id, name: "Helix" }]);
+  });
+});
+
+
+describe("undoNewSet", () => {
+  const madeSet = {
+    moved: [],
+    created: [
+      { teamId: "n1", name: "Team 1" },
+      { teamId: "n2", name: "Team 2" },
+    ],
+    renamed: [],
+    newSet: { courseId: "c1", setId: "set-new", name: "New Set", previousSetId: "set-old" },
+  };
+
+  it("moves the class back onto its old set, then removes the new one", async () => {
+    const out = await undoNewSet(madeSet);
+    expect(setCurrentTeamSet).toHaveBeenCalledWith("c1", "set-old");
+    expect(deleteTeamSet).toHaveBeenCalledWith("set-new");
+    expect(out).toMatchObject({ switchedBack: true, removed: 2, notes: [] });
+  });
+
+  it("keeps the new set, out of use, once anything has been recorded on it", async () => {
+    countOneTeamMarks.mockImplementation(async (id: string) => (id === "n2" ? 1 : 0));
+    const out = await undoNewSet(madeSet);
+    expect(setCurrentTeamSet).toHaveBeenCalledWith("c1", "set-old");
+    expect(deleteTeamSet).not.toHaveBeenCalled();
+    expect(out.notes[0]).toMatch(/recorded on Team 2/);
   });
 });
