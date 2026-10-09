@@ -7,14 +7,18 @@
 // are a press away; eighty names are not something to read before trusting a
 // draft, the checks are. "Try another arrangement" re-forms with a new seed when
 // she would rather see a different mix that keeps the same rules.
+//
+// When the class does not divide by the size she asked for, the odd teams can
+// go one smaller or one larger, and that is hers to pick on the draft — not
+// something to re-ask the assistant for, and not the optimiser's call.
 
 import { useMemo, useState } from "react";
-import type { FormProposal } from "@/assistant/types";
+import type { FormProposal, Leftovers } from "@/assistant/types";
 import type { Student, TeamWithMembers } from "@/checkins/types";
 import { AppliedCard } from "./AppliedCard";
 import { planForm } from "./formPlan";
 import { outcomeText } from "./SeatingCard";
-import { applySeating, planSeating, type SeatRecord } from "./seating";
+import { applyNewSet, applySeating, planSeating, type SeatRecord } from "./seating";
 import type { Table } from "./table";
 import type { DraftStatus } from "./thread";
 
@@ -25,6 +29,10 @@ interface FormTeamsCardProps {
   table: Table | null;
   roster: Student[];
   teams: TeamWithMembers[];
+  /** The set `teams` is — what the class goes back to on Undo. */
+  currentSetId: string | null;
+  /** The database can move the class onto a new set (0045). */
+  canMakeSet: boolean;
   status: DraftStatus;
   outcome?: string;
   record?: SeatRecord;
@@ -37,6 +45,7 @@ interface FormTeamsCardProps {
 export function FormTeamsCard(props: FormTeamsCardProps): JSX.Element {
   const { proposal, table, roster, teams, status } = props;
   const [seed, setSeed] = useState(1);
+  const [leftovers, setLeftovers] = useState<Leftovers>(proposal.leftovers ?? "either");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showTeams, setShowTeams] = useState(false);
@@ -47,11 +56,15 @@ export function FormTeamsCard(props: FormTeamsCardProps): JSX.Element {
   // Not while applied: the plan would re-form against the class it just wrote.
   const live = status === "open";
   const plan = useMemo(
-    () => (live ? planForm(proposal, table, roster, teams, seed) : null),
-    [live, proposal, table, roster, teams, seed],
+    () => (live ? planForm({ ...proposal, leftovers }, table, roster, teams, seed, props.canMakeSet) : null),
+    [live, proposal, leftovers, table, roster, teams, seed, props.canMakeSet],
   );
+  // Only a size she gave, not a count or a written-out layout, has leftovers.
+  const uneven =
+    !proposal.layout?.length && !proposal.teamCount && roster.length % Math.max(1, proposal.teamSize) !== 0;
+  // Moves within the set in use — only when the teams land there (see formPlan).
   const seating = useMemo(
-    () => (plan?.result ? planSeating(plan.proposal, plan.refs, roster, teams) : null),
+    () => (plan?.result && !plan.intoNewSet ? planSeating(plan.proposal, plan.refs, roster, teams) : null),
     [plan, roster, teams],
   );
   const nameOf = useMemo(() => new Map(roster.map((s) => [s.id, s.name])), [roster]);
@@ -73,10 +86,27 @@ export function FormTeamsCard(props: FormTeamsCardProps): JSX.Element {
   if (!plan) return <div className="fv-as-quiet">Working out the teams…</div>;
 
   async function apply() {
-    if (!seating) return;
+    if (!plan?.result) return;
+    if (!plan.intoNewSet && !seating) return;
     setBusy(true);
     setError(null);
     try {
+      if (plan.intoNewSet) {
+        const formed = plan.result.teams;
+        const out = await applyNewSet(props.courseId, {
+          size: proposal.teamSize,
+          previousSetId: props.currentSetId,
+          groups: formed.map((t, i) => ({ name: plan.targets[i]?.name ?? `Team ${i + 1}`, studentIds: t.members })),
+        });
+        props.onApplied(
+          `Made ${out.created} teams in a new set, "${out.setName}", and moved the class onto it. ` +
+            "The teams you had are kept exactly as they were, with every check-in and hand-in on them — " +
+            "rename the new set, or switch back, on Teams.",
+          out.record,
+        );
+        return;
+      }
+      if (!seating) return;
       const out = await applySeating(props.courseId, seating);
       props.onApplied(outcomeText(out), out.record);
     } catch (e) {
@@ -89,13 +119,15 @@ export function FormTeamsCard(props: FormTeamsCardProps): JSX.Element {
   }
 
   const result = plan.result;
-  const blocked = plan.problems.length > 0 || !result || (seating?.problems.length ?? 0) > 0;
+  const blocked =
+    plan.problems.length > 0 || !result || (!plan.intoNewSet && (seating?.problems.length ?? 1) > 0);
 
   return (
     <div className="fv-as-draft">
       <span className="fv-eyebrow">
         New teams{result ? ` · ${result.teams.length} teams` : ""}
         {table ? ` · from ${table.name}` : ""}
+        {plan.intoNewSet ? " · as a new set" : ""}
       </span>
 
       {plan.problems.length ? (
@@ -114,6 +146,30 @@ export function FormTeamsCard(props: FormTeamsCardProps): JSX.Element {
             </li>
           ))}
         </ul>
+      ) : null}
+
+      {result && uneven ? (
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+          <span className="fv-as-quiet">Leftover teams</span>
+          {(
+            [
+              ["smaller", `Some of ${proposal.teamSize - 1}`],
+              ["larger", `Some of ${proposal.teamSize + 1}`],
+              ["either", "Best fit"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              className={`fv-btn ${leftovers === value ? "outline" : "ghost"} sm`}
+              aria-pressed={leftovers === value}
+              disabled={busy || (value === "smaller" && proposal.teamSize - 1 < 1)}
+              onClick={() => setLeftovers(value)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       ) : null}
 
       {proposal.notApplied.length ? (
@@ -160,8 +216,11 @@ export function FormTeamsCard(props: FormTeamsCardProps): JSX.Element {
       ) : null}
 
       <div className="fv-as-quiet" style={{ marginTop: 10 }}>
-        Students move onto the teams already there, in order, and new teams are made for the rest. A team left
-        with nobody stays standing. Undo puts everyone back.
+        {plan.intoNewSet
+          ? "Apply makes these a new team set and moves the class onto it. The teams in use now stay exactly as " +
+            "they are, with every check-in, hand-in and file on them. Undo moves the class back."
+          : "Students move onto the teams already there, in order, and new teams are made for the rest. A team " +
+            "left with nobody stays standing. Undo puts everyone back."}
       </div>
       {error ? <div className="fv-as-msg error" style={{ marginTop: 8 }}>{error}</div> : null}
       <div className="fv-as-btns">

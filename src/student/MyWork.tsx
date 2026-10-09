@@ -191,7 +191,9 @@ export function MyWork(props: {
   const result = isTeam ? assignment.teamResult : assignment.myResult;
   const seeded = result?.text ?? "";
   const serverStamp = result?.updated_at ?? null;
-  const subjectId = isTeam ? enrolment.team?.id ?? null : enrolment.student.id;
+  const subjectId = isTeam
+    ? (assignment.teamId ?? enrolment.team?.id ?? null)
+    : enrolment.student.id;
   const key = checkIn && subjectId ? draftKey(mode, checkIn.id, subjectId) : null;
 
   // The box and the last known stored version move together. Every question
@@ -364,7 +366,7 @@ export function MyWork(props: {
     ? isTeam
       ? "This activity has no team check-in to submit to."
       : "This activity has no individual check-in to submit to."
-    : isTeam && !enrolment.team
+    : isTeam && !subjectId
       ? "You are not on a team yet, so there is nothing to submit together."
       : result?.status === "scored"
         ? "This has already been graded. Ask your instructor to reopen it."

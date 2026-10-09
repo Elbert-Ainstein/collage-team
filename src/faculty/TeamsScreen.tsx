@@ -999,8 +999,15 @@ export function TeamsScreen(props: {
       const rows: CheckInGradeRow[] = [];
       weekActivities.forEach((a, i) => {
         const sheet = sheets[i];
+        // The team each student was on FOR THIS ACTIVITY (0045), once anything
+        // was recorded on it — never today's team for an old week, which is
+        // how a re-form handed earlier weeks' marks to the new teams.
+        const rosters = sheet.rosters ?? [];
+        const teamOn = rosters.length
+          ? new Map(rosters.map((r) => [r.student_id, r.team_id]))
+          : teamIdOf;
         for (const s of roster) {
-          const teamId = teamIdOf.get(s.id);
+          const teamId = teamOn.get(s.id);
           // Nobody has marked a student who is on no team — the sheet is walked
           // team by team, so there is no row for them to be in or out of.
           if (!teamId) continue;
@@ -1054,6 +1061,7 @@ export function TeamsScreen(props: {
         <div className="fv-scroll">
           <TeamsPillar
             courseId={course.id}
+            currentSetId={course.current_team_set_id}
             roster={roster}
             activities={activities}
             refresh={async () => {

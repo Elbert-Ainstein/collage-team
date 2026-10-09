@@ -13,6 +13,7 @@
 
 import { requireSupabase } from "@/lib/supabaseClient";
 import { dbError } from "./data";
+import { listRosters, type ActivityRoster } from "./rosters";
 
 /** One check-in slot of a session, for one team. */
 export interface TutorialMark {
@@ -113,6 +114,12 @@ export interface TutorialSheet {
   marks: TutorialMark[];
   absences: TutorialAbsence[];
   graders: TutorialGrader[];
+  /**
+   * Who was on which team for this activity, once anything has been recorded
+   * on it (0045). Empty means not frozen yet — the sheet follows today's teams
+   * — and is also what a database without 0045 reads as.
+   */
+  rosters: ActivityRoster[];
 }
 
 /**
@@ -151,18 +158,22 @@ async function readGraders(activityId: string): Promise<TutorialGrader[]> {
 /** Everything recorded for one activity, across every team. */
 export async function getTutorialSheet(activityId: string): Promise<TutorialSheet> {
   try {
-    const [marks, absences, graders] = await Promise.all([
+    const [marks, absences, graders, rosters] = await Promise.all([
       db().from("tutorial_marks").select("*").eq("activity_id", activityId).order("slot"),
       db().from("tutorial_absences").select("*").eq("activity_id", activityId),
       // Newer than the sheet itself (0040/0041): on a database without it the
       // sheet still works, minus the Grader column, rather than telling a TF
       // mid-session the whole tab is not installed.
       readGraders(activityId),
+      // Read with the sheet, not only at the app's refresh: the first mark is
+      // what freezes them, and that happens while this sheet is open.
+      listRosters([activityId]),
     ]);
     return {
       marks: (unwrap(marks) as TutorialMark[] | null) ?? [],
       absences: (unwrap(absences) as TutorialAbsence[] | null) ?? [],
       graders,
+      rosters,
     };
   } catch (e) {
     if (missingTable(e)) throw new TutorialNotInstalledError();
@@ -403,8 +414,12 @@ export function graderFor(
   return row.instructor ? INSTRUCTOR : row.tf_id;
 }
 
-/** The three tables one activity's sheet is made of — what a live copy watches. */
-const SHEET_TABLES = ["tutorial_marks", "tutorial_absences", "tutorial_graders"] as const;
+/**
+ * The tables one activity's sheet is made of — what a live copy watches. The
+ * teams are one of them since 0045: another copy's "use today's teams" changes
+ * who is on every row of this one.
+ */
+const SHEET_TABLES = ["tutorial_marks", "tutorial_absences", "tutorial_graders", "activity_rosters"] as const;
 
 /**
  * Watch one activity's sheet for writes from ANY copy of it, and say so.
@@ -413,7 +428,7 @@ const SHEET_TABLES = ["tutorial_marks", "tutorial_absences", "tutorial_graders"]
  * marked Team 1's check-in 1; Luke, who had opened the sheet first, still saw
  * that row empty and put check-in 2's marks into it. The fix is not a merge
  * — the sheet's own loader is the merge — it is being TOLD something landed.
- * `onChange` fires once per change on any of the three tables for this
+ * `onChange` fires once per change on any of these tables for this
  * activity, and the caller re-reads the sheet.
  *
  * Filtered server-side on activity_id so a copy of week 3's sheet is not woken

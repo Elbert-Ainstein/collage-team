@@ -8,7 +8,8 @@
 // the schedule is legible in the code a student's screen is actually built from.
 
 import { requireSupabase } from "@/lib/supabaseClient";
-import { dbError } from "./data";
+import { currentSetOf, dbError } from "./data";
+import { listMyRosters } from "./rosters";
 import { INDIV_ELSEWHERE, SCOPE_OF } from "./types";
 import type {
   Activity,
@@ -22,6 +23,7 @@ import type {
   Student,
   SubmissionMark,
   Team,
+  TeamSet,
 } from "./types";
 
 const db = () => requireSupabase();
@@ -108,15 +110,31 @@ export async function getEnrolment(): Promise<Enrolment | null> {
   const links = unwrap(
     await db().from("team_members").select("team_id,student_id"),
   ) as { team_id: string; student_id: string }[] ?? [];
-  const mine = links.find((l) => l.student_id === me.id);
+  const myTeamIds = [...new Set(links.filter((l) => l.student_id === me.id).map((l) => l.team_id))];
 
   let team: Team | null = null;
   let teammates: Student[] = [];
-  if (mine) {
-    team = (unwrap(
-      await db().from("teams").select("*").eq("id", mine.team_id).limit(1),
-    ) as Team[] ?? [])[0] ?? null;
-    const memberIds = links.filter((l) => l.team_id === mine.team_id).map((l) => l.student_id);
+  if (myTeamIds.length) {
+    // The team in the set the class is using now. A student is on one team
+    // per set, and once a class has been re-formed they are on several — this
+    // used to take whichever membership row Postgres happened to return first,
+    // so the same student could land on last month's team on one load and
+    // today's on the next. currentSetOf is the faculty app's own answer.
+    const [rows, sets] = await Promise.all([
+      db().from("teams").select("*").in("id", myTeamIds)
+        .then((res) => unwrap(res) as Team[] ?? []),
+      db().from("team_sets").select("*").eq("course_id", course.id).order("created_at").order("id")
+        .then((res) => unwrap(res) as TeamSet[] ?? []),
+    ]);
+    const current = currentSetOf(course, sets);
+    team = current
+      ? rows.find((t) => t.team_set_id === current.id) ?? null
+      // No set this student can see at all: whatever team they are on.
+      : rows[0] ?? null;
+  }
+  if (team) {
+    const teamId = team.id;
+    const memberIds = links.filter((l) => l.team_id === teamId).map((l) => l.student_id);
     if (memberIds.length) {
       teammates = (unwrap(
         await db().from("students").select("*").in("id", memberIds).order("position"),
@@ -153,6 +171,12 @@ export interface Assignment {
   myResult: CheckInResult | null;
   /** Their team's result on the team check-in. */
   teamResult: CheckInResult | null;
+  /**
+   * The team this activity's team half belongs to: the one they were on when
+   * it was recorded (0045), else their team now. Optional so a hand-built
+   * Assignment without it means "their team now".
+   */
+  teamId?: string | null;
   status: AssignmentStatus;
   /** The headline grade — the individual one, except for team-only work. */
   grade: string;
@@ -273,13 +297,19 @@ export async function listAssignments(enrolment: Enrolment): Promise<Assignment[
   const activities = all.filter((a) => isOpenToStudents(a, now));
   if (!activities.length) return [];
 
-  const [checkIns, reopened] = await Promise.all([
+  const [checkIns, reopened, rosters] = await Promise.all([
     db().from("check_ins").select("*")
       .in("activity_id", activities.map((a) => a.id))
       .order("position")
       .then((res) => unwrap(res) as CheckIn[] ?? []),
     listMyReopens(enrolment.student.id),
+    // Which team they were on for each activity that has anything recorded —
+    // an earlier week's team work is their earlier team's, not today's. A
+    // failed read degrades to today's team for everything, which is how this
+    // screen worked before; it must not take the assignment list down.
+    listMyRosters(enrolment.student.id).catch(() => []),
   ]);
+  const teamFor = new Map(rosters.map((r) => [r.activity_id, r.team_id]));
 
   const results = checkIns.length
     ? (unwrap(
@@ -297,9 +327,10 @@ export async function listAssignments(enrolment: Enrolment): Promise<Assignment[
       results.find(
         (r) => r.check_in_id === indivCheckIn?.id && r.student_id === enrolment.student.id,
       ) ?? null;
+    const teamId = teamFor.get(activity.id) ?? enrolment.team?.id ?? null;
     const teamResult =
       results.find(
-        (r) => r.check_in_id === teamCheckIn?.id && r.team_id === enrolment.team?.id,
+        (r) => r.check_in_id === teamCheckIn?.id && r.team_id === teamId,
       ) ?? null;
 
     // SCOPE, not type. This branched on `type === "amplify"` — which was a
@@ -320,6 +351,7 @@ export async function listAssignments(enrolment: Enrolment): Promise<Assignment[
       teamCheckIn,
       myResult,
       teamResult,
+      teamId,
       status: elsewhere
         ? statusOfElsewhere(lead, activity.stage)
         : statusOf(lead, activity.stage),

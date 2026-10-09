@@ -49,6 +49,7 @@ import {
   type ComboTotal,
   type PointedQuestion,
 } from "./model";
+import { teamsOf } from "@/checkins/rosters";
 import type { FacultyData } from "./FacultyApp";
 import { FAvatar, FIcon } from "./icons";
 import { ActivityTeamPanel } from "./ActivityTeamPanel";
@@ -325,7 +326,7 @@ export function GradingScreen({
     );
     const out: Subject[] = [];
     if (kind === "team") {
-      for (const t of data.teams) {
+      for (const t of teamsOf(data, checkIn.activity_id)) {
         const r = rows.find((x) => x.team_id === t.id);
         if (r) out.push({ id: t.id, name: t.name, tint: null, result: r });
       }
@@ -336,7 +337,7 @@ export function GradingScreen({
       }
     }
     return out.sort((a, b) => a.name.localeCompare(b.name));
-  }, [checkIn, data.results, data.roster, data.teams, kind, elsewhere]);
+  }, [checkIn, data.results, data.roster, data.teams, data.frozenTeams, kind, elsewhere]);
 
   const subject = subjects[stIdx] ?? null;
 
@@ -787,7 +788,7 @@ export function GradingScreen({
         {scope === "both" ? halfToggle : null}
         <ActivityTeamPanel
           activityId={activity.id}
-          teams={data.teams}
+          teams={teamsOf(data, activity.id)}
           onOpenCheckIn={onOpenCheckIn}
         />
       </div>

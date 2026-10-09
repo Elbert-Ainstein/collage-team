@@ -51,6 +51,7 @@ import {
 } from "./model";
 import { FAvatar, FIcon } from "./icons";
 import type { ResultRow } from "@/checkins/data";
+import { allTeamsOf } from "@/checkins/rosters";
 import type { FacultyData } from "./FacultyApp";
 
 
@@ -485,7 +486,9 @@ export function ActivitiesScreen(props: {
           // this course gone quiet" can be answered from the last hand-in
           // rather than from when somebody typed the week in.
           roster={data.roster}
-          teams={data.teams}
+          // Every team a file could be filed under: today's, and the ones
+          // earlier activities were frozen with (0045).
+          teams={allTeamsOf(data)}
           checkIns={data.checkIns}
           results={data.results}
           questions={data.questions}

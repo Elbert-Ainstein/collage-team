@@ -1099,10 +1099,13 @@ export function StudentApp({
           if (workMode === "team") {
             // Guarded in MyWork too, but never write a submission we cannot
             // attribute to a team.
-            if (!selected.teamCheckIn || !enrolment.team) return;
+            // The activity's team: the one it was recorded against, once
+            // anything was (0045), so a resubmit lands on the same row.
+            const teamId = selected.teamId ?? enrolment.team?.id ?? null;
+            if (!selected.teamCheckIn || !teamId) return;
             await submitTeamWork(
               selected.teamCheckIn.id,
-              enrolment.team.id,
+              teamId,
               text,
               expectedUpdatedAt,
             );

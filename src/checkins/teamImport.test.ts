@@ -41,7 +41,18 @@ const listTeamSets = vi.fn(async (): Promise<TeamSet[]> => []);
 const moveStudents = vi.fn(async () => undefined);
 const renameTeam = vi.fn(async () => undefined);
 
-vi.mock("./data", () => ({ createTeam, createTeamSet, listTeamSets, moveStudents, renameTeam }));
+vi.mock("./data", async (importOriginal) => {
+  const { currentSetOf } = await importOriginal<typeof import("./data")>();
+  return {
+    createTeam,
+    createTeamSet,
+    currentSetIdOf: vi.fn(async () => null),
+    currentSetOf,
+    listTeamSets,
+    moveStudents,
+    renameTeam,
+  };
+});
 
 const { applyTeamPlan, hasTeamNumbers, missReason, planTeamImport } = await import("./teamImport");
 
