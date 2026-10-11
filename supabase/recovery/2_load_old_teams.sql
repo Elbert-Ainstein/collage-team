@@ -16,6 +16,12 @@ create table if not exists recovery.params (
   last_old_week int  not null
 );
 
+-- When the teams were switched. Only activities whose teams were frozen BEFORE
+-- this are restored, so a week with a Tuesday on the old teams and a Thursday
+-- on the new ones restores the Tuesday and leaves the Thursday alone. Null
+-- means "every week up to last_old_week".
+alter table recovery.params add column if not exists switched_at timestamptz;
+
 -- Who was on which team before the switch — by row id, exactly as the
 -- database had it.
 create table if not exists recovery.old_team_members (
@@ -33,15 +39,18 @@ create table if not exists recovery.old_teams_by_email (
 );
 
 -- ======================================================== 1. FILL IN: course
--- From step 1a and 1c. Example:
---   insert into recovery.params values ('00000000-0000-0000-0000-000000000000', 6)
---   on conflict (course_id) do update set last_old_week = excluded.last_old_week;
+-- From step 1a and 1c, and when the switch happened (with its time zone).
+-- Example:
+--   insert into recovery.params values
+--     ('00000000-0000-0000-0000-000000000000', 6, '2026-10-07 18:00 America/Chicago')
+--   on conflict (course_id) do update
+--     set last_old_week = excluded.last_old_week, switched_at = excluded.switched_at;
 
 
 -- ===================================================== 2. FILL IN: old teams
--- EITHER (best) paste the output of
---   sh supabase/recovery/extract_team_members.sh <backup file>
--- here — one INSERT into recovery.old_team_members, every course's rows.
+-- EITHER (best) paste the INSERT that 0_on_the_backup_copy.sql returned on the
+-- restored copy (or the output of extract_team_members.sh on a downloaded
+-- backup) here — one INSERT into recovery.old_team_members, every course's rows.
 --
 -- OR, from Kelly's spreadsheet's previous-team column:
 --   insert into recovery.old_teams_by_email (course_id, email, team) values
@@ -99,7 +108,10 @@ select a.id as activity_id,
   join recovery.params p on p.course_id = a.course_id
  where a.week is not null
    and a.week <= p.last_old_week
-   and exists (select 1 from activity_rosters r where r.activity_id = a.id);
+   and exists (select 1 from activity_rosters r where r.activity_id = a.id)
+   and (p.switched_at is null
+        or (select min(r.frozen_at) from activity_rosters r where r.activity_id = a.id)
+           < p.switched_at);
 
 -- How many old memberships were loaded, per course. Zero means step 2's
 -- second fill-in is still empty.
