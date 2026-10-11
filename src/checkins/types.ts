@@ -18,6 +18,12 @@ export interface Course {
    * undefined reads as "not cleared", which is the truth there.
    */
   artifacts_cleared_at?: string | null;
+  /**
+   * The team set the class is using now (0045) — what the assistant edits, the
+   * check-in sheet marks and students see. Optional because a database without
+   * 0045 has no column; currentSetOf() then falls back to the old pick.
+   */
+  current_team_set_id?: string | null;
   created_at: string;
 }
 

@@ -12,7 +12,7 @@
 // to another provider later. "Exactly one of to_team / to_new_team" is
 // therefore enforced here rather than in the schema.
 
-import type { ImportRow, Proposal, SeatMove } from "./types";
+import type { ImportRow, Leftovers, Proposal, SeatMove } from "./types";
 
 /** A tool as any provider needs it: a name, when to use it, and its input. */
 export interface ToolSpec {
@@ -142,7 +142,38 @@ export const FORM_TEAMS: ToolSpec = {
     type: "object",
     properties: {
       summary: SUMMARY,
-      team_size: { type: "integer", description: "How many students per team. Leftovers make a few teams one larger or smaller." },
+      team_size: {
+        type: "integer",
+        description: "How many students per team — any size from 2 up; pairs and threes are as fine as fours.",
+      },
+      leftovers: {
+        type: "string",
+        enum: ["smaller", "larger", "either"],
+        description:
+          "When the class does not divide evenly by team_size. smaller: the odd teams are one SMALLER " +
+          "(teams of 4 plus a few of 3) — use it for \"groups of 3 are fine\", \"no teams of 5\", \"round " +
+          "down\". larger: one LARGER (a few of 5). either: whichever mixes the rules better. Default either.",
+      },
+      team_count: {
+        type: "integer",
+        description:
+          "Only when she asks for a NUMBER of teams (\"make 20 teams\"): the class is split as evenly as it " +
+          "goes into this many. Overrides team_size and leftovers.",
+      },
+      team_sizes: {
+        type: "array",
+        description:
+          "Only when she gives an exact layout (\"16 teams of 4 and 2 of 3\"). Must add up to the whole " +
+          "class. Overrides team_size, team_count and leftovers.",
+        items: {
+          type: "object",
+          properties: {
+            size: { type: "integer", description: "Students on each of these teams." },
+            count: { type: "integer", description: "How many teams of that size." },
+          },
+          required: ["size", "count"],
+        },
+      },
       avoid_current_teammates: {
         type: "boolean",
         description: "True to keep apart anyone who is on the same team now (\"nobody works with the same person twice\").",
@@ -311,7 +342,12 @@ function importRow(v: unknown, i: number): ImportRow {
 }
 
 const MAX_TEAM_SIZE = 20;
+const MAX_TEAMS = 200;
 const MAX_COLUMN = 100;
+const LEFTOVERS: readonly Leftovers[] = ["smaller", "larger", "either"];
+
+const isCount = (v: unknown, min: number, max: number): v is number =>
+  typeof v === "number" && Number.isInteger(v) && v >= min && v <= max;
 
 function columnName(v: unknown, what: string): string {
   const c = text(v);
@@ -346,10 +382,30 @@ function parseForm(input: Obj): Proposal {
     }
     return { column: columnName(c.column, `cap ${i + 1}`), values: values.slice(0, 30), max: c.max };
   });
+  if (input.leftovers !== undefined && input.leftovers !== null && !LEFTOVERS.includes(input.leftovers as Leftovers)) {
+    refuse(`"${String(input.leftovers)}" is not a way to size the leftover teams`);
+  }
+  const leftovers: Leftovers = (input.leftovers as Leftovers | undefined | null) ?? "either";
+  let teamCount: number | null = null;
+  if (input.team_count !== undefined && input.team_count !== null) {
+    if (!isCount(input.team_count, 1, MAX_TEAMS)) refuse(`${String(input.team_count)} teams is not a number of teams`);
+    teamCount = input.team_count;
+  }
+  // A team of one is allowed here and nowhere else: in a layout she wrote out
+  // herself it is a decision (a student working alone), not an accident.
+  const layout = list(input.team_sizes, "team_sizes", true).map((g, i) => {
+    if (!isObj(g)) refuse(`team size ${i + 1} is not an object`);
+    if (!isCount(g.size, 1, MAX_TEAM_SIZE)) refuse(`team size ${i + 1} is not a size the app can make`);
+    if (!isCount(g.count, 1, MAX_TEAMS)) refuse(`team size ${i + 1} has no count of teams`);
+    return { size: g.size, count: g.count };
+  });
   return {
     kind: "form",
     summary,
     teamSize: size,
+    leftovers,
+    teamCount,
+    layout: layout.slice(0, 10),
     avoidCurrent: input.avoid_current_teammates === true,
     avoidColumns: columns(input.avoid_together_columns, "avoid column"),
     nameColumns: columns(input.name_columns, "name column").slice(0, 3),

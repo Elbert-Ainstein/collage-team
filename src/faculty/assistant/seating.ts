@@ -18,7 +18,15 @@
 // the part left out is exactly the one the model got wrong.
 
 import type { SeatProposal } from "@/assistant/types";
-import { createTeam, moveStudents, renameTeam } from "@/checkins/data";
+import {
+  createTeam,
+  createTeamSet,
+  freshSetName,
+  listTeamSets,
+  moveStudents,
+  renameTeam,
+  setCurrentTeamSet,
+} from "@/checkins/data";
 import { targetSet } from "@/checkins/teamImport";
 import type { TeamChangeRecord } from "@/checkins/teamUndo";
 import type { Student, TeamWithMembers } from "@/checkins/types";
@@ -249,6 +257,46 @@ function describe(
     unresolved: proposal.unresolved,
     // Once each: three moves to the same missing team are one problem.
     problems: [...new Set(ctx.problems)],
+  };
+}
+
+/**
+ * A whole new arrangement, written as a NEW team set the class is then moved
+ * onto — what "make new teams" means. The set in use stays exactly as it was:
+ * its rows, its members, and every check-in, hand-in, photo and recording
+ * filed against them. Moving students between those rows instead is what
+ * handed Kelly's earlier weeks to her new teams.
+ *
+ * Created, filled, THEN made current: a set that fails halfway is never the
+ * one students are looking at.
+ */
+export async function applyNewSet(
+  courseId: string,
+  input: { size: number; previousSetId: string | null; groups: { name: string; studentIds: string[] }[] },
+): Promise<SeatOutcome & { setName: string }> {
+  const name = freshSetName(await listTeamSets(courseId));
+  const set = await createTeamSet({ courseId, activityId: null, name, teamSize: input.size });
+  const created: SeatRecord["created"] = [];
+  let moved = 0;
+  for (const [i, g] of input.groups.entries()) {
+    const team = await createTeam(set.id, g.name, i);
+    // Into this set only: nobody is taken off a team in the old one.
+    await moveStudents(g.studentIds, team.id, []);
+    created.push({ teamId: team.id, name: g.name });
+    moved += g.studentIds.length;
+  }
+  await setCurrentTeamSet(courseId, set.id);
+  return {
+    moved,
+    created: created.length,
+    renamed: 0,
+    setName: name,
+    record: {
+      moved: [],
+      created,
+      renamed: [],
+      newSet: { courseId, setId: set.id, name, previousSetId: input.previousSetId },
+    },
   };
 }
 

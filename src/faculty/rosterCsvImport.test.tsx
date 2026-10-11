@@ -68,7 +68,11 @@ const removeStudentWithStorage = vi.fn(async (id: string) => {
   db.members = db.members.filter((m) => m.student_id !== id);
 });
 
-vi.mock("@/checkins/data", () => ({
+vi.mock("@/checkins/data", async (importOriginal) => ({
+  currentSetOf: (await importOriginal<typeof import("@/checkins/data")>()).currentSetOf,
+  currentSetIdOf: vi.fn(async () => null),
+  deleteTeamSet: vi.fn(async () => undefined),
+  setCurrentTeamSet: vi.fn(async () => undefined),
   addStudents,
   createTeam,
   createTeamSet,

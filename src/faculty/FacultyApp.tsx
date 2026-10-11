@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
 import {
+  currentSetOf,
   ensureSessions,
   renameCourse,
   listCourses,
@@ -20,6 +21,7 @@ import {
   listTeamSets,
   listTeams,
 } from "@/checkins/data";
+import { frozenTeams, listRosters, listTeamsByIds, teamsForActivity, teamsOf } from "@/checkins/rosters";
 import type {
   Activity,
   CheckIn,
@@ -163,7 +165,17 @@ export interface FacultyData {
    * app did. A screen that shows somebody's words fetches that one submission.
    */
   results: ResultRow[];
+  /** The set the class is using now — see currentSetOf. */
   teams: TeamWithMembers[];
+  /** Which set `teams` is. Null when the course has none. Optional for hand-built data. */
+  teamSetId?: string | null;
+  /**
+   * Each activity's teams as they were when its work was recorded (0045), for
+   * the activities that have any. Read through teamsOf(), never directly: an
+   * activity missing from here follows `teams`. Optional so a hand-built
+   * FacultyData without it means "nothing frozen".
+   */
+  frozenTeams?: Map<string, TeamWithMembers[]>;
   tfs: CourseTF[];
   /**
    * The course instructor's name, when it can be read (0042), for the check-in
@@ -552,17 +564,15 @@ export function FacultyApp({
       ]);
       const course = allCourses.find((c) => c.id === courseId) ?? known;
 
-      // The gradebook needs ONE set of teams. Our team sets are per-activity, so
-      // prefer a course-wide set and fall back to the most recent — the design
-      // assumes a single stable roster of teams and this is the closest honest
-      // reading of it.
-      const set = sets.find((s) => s.activity_id == null) ?? sets[sets.length - 1] ?? null;
+      // The set the class is using now. The course names it (0045); before
+      // that, the first whole-session set, else the newest — see currentSetOf.
+      const set = currentSetOf(course, sets);
 
       // Only results genuinely waits on check-ins, so that pair stays chained
       // inside its own branch; questions and teams need nothing the first wave
       // did not already return. These used to run one after another, four round
       // trips deep, and every write in the app paid for all four.
-      const [[checkIns, results], questions, teams] = await Promise.all([
+      const [[checkIns, results], questions, teams, rosters] = await Promise.all([
         (async (): Promise<[CheckIn[], ResultRow[]]> => {
           const cs = activities.length ? await listCheckIns(activities.map((a) => a.id)) : [];
           const rs = cs.length ? await listResults(cs.map((c) => c.id)) : [];
@@ -575,11 +585,20 @@ export function FacultyApp({
           ? listQuestionsFor(activities.map((a) => a.id))
           : Promise.resolve([] as PointedQuestion[]),
         set ? listTeams(set.id, roster) : Promise.resolve([] as TeamWithMembers[]),
+        // Who was on which team for each activity that has anything recorded.
+        listRosters(activities.map((a) => a.id)),
       ]);
+      // A frozen team from an earlier set is not among today's rows; its name
+      // and position are one more read, only when there is such a team.
+      const todays = new Set(teams.map((t) => t.id));
+      const older = await listTeamsByIds(
+        [...new Set(rosters.map((r) => r.team_id))].filter((id) => !todays.has(id)),
+      );
+      const frozen = frozenTeams(rosters, [...teams, ...older], roster);
 
       const stats = new Map<string, ActivityStat>();
       for (const a of activities) {
-        stats.set(a.id, statFor(a, checkIns, results, roster, teams));
+        stats.set(a.id, statFor(a, checkIns, results, roster, teamsForActivity(frozen, a.id, teams)));
       }
 
       setData({
@@ -591,6 +610,8 @@ export function FacultyApp({
         checkIns,
         results,
         teams,
+        teamSetId: set?.id ?? null,
+        frozenTeams: frozen,
         tfs,
         instructor,
         stats,
@@ -636,7 +657,7 @@ export function FacultyApp({
     const results = checkIns.length ? await listResults(checkIns.map((c) => c.id)) : [];
     const stats = new Map<string, ActivityStat>();
     for (const a of cur.activities) {
-      stats.set(a.id, statFor(a, checkIns, results, cur.roster, cur.teams));
+      stats.set(a.id, statFor(a, checkIns, results, cur.roster, teamsOf(cur, a.id)));
     }
     setData((d) => (d ? { ...d, checkIns, results, stats } : d));
   }, []);
@@ -806,7 +827,12 @@ export function FacultyApp({
     switch (screen) {
       case "checkin":
         return data.can.runCheckIns ? (
-          <CheckInScreen data={data} selId={selId} onOpen={pickActivity} />
+          <CheckInScreen
+            data={data}
+            selId={selId}
+            onOpen={pickActivity}
+            onChanged={() => refresh().catch(fail)}
+          />
         ) : null;
       case "review":
         return data.can.release ? (

@@ -1040,8 +1040,10 @@ function LiveGrading({
   members: Student[];
   loading: boolean;
 }) {
+  // A presenter who is not on the team today — the activity was run with the
+  // team as it was then — is still somebody who presented, not "Not recorded".
   const nameOf = (id: string | null) =>
-    (id && members.find((m) => m.id === id)?.name) || "Not recorded";
+    id ? (members.find((m) => m.id === id)?.name ?? "A teammate") : "Not recorded";
 
   // A row exists as soon as anything is touched, so "has a row" is not the
   // question — an all-null row means the instructor opened the sheet, nothing
@@ -1224,7 +1226,9 @@ function AssignmentDetail({
   // activity's row.
   const [made, setMade] = useState<{ checkInId: string; resultId: string } | null>(null);
   const teamCheckInId = a.teamCheckIn?.id ?? null;
-  const teamId = enrolment.team?.id ?? null;
+  // The team this activity's team half belongs to — the one they were on when
+  // it was marked, which after a re-form is not their team today (0045).
+  const teamId = a.teamId ?? enrolment.team?.id ?? null;
   const teamResultId =
     a.teamResult?.id ?? (made && made.checkInId === teamCheckInId ? made.resultId : null);
 

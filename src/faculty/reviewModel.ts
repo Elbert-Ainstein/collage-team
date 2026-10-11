@@ -10,6 +10,7 @@
 import type { Activity, CheckIn, CourseWeek } from "@/checkins/types";
 import { isCompletionMet } from "@/checkins/studentData";
 import type { ResultRow } from "@/checkins/data";
+import { allTeamsOf } from "@/checkins/rosters";
 import type { FacultyData } from "./FacultyApp";
 import { comboTotal, pointsTotal } from "./model";
 
@@ -88,7 +89,10 @@ export function reviewGroups(data: FacultyData): ReviewGroup[] {
   const checkInById = new Map(data.checkIns.map((c) => [c.id, c]));
   const activityById = new Map(data.activities.map((a) => [a.id, a]));
   const studentById = new Map(data.roster.map((s) => [s.id, s]));
-  const teamById = new Map(data.teams.map((t) => [t.id, t]));
+  // Today's teams, and every team an earlier activity was frozen with (0045):
+  // a hand-in from a team of an earlier set is still waiting on somebody, and
+  // dropping it here for not being on today's list would hide it.
+  const teamById = new Map(allTeamsOf(data).map((t) => [t.id, t]));
 
   for (const r of data.results) {
     if (r.status !== "needs_review" && r.status !== "scored") continue;

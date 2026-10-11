@@ -111,6 +111,18 @@ export interface FormProposal {
   kind: "form";
   summary: string;
   teamSize: number;
+  /**
+   * When the class does not divide by teamSize: make the odd teams one SMALLER
+   * (teams of 4 and a few of 3), one LARGER (a few of 5), or EITHER — whichever
+   * mixes the rules better. Kelly asked for 4s with the leftovers in 3s, and
+   * "either" kept choosing 5s because a team of 3 is harder to mix; it is her
+   * call, not the optimiser's.
+   */
+  leftovers: Leftovers;
+  /** "Make 20 teams": the class split as evenly as it goes. Overrides teamSize. */
+  teamCount: number | null;
+  /** An exact layout — 16 of 4 and 2 of 3. Overrides both. Empty when not given. */
+  layout: { size: number; count: number }[];
   /** Keep apart anyone on the same team now. */
   avoidCurrent: boolean;
   /** Keep apart anyone sharing a value in these columns (earlier teams in the file). */
@@ -126,6 +138,8 @@ export interface FormProposal {
   /** Rules she gave that these settings cannot express, said out loud. */
   notApplied: string[];
 }
+
+export type Leftovers = "smaller" | "larger" | "either";
 
 /** The attached file is a class list: open it in the Teams importer as it is. */
 export interface FileImportProposal {

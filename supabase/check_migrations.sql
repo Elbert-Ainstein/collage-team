@@ -248,6 +248,21 @@ select '0044 hand-ins close at the deadline',
                  and tgrelid = 'public.check_in_results'::regclass)
             then 'applied'
             else 'NOT APPLIED — run 0044_hand_in_deadline.sql' end
+union all
+-- The table AND the freeze. Without the trigger the table only ever holds the
+-- backfill, and every activity marked after it goes on following the teams.
+select '0045 activities keep their teams',
+       case when to_regclass('public.activity_rosters') is not null
+             and exists (
+              select 1 from pg_trigger
+               where tgname = 'trg_freeze_on_mark'
+                 and tgrelid = 'public.tutorial_marks'::regclass)
+             and exists (
+              select 1 from information_schema.columns
+               where table_schema = 'public' and table_name = 'courses'
+                 and column_name = 'current_team_set_id')
+            then 'applied'
+            else 'NOT APPLIED — run 0045_activity_rosters.sql' end
 order by 1;
 
 -- ------------------------------------------------------- and the buckets

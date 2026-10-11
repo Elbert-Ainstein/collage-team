@@ -46,6 +46,7 @@ import { COMBO_TEMPLATE } from "./comboRubric";
 import { pointsLabel, nextPositionIn, pointsTotal, questionCount, questionsFor, statFor } from "./model";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { FAvatar, FIcon } from "./icons";
+import { teamsOf } from "@/checkins/rosters";
 import { linkToActivity } from "./FacultyApp";
 import type { FacultyData, GradeFocus } from "./FacultyApp";
 import { ActivityTeamPanel } from "./ActivityTeamPanel";
@@ -733,7 +734,7 @@ export function ActivityDetail(props: {
   // "Grade now". One object, never recomputed here.
   const stat =
     data.stats.get(activity.id) ??
-    statFor(activity, data.checkIns, data.results, data.roster, data.teams);
+    statFor(activity, data.checkIns, data.results, data.roster, teamsOf(data, activity.id));
 
   const weekLine = useMemo(() => {
     if (activity.week == null) return "Unscheduled";
@@ -808,7 +809,7 @@ export function ActivityDetail(props: {
 
     const people: Subject[] =
       kind === "team"
-        ? data.teams.map((t) => ({
+        ? teamsOf(data, activity.id).map((t) => ({
             id: t.id,
             name: t.name,
             tint: tintFor(t.name),
@@ -871,7 +872,7 @@ export function ActivityDetail(props: {
       missing: outList,
       pileKind: kind,
     };
-  }, [data.checkIns, data.results, data.roster, data.teams, activity, scope]);
+  }, [data.checkIns, data.results, data.roster, data.teams, data.frozenTeams, activity, scope]);
 
   const [releasedOpen, setReleasedOpen] = useState(true);
   const [reviewOpen, setReviewOpen] = useState(true);
@@ -2219,7 +2220,7 @@ export function ActivityDetail(props: {
         {onTeamHalf ? (
           <ActivityTeamPanel
             activityId={activity.id}
-            teams={data.teams}
+            teams={teamsOf(data, activity.id)}
             onOpenCheckIn={onCheckIn}
           />
         ) : editing ? null : (

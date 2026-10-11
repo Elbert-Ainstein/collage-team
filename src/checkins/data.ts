@@ -497,6 +497,65 @@ export async function deleteTeamSet(id: string): Promise<void> {
   if (error) throw dbError(error);
 }
 
+/**
+ * The set the class is using now.
+ *
+ * The course says, once 0045 is in. Before it — or when the set it named has
+ * been deleted — the pick the faculty app has always made: the first
+ * whole-session set, else the newest. Faculty and student both go through
+ * here, so the two can never be looking at different sets.
+ */
+export function currentSetOf(
+  course: Pick<Course, "current_team_set_id">,
+  sets: TeamSet[],
+): TeamSet | null {
+  const chosen = course.current_team_set_id
+    ? sets.find((s) => s.id === course.current_team_set_id)
+    : undefined;
+  return chosen ?? sets.find((s) => s.activity_id == null) ?? sets[sets.length - 1] ?? null;
+}
+
+/**
+ * The course's chosen set id, read fresh — for a write path that must land on
+ * the set in use NOW, not the one a screen loaded earlier. Null on a database
+ * without 0045, where currentSetOf falls back on its own.
+ */
+export async function currentSetIdOf(courseId: string): Promise<string | null> {
+  const { data, error } = await db().from("courses").select("current_team_set_id").eq("id", courseId).limit(1);
+  if (error) return null;
+  return ((data as { current_team_set_id: string | null }[] | null)?.[0]?.current_team_set_id) ?? null;
+}
+
+/**
+ * A name for a new set that no set on the course already has: "New Set", then
+ * "New Set 2". Two pills both reading "New Set" is the confusion this name is
+ * meant to end.
+ */
+export function freshSetName(sets: Pick<TeamSet, "name">[], base = "New Set"): string {
+  const taken = new Set(sets.map((s) => (s.name ?? "").trim().toLowerCase()));
+  if (!taken.has(base.toLowerCase())) return base;
+  for (let n = 2; ; n++) if (!taken.has(`${base} ${n}`.toLowerCase())) return `${base} ${n}`;
+}
+
+/** Make this the set the class uses — the assistant, the check-in sheet, students. */
+export async function setCurrentTeamSet(courseId: string, setId: string): Promise<void> {
+  const { error } = await db().from("courses").update({ current_team_set_id: setId }).eq("id", courseId);
+  if (error) {
+    if (/current_team_set_id/.test(error.message)) {
+      throw new Error(
+        "Choosing which team set is in use needs supabase/migrations/0045_activity_rosters.sql — " +
+          "run it in the Supabase SQL editor.",
+      );
+    }
+    throw dbError(error);
+  }
+}
+
+export async function renameTeamSet(id: string, name: string): Promise<void> {
+  const { error } = await db().from("team_sets").update({ name }).eq("id", id);
+  if (error) throw dbError(error);
+}
+
 export async function setTeamSetLocked(id: string, locked: boolean): Promise<void> {
   const { error } = await db().from("team_sets").update({ locked }).eq("id", id);
   if (error) throw dbError(error);

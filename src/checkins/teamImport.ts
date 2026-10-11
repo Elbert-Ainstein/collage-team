@@ -55,7 +55,15 @@
 // deleting it costs everything filed against it, and that delete already has a
 // guard on the Form teams screen.
 
-import { createTeam, createTeamSet, listTeamSets, moveStudents, renameTeam } from "./data";
+import {
+  createTeam,
+  createTeamSet,
+  currentSetIdOf,
+  currentSetOf,
+  listTeamSets,
+  moveStudents,
+  renameTeam,
+} from "./data";
 import type { ParsedStudent } from "./rosterImport";
 import type { Student, TeamWithMembers } from "./types";
 
@@ -409,8 +417,11 @@ export function planTeamImport(input: {
  * this is exported; `size` only sizes a set created from nothing.
  */
 export async function targetSet(courseId: string, size: number): Promise<string> {
-  const sets = await listTeamSets(courseId);
-  const set = sets.find((s) => s.activity_id == null) ?? sets[sets.length - 1] ?? null;
+  // The set the class is using now — the one every screen shows. This used to
+  // be its own copy of the old pick (first whole-session set), which is how a
+  // set made with "+ New set" could be on screen while imports went elsewhere.
+  const [sets, chosen] = await Promise.all([listTeamSets(courseId), currentSetIdOf(courseId)]);
+  const set = currentSetOf({ current_team_set_id: chosen }, sets);
   if (set) return set.id;
   const made = await createTeamSet({
     courseId,

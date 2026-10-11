@@ -7,14 +7,19 @@
 // teamUndo.ts like every other change — nothing about forming teams needs a
 // write path of its own.
 //
-// WHERE THE NEW TEAMS LAND. On the team rows that already exist, in order, and
-// on new rows only for teams beyond them. A row a student moves onto keeps its
-// name and everything filed against it; a row left with nobody stays standing,
-// as the importer leaves it. Nothing is deleted.
+// WHERE THE NEW TEAMS LAND. In a NEW team set, when the class has teams in use
+// (`intoNewSet`): Team 1 to Team N, made fresh, and the class is moved onto
+// them by applyNewSet. The old set keeps its rows and members untouched, so
+// everything recorded on them stays with the people who were on them. Reusing
+// those rows instead — the old behaviour — re-credited every earlier week's
+// marks to whoever was moved onto them.
+//
+// Only when the set in use has nobody on it (a fresh "+ New set", a class not
+// yet teamed) do they land in it: on its rows, in order, then on new rows.
 
 import type { FormProposal, SeatProposal } from "@/assistant/types";
 import type { Student, TeamWithMembers } from "@/checkins/types";
-import { formTeams, present, type FormResult, type Person } from "./formTeams";
+import { formTeams, layoutTotal, present, type FormResult, type Person } from "./formTeams";
 import type { Refs } from "./snapshot";
 import { findColumn, findValue, joinRoster, valuesIn, type Table } from "./table";
 
@@ -26,6 +31,8 @@ export interface FormPlan {
   result: FormResult | null;
   /** Where each formed team lands: an existing row, or a new team by name. */
   targets: { name: string; teamId: string | null }[];
+  /** The teams go into a new set, which the class is moved onto. */
+  intoNewSet: boolean;
   /** The formed teams as a seat draft, refs being row ids (see `refs`). */
   proposal: SeatProposal;
   refs: Refs;
@@ -108,14 +115,20 @@ export function planForm(
   roster: Student[],
   teams: TeamWithMembers[],
   seed: number,
+  /**
+   * May a new set be made? Not on a database without 0045: there is no way to
+   * move the class onto it, and the teams would land somewhere nobody looks.
+   */
+  canMakeSet = false,
 ): FormPlan {
+  const intoNewSet = canMakeSet && teams.some((t) => t.members.length > 0);
   const refs: Refs = {
     students: new Map(roster.map((s) => [s.id, s.id])),
     teams: new Map(teams.map((t) => [t.id, t.id])),
   };
   const empty: SeatProposal = { kind: "seat", summary: p.summary, moves: [], renames: [], unresolved: [] };
   const { problems, cols } = resolve(p, table);
-  if (problems.length || !cols) return { problems, notes: [], result: null, targets: [], proposal: empty, refs };
+  if (problems.length || !cols) return { problems, notes: [], result: null, targets: [], intoNewSet, proposal: empty, refs };
 
   const notes: string[] = [];
   let people: Person[] = roster.map((s) => ({ id: s.id, values: {} }));
@@ -144,6 +157,24 @@ export function planForm(
     }
   }
 
+  // A layout she wrote out has to place exactly the class: the code will not
+  // invent a team for the difference, or leave somebody off one to fit.
+  if (p.layout.length && layoutTotal(p.layout) !== people.length) {
+    const total = layoutTotal(p.layout);
+    return {
+      problems: [
+        `Those team sizes place ${total} students, and the class has ${people.length}. ` +
+          `Ask again with sizes that add up to ${people.length}.`,
+      ],
+      notes,
+      result: null,
+      targets: [],
+      intoNewSet,
+      proposal: empty,
+      refs,
+    };
+  }
+
   const currentTeam = new Map<string, string>();
   for (const t of teams) for (const m of t.members) if (!currentTeam.has(m.id)) currentTeam.set(m.id, t.id);
   const result = formTeams({
@@ -152,6 +183,9 @@ export function planForm(
     seed,
     spec: {
       teamSize: p.teamSize,
+      leftovers: p.leftovers,
+      teamCount: p.teamCount,
+      layout: p.layout,
       avoidCurrent: p.avoidCurrent,
       avoidColumns: cols.avoid,
       noLone: cols.noLone,
@@ -159,7 +193,7 @@ export function planForm(
       balance: cols.balance,
     },
   });
-  const targets = targetsFor(result.teams.length, teams);
+  const targets = targetsFor(result.teams.length, intoNewSet ? [] : teams);
   const proposal: SeatProposal = {
     ...empty,
     moves: result.teams.flatMap((t, i) =>
@@ -170,5 +204,5 @@ export function planForm(
       })),
     ),
   };
-  return { problems: [], notes, result, targets, proposal, refs };
+  return { problems: [], notes, result, targets, intoNewSet, proposal, refs };
 }

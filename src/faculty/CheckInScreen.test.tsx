@@ -16,7 +16,7 @@ import type { TutorialMark, TutorialSheet } from "@/checkins/tutorial";
 import type { FacultyData } from "./FacultyApp";
 
 const getTutorialSheet = vi.fn(
-  async (): Promise<TutorialSheet> => ({ marks: [], absences: [], graders: [] }),
+  async (): Promise<TutorialSheet> => ({ marks: [], absences: [], graders: [], rosters: [] }),
 );
 const setTutorialMark = vi.fn(async (): Promise<TutorialMark> => ({}) as TutorialMark);
 const setTutorialGrader = vi.fn(async (): Promise<void> => undefined);
@@ -27,6 +27,12 @@ const watchTutorialSheet = vi.fn((_: string, onChange: () => void) => {
   return () => {
     liveChange = null;
   };
+});
+
+const refreezeRoster = vi.fn(async (): Promise<void> => undefined);
+vi.mock("@/checkins/rosters", async (importOriginal) => {
+  const real = await importOriginal<typeof import("@/checkins/rosters")>();
+  return { ...real, refreezeRoster };
 });
 
 vi.mock("@/checkins/tutorial", async (importOriginal) => {
@@ -101,7 +107,7 @@ let root: Root;
 
 beforeEach(() => {
   getTutorialSheet.mockReset();
-  getTutorialSheet.mockResolvedValue({ marks: [], absences: [], graders: [] });
+  getTutorialSheet.mockResolvedValue({ marks: [], absences: [], graders: [], rosters: [] });
   setTutorialMark.mockReset();
   setTutorialGrader.mockReset();
   watchTutorialSheet.mockClear();
@@ -270,6 +276,7 @@ describe("CheckInScreen", () => {
       }],
       absences: [],
       graders: [],
+      rosters: [],
     });
     getTutorialSheet.mockImplementationOnce(() => new Promise<TutorialSheet>(() => undefined));
     await mount();
@@ -370,6 +377,7 @@ describe("the Grading TF column", () => {
     getTutorialSheet.mockResolvedValue({
       marks: [],
       absences: [],
+      rosters: [],
       graders: [
         { activity_id: "a1", team_id: "t1", slot: 1, tf_id: "tf1", instructor: false },
         { activity_id: "a1", team_id: "t1", slot: 2, tf_id: null, instructor: true },
@@ -454,7 +462,7 @@ describe("the sheet is live", () => {
   it("another copy's write re-reads the sheet without blanking it", async () => {
     await mount(facultyData(), { start: "a1" });
     expect(getTutorialSheet).toHaveBeenCalledTimes(1);
-    getTutorialSheet.mockResolvedValueOnce({ marks: [mark(4)], absences: [], graders: [] });
+    getTutorialSheet.mockResolvedValueOnce({ marks: [mark(4)], absences: [], graders: [], rosters: [] });
     await act(async () => { liveChange!(); liveChange!(); liveChange!(); });
     await settle();
     // Three events, one re-read — and the mark Diego made is on Luke's sheet.
@@ -470,7 +478,7 @@ describe("the sheet is live", () => {
     await mount(facultyData(), { start: "a1" });
     await act(async () => { score(3).click(); });
     // A change arrives while the tap is still in flight...
-    getTutorialSheet.mockResolvedValue({ marks: [mark(3)], absences: [], graders: [] });
+    getTutorialSheet.mockResolvedValue({ marks: [mark(3)], absences: [], graders: [], rosters: [] });
     await act(async () => { liveChange!(); });
     await settle();
     // ...and nothing is re-read yet: the optimistic 3 stays put.
@@ -480,5 +488,63 @@ describe("the sheet is live", () => {
     // Once it lands, the deferred re-read runs.
     expect(getTutorialSheet).toHaveBeenCalledTimes(2);
     expect(score(3).getAttribute("aria-pressed")).toBe("true");
+  });
+});
+
+// 0045: the sheet shows the teams the activity was run with, not today's.
+describe("CheckInScreen · teams as they were", () => {
+  const roster = [student("s1", "Ada Lovelace"), student("s2", "Grace Hopper")];
+  /** Today: Ada on Team 1. When week 8 was marked: Grace was. */
+  const reformed = (): FacultyData =>
+    ({
+      ...facultyData(),
+      roster,
+      teams: [{ id: "t1", team_set_id: "set1", name: "Team 1", position: 0, members: [roster[0]] }],
+    }) as unknown as FacultyData;
+  const frozen = (at: string) => ({
+    marks: [],
+    absences: [],
+    graders: [],
+    rosters: [{ activity_id: "a1", team_id: "t1", student_id: "s2", frozen_at: at }],
+  });
+  const absentNames = () =>
+    Array.from(host.querySelectorAll(".fv-ckabs .fv-ellip")).map((e) => e.textContent);
+
+  beforeEach(() => refreezeRoster.mockReset());
+
+  it("lists the members frozen for the activity, and says so", async () => {
+    getTutorialSheet.mockResolvedValue(frozen("2026-09-01T10:00:00Z"));
+    await mount(reformed(), { start: "a1" });
+    expect(absentNames()).toEqual(["Grace Hopper"]);
+    expect(textOf()).toContain("These are the teams as they were for this activity");
+    expect(textOf()).toContain("Marks stay with the people who were in the room");
+    // Never offered a week later: that button would hand the marks over.
+    expect(textOf()).not.toContain("Use today's teams on this sheet");
+  });
+
+  it("follows today's teams on an activity nothing has been recorded on", async () => {
+    await mount(reformed(), { start: "a1" });
+    expect(absentNames()).toEqual(["Ada Lovelace"]);
+    expect(textOf()).not.toContain("as they were");
+  });
+
+  it("during the session, offers today's teams and re-freezes from the current set", async () => {
+    getTutorialSheet.mockResolvedValue(frozen(new Date(Date.now() - 30 * 60 * 1000).toISOString()));
+    await mount(reformed(), { start: "a1" });
+    expect(textOf()).toContain("Teams have changed since this sheet was started");
+    expect(textOf()).toContain("Grace Hopper, Ada Lovelace are on a different team now");
+    const button = Array.from(host.querySelectorAll("button")).find(
+      (b) => b.textContent === "Use today's teams on this sheet",
+    )!;
+    getTutorialSheet.mockResolvedValue({
+      ...frozen(new Date().toISOString()),
+      rosters: [{ activity_id: "a1", team_id: "t1", student_id: "s1", frozen_at: new Date().toISOString() }],
+    });
+    await act(async () => {
+      button.click();
+    });
+    expect(refreezeRoster).toHaveBeenCalledWith("a1", "set1");
+    expect(absentNames()).toEqual(["Ada Lovelace"]);
+    expect(textOf()).not.toContain("Teams have changed");
   });
 });

@@ -278,6 +278,9 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
                     table={e.table ?? null}
                     roster={data.roster}
                     teams={data.teams}
+                    currentSetId={data.teamSetId ?? data.teams[0]?.team_set_id ?? null}
+                    // The column is there — even when null — once 0045 is in.
+                    canMakeSet={"current_team_set_id" in data.course}
                     status={e.status ?? "open"}
                     outcome={e.outcome}
                     record={e.record}

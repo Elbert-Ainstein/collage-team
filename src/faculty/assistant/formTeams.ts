@@ -24,8 +24,12 @@
 //
 // TEAM SIZES. When the class does not divide evenly there are two honest
 // layouts — 74 in fours is 17 of 4 and 2 of 3, or 16 of 4 and 2 of 5 — and they
-// are not equal: a team of 3 cannot be mixed without leaving someone alone. Both
-// are searched and the better kept.
+// are not equal: a team of 3 cannot be mixed without leaving someone alone. By
+// default both are searched and the better kept. But that is the optimiser
+// choosing a team SIZE, and Kelly wanted the threes: asked for fours, she got
+// fives every time, because a three is harder to mix. So the instructor can say
+// which (`leftovers`), ask for a number of teams instead (`teamCount`), or write
+// the layout out whole (`layout`) — and then that is what gets made.
 //
 // The search is simulated annealing over swaps between teams — swaps keep the
 // sizes fixed — from a few seeded starts, then a greedy pass that takes every
@@ -47,6 +51,12 @@ export interface BalanceRule {
 
 export interface FormSpec {
   teamSize: number;
+  /** Odd teams one smaller, one larger, or whichever mixes better (the default). */
+  leftovers?: "smaller" | "larger" | "either";
+  /** This many teams, as even as the class divides. Overrides teamSize. */
+  teamCount?: number | null;
+  /** Exactly these teams. Overrides both — and must add up to the class. */
+  layout?: { size: number; count: number }[];
   /** Keep apart anyone on the same team right now. */
   avoidCurrent: boolean;
   /** Keep apart anyone sharing a non-blank value in any of these columns. */
@@ -333,15 +343,56 @@ const STARTS = 3;
  * The ways `n` can be split into teams of about `size`: one fewer team or one
  * more when it does not divide, sizes as even as possible either way.
  */
-export function sizeLayouts(n: number, size: number): number[][] {
+export function sizeLayouts(
+  n: number,
+  size: number,
+  leftovers: "smaller" | "larger" | "either" = "either",
+): number[][] {
   if (n <= 0) return [[]];
   const s = Math.max(1, size);
-  const counts = [...new Set([Math.floor(n / s), Math.ceil(n / s)])].filter((k) => k >= 1);
-  return counts.map((k) => {
-    const base = Math.floor(n / k);
-    const extra = n % k;
-    return Array.from({ length: k }, (_, i) => base + (i < extra ? 1 : 0));
-  });
+  // More teams makes the odd ones smaller; fewer makes them larger.
+  const want =
+    leftovers === "smaller" ? [Math.ceil(n / s)]
+    : leftovers === "larger" ? [Math.max(1, Math.floor(n / s))]
+    : [Math.floor(n / s), Math.ceil(n / s)];
+  return [...new Set(want)].filter((k) => k >= 1).map((k) => evenSplit(n, k));
+}
+
+/** `n` into `k` teams as even as it goes, the larger ones first. */
+function evenSplit(n: number, k: number): number[] {
+  const base = Math.floor(n / k);
+  const extra = n % k;
+  return Array.from({ length: k }, (_, i) => base + (i < extra ? 1 : 0));
+}
+
+/** How many students a written-out layout places. */
+export const layoutTotal = (layout: { size: number; count: number }[]) =>
+  layout.reduce((n, g) => n + g.size * g.count, 0);
+
+/**
+ * Every layout the search should try, from what the instructor asked for.
+ *
+ * A written-out layout that does not add up to the class is NOT made: there is
+ * no honest way to place the difference, and planForm refuses it by name
+ * before it gets here. Falling back keeps this function total.
+ */
+export function layoutsFor(n: number, spec: Pick<FormSpec, "teamSize" | "leftovers" | "teamCount" | "layout">): number[][] {
+  if (n <= 0) return [[]];
+  if (spec.layout?.length && layoutTotal(spec.layout) === n) {
+    return [spec.layout.flatMap((g) => Array<number>(g.count).fill(g.size)).sort((a, b) => b - a)];
+  }
+  if (spec.teamCount && spec.teamCount >= 1) return [evenSplit(n, Math.min(spec.teamCount, n))];
+  return sizeLayouts(n, spec.teamSize, spec.leftovers ?? "either");
+}
+
+/** "17 teams of 4 and 2 of 3". */
+export function sizesText(sizes: number[]): string {
+  const counts = new Map<number, number>();
+  for (const s of sizes) counts.set(s, (counts.get(s) ?? 0) + 1);
+  const parts = [...counts].sort((a, b) => b[0] - a[0]).map(([size, count], i) =>
+    i === 0 ? `${count} ${count === 1 ? "team" : "teams"} of ${size}` : `${count} of ${size}`,
+  );
+  return parts.length > 1 ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}` : parts[0] ?? "no teams";
 }
 
 /** How far a layout's sizes stray from the size asked for — the tie-breaker. */
@@ -357,7 +408,7 @@ export function formTeams(input: {
   const p = prepare(people, currentTeam, spec);
   let best: Arrangement | null = null;
   let bestStray = Infinity;
-  for (const sizes of sizeLayouts(people.length, spec.teamSize)) {
+  for (const sizes of layoutsFor(people.length, spec)) {
     for (let s = 0; s < STARTS; s++) {
       const found = search(p, sizes, rng((input.seed ?? 1) * 7919 + s + sizes.length * 104729));
       const d = stray(sizes, spec.teamSize);
@@ -431,7 +482,9 @@ function checks(
   conflicts: FormResult["conflicts"],
   labels: FormResult["labels"],
 ): Check[] {
-  const out: Check[] = [];
+  // The sizes first: it is what she asked for before any rule, and the one
+  // thing about a draft that is never a matter of the optimiser's judgement.
+  const out: Check[] = [{ ok: true, text: `Sizes: ${sizesText(teamsIdx.map((t) => t.length))}.` }];
   if (spec.avoidCurrent || spec.avoidColumns.length) {
     const who = [
       spec.avoidCurrent ? "a current teammate" : "",

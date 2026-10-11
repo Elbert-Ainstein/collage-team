@@ -19,9 +19,24 @@ const moveStudents = vi.fn(async () => undefined);
 const createTeamSet = vi.fn(async () => ({ id: "set-made" }));
 const listTeamSets = vi.fn(async () => [] as { id: string; activity_id: string | null }[]);
 
-vi.mock("@/checkins/data", () => ({ createTeam, renameTeam, moveStudents, createTeamSet, listTeamSets }));
+const setCurrentTeamSet = vi.fn(async () => undefined);
 
-const { applySeating, planSeating } = await import("./seating");
+vi.mock("@/checkins/data", async (importOriginal) => {
+  const { currentSetOf, freshSetName } = await importOriginal<typeof import("@/checkins/data")>();
+  return {
+    createTeam,
+    renameTeam,
+    moveStudents,
+    createTeamSet,
+    listTeamSets,
+    setCurrentTeamSet,
+    currentSetIdOf: vi.fn(async () => null),
+    currentSetOf,
+    freshSetName,
+  };
+});
+
+const { applyNewSet, applySeating, planSeating } = await import("./seating");
 
 const refs = {
   students: new Map([
@@ -192,5 +207,50 @@ describe("applySeating", () => {
     await expect(applySeating("c1", s)).rejects.toThrow();
     expect(moveStudents).not.toHaveBeenCalled();
     expect(renameTeam).not.toHaveBeenCalled();
+  });
+});
+
+// "Make new teams" lands in a new set the class is moved onto; the set in use
+// is not touched, so what is recorded on it stays with the people on it.
+describe("applyNewSet", () => {
+  beforeEach(() => {
+    createTeam.mockClear();
+    moveStudents.mockClear();
+    createTeamSet.mockClear();
+    setCurrentTeamSet.mockClear();
+    listTeamSets.mockResolvedValue([]);
+  });
+
+  it("makes a set called New Set, fills it, and only then moves the class onto it", async () => {
+    const order: string[] = [];
+    createTeam.mockImplementation(async (_set: string, name: string, position: number) => {
+      order.push(`team ${name}`);
+      return { id: `new-${name}`, team_set_id: "set-made", name, position, created_at: "" };
+    });
+    setCurrentTeamSet.mockImplementation(async () => {
+      order.push("current");
+    });
+    const out = await applyNewSet("c1", {
+      size: 2,
+      previousSetId: "set1",
+      groups: [
+        { name: "Team 1", studentIds: [ada.id, kj.id] },
+        { name: "Team 2", studentIds: [alan.id, grace.id] },
+      ],
+    });
+    expect(createTeamSet).toHaveBeenCalledWith({ courseId: "c1", activityId: null, name: "New Set", teamSize: 2 });
+    // Into the new teams only: nobody is taken off their team in the old set.
+    expect(moveStudents).toHaveBeenCalledWith([ada.id, kj.id], "new-Team 1", []);
+    expect(moveStudents).toHaveBeenCalledWith([alan.id, grace.id], "new-Team 2", []);
+    expect(order).toEqual(["team Team 1", "team Team 2", "current"]);
+    expect(setCurrentTeamSet).toHaveBeenCalledWith("c1", "set-made");
+    expect(out.record.newSet).toEqual({ courseId: "c1", setId: "set-made", name: "New Set", previousSetId: "set1" });
+    expect(out.record.moved).toEqual([]);
+  });
+
+  it("does not make a second set called New Set", async () => {
+    listTeamSets.mockResolvedValue([{ id: "x", activity_id: null, name: "New Set" } as never]);
+    const out = await applyNewSet("c1", { size: 4, previousSetId: null, groups: [] });
+    expect(out.setName).toBe("New Set 2");
   });
 });

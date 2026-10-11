@@ -18,7 +18,15 @@
 // those on it either, counted at the moment of the undo. A count that cannot be
 // made keeps the team: guessing "nothing to lose" is the one wrong answer.
 
-import { countOneTeamMarks, countOneTeamResults, deleteTeam, moveStudents, renameTeam } from "./data";
+import {
+  countOneTeamMarks,
+  countOneTeamResults,
+  deleteTeam,
+  deleteTeamSet,
+  moveStudents,
+  renameTeam,
+  setCurrentTeamSet,
+} from "./data";
 import { countResourcesForTeams } from "./resources";
 import type { Student, TeamWithMembers } from "./types";
 
@@ -30,6 +38,13 @@ export interface TeamChangeRecord {
   created: { teamId: string; name: string }[];
   /** Teams it renamed: the name before, and the name it gave. */
   renamed: { teamId: string; from: string; to: string }[];
+  /**
+   * The change was a whole new team SET that the class was moved onto — the
+   * assistant's "make new teams" — rather than moves within the current one.
+   * Undo is then: put the class back on the set it was on, and remove the new
+   * one while nothing has been recorded on it.
+   */
+  newSet?: { courseId: string; setId: string; name: string; previousSetId: string | null };
 }
 
 export interface TeamUndoPlan {
@@ -127,6 +142,36 @@ async function bare(teamId: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Undo a new set: switch the class back, then delete the set if it is bare.
+ *
+ * Switching back comes first and always happens — that is the undo she asked
+ * for. The delete is the part that could cost something, so it is checked team
+ * by team, and a set with anything recorded on it stays (out of use) with a
+ * sentence saying why.
+ */
+export async function undoNewSet(record: TeamChangeRecord): Promise<TeamUndoOutcome & { switchedBack: boolean }> {
+  const ns = record.newSet;
+  if (!ns) throw new Error("This change did not make a new team set.");
+  if (ns.previousSetId) await setCurrentTeamSet(ns.courseId, ns.previousSetId);
+  const recorded: string[] = [];
+  for (const t of record.created) if (!(await bare(t.teamId))) recorded.push(t.name);
+  if (recorded.length) {
+    return {
+      restored: 0,
+      renamedBack: 0,
+      removed: 0,
+      switchedBack: Boolean(ns.previousSetId),
+      notes: [
+        `Something has been recorded on ${recorded.join(", ")} since, so "${ns.name}" was kept — ` +
+          "no longer in use. Delete it on Teams if you do not need it.",
+      ],
+    };
+  }
+  await deleteTeamSet(ns.setId);
+  return { restored: 0, renamedBack: 0, removed: record.created.length, switchedBack: Boolean(ns.previousSetId), notes: [] };
 }
 
 /** Put students back, then names, then remove the new teams that are empty and bare. */
