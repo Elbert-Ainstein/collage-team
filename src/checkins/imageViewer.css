@@ -1,0 +1,170 @@
+/* The full-screen image viewer (ImageViewer.tsx), styled after Google Drive's
+   file preview: near-black backdrop, a bar along the top, arrows at the sides,
+   zoom along the bottom. Dark in both themes, like Drive's. */
+.iv {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  background: rgba(10, 12, 16, 0.94);
+  color: #f1f3f4;
+  font-family: inherit;
+}
+.iv-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 56px;
+  padding: 0 12px;
+  background: linear-gradient(rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0));
+}
+.iv-kind {
+  display: inline-flex;
+  color: #8ab4f8;
+}
+.iv-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 500;
+}
+.iv-count {
+  flex: none;
+  font-size: 13px;
+  color: #bdc1c6;
+}
+.iv-spacer {
+  flex: 1;
+}
+.iv-btn {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-decoration: none;
+}
+.iv-btn:hover:not(:disabled),
+.iv-btn:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+  outline: none;
+}
+.iv-btn:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+.iv-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 72px 72px;
+  overflow: hidden;
+}
+.iv-stage.zoomed {
+  display: block;
+  overflow: auto;
+  text-align: center;
+  padding: 8px 16px 72px;
+}
+.iv-img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  margin: 0 auto;
+  border-radius: 2px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
+  user-select: none;
+}
+.iv-stage:not(.zoomed) .iv-img {
+  cursor: zoom-in;
+}
+.iv-stage.zoomed .iv-img {
+  cursor: zoom-out;
+}
+.iv-missing {
+  font-size: 14px;
+  color: #bdc1c6;
+}
+.iv-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: rgba(32, 33, 36, 0.8);
+  color: #f1f3f4;
+  cursor: pointer;
+}
+.iv-nav:hover,
+.iv-nav:focus-visible {
+  background: rgba(60, 64, 67, 0.95);
+  outline: none;
+}
+.iv-nav.prev {
+  left: 12px;
+}
+.iv-nav.next {
+  right: 12px;
+}
+.iv-zoom {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(32, 33, 36, 0.9);
+}
+.iv-pct {
+  min-width: 56px;
+  height: 32px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.iv-pct:hover,
+.iv-pct:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+  outline: none;
+}
+
+@media (max-width: 600px) {
+  .iv-stage {
+    padding: 8px 8px 72px;
+  }
+  .iv-nav {
+    top: auto;
+    bottom: 12px;
+    transform: none;
+    width: 40px;
+    height: 40px;
+  }
+}

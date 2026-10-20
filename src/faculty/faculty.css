@@ -2603,3 +2603,89 @@ button.fv-person-open:focus-visible {
   background: var(--fv-cream-300);
   outline: none;
 }
+
+/* ---------------------------------------------- images on a grading comment */
+.fv-cimg {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 8px;
+}
+.fv-cimg-note {
+  margin-top: 8px;
+  font-size: var(--fv-2xs);
+  line-height: 1.5;
+}
+.fv-cimg-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 6px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fv-cimg-thumb {
+  position: relative;
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--fv-neutral-200);
+  border-radius: var(--fv-r-md);
+  background: var(--fv-cream-200);
+  font-size: var(--fv-2xs);
+}
+.fv-cimg-thumb.pending {
+  border-style: dashed;
+  padding: 4px;
+  text-align: center;
+}
+.fv-cimg-thumb.pending .fv-sub {
+  font-size: var(--fv-2xs);
+}
+.fv-cimg-open {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: zoom-in;
+}
+.fv-cimg-open:focus-visible {
+  outline: 2px solid var(--fv-navy-700);
+  outline-offset: -2px;
+}
+.fv-cimg-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.fv-cimg-x {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: rgba(0, 31, 63, 0.72);
+  color: var(--fv-cream-100);
+  cursor: pointer;
+}
+.fv-cimg-x:hover,
+.fv-cimg-x:focus-visible {
+  background: var(--fv-navy);
+}
+.fv-ccard.dropping {
+  outline: 2px dashed var(--fv-navy-700);
+  outline-offset: 2px;
+}

@@ -263,6 +263,12 @@ select '0045 activities keep their teams',
                  and column_name = 'current_team_set_id')
             then 'applied'
             else 'NOT APPLIED — run 0045_activity_rosters.sql' end
+union all
+select '0046 feedback images',
+       case when to_regclass('public.feedback_images') is not null
+             and exists (select 1 from storage.buckets where id = 'feedback')
+            then 'applied'
+            else 'NOT APPLIED — run 0046_feedback_images.sql' end
 order by 1;
 
 -- ------------------------------------------------------- and the buckets
@@ -278,5 +284,5 @@ select id as bucket,
        round(file_size_limit / 1024.0 / 1024.0)::text || ' MB' as per_file_limit,
        array_to_string(allowed_mime_types, ', ') as accepts
   from storage.buckets
- where id in ('recordings', 'submissions', 'resources', 'activity-files')
+ where id in ('recordings', 'submissions', 'resources', 'activity-files', 'feedback')
  order by id;

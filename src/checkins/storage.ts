@@ -27,7 +27,7 @@
 import { requireSupabase } from "@/lib/supabaseClient";
 
 /** Every bucket this app owns. Named here so the set is knowable from one place. */
-export type Bucket = "recordings" | "submissions" | "resources" | "activity-files";
+export type Bucket = "recordings" | "submissions" | "resources" | "activity-files" | "feedback";
 
 /** How long a signed link lives. Long enough to use, short enough that a copied one dies. */
 export const SIGNED_SECONDS = 60 * 60;
@@ -146,11 +146,12 @@ export async function signedUrl(
   bucket: Bucket,
   path: string,
   seconds = SIGNED_SECONDS,
-  download = false,
+  /** True saves under the object's name; a string saves under that name. */
+  download: boolean | string = false,
 ): Promise<{ url: string | null; error: StorageFailure | null }> {
   const res = await db()
     .storage.from(bucket)
-    .createSignedUrl(path, seconds, download ? { download: true } : undefined);
+    .createSignedUrl(path, seconds, download ? { download } : undefined);
   if (res.error) return { url: null, error: { message: res.error.message } };
   return { url: res.data?.signedUrl ?? null, error: null };
 }

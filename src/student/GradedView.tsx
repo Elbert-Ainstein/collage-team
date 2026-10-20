@@ -10,7 +10,7 @@
 // locked then anyway, and what the student comes back for is not the upload
 // flow but "what did I get, and why, next to what I wrote".
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Assignment, Enrolment } from "@/checkins/studentData";
 import { listMyMarks, listMyQuestions, listMyRubric } from "@/checkins/studentData";
 import { getSubmissionFile, listSubmissionPages, submissionUrl } from "@/checkins/submissions";
@@ -19,6 +19,7 @@ import type { PointedQuestion } from "@/faculty/model";
 import { gradedQuestions, type GradedQuestion } from "./gradedRubric";
 import { renderPdfPages } from "./pdfPages";
 import { SIcon } from "./icons";
+import { FeedbackImageGrid, useReleasedFeedbackImages } from "./FeedbackImages";
 
 const BACK_HIT = { padding: "14px 0", margin: "-14px 0" };
 
@@ -95,6 +96,7 @@ export function GradedView({
       title={activity.title}
       grade={assignment.grade}
       feedback={result?.status === "scored" ? (result.feedback?.trim() ?? null) : null}
+      feedbackImages={<ReleasedImages resultId={result?.id} released={result?.status === "scored"} />}
       questions={graded}
       pages={pages}
       pagesError={pagesError}
@@ -112,6 +114,7 @@ export function GradedWork({
   title,
   grade,
   feedback,
+  feedbackImages = null,
   questions,
   pages,
   pagesError,
@@ -121,6 +124,8 @@ export function GradedWork({
   title: string;
   grade: string;
   feedback: string | null;
+  /** The images attached to the comment, rendered under it. */
+  feedbackImages?: ReactNode;
   questions: GradedQuestion[];
   /** Rendered page images, or null while they render. */
   pages: string[] | null;
@@ -228,6 +233,7 @@ export function GradedWork({
                   {feedback}
                 </p>
               ) : null}
+              {feedbackImages}
             </div>
 
             {questions.map((q) => {
@@ -300,4 +306,15 @@ export function GradedWork({
       </div>
     </section>
   );
+}
+
+/** The comment's images, once released (0046). Its own component so the hook sits beside its gate. */
+function ReleasedImages({
+  resultId,
+  released,
+}: {
+  resultId: string | undefined;
+  released: boolean;
+}): JSX.Element {
+  return <FeedbackImageGrid state={useReleasedFeedbackImages(resultId, released)} />;
 }
