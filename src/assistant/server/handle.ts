@@ -34,12 +34,12 @@ export interface HandlerResult {
 
 const refuse = (status: number, error: string): HandlerResult => ({ status, body: { ok: false, error } });
 
-function bearer(header: string | null): string | null {
+export function bearer(header: string | null): string | null {
   const m = /^Bearer\s+(\S+)$/i.exec(header ?? "");
   return m ? m[1] : null;
 }
 
-function wait(seconds: number): string {
+export function wait(seconds: number): string {
   if (seconds < 60) return `${seconds} seconds`;
   const minutes = Math.ceil(seconds / 60);
   return `${minutes} minute${minutes === 1 ? "" : "s"}`;

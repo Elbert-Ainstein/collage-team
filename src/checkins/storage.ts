@@ -27,7 +27,7 @@
 import { requireSupabase } from "@/lib/supabaseClient";
 
 /** Every bucket this app owns. Named here so the set is knowable from one place. */
-export type Bucket = "recordings" | "submissions" | "resources" | "activity-files" | "feedback";
+export type Bucket = "recordings" | "submissions" | "resources" | "activity-files" | "feedback" | "imports";
 
 /** How long a signed link lives. Long enough to use, short enough that a copied one dies. */
 export const SIGNED_SECONDS = 60 * 60;

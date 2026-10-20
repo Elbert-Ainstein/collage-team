@@ -9,7 +9,7 @@
 // where it would end up in every log line that prints one.
 
 import type { ToolSpec } from "../tools";
-import { ModelError, type Model, type ModelCall, type ModelResult } from "./model";
+import { ModelError, type Model, type ModelCall, type ModelResult, type ModelTurn } from "./model";
 
 const ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models";
 /** Inside the route's ceiling with room for one retry — see the route's maxDuration. */
@@ -41,12 +41,22 @@ export function toGeminiSchema(s: unknown): unknown {
 
 const declaration = (t: ToolSpec) => ({ name: t.name, description: t.description, parameters: toGeminiSchema(t.schema) });
 
+/**
+ * One turn's parts. A file goes first, as inline data — Google's guidance is
+ * the document before the words that ask about it.
+ */
+function parts(t: ModelTurn) {
+  const words = { text: t.text };
+  return t.file ? [{ inlineData: { mimeType: t.file.mimeType, data: t.file.data } }, words] : [words];
+}
+
 export function geminiRequest(call: ModelCall) {
   return {
     systemInstruction: { parts: [{ text: call.system }] },
-    contents: call.turns.map((t) => ({ role: t.role === "assistant" ? "model" : "user", parts: [{ text: t.text }] })),
+    contents: call.turns.map((t) => ({ role: t.role === "assistant" ? "model" : "user", parts: parts(t) })),
     tools: [{ functionDeclarations: call.tools.map(declaration) }],
-    toolConfig: { functionCallingConfig: { mode: "AUTO" } },
+    // "ANY" makes Gemini call one of the tools it was given.
+    toolConfig: { functionCallingConfig: { mode: call.requireTool ? "ANY" : "AUTO" } },
     generationConfig: { maxOutputTokens: MAX_OUTPUT_TOKENS },
   };
 }
