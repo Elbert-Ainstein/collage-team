@@ -40,6 +40,20 @@ vi.mock("./facultyData", () => ({
 vi.mock("./SubmissionPages", () => ({ SubmissionPages: () => <div>PAGES</div> }));
 vi.mock("./ActivityTeamPanel", () => ({ ActivityTeamPanel: () => <div>TEAM PANEL</div> }));
 
+// Images on the comment have their own tests (commentImages.test.tsx).
+vi.mock("@/checkins/useFeedbackImages", () => ({
+  useFeedbackImages: () => ({
+    images: [],
+    urls: new Map(),
+    uploading: 0,
+    unavailable: null,
+    loaded: true,
+    attach: async () => undefined,
+    remove: async () => undefined,
+  }),
+  imageFilesOf: () => [],
+}));
+
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const { GradingScreen } = await import("./GradingScreen");

@@ -55,6 +55,9 @@ import { FAvatar, FIcon } from "./icons";
 import { ActivityTeamPanel } from "./ActivityTeamPanel";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { SubmissionPages } from "./SubmissionPages";
+import { CommentImages } from "./CommentImages";
+import { imageFilesOf, useFeedbackImages } from "@/checkins/useFeedbackImages";
+import type { FeedbackTarget } from "@/checkins/feedbackImages";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -411,6 +414,18 @@ export function GradingScreen({
   useEffect(() => {
     setNote(subject?.result.feedback ?? "");
   }, [subject?.result.id, subject?.result.feedback]);
+
+  // Images on the comment (0046), for whoever is being graded right now.
+  const imageTarget = useMemo<FeedbackTarget | null>(
+    () =>
+      subject
+        ? { courseId: activity.course_id, activityId: activity.id, resultId: subject.result.id }
+        : null,
+    [activity.course_id, activity.id, subject?.result.id],
+  );
+  const commentImages = useFeedbackImages(imageTarget, onError);
+  const canAttach = data.can.grade && !commentImages.unavailable;
+  const [dropping, setDropping] = useState(false);
 
   // Left/right steps questions, but not while someone is typing.
   useEffect(() => {
@@ -1248,7 +1263,26 @@ export function GradingScreen({
             </div>
           )}
 
-          <div className="fv-card" style={{ padding: "12px 14px" }}>
+          <div
+            className={`fv-card fv-ccard${dropping ? " dropping" : ""}`}
+            style={{ padding: "12px 14px" }}
+            onDragOver={(e) => {
+              if (!canAttach || !Array.from(e.dataTransfer.types).includes("Files")) return;
+              e.preventDefault();
+              setDropping(true);
+            }}
+            onDragLeave={(e) => {
+              if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false);
+            }}
+            onDrop={(e) => {
+              setDropping(false);
+              if (!canAttach) return;
+              const files = imageFilesOf(e.dataTransfer);
+              if (!files.length) return;
+              e.preventDefault();
+              void commentImages.attach(files);
+            }}
+          >
             <div className="fv-eyebrow" style={{ marginBottom: 6 }}>
               Comments
             </div>
@@ -1262,7 +1296,15 @@ export function GradingScreen({
               value={note}
               onChange={(e) => setNote(e.target.value)}
               onBlur={() => void saveNote()}
+              onPaste={(e) => {
+                // A pasted screenshot attaches; pasted text types as usual.
+                const files = canAttach ? imageFilesOf(e.clipboardData) : [];
+                if (!files.length) return;
+                e.preventDefault();
+                void commentImages.attach(files);
+              }}
             />
+            <CommentImages state={commentImages} canEdit={canAttach} />
             <div
               className="fv-sub"
               style={{ marginTop: 6, fontSize: "var(--fv-2xs)", lineHeight: 1.5 }}
@@ -1271,7 +1313,8 @@ export function GradingScreen({
                   typed days before release and edited in between, and a
                   half-finished judgement must not reach the person it is about
                   ahead of the mark it explains. */}
-              Shown to {half === "team" ? "the team" : "them"} with their grade, once it is released.
+              Shown to {half === "team" ? "the team" : "them"} with their grade, once it is released
+              {canAttach ? " — images too. Paste or drop a screenshot to attach it." : "."}
             </div>
           </div>
 

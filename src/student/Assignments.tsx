@@ -29,6 +29,7 @@ import {
   type TeamResource,
 } from "@/checkins/resources";
 import { RESIGN_MS } from "@/checkins/storage";
+import { FeedbackImageGrid, useReleasedFeedbackImages } from "./FeedbackImages";
 import { listMyQuestions } from "@/checkins/studentData";
 import type { Assignment, AssignmentStatus, Enrolment } from "@/checkins/studentData";
 import type {
@@ -112,8 +113,11 @@ function statusLabel(a: Assignment): string {
  * student" that no student-facing screen read.
  */
 function MarkerNote({ result }: { result: CheckInResult | null }): JSX.Element | null {
-  const note = result?.status === "scored" ? result.feedback?.trim() : null;
-  if (!note) return null;
+  const released = result?.status === "scored";
+  const note = released ? result?.feedback?.trim() : null;
+  // Images on the comment (0046) pass the same gate, and can stand without text.
+  const images = useReleasedFeedbackImages(result?.id, released);
+  if (!note && !images.images.length) return null;
   return (
     <div
       style={{
@@ -125,17 +129,20 @@ function MarkerNote({ result }: { result: CheckInResult | null }): JSX.Element |
       }}
     >
       <Eyebrow>From your instructor</Eyebrow>
-      <p
-        style={{
-          margin: "6px 0 0",
-          fontSize: "var(--text-xs)",
-          lineHeight: 1.6,
-          // Their line breaks are theirs; a marker's note is often a short list.
-          whiteSpace: "pre-wrap",
-        }}
-      >
-        {note}
-      </p>
+      {note ? (
+        <p
+          style={{
+            margin: "6px 0 0",
+            fontSize: "var(--text-xs)",
+            lineHeight: 1.6,
+            // Their line breaks are theirs; a marker's note is often a short list.
+            whiteSpace: "pre-wrap",
+          }}
+        >
+          {note}
+        </p>
+      ) : null}
+      <FeedbackImageGrid state={images} />
     </div>
   );
 }

@@ -12,6 +12,7 @@
 //   submissions    (0015) the student's handed-in PDF
 //   resources      (0017) the team's photos
 //   activity-files (0012) the assignment document
+//   feedback       (0046) images a marker attached to a comment
 //
 // The last one is not merely orphaned — it is UNREACHABLE. Its only write
 // policy joins back to the activity row, so once the activity is gone the
@@ -95,6 +96,38 @@ async function resultIdsFor(activityIds: string[]): Promise<string[]> {
 }
 
 /**
+ * The feedback images hanging off these results (0046).
+ *
+ * Tolerates a project that has not run 0046: there is nothing to sweep there,
+ * and refusing to delete an activity because a newer table is missing would
+ * be a worse failure than the one this guards against.
+ */
+async function feedbackPathsFor(resultIds: string[]): Promise<string[]> {
+  if (!resultIds.length) return [];
+  try {
+    const rows = await selectAllIn<{ path: string }>(resultIds, (chunk, from, to) =>
+      db().from("feedback_images").select("path").in("result_id", chunk).order("id").range(from, to),
+    );
+    return rows.map((r) => r.path);
+  } catch (e) {
+    // Only "the table isn't there". A permission error that names the table
+    // must stop the delete: swallowing it would let the rows cascade away and
+    // strand objects whose delete policy reads those rows.
+    const message = e instanceof Error ? e.message : String(e);
+    const missingTable =
+      /feedback_images/.test(message) &&
+      /42P01|PGRST205|could not find the table|does not exist/i.test(message);
+    if (missingTable) return [];
+    throw e;
+  }
+}
+
+/** Every image a marker attached to a comment on this activity. */
+export async function deleteActivityFeedback(activityId: string): Promise<number> {
+  return removeAll("feedback", await feedbackPathsFor(await resultIdsFor([activityId])));
+}
+
+/**
  * Every handed-in PDF on this activity. Driven off the ROWS rather than the
  * path prefix — the prefix is pinned by 0015, but the rows are the authority on
  * what exists, and one landing under an unexpected prefix should still go.
@@ -170,6 +203,7 @@ export async function deleteTeamStorage(teamIds: string[]): Promise<number> {
   let n = 0;
   n += await removeAll("recordings", audio.map((r) => r.path));
   n += await removeAll("submissions", pdfs.map((r) => r.path));
+  n += await removeAll("feedback", await feedbackPathsFor(ids));
   return n;
 }
 
@@ -204,6 +238,7 @@ export async function deleteStudentStorage(studentId: string): Promise<number> {
   let n = 0;
   n += await removeAll("recordings", audio.map((r) => r.path));
   n += await removeAll("submissions", pdfs.map((r) => r.path));
+  n += await removeAll("feedback", await feedbackPathsFor(ids));
   return n;
 }
 
@@ -230,7 +265,7 @@ export interface RosterRemoval {
   students: number;
   /** Recorded work of theirs — what an instructor would call "their marks". */
   work: number;
-  /** Recordings and PDFs of theirs sitting in storage. */
+  /** Recordings, PDFs and comment images of theirs sitting in storage. */
   files: number;
 }
 
@@ -249,16 +284,22 @@ async function rosterAndWork(courseId: string): Promise<{ students: string[]; re
   return { students: ids, results: results.map((r) => r.id) };
 }
 
-/** The paths one set of result rows owns, in both buckets. */
-async function objectsOf(resultIds: string[]): Promise<{ audio: string[]; pdfs: string[] }> {
-  if (!resultIds.length) return { audio: [], pdfs: [] };
+/** The paths one set of result rows owns, in every bucket that hangs off a result. */
+async function objectsOf(
+  resultIds: string[],
+): Promise<{ audio: string[]; pdfs: string[]; feedback: string[] }> {
+  if (!resultIds.length) return { audio: [], pdfs: [], feedback: [] };
   const audio = await selectAllIn<{ path: string }>(resultIds, (chunk, from, to) =>
     db().from("recordings").select("path").in("result_id", chunk).order("id").range(from, to),
   );
   const pdfs = await selectAllIn<{ path: string }>(resultIds, (chunk, from, to) =>
     db().from("submission_files").select("path").in("result_id", chunk).order("id").range(from, to),
   );
-  return { audio: audio.map((r) => r.path), pdfs: pdfs.map((r) => r.path) };
+  return {
+    audio: audio.map((r) => r.path),
+    pdfs: pdfs.map((r) => r.path),
+    feedback: await feedbackPathsFor(resultIds),
+  };
 }
 
 /**
@@ -276,8 +317,8 @@ export async function previewRosterRemoval(courseId: string): Promise<RosterRemo
     db().from("check_in_results").select("id", { count: "exact", head: true })
       .in("student_id", chunk).eq("subject_type", "student").neq("status", "none"),
   );
-  const { audio, pdfs } = await objectsOf(results);
-  return { students: students.length, work, files: audio.length + pdfs.length };
+  const { audio, pdfs, feedback } = await objectsOf(results);
+  return { students: students.length, work, files: audio.length + pdfs.length + feedback.length };
 }
 
 /**
@@ -305,11 +346,12 @@ export async function clearRoster(courseId: string): Promise<RosterRemoval> {
     db().from("check_in_results").select("id", { count: "exact", head: true })
       .in("student_id", chunk).eq("subject_type", "student").neq("status", "none"),
   );
-  const { audio, pdfs } = await objectsOf(results);
+  const { audio, pdfs, feedback } = await objectsOf(results);
 
   let files = 0;
   files += await removeAll("recordings", audio);
   files += await removeAll("submissions", pdfs);
+  files += await removeAll("feedback", feedback);
 
   // One statement, not one per student: RLS scopes it to a course this account
   // owns, and the rest — team seats, results, marks — cascades from the row.
@@ -343,6 +385,7 @@ export interface PurgeCount {
   submissions: number;
   resources: number;
   files: number;
+  feedback: number;
 }
 
 /**
@@ -357,8 +400,9 @@ export async function purgeActivityStorage(activityId: string): Promise<PurgeCou
   // done and the row is still there, so a retry is safe and finishes the job.
   const submissions = await deleteActivitySubmissions(activityId);
   const resources = await deleteActivityResources(activityId);
+  const feedback = await deleteActivityFeedback(activityId);
   const files = await deleteActivityFiles(activityId);
-  return { submissions, resources, files };
+  return { submissions, resources, files, feedback };
 }
 
 // ---------------------------------------------------------------------------
@@ -385,8 +429,12 @@ export async function purgeActivityStorage(activityId: string): Promise<PurgeCou
  * kilobytes of it — and clearing it would be the worst thing this feature could
  * do. Written as an Exclude so a later edit that tries to sweep it does not
  * compile.
+ *
+ * `feedback` stays for the same reason the comment text does: it is the
+ * marker's judgement on graded work, part of the record of the year rather than
+ * the year's media, and it is a handful of images rather than gigabytes.
  */
-export type ClearBucket = Exclude<Bucket, "activity-files">;
+export type ClearBucket = Exclude<Bucket, "activity-files" | "feedback">;
 
 export type ClearStep = "scan" | "objects" | "rows";
 
