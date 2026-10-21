@@ -21,6 +21,8 @@ import { NEW_ACTIVITY_STEPS, Steps } from "../Steps";
 import { DraftQuestionCard } from "./DraftQuestionCard";
 import { answersAtRisk, blankQuestion, draftsFrom, summarizeProblems, toQuestionDraft, type DraftQuestion } from "./draft";
 import { ConfirmDialog } from "../ConfirmDialog";
+import { ImportCard, type Imported } from "./ImportCard";
+import { leftOutLine, withImported } from "./importDraft";
 
 interface Props {
   data: FacultyData;
@@ -61,6 +63,8 @@ export function LiveBuilder({ data, activity, snapshot, startStep, onLeave, onDo
   const [show, setShow] = useState<ShowAnswers>(snapshot.state.show_answers);
   const [grading, setGrading] = useState<LiveGrading>(snapshot.state.grading);
   const [busy, setBusy] = useState(false);
+  /** What the last PDF import brought in, for the summary lines. */
+  const [imported, setImported] = useState<Imported | null>(null);
   /** Sentences about answers this save would lose, while she decides. */
   const [risk, setRisk] = useState<string[] | null>(null);
 
@@ -158,6 +162,31 @@ export function LiveBuilder({ data, activity, snapshot, startStep, onLeave, onDo
       <div className="fv-scroll lq-scroll">
         {step === 0 ? (
           <div className="lq-bstep1">
+            {frozen ? null : imported ? (
+              <div className="lq-imported" role="status">
+                <Ic name="sparkle" size={15} />
+                <span>
+                  <b>
+                    {imported.questions.length} question{imported.questions.length === 1 ? "" : "s"} drafted
+                  </b>
+                  {(() => {
+                    const n = imported.questions.filter((q) => q.source?.needsPick).length;
+                    return n ? ` · ${n} need${n === 1 ? "s" : ""} an answer` : "";
+                  })()}
+                  {imported.figuresMissed ? ` · ${imported.figuresMissed} figure${imported.figuresMissed === 1 ? "" : "s"} to add by hand` : ""}
+                </span>
+              </div>
+            ) : (
+              <ImportCard
+                courseId={activity.course_id}
+                activityId={activity.id}
+                onImported={(result) => {
+                  setImported(result);
+                  setQuestions((qs) => withImported(qs, result.questions));
+                  if (!title.trim() && result.title) setTitle(result.title);
+                }}
+              />
+            )}
             <input
               className="fv-display fv-titlein lq-titlein"
               value={title}
@@ -220,6 +249,12 @@ export function LiveBuilder({ data, activity, snapshot, startStep, onLeave, onDo
                     onError={onError}
                   />
                 ))}
+
+                {imported && leftOutLine(imported.leftOut) ? (
+                  <p className="lq-leftline" title={imported.leftOut.map((l) => `p.${l.page}: ${l.reason}`).join("\n")}>
+                    Left out: {leftOutLine(imported.leftOut)}
+                  </p>
+                ) : null}
 
                 {frozen ? null : (
                   <div className="lq-addrow">
