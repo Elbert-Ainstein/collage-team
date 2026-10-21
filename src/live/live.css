@@ -3246,11 +3246,26 @@ button.lq-reviewrow {
   background: transparent;
   padding: 0 0 12px;
 }
+/* One centred column for everything on the screen — the badge, title,
+   question text and Start button as well as the choices — and the Back /
+   Next bar under the same column. Each child centring itself (the rule on
+   .lq-sscroll > *) left anything with its own margins at the panel's left
+   edge, so a screen read half-centred. Padding, not max-width: a % padding
+   is of the panel's width, so the column is 680px wherever there's room and
+   the full width on a phone. */
+.lq-shost {
+  --lq-col: 680px;
+}
 .lq-shost .lq-sscroll {
-  padding: 18px 0 24px;
+  padding: 18px max(0px, calc((100% - var(--lq-col)) / 2)) 24px;
+}
+.lq-shost .lq-sscroll > * {
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
 }
 .lq-shost .lq-sfoot {
-  padding: 12px 0;
+  padding: 12px max(0px, calc((100% - var(--lq-col)) / 2));
   background: var(--fv-cream-200);
 }
 .lq-shost .lq-serror {
@@ -3305,4 +3320,17 @@ button.lq-reviewrow {
     bottom: 0;
     z-index: 2;
   }
+}
+
+.lq-submitted {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 14px;
+  border-radius: var(--fv-r-md);
+  background: var(--lq-right-100);
+  color: var(--lq-right-ink);
+  font-weight: 600;
+  font-size: 14px;
 }

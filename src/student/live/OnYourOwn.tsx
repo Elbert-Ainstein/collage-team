@@ -89,28 +89,66 @@ function Pips({ n, current, filled, onPick }: { n: number; current: number; fill
   );
 }
 
+// Submit, on this device. Answers save as they're given, so what the
+// instructor sees doesn't depend on it — "submitted" there is "answered every
+// question". This is the student's own "I'm done", kept so the review screen
+// still says so when they come back.
+const submittedKey = (activityId: string) => `lq-submitted-${activityId}`;
+function readSubmitted(activityId: string): boolean {
+  try {
+    return window.localStorage.getItem(submittedKey(activityId)) === "1";
+  } catch {
+    return false;
+  }
+}
+function writeSubmitted(activityId: string): void {
+  try {
+    window.localStorage.setItem(submittedKey(activityId), "1");
+  } catch {
+    // Private mode: Submitted shows until they leave, which is all it promises.
+  }
+}
+
+const listQs = (ns: number[]): string => {
+  const qs = ns.map((n) => `Q${n}`);
+  return qs.length < 2 ? qs[0] : `${qs.slice(0, -1).join(", ")} and ${qs[qs.length - 1]}`;
+};
+
 export function OnYourOwn({
   m,
   saver,
   cursor,
   onCursor,
+  activityId,
 }: {
   m: LiveModel;
   saver: AnswerSaver;
   cursor: number;
   onCursor: (q: number) => void;
+  activityId: string;
 }) {
+  const [submittedHere, setSubmitted] = useState(() => readSubmitted(activityId));
   const N = m.questions.length;
   const answerOf = (i: number) => saver.answers[m.questions[i]?.id] ?? null;
   const filled = (i: number) => answerOf(i) !== null;
 
   if (cursor >= N) {
     const done = m.questions.filter((_, i) => filled(i)).length;
+    const missing = m.questions.flatMap((_, i) => (filled(i) ? [] : [i + 1]));
+    const saving = m.questions.some((q) => saver.state[q.id]?.kind === "saving");
+    const failed = m.questions.flatMap((q, i) => (saver.state[q.id]?.kind === "failed" ? [i + 1] : []));
+    const submitted = submittedHere && missing.length === 0;
     return (
+      <>
       <div className="lq-sscroll">
         <Pips n={N} current={-1} filled={filled} onPick={onCursor} />
         <div className="lq-scard">
-          <h2 className="lq-h2">{done === N ? "All set for class" : `${done} of ${N} answered`}</h2>
+          <h2 className="lq-h2">{submitted ? "Submitted" : done === N ? "Ready to submit" : `${done} of ${N} answered`}</h2>
+          {submitted ? (
+            <p className="fv-sub" style={{ margin: "0 0 10px" }}>
+              You can still change an answer until class starts.
+            </p>
+          ) : null}
           <div className="lq-reviewlist">
             {m.questions.map((q, i) => (
               <button key={q.id} type="button" className="lq-reviewrow" onClick={() => onCursor(i)}>
@@ -122,6 +160,40 @@ export function OnYourOwn({
           </div>
         </div>
       </div>
+      <footer className="lq-sfoot">
+        <button type="button" className="fv-btn outline" onClick={() => onCursor(N - 1)}>
+          <Ic name="chevronLeft" size={15} /> Back
+        </button>
+        <span className={`lq-saved${failed.length ? " bad" : ""}`} role="status">
+          {failed.length
+            ? `${listQs(failed)} didn’t save — open ${failed.length === 1 ? "it" : "them"} to try again`
+            : missing.length
+              ? `Answer ${listQs(missing)} to submit`
+              : saving
+                ? "Saving…"
+                : submitted
+                  ? "Answers saved"
+                  : ""}
+        </span>
+        {submitted ? (
+          <span className="lq-submitted">
+            <Ic name="check" size={15} /> Submitted
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="fv-btn primary"
+            disabled={missing.length > 0 || saving || failed.length > 0}
+            onClick={() => {
+              writeSubmitted(activityId);
+              setSubmitted(true);
+            }}
+          >
+            Submit
+          </button>
+        )}
+      </footer>
+      </>
     );
   }
 
@@ -168,7 +240,7 @@ export function OnYourOwn({
           {st?.kind === "saving" ? "Saving…" : st?.kind === "failed" ? st.message : mine ? "Saved" : ""}
         </span>
         <button type="button" className="fv-btn primary" onClick={() => onCursor(cursor + 1)}>
-          {cursor === N - 1 ? "Review" : "Next"} <Ic name="chevronRight" size={15} />
+          {cursor === N - 1 ? "Review and submit" : "Next"} <Ic name="chevronRight" size={15} />
         </button>
       </footer>
     </>
