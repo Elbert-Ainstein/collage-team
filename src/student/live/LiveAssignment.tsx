@@ -91,7 +91,7 @@ export function LiveAssignment({ assignment, enrolment, onBack }: Props) {
           />
         );
       }
-      return <OnYourOwn m={m} saver={saver} cursor={cursor} onCursor={setCursor} />;
+      return <OnYourOwn m={m} saver={saver} cursor={cursor} onCursor={setCursor} activityId={activity.id} />;
     }
     if (phase === "team") {
       if (!team) {
