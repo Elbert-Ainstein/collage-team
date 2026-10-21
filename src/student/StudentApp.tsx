@@ -26,6 +26,8 @@ import { assignmentKey, TeamResources } from "./TeamResources";
 import { GradedView } from "./GradedView";
 import { SubmitScreen } from "./SubmitScreen";
 import "./student.css";
+import { LiveAssignment } from "./live/LiveAssignment";
+import { watchLive } from "@/live/data";
 
 type Screen = "list" | "detail" | "work" | "submit" | "tr" | "trDetail";
 
@@ -834,6 +836,32 @@ export function StudentApp({
     setSelId(null);
     setScreen("list");
   }, [selId, selected, screen, ready, enrolment]);
+  // A live activity's session moves when the instructor moves it — Start team
+  // mode is what puts "Team mode is on" at the top of the list, and two
+  // minutes later is too late for a class that's waiting. Only the sessions
+  // still running are watched.
+  const liveIds = assignments
+    .filter((a) => a.activity.type === "live" && a.live?.phase !== "closed")
+    .map((a) => a.activity.id)
+    .join(",");
+  useEffect(() => {
+    if (!liveIds) return;
+    // Only the session moving (live_state), not every vote — votes are the open
+    // activity's business — and one reload for a burst of them.
+    let timer: number | undefined;
+    const again = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => void load().catch(() => undefined), 400);
+    };
+    const unwatch = liveIds.split(",").map((id) => watchLive(id, again, ["live_state"]));
+    return () => {
+      window.clearTimeout(timer);
+      unwatch.forEach((u) => u());
+    };
+    // load is stable enough here: a re-subscribe per render would churn sockets.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveIds]);
+
   const dueCount = assignments.filter(
     (a) => a.status === "Not started" || a.status === "Late",
   ).length;
@@ -1059,6 +1087,23 @@ export function StudentApp({
           }
         />
       </JoinScreen>
+    );
+  }
+
+  // Live questions open on their own screen: answering, team voting and
+  // results in one place, following the session as the instructor runs it.
+  if (screen === "detail" && selected?.activity.type === "live") {
+    return shell(
+      <LiveAssignment
+        key={selected.activity.id}
+        assignment={selected}
+        enrolment={enrolment}
+        onBack={() => {
+          setSelId(null);
+          setScreen("list");
+          void load().catch(() => undefined);
+        }}
+      />,
     );
   }
 

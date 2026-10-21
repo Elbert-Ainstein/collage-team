@@ -1,0 +1,281 @@
+"use client";
+
+// Making live questions, in the two steps every new activity goes through
+// ("Activity", then "Questions & grading"). Finish saves the questions and
+// their keys, and — the first time — puts the activity in front of the class:
+// there's no separate "make visible" step to forget.
+//
+// Opened again later it edits the same activity. Once team mode has started
+// the questions themselves are fixed (0047), but the wording, images and keys
+// can still change; a fixed key on a scored session is re-scored on save.
+
+import { useMemo, useState } from "react";
+import { updateActivity } from "@/checkins/data";
+import type { Activity } from "@/checkins/types";
+import { loadLive, saveLiveQuestions, scoreLive, setLiveSettings } from "@/live/data";
+import type { LiveGrading, LiveSnapshot, LockRule, ShowAnswers } from "@/live/types";
+import { Ic } from "@/live/ui";
+import { fromLocalInput, toLocalInput } from "../ActivityDetail";
+import type { FacultyData } from "../FacultyApp";
+import { NEW_ACTIVITY_STEPS, Steps } from "../Steps";
+import { DraftQuestionCard } from "./DraftQuestionCard";
+import { answersAtRisk, blankQuestion, draftsFrom, summarizeProblems, toQuestionDraft, type DraftQuestion } from "./draft";
+import { ConfirmDialog } from "../ConfirmDialog";
+
+interface Props {
+  data: FacultyData;
+  activity: Activity;
+  snapshot: LiveSnapshot;
+  /** Which step it opens on: 0 for a new one, 1 for "Edit questions". */
+  startStep: 0 | 1;
+  /** Leaves without finishing; a new activity stays as a hidden draft. */
+  onLeave: () => void;
+  /** Saved. `published` when this Finish is what put it in front of the class. */
+  onDone: (published: boolean) => void;
+  onError: (e: unknown) => void;
+}
+
+function Seg<T extends string>({ value, options, disabled, onChange }: { value: T; options: [T, string][]; disabled: boolean; onChange: (v: T) => void }) {
+  return (
+    <div className="fv-seg">
+      {options.map(([v, label]) => (
+        <button key={v} type="button" className={value === v ? "on" : ""} disabled={disabled} onClick={() => onChange(v)}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function LiveBuilder({ data, activity, snapshot, startStep, onLeave, onDone, onError }: Props) {
+  const firstTime = snapshot.questions.length === 0;
+  const frozen = snapshot.state.phase !== "individual";
+  const [step, setStep] = useState<0 | 1>(startStep);
+  const [title, setTitle] = useState(firstTime && activity.title === "Untitled" ? "" : activity.title);
+  const [week, setWeek] = useState<number | null>(activity.week);
+  const [due, setDue] = useState(toLocalInput(activity.due_at ?? activity.individual_due_at));
+  const [questions, setQuestions] = useState<DraftQuestion[]>(() =>
+    firstTime ? [blankQuestion()] : draftsFrom(snapshot.questions, snapshot.keys),
+  );
+  const [rule, setRule] = useState<LockRule>(snapshot.state.lock_rule);
+  const [show, setShow] = useState<ShowAnswers>(snapshot.state.show_answers);
+  const [grading, setGrading] = useState<LiveGrading>(snapshot.state.grading);
+  const [busy, setBusy] = useState(false);
+  /** Sentences about answers this save would lose, while she decides. */
+  const [risk, setRisk] = useState<string[] | null>(null);
+
+  const problem = summarizeProblems(questions);
+  const weeks = useMemo(() => [...data.weeks].sort((a, b) => a.week - b.week), [data.weeks]);
+  const replace = (i: number, next: DraftQuestion) => setQuestions((qs) => qs.map((q, j) => (j === i ? next : q)));
+  // For changes that land later (an image upload): applied to the question as
+  // it is then, not as it was when the upload started.
+  const patch = (id: string, change: Partial<DraftQuestion>) =>
+    setQuestions((qs) => qs.map((q) => (q.id === id ? { ...q, ...change } : q)));
+  const saved = useMemo(() => draftsFrom(snapshot.questions, snapshot.keys), [snapshot.questions, snapshot.keys]);
+  const answered = useMemo(() => {
+    const n = new Map<string, number>();
+    for (const r of snapshot.responses) n.set(r.question_id, (n.get(r.question_id) ?? 0) + 1);
+    return n;
+  }, [snapshot.responses]);
+
+  const saveBasics = async () => {
+    setBusy(true);
+    try {
+      await updateActivity(activity.id, { title: title.trim(), week, due_at: fromLocalInput(due) });
+      setStep(1);
+    } catch (e) {
+      onError(e);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const finish = async (confirmed = false) => {
+    if (problem) return;
+    const atRisk = answersAtRisk(saved, questions, answered);
+    if (atRisk.length && !confirmed) {
+      setRisk(atRisk);
+      return;
+    }
+    setRisk(null);
+    setBusy(true);
+    try {
+      await saveLiveQuestions(activity.id, questions.map(toQuestionDraft), frozen);
+      if (!frozen) await setLiveSettings(activity.id, { lock_rule: rule, show_answers: show, grading });
+      const n = questions.length;
+      await updateActivity(activity.id, {
+        title: title.trim() || activity.title,
+        // Own + team is a point a question twice; team only, once (0047).
+        points_total: grading === "team" ? n : 2 * n,
+        ...(firstTime ? { opens_at: null } : {}),
+      });
+      // A key fixed after the session was scored: the gradebook follows it.
+      if (snapshot.state.scored_at && data.can.grade) {
+        const fresh = await loadLive(activity.id);
+        if (fresh) await scoreLive(fresh);
+      }
+      onDone(firstTime);
+    } catch (e) {
+      onError(e);
+      setBusy(false);
+    }
+  };
+
+  const weekName = (w: number | null) => {
+    const row = weeks.find((x) => x.week === w);
+    return row?.title || (w === null ? "No week" : `Week ${w}`);
+  };
+
+  return (
+    <div className="fv-panel lq-panel">
+      <div className="fv-topbar">
+        <button
+          type="button"
+          className="fv-back"
+          aria-label={step === 1 && firstTime ? "Back to the first step" : "Back"}
+          onClick={step === 1 && firstTime ? () => setStep(0) : onLeave}
+        >
+          <Ic name="chevronLeft" size={16} />
+        </button>
+        <span className="fv-sub">
+          {step === 0 ? `${firstTime ? "New activity" : title || "Untitled"} · ${weekName(week)}` : `${title || "Untitled"} · ${weekName(week)}`}
+        </span>
+        {step === 1 ? (
+          <button
+            type="button"
+            className="fv-btn primary sm"
+            style={{ marginLeft: "auto" }}
+            disabled={!!problem || busy}
+            title={problem ?? undefined}
+            onClick={() => void finish()}
+          >
+            {firstTime ? "Finish" : "Save"}
+          </button>
+        ) : null}
+      </div>
+      <Steps steps={NEW_ACTIVITY_STEPS} current={step} onGo={() => setStep(0)} />
+
+      <div className="fv-scroll lq-scroll">
+        {step === 0 ? (
+          <div className="lq-bstep1">
+            <input
+              className="fv-display fv-titlein lq-titlein"
+              value={title}
+              placeholder="What are they working on?"
+              aria-label="Activity title"
+              autoFocus
+              onChange={(e) => setTitle(e.target.value)}
+            />
+            <div className="fv-fields">
+              <label className="fv-field">
+                <span className="fv-eyebrow">Week</span>
+                <select
+                  className="fv-in quiet"
+                  value={week ?? ""}
+                  onChange={(e) => setWeek(e.target.value === "" ? null : Number(e.target.value))}
+                >
+                  {week === null ? <option value="">No week</option> : null}
+                  {weeks.map((w) => (
+                    <option key={w.id} value={w.week}>
+                      {w.title || `Week ${w.week}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="fv-field">
+                <span className="fv-eyebrow">Answer on their own by</span>
+                <input className="fv-in quiet" type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} />
+              </label>
+            </div>
+
+            <div className="fv-editbar">
+              <button type="button" className="fv-btn primary sm" disabled={!title.trim() || busy} onClick={() => void saveBasics()}>
+                Save and continue
+              </button>
+              <button type="button" className="fv-btn ghost sm" onClick={onLeave}>
+                Not now
+              </button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="lq-builder">
+              <section className="lq-bmain">
+                <h1 className="fv-display" style={{ fontSize: 24 }}>
+                  Questions & grading
+                </h1>
+                <div className="lq-step2gap" />
+
+                {questions.map((q, i) => (
+                  <DraftQuestionCard
+                    key={q.id}
+                    q={q}
+                    n={i + 1}
+                    activityId={activity.id}
+                    onlyOne={questions.length === 1}
+                    locked={frozen}
+                    onChange={(next) => replace(i, next)}
+                    onPatch={(change) => patch(q.id, change)}
+                    onRemove={() => setQuestions((qs) => qs.filter((_, j) => j !== i))}
+                    onError={onError}
+                  />
+                ))}
+
+                {frozen ? null : (
+                  <div className="lq-addrow">
+                    <button type="button" className="lq-addq" onClick={() => setQuestions((qs) => [...qs, blankQuestion()])}>
+                      <Ic name="add" size={16} /> Add a question
+                    </button>
+                  </div>
+                )}
+              </section>
+
+              <aside className="lq-bside">
+                <div className="fv-card lq-bcard">
+                  <div className="fv-field">
+                    <span className="fv-eyebrow">Team answer locks when</span>
+                    <Seg value={rule} disabled={frozen} onChange={setRule} options={[["any", "Anyone submits"], ["all", "Everyone agrees"]]} />
+                  </div>
+                  <div className="fv-field">
+                    <span className="fv-eyebrow">Show answers</span>
+                    <Seg value={show} disabled={frozen} onChange={setShow} options={[["close", "When I close"], ["lock", "As teams lock"]]} />
+                  </div>
+                  <div className="fv-field">
+                    <span className="fv-eyebrow">Grade</span>
+                    <Seg value={grading} disabled={frozen} onChange={setGrading} options={[["both", "Own + team"], ["team", "Team only"]]} />
+                  </div>
+                </div>
+              </aside>
+            </div>
+            <div className="fv-editbar lq-step2bar">
+              <button type="button" className="fv-btn outline sm" onClick={firstTime ? () => setStep(0) : onLeave}>
+                <Ic name="chevronLeft" size={14} /> Back
+              </button>
+              <button type="button" className="fv-btn primary sm" disabled={!!problem || busy} title={problem ?? undefined} onClick={() => void finish()}>
+                {busy ? "Saving…" : firstTime ? "Finish" : "Save"}
+              </button>
+              {problem ? <span className="fv-sub">{problem}</span> : null}
+            </div>
+          </>
+        )}
+      </div>
+      {risk ? (
+        <ConfirmDialog
+          title="Students have already answered these"
+          body={
+            <>
+              {risk.map((line) => (
+                <div key={line}>{line}</div>
+              ))}
+            </>
+          }
+          confirmLabel="Save anyway"
+          busy={busy}
+          busyLabel="Saving…"
+          onConfirm={() => void finish(true)}
+          onCancel={() => setRisk(null)}
+        />
+      ) : null}
+    </div>
+  );
+}

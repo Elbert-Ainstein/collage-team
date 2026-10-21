@@ -53,6 +53,7 @@ import { FAvatar, FIcon } from "./icons";
 import type { ResultRow } from "@/checkins/data";
 import { allTeamsOf } from "@/checkins/rosters";
 import type { FacultyData } from "./FacultyApp";
+import { AddActivityMenu, type NewKind } from "./live/AddActivityMenu";
 
 
 const GLYPH: Record<CellState, string> = {
@@ -271,10 +272,26 @@ export function ActivitiesScreen(props: {
    * sixteen students' assignment lists while it is being written, and the page
    * you land on is where you choose when it opens.
    */
-  const startNewActivity = (atWeek?: number) =>
+  const startNewActivity = (atWeek?: number, kind: NewKind = "activity") =>
     void run(async () => {
       const week = atWeek ?? weekNumbers[0];
       if (week == null) return;
+
+      if (kind === "live") {
+        // Its own builder asks for the title, and scoring makes its gradebook
+        // columns (score_live, 0047) — nothing else to set up here. Setting the
+        // type is what creates its live_state row.
+        const created = await createActivity({
+          courseId: data.course.id,
+          week,
+          title: "Untitled",
+          opensAt: HIDDEN_INSTANT,
+        });
+        await updateActivity(created.id, { type: "live", question_count: 0, points_total: 0 });
+        await onChanged();
+        onOpen(created.id, { fresh: true });
+        return true;
+      }
 
       const type: ActivityType = "combo";
       const created = await createActivity({
@@ -370,20 +387,11 @@ export function ActivitiesScreen(props: {
                 <FIcon name="add" size={15} />
                 New week
               </button>
-              <button
-                type="button"
-                className="fv-btn primary sm"
+              <AddActivityMenu
                 disabled={busy || weekNumbers.length === 0}
-                title={
-                  weekNumbers.length === 0
-                    ? "Add a week first — every activity belongs to one."
-                    : "Create an activity and open it — you pick its week there"
-                }
-                onClick={() => startNewActivity()}
-              >
-                <FIcon name="add" size={15} />
-                Activity
-              </button>
+                title={weekNumbers.length === 0 ? "Add a week first — every activity belongs to one." : undefined}
+                onPick={(kind) => startNewActivity(undefined, kind)}
+              />
             </>
           ) : null}
         </div>
