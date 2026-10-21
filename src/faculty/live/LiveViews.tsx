@@ -177,16 +177,22 @@ function TeamCard({ m, team, reveal, onOpen }: { m: LiveModel; team: TeamWithMem
         ) : null}
       </div>
 
-      <div className="lq-pips" aria-label={`${m.done(team.id)} of ${N} locked`}>
-        {locks.map((l, q) => {
-          const now = cur?.q === q;
-          const r = l && reveal ? m.right(q, l.answer) : null;
-          return (
-            <span key={q} className={`lq-pip${l ? " locked" : ""}${now ? " now" : ""}${r === true ? " right" : r === false ? " wrong" : ""}`}>
-              {l ? l.answer : now ? "…" : ""}
-            </span>
-          );
-        })}
+      <div className="lq-pipsrow">
+        <div className="lq-pips" aria-label={`${m.done(team.id)} of ${N} locked`}>
+          {locks.map((l, q) => {
+            const now = cur?.q === q;
+            const r = l && reveal ? m.right(q, l.answer) : null;
+            return (
+              <span
+                key={q}
+                className={`lq-pip${l ? " locked" : ""}${now ? " now" : ""}${r === true ? " right" : r === false ? " wrong" : ""}`}
+                title={l ? `Q${q + 1}: ${m.label(q, l.answer)}` : `Q${q + 1}`}
+              >
+                {l ? l.answer : now ? "…" : ""}
+              </span>
+            );
+          })}
+        </div>
         {finished !== null && reveal && m.score(team.id) !== null ? (
           <span className="lq-tscore fv-num">
             {m.score(team.id)}/{N}

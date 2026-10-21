@@ -44,8 +44,8 @@ export function Pick({
   }
   const verdict = right === true ? "right" : right === false ? "wrong" : "";
   return (
-    <span className={`lq-pick ${size} ${verdict}`}>
-      {value}
+    <span className={`lq-pick ${size} ${verdict}`} title={value}>
+      <span className="lq-pickv">{value}</span>
       {verdict === "right" ? <Tick /> : verdict === "wrong" ? <Cross /> : null}
     </span>
   );

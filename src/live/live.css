@@ -3334,3 +3334,54 @@ button.lq-reviewrow {
   font-weight: 600;
   font-size: 14px;
 }
+
+/* -------------------------------------------- many questions, narrow boxes */
+/* A row of answers grows with the number of questions; a card or a table cell
+   doesn't. Team-card boxes wrap onto as many rows as they need, the score
+   sits beside them rather than at the end of the row, and a long answer
+   ("12.345", "F*m/2") is cut short in its box — the whole of it is the
+   box's tooltip. */
+.lq-pipsrow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.lq-pipsrow .lq-pips {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(34px, 1fr));
+  gap: 4px;
+}
+.lq-pipsrow .lq-pip {
+  display: block;
+  width: auto;
+  min-width: 0;
+  padding: 0 3px;
+  line-height: 24px;
+  text-align: center;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.lq-pipsrow .lq-tscore {
+  flex: none;
+  margin-left: 0;
+  line-height: 26px;
+}
+
+/* An answer chip never grows past a readable width; tables wrap their chips. */
+.lq-pickv {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.lq-qcells {
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.lq-qcells .lq-pick {
+  max-width: 58px;
+}
