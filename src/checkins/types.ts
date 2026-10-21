@@ -41,7 +41,12 @@ export interface Profile {
  * The design keys its layout off SCOPE, not type — type only picks a label and
  * an accent colour. Getting this backwards is the easiest mistake to make here.
  */
-export type ActivityType = "challenge" | "combo" | "skills" | "amplify";
+/**
+ * "live" is live questions (0047): answered alone before class, then agreed as
+ * a team in class. Its two halves are scored from the answers by score_live,
+ * not graded against a rubric.
+ */
+export type ActivityType = "challenge" | "combo" | "skills" | "amplify" | "live";
 export type Scope = "indiv" | "team" | "both";
 
 export const SCOPE_OF: Record<ActivityType, Scope> = {
@@ -54,6 +59,7 @@ export const SCOPE_OF: Record<ActivityType, Scope> = {
   // scope decides which check_ins must exist, and without that row the new
   // Individual tab has nothing to hand in to.
   amplify: "both",
+  live: "both",
 };
 
 /**
@@ -79,6 +85,8 @@ export const INDIV_ELSEWHERE: Record<ActivityType, string | null> = {
   combo: null,
   skills: null,
   amplify: "Amplify",
+  // Answered in the app, on its own screen — not a hand-in, and not elsewhere.
+  live: null,
 };
 
 export const TYPE_LABEL: Record<ActivityType, string> = {
@@ -86,6 +94,7 @@ export const TYPE_LABEL: Record<ActivityType, string> = {
   combo: "Combo",
   skills: "Skills",
   amplify: "Amplify",
+  live: "Live questions",
 };
 
 export const SCOPE_LABEL: Record<Scope, string> = {
@@ -387,6 +396,7 @@ export const IS_COMPLETION: Record<ActivityType, boolean> = {
   combo: false,
   amplify: true,
   skills: false,
+  live: false,
 };
 
 export const TYPE_ACCENT: Record<ActivityType, string> = {
@@ -394,6 +404,7 @@ export const TYPE_ACCENT: Record<ActivityType, string> = {
   combo: "var(--fv-navy-700)",
   amplify: "var(--fv-lavender)",
   skills: "var(--fv-sky)",
+  live: "#7c3aed",
 };
 
 /**

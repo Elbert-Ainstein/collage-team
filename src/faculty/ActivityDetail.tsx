@@ -2056,7 +2056,10 @@ export function ActivityDetail(props: {
                     value={kind}
                     onChange={(e) => setKind(e.target.value as ActivityType)}
                   >
-                    {(Object.keys(TYPE_LABEL) as ActivityType[]).map((t) => (
+                    {/* Live questions is made from "+ Activity → Live questions" and has its
+                        own page; turning a rubric-graded activity into one here
+                        would leave it with no questions and no way to write them. */}
+                    {(Object.keys(TYPE_LABEL) as ActivityType[]).filter((t) => t !== "live").map((t) => (
                       <option key={t} value={t}>
                         {TYPE_LABEL[t]} · {SCOPE_LABEL[SCOPE_OF[t]]}
                       </option>

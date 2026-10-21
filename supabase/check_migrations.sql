@@ -269,6 +269,19 @@ select '0046 feedback images',
              and exists (select 1 from storage.buckets where id = 'feedback')
             then 'applied'
             else 'NOT APPLIED — run 0046_feedback_images.sql' end
+union all
+select '0047 live questions',
+       case when to_regclass('public.live_state') is not null
+             and to_regprocedure('public.score_live(uuid,jsonb)') is not null
+             and exists (select 1 from storage.buckets where id = 'imports')
+            then 'applied'
+            else 'NOT APPLIED — run 0047_live_questions.sql' end
+union all
+select '0048 ownership checks read once',
+       case when (select prosecdef from pg_proc where oid = to_regprocedure('public.owns_student(uuid)'))
+             and (select prosecdef from pg_proc where oid = to_regprocedure('public.owns_team(uuid)'))
+            then 'applied'
+            else 'NOT APPLIED — run 0048_owns_student_definer.sql' end
 order by 1;
 
 -- ------------------------------------------------------- and the buckets
@@ -284,5 +297,5 @@ select id as bucket,
        round(file_size_limit / 1024.0 / 1024.0)::text || ' MB' as per_file_limit,
        array_to_string(allowed_mime_types, ', ') as accepts
   from storage.buckets
- where id in ('recordings', 'submissions', 'resources', 'activity-files', 'feedback')
+ where id in ('recordings', 'submissions', 'resources', 'activity-files', 'feedback', 'imports')
  order by id;

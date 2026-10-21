@@ -52,6 +52,7 @@ import { reviewCount } from "./reviewModel";
 import { RubricBuilder } from "./RubricBuilder";
 import { TeamsScreen, type Incoming } from "./TeamsScreen";
 import { TFsScreen } from "./TFsScreen";
+import { LiveDetail } from "./live/LiveDetail";
 import { AssistantLauncher } from "./assistant/AssistantLauncher";
 import { AssistantPanel, SHEET_QUERY } from "./assistant/AssistantPanel";
 import "./faculty.css";
@@ -871,6 +872,24 @@ export function FacultyApp({
             <div className="fv-panel">
               <div className="fv-sub">Opening the new activity…</div>
             </div>
+          );
+        }
+        // Live questions have their own screen: a builder and an in-class
+        // view instead of a rubric and a grading list.
+        if (selected?.type === "live") {
+          return (
+            <LiveDetail
+              key={selected.id}
+              data={data}
+              activity={selected}
+              fresh={fresh === selected.id}
+              onBack={() => {
+                setFresh(null);
+                setScreen("activities");
+              }}
+              onChanged={() => refresh().catch(fail)}
+              onError={fail}
+            />
           );
         }
         return selected ? (

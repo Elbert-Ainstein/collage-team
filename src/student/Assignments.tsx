@@ -49,6 +49,8 @@ import { kindOf } from "@/faculty/activityFiles";
 import { activityFileUrls } from "@/faculty/facultyData";
 import { SIcon } from "./icons";
 import { Recorder } from "./Recorder";
+import { liveStatusLabel } from "@/live/status";
+import { Ic, LiveDot } from "@/live/ui";
 
 // ------------------------------------------------------------------ tokens
 
@@ -58,6 +60,7 @@ const ACCENT: Record<ActivityType, string> = {
   combo: "var(--navy-700)",
   skills: "var(--sky-700)",
   amplify: "var(--lavender-600)",
+  live: "#7c3aed",
 };
 
 const TYPE_BADGE: Record<ActivityType, string> = {
@@ -65,6 +68,7 @@ const TYPE_BADGE: Record<ActivityType, string> = {
   combo: "sky",
   skills: "sky",
   amplify: "lavender",
+  live: "lavender",
 };
 
 const STATUS_BADGE: Record<AssignmentStatus, string> = {
@@ -95,6 +99,8 @@ function elsewhereName(a: Assignment): string | null {
  * elsewhere. Name it.
  */
 function statusLabel(a: Assignment): string {
+  const live = liveStatusLabel(a.status, a.live);
+  if (live) return live;
   if (a.status !== "Answered elsewhere") return a.status;
   const place = elsewhereName(a);
   return place ? `Answered in ${place}` : a.status;
@@ -447,6 +453,25 @@ function AssignmentsList({
           <h1 className="sv-h1">Assignments</h1>
           <span className="sv-sub">Everything you owe, and everything your team owes together.</span>
         </div>
+
+        {assignments
+          .filter((a) => a.live?.phase === "team")
+          .map((a) => (
+            <div key={a.activity.id} className="lq-stu">
+              <button type="button" className="lq-joinbanner" onClick={() => onSelect(a.activity.id)}>
+                <span className="lq-joinicon">
+                  <Ic name="groups" size={20} />
+                </span>
+                <span className="lq-jointext">
+                  <b>
+                    <LiveDot tone="team" /> Team mode is on
+                  </b>
+                  <span>{a.activity.title}</span>
+                </span>
+                <span className="fv-btn primary sm lq-teambtn">Join</span>
+              </button>
+            </div>
+          ))}
 
         <div style={{ margin: "14px 0 18px" }}>
         <div className="sv-tabs" role="tablist" aria-label="Filter assignments">

@@ -25,6 +25,8 @@ import type {
   Team,
   TeamSet,
 } from "./types";
+import { listLiveProgress } from "@/live/data";
+import { liveStatus, type LiveProgress } from "@/live/status";
 
 const db = () => requireSupabase();
 function unwrap<T>(res: { data: T | null; error: { message: string } | null }): T {
@@ -189,6 +191,8 @@ export interface Assignment {
    * the deadline has passed.
    */
   reopened: boolean;
+  /** Live questions only: where its session stands for this student (0047). */
+  live?: LiveProgress;
 }
 
 export function statusOf(r: CheckInResult | null, stage: number): AssignmentStatus {
@@ -318,6 +322,24 @@ export async function listAssignments(enrolment: Enrolment): Promise<Assignment[
       ) as CheckInResult[] ?? [])
     : [];
 
+  // A live activity's progress is in its own tables until it's scored. A
+  // failed read leaves those rows on their gradebook status, as before 0047.
+  const liveIds = activities.filter((a) => a.type === "live").map((a) => a.id);
+  const live = liveIds.length
+    ? await listLiveProgress(liveIds).catch(() => null)
+    : null;
+  const liveOf = (activityId: string): LiveProgress | undefined => {
+    const state = live?.states.find((st) => st.activity_id === activityId);
+    if (!live || !state) return undefined;
+    return {
+      phase: state.phase,
+      answered: live.answers.filter(
+        (r) => r.activity_id === activityId && r.student_id === enrolment.student.id,
+      ).length,
+      questions: live.questionCounts.get(activityId) ?? 0,
+    };
+  };
+
   return activities.map((activity) => {
     const mine = checkIns.filter((c) => c.activity_id === activity.id);
     const indivCheckIn = mine.find((c) => c.kind === "individual") ?? null;
@@ -345,6 +367,11 @@ export async function listAssignments(enrolment: Enrolment): Promise<Assignment[
     // case an empty row is the normal state of it and not a missed deadline.
     const elsewhere = !teamOnly && INDIV_ELSEWHERE[activity.type] !== null;
 
+    const progress = activity.type === "live" ? liveOf(activity.id) : undefined;
+    const plain = elsewhere
+      ? statusOfElsewhere(lead, activity.stage)
+      : statusOf(lead, activity.stage);
+
     return {
       activity,
       indivCheckIn,
@@ -352,9 +379,10 @@ export async function listAssignments(enrolment: Enrolment): Promise<Assignment[
       myResult,
       teamResult,
       teamId,
-      status: elsewhere
-        ? statusOfElsewhere(lead, activity.stage)
-        : statusOf(lead, activity.stage),
+      ...(progress ? { live: progress } : {}),
+      status: activity.type === "live"
+        ? liveStatus(progress, plain, activity.due_at ?? activity.individual_due_at)
+        : plain,
       grade: gradeOf(lead, leadCheckIn),
       teamGrade: gradeOf(teamResult, teamCheckIn),
       submitted: lead?.updated_at ?? null,

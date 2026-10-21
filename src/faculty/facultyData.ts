@@ -36,6 +36,7 @@ import { humanBytes, refuseFile } from "./activityFiles";
 import { deductionForAward, pointsTotal, type PointedQuestion } from "./model";
 import { COMBO_TEMPLATE, type RubricTemplate } from "./comboRubric";
 import { shareInFlight } from "./inFlight";
+import { copyLive } from "@/live/data";
 
 const db = () => requireSupabase();
 
@@ -822,9 +823,12 @@ export async function duplicateActivity(
     if (error) throw dbError(error);
   }
 
+  // Live questions keep theirs in their own tables (0047).
+  const liveQuestions = source.type === "live" ? await copyLive(source.id, created.id) : 0;
+
   return {
     activity: { ...created, ...patch },
-    questions: questionRows.length,
+    questions: questionRows.length + liveQuestions,
     criteria: rubricRows.length,
   };
 }
