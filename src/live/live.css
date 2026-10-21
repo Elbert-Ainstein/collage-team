@@ -791,7 +791,7 @@
   width: 32px;
   height: 26px;
   border-radius: 6px;
-  border: 1px dashed var(--fv-neutral-300);
+  border: 1px dashed var(--fv-neutral-200);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -799,18 +799,22 @@
   font-weight: 700;
   color: var(--fv-muted);
 }
+/* Locked: a light chip with the answer in it, like every other answer on
+   these screens — not a solid block. Right and wrong only tint it. */
 .lq-pip.locked {
-  border: 1px solid var(--fv-navy);
-  background: var(--fv-navy);
-  color: var(--fv-cream-100);
+  border: 1px solid var(--fv-neutral-300);
+  background: #fff;
+  color: var(--fv-navy);
 }
 .lq-pip.locked.right {
-  background: var(--lq-right);
-  border-color: var(--lq-right);
+  background: var(--lq-right-100);
+  border-color: #a5dcc3;
+  color: var(--lq-right-ink);
 }
 .lq-pip.locked.wrong {
-  background: var(--lq-wrong);
-  border-color: var(--lq-wrong);
+  background: var(--lq-wrong-100);
+  border-color: #f2b8b8;
+  color: var(--lq-wrong);
 }
 .lq-pip.now {
   border: 1.5px solid var(--lq-team);
