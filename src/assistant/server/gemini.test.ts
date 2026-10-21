@@ -41,6 +41,26 @@ describe("geminiRequest", () => {
     expect(r.contents.map((c) => c.role)).toEqual(["user", "model", "user"]);
     expect(r.tools[0].functionDeclarations.map((f) => f.name)).toEqual(["seat_students", "prepare_import"]);
   });
+
+  it("sends words-only turns as one text part, and leaves the model free to answer in words", () => {
+    const r = geminiRequest(call);
+    expect(r.contents[0].parts).toEqual([{ text: "Move Ada" }]);
+    expect(r.toolConfig.functionCallingConfig.mode).toBe("AUTO");
+  });
+
+  it("sends a file as inline data before the words that ask about it", () => {
+    const r = geminiRequest({
+      ...call,
+      turns: [{ role: "user", text: "Draft these.", file: { mimeType: "application/pdf", data: "JVBERi0=" } }],
+    });
+    expect(r.contents).toEqual([
+      { role: "user", parts: [{ inlineData: { mimeType: "application/pdf", data: "JVBERi0=" } }, { text: "Draft these." }] },
+    ]);
+  });
+
+  it("makes the model call a tool when one is required", () => {
+    expect(geminiRequest({ ...call, requireTool: true }).toolConfig.functionCallingConfig.mode).toBe("ANY");
+  });
 });
 
 describe("readGeminiResponse", () => {

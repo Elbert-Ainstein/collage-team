@@ -433,8 +433,12 @@ export async function purgeActivityStorage(activityId: string): Promise<PurgeCou
  * `feedback` stays for the same reason the comment text does: it is the
  * marker's judgement on graded work, part of the record of the year rather than
  * the year's media, and it is a handful of images rather than gigabytes.
+ *
+ * `imports` holds the instructor's own PDFs of questions, uploaded to draft a
+ * live-questions activity from — her material, like `activity-files`, not the
+ * students'.
  */
-export type ClearBucket = Exclude<Bucket, "activity-files" | "feedback">;
+export type ClearBucket = Exclude<Bucket, "activity-files" | "feedback" | "imports">;
 
 export type ClearStep = "scan" | "objects" | "rows";
 
