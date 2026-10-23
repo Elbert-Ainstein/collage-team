@@ -85,6 +85,7 @@ export function LiveAssignment({ assignment, enrolment, onBack }: Props) {
             m={m}
             team={team}
             title={activity.title}
+            brief={activity.source_text?.trim() ?? ""}
             due={due}
             answered={(i) => saver.answers[m.questions[i]?.id] !== undefined}
             onStart={setCursor}

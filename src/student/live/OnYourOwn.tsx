@@ -4,6 +4,7 @@
 // Every answer saves as it's given (useAnswerSaver).
 
 import { useState } from "react";
+import { BriefText } from "@/checkins/BriefText";
 import type { TeamWithMembers } from "@/checkins/types";
 import { canonicalAnswer, normalizeNumber, optionLetter } from "@/live/answers";
 import { Figure } from "@/live/figure";
@@ -16,6 +17,7 @@ export function Brief({
   m,
   team,
   title,
+  brief,
   due,
   answered,
   onStart,
@@ -23,6 +25,8 @@ export function Brief({
   m: LiveModel;
   team: TeamWithMembers | null;
   title: string;
+  /** The instructor's description, if there is one. */
+  brief: string;
   due: string | null;
   answered: (q: number) => boolean;
   onStart: (q: number) => void;
@@ -39,6 +43,11 @@ export function Brief({
         {N} question{N === 1 ? "" : "s"}
         {due ? ` · due ${due}` : ""}
       </p>
+      {brief ? (
+        <p className="lq-sdesc">
+          <BriefText text={brief} />
+        </p>
+      ) : null}
 
       <div className="lq-scard lq-how">
         <div className="lq-howrow">

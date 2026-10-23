@@ -105,7 +105,7 @@
   background: var(--fv-cream-300, #f1ece2);
 }
 .lq-bfigure {
-  margin: 10px 0 0 38px;
+  margin: 10px 0 0 var(--lq-bcol);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -113,6 +113,11 @@
 .lq-bfigbtns {
   display: flex;
   gap: 14px;
+}
+/* No image yet: "+ Image" belongs to the question above, not the options below. */
+.lq-bfigure.bare {
+  margin-top: 2px;
+  margin-bottom: 14px;
 }
 .lq-srcpage {
   margin-left: auto;
@@ -2103,6 +2108,30 @@ button.lq-reviewrow {
   font-size: 30px;
   line-height: 1.2;
 }
+/* The description, written the way the page shows it: same size and measure,
+   no box, like the title above it. */
+.lq-descin {
+  display: block;
+  width: 100%;
+  max-width: 64ch;
+  min-height: calc(1.65em * 2);
+  margin: 14px 0 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  resize: none;
+  field-sizing: content;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--fv-navy);
+}
+.lq-descin::placeholder {
+  color: var(--fv-neutral-400);
+}
+.lq-descin:focus {
+  outline: none;
+}
 .lq-vis {
   display: inline-flex;
   align-items: center;
@@ -2148,6 +2177,9 @@ button.lq-reviewrow {
   gap: 10px;
 }
 .lq-bq {
+  /* The Q tag plus its gap: everything under the question starts here, so
+     the image, options and key line up with the question box. */
+  --lq-bcol: 48px;
   padding: 12px 14px;
   margin-bottom: 10px;
 }
@@ -2157,6 +2189,10 @@ button.lq-reviewrow {
   gap: 10px;
 }
 .lq-bqhead .lq-qn {
+  /* One width for Q1 through Q99, so every question starts at the same x. */
+  min-width: 38px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
   margin-top: 8px;
 }
 .lq-bstem {
@@ -2166,6 +2202,11 @@ button.lq-reviewrow {
   font-family: var(--fv-serif);
   font-size: 15px;
   line-height: 1.4;
+}
+/* Room to write while it's empty; once written, it hugs the text so what
+   sits under it (the image) reads as part of the question. */
+.lq-bstem:not(:placeholder-shown) {
+  min-height: 0;
 }
 .lq-bremove {
   width: 28px;
@@ -2180,7 +2221,7 @@ button.lq-reviewrow {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px 10px;
-  margin: 10px 0 0 38px;
+  margin: 10px 0 0 var(--lq-bcol);
 }
 .lq-bopt {
   display: flex;
@@ -2227,7 +2268,7 @@ button.lq-reviewrow {
   align-items: center;
   flex-wrap: wrap;
   gap: 6px 14px;
-  margin: 8px 0 0 38px;
+  margin: 8px 0 0 var(--lq-bcol);
 }
 .lq-addrow {
   display: flex;
@@ -2481,6 +2522,13 @@ button.lq-reviewrow {
   font-weight: 700;
   letter-spacing: var(--fv-tight);
   line-height: 1.15;
+}
+.lq-sdesc {
+  margin: -4px 0 18px;
+  font-size: 16px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 .lq-how {
   display: flex;
@@ -2749,12 +2797,28 @@ button.lq-reviewrow {
   font-weight: 600;
   color: var(--fv-navy-700);
   cursor: pointer;
+  /* A taller hit area for touch, without moving the text. */
+  padding: 8px 6px;
+  margin: -8px -6px;
+  border-radius: 4px;
+}
+.lq-linkish:hover:not(:disabled) {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.lq-linkish:focus-visible {
+  outline: 2px solid var(--fv-navy-700);
+  outline-offset: -4px;
+}
+.lq-linkish:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 .lq-agentnote {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin: 10px 0 0 38px;
+  margin: 10px 0 0 var(--lq-bcol);
   padding: 9px 11px;
   border-radius: var(--fv-r-md);
   background: var(--fv-cream-300);
@@ -2894,7 +2958,7 @@ button.lq-reviewrow {
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 10px 14px;
-  margin: 10px 0 0 38px;
+  margin: 10px 0 0 var(--lq-bcol);
   padding: 12px;
   border: 1px solid var(--fv-neutral-200);
   border-radius: var(--fv-r-lg);
@@ -3142,6 +3206,18 @@ button.lq-reviewrow {
   max-width: 64ch;
   font-size: 16px;
   line-height: 1.65;
+  /* The line breaks typed into the builder are kept, as on the other pages. */
+  white-space: pre-wrap;
+}
+/* Its 8px of touch padding is cancelled out by these margins, so the gaps
+   read as 16px under the switch and 6px under the words. */
+.lq-descedit {
+  display: block;
+  width: fit-content;
+  margin: 8px -6px -8px;
+}
+.lq-desc + .lq-descedit {
+  margin-top: -2px;
 }
 .lq-badges {
   display: flex;

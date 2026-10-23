@@ -28,7 +28,7 @@ interface Props {
   data: FacultyData;
   activity: Activity;
   snapshot: LiveSnapshot;
-  /** Which step it opens on: 0 for a new one, 1 for "Edit questions". */
+  /** Which step it opens on: 0 for a new one or its details, 1 for "Edit questions". */
   startStep: 0 | 1;
   /** Leaves without finishing; a new activity stays as a hidden draft. */
   onLeave: () => void;
@@ -56,6 +56,10 @@ export function LiveBuilder({ data, activity, snapshot, startStep, onLeave, onDo
   const [title, setTitle] = useState(firstTime && activity.title === "Untitled" ? "" : activity.title);
   const [week, setWeek] = useState<number | null>(activity.week);
   const [due, setDue] = useState(toLocalInput(activity.due_at ?? activity.individual_due_at));
+  const [desc, setDesc] = useState(activity.source_text ?? "");
+  /** Once the questions step has been open, its edits ride on its own Save, so
+      saving this step must not close the builder under them. */
+  const [sawQuestions, setSawQuestions] = useState(startStep === 1);
   const [questions, setQuestions] = useState<DraftQuestion[]>(() =>
     firstTime ? [blankQuestion()] : draftsFrom(snapshot.questions, snapshot.keys),
   );
@@ -85,14 +89,27 @@ export function LiveBuilder({ data, activity, snapshot, startStep, onLeave, onDo
   const saveBasics = async () => {
     setBusy(true);
     try {
-      await updateActivity(activity.id, { title: title.trim(), week, due_at: fromLocalInput(due) });
+      await updateActivity(activity.id, {
+        title: title.trim(),
+        week,
+        due_at: fromLocalInput(due),
+        // Whitespace-only is no description; null, as ActivityDetail writes it.
+        source_text: desc.trim() ? desc.trim() : null,
+      });
+      // Opened from the page just to change these: done, back to the page.
+      if (!firstTime && !sawQuestions) {
+        onDone(false);
+        return;
+      }
       setStep(1);
+      setSawQuestions(true);
     } catch (e) {
       onError(e);
     } finally {
       setBusy(false);
     }
   };
+  const basicsOnly = !firstTime && !sawQuestions;
 
   const finish = async (confirmed = false) => {
     if (problem) return;
@@ -195,6 +212,14 @@ export function LiveBuilder({ data, activity, snapshot, startStep, onLeave, onDo
               autoFocus
               onChange={(e) => setTitle(e.target.value)}
             />
+            <textarea
+              className="lq-descin"
+              rows={3}
+              value={desc}
+              placeholder="Add a description"
+              aria-label="Description"
+              onChange={(e) => setDesc(e.target.value)}
+            />
             <div className="fv-fields">
               <label className="fv-field">
                 <span className="fv-eyebrow">Week</span>
@@ -219,7 +244,7 @@ export function LiveBuilder({ data, activity, snapshot, startStep, onLeave, onDo
 
             <div className="fv-editbar">
               <button type="button" className="fv-btn primary sm" disabled={!title.trim() || busy} onClick={() => void saveBasics()}>
-                Save and continue
+                {basicsOnly ? "Save" : "Save and continue"}
               </button>
               <button type="button" className="fv-btn ghost sm" onClick={onLeave}>
                 Not now
