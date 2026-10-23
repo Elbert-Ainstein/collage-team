@@ -13,6 +13,7 @@ const snap: LiveSnapshot = {
   responses: [],
   votes: [],
   locks: [{ question_id: "q", activity_id: "x", team_id: "t", answer: "-9.8", correct: null, locked_by: "a", locked_at: "" }],
+  attempts: [],
 };
 
 describe("teamCsv", () => {
@@ -22,5 +23,19 @@ describe("teamCsv", () => {
     expect(row.startsWith(`"'=HYPERLINK(""x"")"`)).toBe(true);
     expect(row).toContain('"Zoë, A; Bo"');
     expect(row.endsWith(",-9.8")).toBe(true);
+  });
+
+  it("scores by the try each question was got on, and lists the tries", () => {
+    const at = (attempt: number, answer: string, correct: boolean) =>
+      ({ question_id: "q", activity_id: "x", team_id: "t", attempt, answer, correct, locked_by: "a", locked_at: "" });
+    const m = buildLiveModel({
+      snapshot: { ...snap, attempts: [at(1, "-9.7", false), at(2, "-9.8", true)] },
+      students: team.members,
+      teams: [team],
+      now: 0,
+    });
+    const row = teamCsv(m).split("\n")[1].split(",");
+    // A trail isn't a plain number, so a leading minus is defused like any other.
+    expect(row.slice(-4)).toEqual(["0.5", "1", "", "'-9.7 → -9.8"]);
   });
 });

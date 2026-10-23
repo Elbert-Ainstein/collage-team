@@ -11,7 +11,7 @@ import { deleteActivity, updateActivity } from "@/checkins/data";
 import { HIDDEN_INSTANT, type Activity, type Student } from "@/checkins/types";
 import { isOpenToStudents } from "@/checkins/studentData";
 import { remove as removeObjects } from "@/checkins/storage";
-import { closeLive, loadLive, scoreLive, startTeamMode } from "@/live/data";
+import { closeLive, loadLive, printOldKeys, scoreLive, startTeamMode } from "@/live/data";
 import { mmss, type LiveModel } from "@/live/model";
 import type { LivePhase } from "@/live/types";
 import { Av, Ic, LiveDot } from "@/live/ui";
@@ -424,7 +424,14 @@ function TeamHalf({ data, activity, m, reload, onError }: Props) {
     setBusy(true);
     setNote(null);
     try {
-      if (move === "start") await startTeamMode(activity.id);
+      if (move === "start") {
+        // Keys from before 0049 get what a team's typed expression is checked
+        // against as it submits. Never in the way of starting the class: without
+        // prints a team's expression is only right as the key writes it until
+        // scoring, which decides by the algebra regardless.
+        if (data.can.author) await printOldKeys(activity.id, m.questions).catch(() => {});
+        await startTeamMode(activity.id);
+      }
       if (move === "close") await closeLive(activity.id);
       await reload();
       if ((move === "close" || move === "score") && data.can.grade) await score();

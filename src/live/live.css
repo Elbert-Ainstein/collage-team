@@ -3465,3 +3465,139 @@ button.lq-reviewrow {
 .lq-qcells .lq-pick {
   max-width: 58px;
 }
+
+/* ------------------------------------------- team tries (0049): told at once */
+/* A team is told right or wrong as each answer lands and goes again when it's
+   wrong, for less. A tried answer stays on screen, struck through, so the team
+   sees what's been ruled out; "worth" says what the next try earns. */
+.lq-introline.lq-introrule {
+  margin-top: -10px;
+  font-size: 13px;
+}
+.lq-sqrow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-bottom: 6px;
+}
+.lq-sqrow .lq-sq {
+  margin-bottom: 0;
+}
+.lq-worth {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--lq-team);
+  font-variant-numeric: tabular-nums;
+}
+.lq-worth.retry {
+  color: var(--fv-amber);
+}
+.lq-tried {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  border-radius: var(--fv-r-lg);
+  background: var(--lq-wrong-100);
+  color: var(--lq-wrong);
+  font-size: 13px;
+  line-height: 1.4;
+  animation: lq-rise 200ms ease;
+}
+.lq-choice.out,
+.lq-choice.out:hover {
+  cursor: default;
+  border-style: dashed;
+  border-color: var(--fv-neutral-300);
+  background: transparent;
+  box-shadow: none;
+  color: var(--fv-muted);
+}
+.lq-choice.out .lq-choicet {
+  text-decoration: line-through;
+  text-decoration-color: var(--fv-neutral-400);
+}
+.lq-choice.out .lq-choicel {
+  border-color: #f2b8b8;
+  background: var(--lq-wrong-100);
+  color: var(--lq-wrong);
+}
+.lq-outtag {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--lq-wrong);
+}
+.lq-toast.right {
+  background: var(--lq-right-100);
+  color: var(--lq-right-ink);
+}
+.lq-toast.wrong {
+  background: var(--lq-wrong-100);
+  color: var(--lq-wrong);
+}
+/* The student's question boxes: right and wrong win over the team purple. */
+.lq-spip.team.filled.right {
+  background: var(--lq-right-100);
+  border-color: #a5dcc3;
+  color: var(--lq-right-ink);
+}
+.lq-spip.team.filled.wrong {
+  background: var(--lq-wrong-100);
+  border-color: #f2b8b8;
+  color: var(--lq-wrong);
+}
+.lq-donescore {
+  margin: 0 0 6px;
+  font-size: 15px;
+  color: var(--fv-navy);
+}
+.lq-donescore b {
+  font-size: 22px;
+  color: var(--lq-team);
+}
+.lq-tries {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+  min-width: 0;
+}
+.lq-tries.hidden {
+  font-size: 12px;
+  white-space: nowrap;
+}
+/* What the question earned the team: 1, ½, ¼ or 0. */
+.lq-credit {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--lq-team);
+  white-space: nowrap;
+}
+.lq-picktries {
+  align-self: flex-start;
+  margin: 1px 0 0 1px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0.8;
+}
+.lq-piptries {
+  margin-left: 1px;
+  font-size: 9px;
+  line-height: 0;
+  opacity: 0.8;
+}
+.lq-tag.tried {
+  background: var(--lq-wrong-100);
+  color: var(--lq-wrong);
+}
+.lq-bnote {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--fv-muted);
+}

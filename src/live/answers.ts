@@ -10,7 +10,10 @@
 // Expressions are the one kind the database can't check: it doesn't do
 // algebra. The staff client decides them here — by evaluating both sides at a
 // handful of points, the way Learning Catalytics' checker does — and passes
-// the verdicts to score_live. No AI anywhere in this.
+// the verdicts to score_live. In team mode, when a team has to be told right
+// or wrong the moment it submits, the browsers hand the database those values
+// instead (expressionPrint) and it compares them by the same rule (0049's
+// live_prints_match). No AI anywhere in this.
 
 import type { MathNode } from "mathjs";
 import type { LiveKey, LiveKind, LiveQuestion } from "./types";
@@ -70,6 +73,23 @@ export function isRight(question: LiveQuestion, key: LiveKey | null | undefined,
   return false;
 }
 
+// ------------------------------------------------------------ team tries
+
+/**
+ * In team mode a team is told right or wrong as it submits, and tries again
+ * when it's wrong (0049). Getting a question right is worth the whole point
+ * first time, then half, then a quarter, then nothing — 0049's
+ * live_attempt_credit, which is what the gradebook gets.
+ */
+export const TRY_CREDIT: readonly number[] = [1, 0.5, 0.25];
+export const tryCredit = (n: number): number => TRY_CREDIT[n - 1] ?? 0;
+
+/** Tries a team gets at a typed answer. Multiple choice may try every option. */
+export const TYPED_TRIES = 3;
+/** 0049's live_max_attempts. */
+export const maxTries = (q: Pick<LiveQuestion, "kind" | "options">): number =>
+  q.kind === "mc" ? Math.max(1, q.options.length) : TYPED_TRIES;
+
 // --------------------------------------------------------- expressions
 
 /** What students actually type, made into something the parser reads. */
@@ -109,8 +129,9 @@ function onlyArithmetic(node: MathNode): boolean {
 
 // Twenty points: an answer built to agree with the key at exactly the points
 // checked — "F/2 + (F-p1)(F-p2)…" — needs a factor per point, and twenty of
-// those don't fit in MAX_EXPRESSION_LENGTH.
-const TRIALS = 20;
+// those don't fit in MAX_EXPRESSION_LENGTH. 0049's live_print_ok and
+// live_prints_match have both numbers written in; change them together.
+export const TRIALS = 20;
 const MIN_COMPARED = 10;
 
 // A fixed sequence, so the same two answers always get the same verdict.
@@ -123,73 +144,105 @@ function* points(seed = 7): Generator<number> {
 }
 
 /**
- * Are these the same expression? Both are evaluated at twenty points; they
- * must use the same variables, be defined at the same points, and agree to a
- * relative 1e-9 wherever they are (at least ten points). So "F/2", "0.5F" and "F·0.5" agree,
- * and "0.33v" for "v/3" does not — decimals for fractions are wrong, as in
- * Learning Catalytics.
+ * An expression as the checker sees it: its variables, and its value at each
+ * of the TRIALS points (the n-th point going to the variables in sorted order,
+ * so two expressions in the same variables are evaluated in the same places).
+ * Null where it isn't a real number there.
  */
-export async function expressionsEquivalent(a: string, b: string): Promise<boolean> {
-  if (!a.trim() || !b.trim() || a.length > MAX_EXPRESSION_LENGTH || b.length > MAX_EXPRESSION_LENGTH) return false;
+export interface ExpressionPrint {
+  vars: string[];
+  values: (number | null)[];
+}
+
+const variablesOf = (node: MathNode): Set<string> => {
+  const fns = new Set(
+    node
+      .filter((n) => n.type === "FunctionNode")
+      .map((n) => (n as unknown as { fn: { name: string } }).fn.name),
+  );
+  return new Set(
+    node
+      .filter((n) => n.type === "SymbolNode")
+      .map((n) => (n as unknown as { name: string }).name)
+      .filter((name) => !fns.has(name) && !NOT_VARIABLES.has(name)),
+  );
+};
+
+/** Null for anything that can't be checked: empty, too long, not arithmetic, or failing to evaluate. */
+export async function expressionPrint(expr: string): Promise<ExpressionPrint | null> {
+  if (!expr.trim() || expr.length > MAX_EXPRESSION_LENGTH) return null;
   const math = await import("mathjs");
-  let na: MathNode;
-  let nb: MathNode;
+  let node: MathNode;
   try {
-    na = math.parse(prepare(a));
-    nb = math.parse(prepare(b));
+    node = math.parse(prepare(expr));
   } catch {
-    return false;
+    return null;
   }
-  if (!onlyArithmetic(na) || !onlyArithmetic(nb)) return false;
+  if (!onlyArithmetic(node)) return null;
+  const vars = [...variablesOf(node)].sort();
 
-  const variables = (node: MathNode): Set<string> => {
-    const fns = new Set(
-      node
-        .filter((n) => n.type === "FunctionNode")
-        .map((n) => (n as unknown as { fn: { name: string } }).fn.name),
-    );
-    return new Set(
-      node
-        .filter((n) => n.type === "SymbolNode")
-        .map((n) => (n as unknown as { name: string }).name)
-        .filter((name) => !fns.has(name) && !NOT_VARIABLES.has(name)),
-    );
-  };
-  const va = variables(na);
-  const vb = variables(nb);
-  if (va.size !== vb.size || [...va].some((v) => !vb.has(v))) return false;
-
-  let fa: { evaluate: (scope: Record<string, number>) => unknown };
-  let fb: typeof fa;
+  let f: { evaluate: (scope: Record<string, number>) => unknown };
   try {
-    fa = na.compile();
-    fb = nb.compile();
+    f = node.compile();
   } catch {
-    return false;
+    return null;
   }
 
   const gen = points();
-  let compared = 0;
+  const values: (number | null)[] = [];
   for (let trial = 0; trial < TRIALS; trial++) {
     const scope: Record<string, number> = {};
-    for (const v of va) scope[v] = gen.next().value as number;
+    for (const v of vars) scope[v] = gen.next().value as number;
     let x: unknown;
-    let y: unknown;
     try {
-      x = fa.evaluate(scope);
-      y = fb.evaluate(scope);
+      x = f.evaluate(scope);
     } catch {
-      return false;
+      return null;
     }
-    const realX = typeof x === "number" && Number.isFinite(x);
-    const realY = typeof y === "number" && Number.isFinite(y);
+    values.push(typeof x === "number" && Number.isFinite(x) ? x : null);
+  }
+  return { vars, values };
+}
+
+/**
+ * The comparison itself — and 0049's live_prints_match, line for line: the
+ * same variables, defined at the same points, and agreeing to a relative 1e-9
+ * wherever they are (at least ten points).
+ */
+export function samePrint(a: ExpressionPrint, b: ExpressionPrint): boolean {
+  if (a.vars.length !== b.vars.length || a.vars.some((v, i) => v !== b.vars[i])) return false;
+  if (a.values.length !== TRIALS || b.values.length !== TRIALS) return false;
+  let compared = 0;
+  for (let i = 0; i < TRIALS; i++) {
+    const x = a.values[i];
+    const y = b.values[i];
     // Defined where the key is, and nowhere else: "F/2 + 0*sqrt(F-2)" is not F/2.
-    if (realX !== realY) return false;
-    if (!realX) continue;
+    if ((x === null) !== (y === null)) return false;
+    if (x === null || y === null) continue;
     compared++;
-    if (Math.abs((x as number) - (y as number)) > 1e-9 * Math.max(1, Math.abs(x as number), Math.abs(y as number))) return false;
+    if (Math.abs(x - y) > 1e-9 * Math.max(1, Math.abs(x), Math.abs(y))) return false;
   }
   return compared >= MIN_COMPARED;
+}
+
+/**
+ * Are these the same expression? So "F/2", "0.5F" and "F·0.5" agree, and
+ * "0.33v" for "v/3" does not — decimals for fractions are wrong, as in
+ * Learning Catalytics.
+ */
+export async function expressionsEquivalent(a: string, b: string): Promise<boolean> {
+  const [pa, pb] = await Promise.all([expressionPrint(a), expressionPrint(b)]);
+  return pa !== null && pb !== null && samePrint(pa, pb);
+}
+
+/**
+ * What a team's browser sends with its answer to an expression (0049's
+ * lock_team_answer): the answer it means, and its print — all nulls when it
+ * can't be checked, which matches nothing.
+ */
+export async function answerPrint(answer: string): Promise<ExpressionPrint & { answer: string }> {
+  const print = await expressionPrint(answer);
+  return { answer, ...(print ?? { vars: [], values: Array<null>(TRIALS).fill(null) }) };
 }
 
 /**

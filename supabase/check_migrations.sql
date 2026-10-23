@@ -282,6 +282,13 @@ select '0048 ownership checks read once',
              and (select prosecdef from pg_proc where oid = to_regprocedure('public.owns_team(uuid)'))
             then 'applied'
             else 'NOT APPLIED — run 0048_owns_student_definer.sql' end
+union all
+select '0049 team tries, told at once',
+       case when to_regclass('public.live_attempts') is not null
+             and to_regprocedure('public.lock_team_answer(uuid,jsonb)') is not null
+             and to_regprocedure('public.lock_team_answer(uuid)') is null
+            then 'applied'
+            else 'NOT APPLIED — run 0049_live_team_attempts.sql' end
 order by 1;
 
 -- ------------------------------------------------------- and the buckets

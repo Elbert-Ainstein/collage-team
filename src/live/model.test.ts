@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildLiveModel, outcomeOf } from "./model";
-import type { LiveSnapshot } from "./types";
+import { buildLiveModel, fmtPoints, outcomeOf } from "./model";
+import type { LiveAttempt, LiveSnapshot } from "./types";
 import type { Student, TeamWithMembers } from "@/checkins/types";
 
 const T0 = Date.parse("2026-10-27T10:00:00Z");
@@ -45,9 +45,30 @@ function snapshot(over: Partial<LiveSnapshot> = {}): LiveSnapshot {
       { question_id: "q2", activity_id: "a", team_id: "t1", student_id: "s2", answer: "20", updated_at: "" },
     ],
     locks: [{ question_id: "q1", activity_id: "a", team_id: "t1", answer: "B", correct: null, locked_by: "s1", locked_at: iso(70) }],
+    attempts: [],
     ...over,
   };
 }
+
+const attempt = (question_id: string, n: number, answer: string, correct: boolean | null, at = 0, team_id = "t1"): LiveAttempt => ({
+  question_id,
+  activity_id: "a",
+  team_id,
+  attempt: n,
+  answer,
+  correct,
+  locked_by: "s1",
+  locked_at: iso(at),
+});
+const lock = (question_id: string, answer: string, correct: boolean | null, at = 0, team_id = "t1") => ({
+  question_id,
+  activity_id: "a",
+  team_id,
+  answer,
+  correct,
+  locked_by: "s1",
+  locked_at: iso(at),
+});
 
 const model = (over: Partial<LiveSnapshot> = {}, verdicts: Record<string, Record<string, boolean>> = { q3: { "0.5F": true } }) =>
   buildLiveModel({
@@ -132,12 +153,104 @@ describe("teams", () => {
   });
 });
 
+describe("team tries", () => {
+  // q1 (3 options, key B): C wrong, then B right. q2 (number): 3 wrong tries, out.
+  const tried = () =>
+    model({
+      locks: [lock("q1", "B", true, 70), lock("q2", "1", false, 150)],
+      attempts: [
+        attempt("q1", 1, "C", false, 40),
+        attempt("q1", 2, "B", true, 70),
+        attempt("q2", 1, "3", false, 100),
+        attempt("q2", 2, "2", false, 120),
+        attempt("q2", 3, "1", false, 150),
+      ],
+    });
+
+  it("lists every try in order and knows which one was right", () => {
+    const m = tried();
+    expect(m.tries("t1", 0).map((t) => t.answer)).toEqual(["C", "B"]);
+    expect(m.rightOn("t1", 0)).toBe(2);
+    expect(m.rightOn("t1", 1)).toBe(0);
+    expect(m.rightOn("t1", 2)).toBe(0);
+  });
+
+  it("is worth less the more tries it took: 1, ½, ¼, then nothing", () => {
+    const m = model({
+      locks: [lock("q1", "B", true), lock("q2", "19.6", true), lock("q3", "F/2", true)],
+      attempts: [
+        attempt("q1", 1, "B", true),
+        attempt("q2", 1, "1", false),
+        attempt("q2", 2, "19.6", true),
+        attempt("q3", 1, "F", false),
+        attempt("q3", 2, "2F", false),
+        attempt("q3", 3, "F/2", true),
+      ],
+    });
+    expect([0, 1, 2].map((q) => m.credit("t1", q))).toEqual([1, 0.5, 0.25]);
+    expect(m.score("t1")).toBe(1.75);
+    expect(tried().score("t1")).toBe(0.5);
+  });
+
+  it("trusts the verdict the team was given over its own reading of the key", () => {
+    // The key says B; the database, judging when the team submitted, said C was right.
+    const m = model({ locks: [lock("q1", "C", true)], attempts: [attempt("q1", 1, "C", true)] });
+    expect(m.rightOn("t1", 0)).toBe(1);
+  });
+
+  it("counts a lock from before tries existed as one try, judged by the key", () => {
+    const m = model();
+    expect(m.tries("t1", 0)).toHaveLength(1);
+    expect(m.credit("t1", 0)).toBe(1);
+    expect(model({ keys: [] }).score("t1")).toBeNull();
+  });
+
+  it("doesn't count a vote still sitting on an answer the team has tried", () => {
+    const m = model({
+      locks: [lock("q1", "B", true, 70)],
+      attempts: [attempt("q1", 1, "B", true, 70), attempt("q2", 1, "19.6", false, 90)],
+    });
+    // s1's vote is on 19.6, which the team just tried and was told is wrong.
+    expect(m.current("t1")?.votes).toEqual([null, "20"]);
+  });
+
+  it("is on the question it's still trying, however many wrong tries in", () => {
+    const m = tried();
+    const cur = m.current("t1")!;
+    expect(cur.q).toBe(2);
+    expect(m.done("t1")).toBe(2);
+  });
+
+  it("applies to both ways of grading: the team's score doesn't depend on it", () => {
+    const both = tried();
+    const teamOnly = model({
+      state: { ...snapshot().state, grading: "team" },
+      locks: [lock("q1", "B", true, 70), lock("q2", "1", false, 150)],
+      attempts: tried().tries("t1", 0).concat(tried().tries("t1", 1)),
+    });
+    expect(teamOnly.score("t1")).toBe(both.score("t1"));
+  });
+});
+
+describe("fmtPoints", () => {
+  it("reads quarters the way they're said", () => {
+    expect(fmtPoints(3)).toBe("3");
+    expect(fmtPoints(2.5)).toBe("2½");
+    expect(fmtPoints(0.75)).toBe("¾");
+    expect(fmtPoints(0.25)).toBe("¼");
+    expect(fmtPoints(0)).toBe("0");
+    expect(fmtPoints(1 / 3)).toBe("0.33");
+  });
+});
+
 describe("outcomeOf", () => {
   it("says what happened between the student and the team", () => {
-    expect(outcomeOf(true, true).label).toBe("Right both times");
-    expect(outcomeOf(false, true).label).toBe("Team brought them round");
-    expect(outcomeOf(true, false).label).toBe("Was right — team went another way");
-    expect(outcomeOf(false, false).label).toBe("Missed both times");
+    expect(outcomeOf(true, 1).label).toBe("Right both times");
+    expect(outcomeOf(false, 1).label).toBe("Team brought them round");
+    expect(outcomeOf(true, 0).label).toBe("Was right — team went another way");
+    expect(outcomeOf(true, 2).label).toBe("Was right — team went another way");
+    expect(outcomeOf(false, 3).label).toBe("Team got there on try 3");
+    expect(outcomeOf(false, 0).label).toBe("Missed both times");
     expect(outcomeOf(null, null).tone).toBe("muted");
   });
 });

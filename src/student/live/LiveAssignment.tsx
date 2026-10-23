@@ -122,7 +122,7 @@ export function LiveAssignment({ assignment, enrolment, onBack }: Props) {
         );
       }
       return m.current(team.id) ? (
-        <TeamQuestion m={m} team={team} onError={setError} />
+        <TeamQuestion m={m} team={team} onError={setError} onTried={reload} />
       ) : (
         <TeamDone m={m} team={team} meId={me} />
       );

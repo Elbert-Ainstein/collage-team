@@ -7,8 +7,8 @@
 // the instructor's team card and on a student's results can't disagree.
 
 import type { Student, TeamWithMembers } from "@/checkins/types";
-import { isRight, optionLetter } from "./answers";
-import type { LiveKey, LiveLock, LiveQuestion, LiveSnapshot, LiveState } from "./types";
+import { isRight, optionLetter, tryCredit } from "./answers";
+import type { LiveAttempt, LiveKey, LiveLock, LiveQuestion, LiveSnapshot, LiveState } from "./types";
 
 export interface LiveModelInput {
   snapshot: LiveSnapshot;
@@ -26,7 +26,10 @@ export interface TeamCurrent {
   q: number;
   /** Seconds on it: since the last lock, or since team mode started. */
   since: number;
-  /** Each member's vote on it, in member order. */
+  /**
+   * Each member's vote on it, in member order. A vote still sitting on an
+   * answer the team has tried is no vote: that answer is off the table.
+   */
   votes: (string | null)[];
 }
 
@@ -43,8 +46,16 @@ export interface LiveModel {
   /** Own answers right, or null without the keys. */
   ownScore(studentId: string): number | null;
   teamOf(studentId: string): TeamWithMembers | null;
+  /** Each question's lock: the team is done with it, right or out of tries. */
   locks(teamId: string): (LiveLock | null)[];
   done(teamId: string): number;
+  /** The team's tries at question q, first first. A lock from before 0049 is one try. */
+  tries(teamId: string, q: number): LiveAttempt[];
+  /** The try the team got q right on; 0 if it hasn't (yet); null when that isn't known. */
+  rightOn(teamId: string, q: number): number | null;
+  /** What q earned the team (tryCredit), or null when that isn't known. */
+  credit(teamId: string, q: number): number | null;
+  /** Credit summed over the questions: what the gradebook's team score is. */
   score(teamId: string): number | null;
   current(teamId: string): TeamCurrent | null;
   /** Seconds from team mode starting to the last lock, once every question is locked. */
@@ -70,6 +81,12 @@ export function buildLiveModel(input: LiveModelInput): LiveModel {
   }
   const lockOf = new Map<string, LiveLock>();
   for (const l of snapshot.locks) lockOf.set(`${l.team_id}:${l.question_id}`, l);
+  const attemptsOf = new Map<string, LiveAttempt[]>();
+  for (const a of snapshot.attempts) {
+    const k = `${a.team_id}:${a.question_id}`;
+    attemptsOf.set(k, [...(attemptsOf.get(k) ?? []), a]);
+  }
+  for (const list of attemptsOf.values()) list.sort((a, b) => a.attempt - b.attempt);
   const voteOf = new Map<string, string>();
   for (const v of snapshot.votes) voteOf.set(`${v.student_id}:${v.question_id}`, v.answer);
   const teamByStudent = new Map<string, TeamWithMembers>();
@@ -93,6 +110,30 @@ export function buildLiveModel(input: LiveModelInput): LiveModel {
   };
 
   const locks = (teamId: string) => questions.map((q) => lockOf.get(`${teamId}:${q.id}`) ?? null);
+
+  const tries = (teamId: string, q: number): LiveAttempt[] => {
+    const question = questions[q];
+    if (!question) return [];
+    const list = attemptsOf.get(`${teamId}:${question.id}`);
+    if (list?.length) return list;
+    // Locked before 0049, or on a database without it: the lock was the one try.
+    const l = lockOf.get(`${teamId}:${question.id}`);
+    return l ? [{ ...l, attempt: 1 }] : [];
+  };
+
+  const rightOn = (teamId: string, q: number): number | null => {
+    for (const t of tries(teamId, q)) {
+      const v = right(q, t.answer, t.correct);
+      if (v === null) return null;
+      if (v) return t.attempt;
+    }
+    return 0;
+  };
+
+  const credit = (teamId: string, q: number): number | null => {
+    const on = rightOn(teamId, q);
+    return on === null ? null : on === 0 ? 0 : tryCredit(on);
+  };
 
   const sortedLockTimes = (teamId: string) =>
     locks(teamId)
@@ -122,15 +163,15 @@ export function buildLiveModel(input: LiveModelInput): LiveModel {
     teamOf: (sid) => teamByStudent.get(sid) ?? null,
     locks,
     done: (tid) => locks(tid).filter(Boolean).length,
+    tries,
+    rightOn,
+    credit,
     score: (tid) => {
       let n = 0;
-      const ls = locks(tid);
-      for (let i = 0; i < ls.length; i++) {
-        const l = ls[i];
-        if (!l) continue;
-        const v = right(i, l.answer, l.correct);
-        if (v === null) return null;
-        if (v) n++;
+      for (let i = 0; i < questions.length; i++) {
+        const c = credit(tid, i);
+        if (c === null) return null;
+        n += c;
       }
       return n;
     },
@@ -142,10 +183,14 @@ export function buildLiveModel(input: LiveModelInput): LiveModel {
       const team = teams.find((t) => t.id === tid);
       const times = sortedLockTimes(tid);
       const from = times.length ? Math.max(started, times[times.length - 1]) : started;
+      const tried = new Set(tries(tid, q).map((t) => t.answer));
       return {
         q,
         since: seconds(now - from),
-        votes: (team?.members ?? []).map((m) => voteOf.get(`${m.id}:${questions[q].id}`) ?? null),
+        votes: (team?.members ?? []).map((m) => {
+          const v = voteOf.get(`${m.id}:${questions[q].id}`) ?? null;
+          return v !== null && tried.has(v) ? null : v;
+        }),
       };
     },
     finishedAt: (tid) => {
@@ -177,13 +222,28 @@ export { optionLetter };
 
 export type OutcomeTone = "good" | "gain" | "warn" | "bad" | "muted";
 
-/** What happened between a student's own answer and their team's, in a few words. */
-export function outcomeOf(ownRight: boolean | null, teamRight: boolean | null): { label: string; tone: OutcomeTone } {
-  if (ownRight === null || teamRight === null) return { label: "Not scored yet", tone: "muted" };
-  if (ownRight && teamRight) return { label: "Right both times", tone: "good" };
-  if (!ownRight && teamRight) return { label: "Team brought them round", tone: "gain" };
-  if (ownRight && !teamRight) return { label: "Was right — team went another way", tone: "warn" };
+/**
+ * What happened between a student's own answer and their team's, in a few
+ * words. `teamRightOn` is the try the team got it right on (rightOn): 0 for
+ * never, null when that isn't known.
+ */
+export function outcomeOf(ownRight: boolean | null, teamRightOn: number | null): { label: string; tone: OutcomeTone } {
+  if (ownRight === null || teamRightOn === null) return { label: "Not scored yet", tone: "muted" };
+  if (teamRightOn === 1) {
+    return ownRight ? { label: "Right both times", tone: "good" } : { label: "Team brought them round", tone: "gain" };
+  }
+  if (ownRight) return { label: "Was right — team went another way", tone: "warn" };
+  if (teamRightOn > 1) return { label: `Team got there on try ${teamRightOn}`, tone: "warn" };
   return { label: "Missed both times", tone: "bad" };
+}
+
+/** A score in quarters (team credit is 1, ½, ¼), the way it's read: "3", "2½", "¾". */
+export function fmtPoints(n: number): string {
+  const quarters = Math.round(n * 4);
+  if (Math.abs(n * 4 - quarters) > 1e-6) return String(Math.round(n * 100) / 100);
+  const whole = Math.floor(quarters / 4);
+  const part = ["", "¼", "½", "¾"][quarters % 4];
+  return whole === 0 && part ? part : `${whole}${part}`;
 }
 
 export const mmss = (sec: number): string => {

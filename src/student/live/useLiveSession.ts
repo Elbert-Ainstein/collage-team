@@ -119,7 +119,7 @@ export function useLiveSession(activityId: string, enrolment: Enrolment, teamId:
       return;
     }
     let live = true;
-    void expressionVerdicts(snap.questions, snap.keys, [...snap.responses, ...snap.locks]).then((v) => {
+    void expressionVerdicts(snap.questions, snap.keys, [...snap.responses, ...snap.locks, ...snap.attempts]).then((v) => {
       if (live) setVerdicts(v);
     });
     return () => {

@@ -2,6 +2,7 @@
 // the live dot, and the stroked icon set (inline, so nothing is fetched).
 
 import { initials, tintFor } from "@/checkins/data";
+import type { LiveModel } from "./model";
 
 interface Person {
   id: string;
@@ -30,10 +31,13 @@ export function Pick({
   value,
   right,
   size = "md",
+  tries,
 }: {
   value: string | null;
   right?: boolean | null;
   size?: "sm" | "md" | "lg";
+  /** A team's answer that took more than one try: how many, in the corner. */
+  tries?: number;
 }) {
   if (!value) {
     return (
@@ -43,10 +47,44 @@ export function Pick({
     );
   }
   const verdict = right === true ? "right" : right === false ? "wrong" : "";
+  const many = tries !== undefined && tries > 1;
   return (
-    <span className={`lq-pick ${size} ${verdict}`} title={value}>
+    <span className={`lq-pick ${size} ${verdict}`} title={many ? `${value} · ${tries} tries` : value}>
       <span className="lq-pickv">{value}</span>
       {verdict === "right" ? <Tick /> : verdict === "wrong" ? <Cross /> : null}
+      {many ? <span className="lq-picktries fv-num">{tries}</span> : null}
+    </span>
+  );
+}
+
+/**
+ * A team's tries at one question, in order — "C ✗ B ✓" — each marked with the
+ * verdict the team was given. With `reveal` off (the instructor's screen on
+ * the projector) only how many: the answers themselves would say which is right.
+ */
+export function Tries({
+  m,
+  teamId,
+  q,
+  size = "sm",
+  reveal = true,
+}: {
+  m: LiveModel;
+  teamId: string;
+  q: number;
+  size?: "sm" | "md" | "lg";
+  reveal?: boolean;
+}) {
+  const tries = m.tries(teamId, q);
+  if (tries.length === 0) return <Pick value={null} size={size} />;
+  if (!reveal) {
+    return <span className="lq-tries hidden fv-sub fv-num">{tries.length === 1 ? "1 try" : `${tries.length} tries`}</span>;
+  }
+  return (
+    <span className="lq-tries" aria-label={`Tries: ${tries.map((t) => t.answer).join(", ")}`}>
+      {tries.map((t) => (
+        <Pick key={t.attempt} value={t.answer} right={t.correct ?? m.right(q, t.answer)} size={size} />
+      ))}
     </span>
   );
 }

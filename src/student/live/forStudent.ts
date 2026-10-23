@@ -13,6 +13,7 @@ const WRITTEN_FOR_STUDENTS = [
   "That answer can't be used",
   "That question isn't available",
   "You're not on a team for this activity",
+  "Your team already tried that one",
   "Your team has already locked this one",
 ];
 

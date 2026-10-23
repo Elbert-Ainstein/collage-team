@@ -1,17 +1,17 @@
 "use client";
 
 // After the instructor closes the session: how they did on their own, how the
-// team did, and each question's answer beside both of theirs.
+// team did, and each question's answer beside both of theirs — the team's as
+// every try it took, and what that question earned it.
 
 import type { TeamWithMembers } from "@/checkins/types";
-import type { LiveModel } from "@/live/model";
-import { Pick } from "@/live/ui";
+import { fmtPoints, type LiveModel } from "@/live/model";
+import { Pick, Tries } from "@/live/ui";
 
 export function Results({ m, team, meId }: { m: LiveModel; team: TeamWithMembers | null; meId: string }) {
   const N = m.questions.length;
   const own = m.ownScore(meId);
   const together = team ? m.score(team.id) : null;
-  const locks = team ? m.locks(team.id) : m.questions.map(() => null);
 
   if (own === null) {
     return (
@@ -38,7 +38,7 @@ export function Results({ m, team, meId }: { m: LiveModel; team: TeamWithMembers
           <div className="lq-stat team">
             <span className="fv-eyebrow">{team.name}, together</span>
             <span className="lq-statnum fv-num">
-              {together}
+              {fmtPoints(together)}
               <small>/{N}</small>
             </span>
           </div>
@@ -47,7 +47,9 @@ export function Results({ m, team, meId }: { m: LiveModel; team: TeamWithMembers
       <div className="lq-sreslist">
         {m.questions.map((q, i) => {
           const mine = m.own(meId, i);
-          const t = locks[i]?.answer ?? null;
+          const first = team ? m.tries(team.id, i)[0]?.answer ?? null : null;
+          const on = team ? m.rightOn(team.id, i) : null;
+          const credit = team ? m.credit(team.id, i) : null;
           const key = m.key(i);
           const keyText =
             q.kind === "mc"
@@ -60,7 +62,6 @@ export function Results({ m, team, meId }: { m: LiveModel; team: TeamWithMembers
                   : null
                 : key?.accept[0] ?? null;
           const mineRight = mine ? m.right(i, mine) : false;
-          const teamRight = t ? m.right(i, t) : false;
           return (
             <div key={q.id} className="lq-scard lq-sres">
               <div className="lq-sreshead">
@@ -79,11 +80,18 @@ export function Results({ m, team, meId }: { m: LiveModel; team: TeamWithMembers
                 </span>
                 {team ? (
                   <span>
-                    Team <Pick value={t} right={t ? teamRight : undefined} size="sm" />
+                    Team <Tries m={m} teamId={team.id} q={i} />
+                    {credit !== null ? <span className="lq-credit fv-num">{fmtPoints(credit)}</span> : null}
                   </span>
                 ) : null}
                 <span className="fv-sub">
-                  {mine && mine === t ? "Team went with yours" : teamRight && !mineRight ? "Team got there" : mineRight && !teamRight ? "You had it" : ""}
+                  {mine && mine === first
+                    ? "Team went with yours"
+                    : on === 1 && !mineRight
+                      ? "Team got there"
+                      : mineRight && on !== 1
+                        ? "You had it"
+                        : ""}
                 </span>
               </div>
             </div>
