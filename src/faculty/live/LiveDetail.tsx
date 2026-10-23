@@ -206,6 +206,7 @@ export function LiveDetail({ data, activity, fresh, onBack, onChanged, onError }
           onDismissPublished={() => setJustPublished(false)}
           onBack={onBack}
           onEdit={() => setBuilding(1)}
+          onEditDetails={() => setBuilding(0)}
           reload={async () => {
             await reload();
             // Starting team mode froze the teams; the course data has to see that too.

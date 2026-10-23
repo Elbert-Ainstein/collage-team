@@ -6,6 +6,7 @@
 // mode, watch the teams, Close and score.
 
 import { useEffect, useState } from "react";
+import { BriefText } from "@/checkins/BriefText";
 import { deleteActivity, updateActivity } from "@/checkins/data";
 import { HIDDEN_INSTANT, type Activity, type Student } from "@/checkins/types";
 import { isOpenToStudents } from "@/checkins/studentData";
@@ -37,6 +38,8 @@ interface Props {
   onDismissPublished: () => void;
   onBack: () => void;
   onEdit: () => void;
+  /** Title, week, due date and description: the builder's first step. */
+  onEditDetails: () => void;
   /** Re-read this activity's live rows now (a move here shouldn't wait for realtime). */
   reload: () => Promise<void>;
   /** Re-read the course: titles, visibility, the gradebook. */
@@ -116,6 +119,7 @@ function IndividualHalf({
   justPublished,
   onDismissPublished,
   onEdit,
+  onEditDetails,
   onBack,
   onChanged,
   onError,
@@ -128,6 +132,8 @@ function IndividualHalf({
   const visible = isOpenToStudents(activity);
   const reveal = m.state.phase === "closed";
   const due = fmtDue(activity.due_at ?? activity.individual_due_at);
+  // Whitespace-only is no description; rows written elsewhere can carry "".
+  const brief = activity.source_text?.trim() ?? "";
 
   if (drill && drill.kind !== "team") {
     return (
@@ -239,6 +245,19 @@ function IndividualHalf({
               {visible ? "Visible to students" : "Not visible to students"}
             </span>
           </div>
+        ) : null}
+
+        {/* Same renderer the class reads it through, so a link that works here
+            works on their phones. */}
+        {brief ? (
+          <p className="lq-desc">
+            <BriefText text={brief} />
+          </p>
+        ) : null}
+        {data.can.author ? (
+          <button type="button" className="lq-linkish lq-descedit" onClick={onEditDetails}>
+            {brief ? "Edit description" : "+ Description"}
+          </button>
         ) : null}
 
         <div className="lq-badges">

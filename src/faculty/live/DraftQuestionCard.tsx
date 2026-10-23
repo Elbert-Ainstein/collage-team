@@ -120,19 +120,25 @@ export function DraftQuestionCard({ q, n, activityId, onlyOne, locked, onChange,
         )}
       </div>
 
-      {q.figure_path ? (
-        <div className="lq-bfigure">
-          <Figure path={q.figure_path} alt={`Figure for question ${n}`} />
-          <div className="lq-bfigbtns">
+      <div className={`lq-bfigure${q.figure_path ? "" : " bare"}`}>
+        {q.figure_path ? <Figure path={q.figure_path} alt={`Figure for question ${n}`} /> : null}
+        <div className="lq-bfigbtns">
+          {q.figure_path ? (
+            <>
+              <button type="button" className="lq-linkish" disabled={uploading} onClick={() => fileRef.current?.click()}>
+                {uploading ? "Uploading…" : "Replace image"}
+              </button>
+              <button type="button" className="lq-linkish" disabled={uploading} onClick={() => onChange({ ...q, figure_path: null })}>
+                Remove
+              </button>
+            </>
+          ) : (
             <button type="button" className="lq-linkish" disabled={uploading} onClick={() => fileRef.current?.click()}>
-              Replace image
+              {uploading ? "Uploading…" : "+ Image"}
             </button>
-            <button type="button" className="lq-linkish" onClick={() => onChange({ ...q, figure_path: null })}>
-              Remove
-            </button>
-          </div>
+          )}
         </div>
-      ) : null}
+      </div>
       <input
         ref={fileRef}
         type="file"
@@ -244,18 +250,13 @@ export function DraftQuestionCard({ q, n, activityId, onlyOne, locked, onChange,
         </div>
       )}
 
-      <div className="lq-bqfoot">
-        {q.kind === "mc" && q.options.length < MAX_OPTIONS && !locked ? (
+      {q.kind === "mc" && q.options.length < MAX_OPTIONS && !locked ? (
+        <div className="lq-bqfoot">
           <button type="button" className="lq-linkish" onClick={() => onChange({ ...q, options: [...q.options, ""] })}>
             + Option
           </button>
-        ) : null}
-        {q.figure_path ? null : (
-          <button type="button" className="lq-linkish" disabled={uploading} onClick={() => fileRef.current?.click()}>
-            {uploading ? "Uploading…" : "+ Image"}
-          </button>
-        )}
-      </div>
+        </div>
+      ) : null}
 
       {pick && src?.note ? (
         <div className="lq-agentnote">
