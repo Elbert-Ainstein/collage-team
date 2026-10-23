@@ -43,7 +43,7 @@ function Seg<T extends string>({ value, options, disabled, onChange }: { value: 
   return (
     <div className="fv-seg">
       {options.map(([v, label]) => (
-        <button key={v} type="button" className={value === v ? "on" : ""} disabled={disabled} onClick={() => onChange(v)}>
+        <button key={v} type="button" className={value === v ? "on" : ""} aria-pressed={value === v} disabled={disabled} onClick={() => onChange(v)}>
           {label}
         </button>
       ))}

@@ -14,7 +14,7 @@ import { useState } from "react";
 import type { Student, TeamWithMembers } from "@/checkins/types";
 import { optionLetter } from "@/live/answers";
 import { fmtPoints, mmss, outcomeOf, type LiveModel } from "@/live/model";
-import { Av, Ic, LiveDot, Pick, Tick, Tries, voteSummary } from "@/live/ui";
+import { Av, Ic, LiveDot, Pick, Tries, voteSummary } from "@/live/ui";
 
 /** Seconds on one question before a card asks for a look. */
 const LONG = 150;
@@ -211,6 +211,7 @@ function TeamCard({ m, team, reveal, onOpen }: { m: LiveModel; team: TeamWithMem
                 }
               >
                 {l ? (reveal ? l.answer : q + 1) : now ? "…" : ""}
+                {r === null ? null : <span className="lq-sr">{r ? ", right" : ", not right"}</span>}
                 {tries.length > 1 || (now && tries.length > 0) ? <sup className="lq-piptries fv-num">{tries.length}</sup> : null}
               </span>
             );
@@ -528,7 +529,8 @@ export function QuestionsView({ m, reveal }: { m: LiveModel; reveal: boolean }) 
                 const right = reveal && m.right(qi, a) === true;
                 return (
                   <div key={a} className={`lq-opt${right ? " right" : ""}${q.kind === "mc" ? "" : " num"}`}>
-                    <span className="lq-optl">{right ? <Tick size={11} /> : q.kind === "mc" ? a : ""}</span>
+                    <span className="lq-optl">{q.kind === "mc" ? a : ""}</span>
+                    {right ? <span className="lq-sr">The right answer:</span> : null}
                     <span className="lq-opttext">{q.kind === "mc" ? q.options[i] : m.label(qi, a)}</span>
                     <Bars own={own.get(a) ?? 0} ownN={ownN} team={team.get(a) ?? 0} teamN={teamN} showTeams={showTeams} />
                   </div>
@@ -899,7 +901,8 @@ export function StudentQuestion({
           const voters = voting ? (team?.members ?? []).filter((_, vi) => voting.votes[vi] === a) : [];
           return (
             <div key={a} className={`lq-sqopt${isOwn ? " own" : ""}${isTeam ? " team" : ""}`}>
-              <span className={`lq-optl${right ? " right" : ""}`}>{right ? <Tick size={11} /> : question.kind === "mc" ? a : ""}</span>
+              <span className={`lq-optl${right ? " right" : ""}`}>{question.kind === "mc" ? a : ""}</span>
+              {right ? <span className="lq-sr">The right answer:</span> : null}
               <span className="lq-sqopttext">
                 {question.kind === "mc" ? question.options[i] : m.label(q, a)}
                 <span className="lq-sqtags">

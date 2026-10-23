@@ -196,8 +196,17 @@
   border-style: dashed;
   background: transparent;
 }
-.lq-mark {
-  flex: none;
+/* Words for a screen reader that the screen says with colour. */
+.lq-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .lq-livedot {
@@ -254,8 +263,19 @@
   .lq-livedot::after,
   .lq-voterpop,
   .lq-fb,
-  .lq-pip.now {
+  .lq-pip.now,
+  .lq-confirm,
+  .lq-detail,
+  .lq-newmenu,
+  .lq-joinbanner,
+  .lq-srow.live,
+  .lq-agentsteps li,
+  .lq-agentdot i,
+  .lq-published {
     animation: none;
+  }
+  .lq-choice {
+    transition: none;
   }
 }
 
@@ -1867,8 +1887,17 @@ button.lq-tr:hover {
 button.lq-reviewrow {
   cursor: pointer;
 }
+/* A long question takes the row and the answers drop beneath it, rather
+   than the question being squeezed to a word a line. */
+.lq-reviewrow {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
 .lq-reviewrow .lq-qshort {
-  flex: 1;
+  flex: 1 1 14em;
+}
+.lq-reviewrow .lq-youteam {
+  flex-wrap: wrap;
 }
 .lq-waiting {
   border-style: dashed;
@@ -2119,6 +2148,10 @@ button.lq-reviewrow {
 }
 .lq-descin:focus {
   outline: none;
+}
+/* Borderless so it reads as the page, until it's being typed in. */
+.lq-descin:focus-visible {
+  box-shadow: 0 1px 0 var(--fv-neutral-300);
 }
 .lq-vis {
   display: inline-flex;
@@ -3482,7 +3515,8 @@ button.lq-reviewrow {
 .lq-worth.retry {
   color: var(--fv-amber);
 }
-.lq-choice:disabled {
+.lq-choice:disabled,
+span.lq-spip {
   cursor: default;
 }
 .lq-choice.wrong,
@@ -3510,7 +3544,7 @@ button.lq-reviewrow {
   color: #fff;
 }
 /* The bottom bar as Khan Academy's: what happened on the left, in green or
-   red with its mark, and the way on — Next — on the right. */
+   red, and the way on — Next — on the right. */
 .lq-sfoot.fb.right {
   background: var(--lq-right-100);
   border-top-color: #a5dcc3;
@@ -3520,28 +3554,7 @@ button.lq-reviewrow {
   border-top-color: #f2b8b8;
 }
 .lq-fb {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
   animation: lq-rise 200ms ease;
-}
-.lq-fbicon {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 999px;
-  color: #fff;
-  background: var(--fv-navy);
-}
-.lq-fbicon.right {
-  background: var(--lq-right);
-}
-.lq-fbicon.wrong {
-  background: var(--lq-wrong);
 }
 .lq-sfoot.fb .lq-footmsg b {
   font-size: 15px;

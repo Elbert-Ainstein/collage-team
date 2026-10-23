@@ -108,6 +108,9 @@ describe("TeamQuestion after a wrong try", () => {
     expect(foot().textContent).toContain("Bo submitted A — pick another, worth 0.5 points");
     // Nobody is on a live answer, so there's nothing to submit yet.
     expect(foot().querySelector("button")).toBeNull();
+    // Colour only — no check or cross drawn anywhere — with the verdict in words for a screen reader.
+    expect(host.querySelector(".lq-choices svg, footer svg, .lq-ownstrip svg")).toBeNull();
+    expect(host.querySelector('[role="status"]')?.textContent).toContain("Not quite. Bo submitted A");
   });
 
   it("submits the answer this screen shows, once its vote has gone in", async () => {

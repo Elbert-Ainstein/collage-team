@@ -13,7 +13,7 @@ import { castVote, lockTeamAnswer } from "@/live/data";
 import { Figure } from "@/live/figure";
 import { fmtPoints, type LiveModel } from "@/live/model";
 import type { LiveQuestion } from "@/live/types";
-import { Av, Cross, Ic, Pick, Tick, Tries, voteSummary } from "@/live/ui";
+import { Av, Ic, Pick, Tries, voteSummary } from "@/live/ui";
 import { forStudent } from "./forStudent";
 
 const MAX_TYPED_CHOICES = 8;
@@ -65,14 +65,18 @@ function TeamPips({ m, team, current }: { m: LiveModel; team: TeamWithMembers; c
         // The team was told as each try landed, so a finished question always shows how it went.
         const on = l ? m.rightOn(team.id, i) : null;
         const r = on === null ? null : on > 0;
+        // A long answer doesn't fit the box: the number, in the colour.
         const short = l && l.answer.length <= 6;
         return (
           <span
             key={i}
             className={`lq-spip team${l ? " filled" : ""}${i === current ? " now" : ""}${r === true ? " right" : r === false ? " wrong" : ""}`}
-            aria-label={`Question ${i + 1}${l ? (r === true ? `, right on try ${on}` : r === false ? ", not got" : ", done") : ""}`}
           >
-            {!l ? i + 1 : short ? l.answer : r === true ? <Tick size={12} /> : r === false ? <Cross size={12} /> : "✓"}
+            <span aria-hidden="true">{short ? l.answer : i + 1}</span>
+            <span className="lq-sr">
+              Question {i + 1}
+              {l ? (r === true ? `, right on try ${on}` : r === false ? ", not got" : ", done") : ""}
+            </span>
           </span>
         );
       })}
@@ -284,7 +288,7 @@ export function TeamQuestion({
         <p className="lq-sstem">{question.stem}</p>
         <Figure path={question.figure_path} alt={`Figure for question ${q + 1}`} className="lq-sfig" />
 
-        <div className="lq-ownstrip" aria-label="How each of you answered on your own">
+        <div className="lq-ownstrip" role="group" aria-label="How each of you answered on your own">
           <span className="lq-ownlabel">On your own</span>
           {team.members.map((s, i) => {
             const own = m.own(s.id, q);
@@ -331,17 +335,16 @@ export function TeamQuestion({
         {question.kind !== "mc" && !done ? <Propose q={question} tried={tried} onPropose={vote} /> : null}
       </div>
 
+      {/* Always there, so a screen reader hears the verdict the moment it changes. */}
+      <span className="lq-sr" role="status">
+        {feedback ? `${feedback.title}. ${feedback.sub}` : ""}
+      </span>
       <footer className={`lq-sfoot team${feedback ? ` fb ${feedback.tone}` : agreed ? " agreed" : ""}`}>
         {feedback ? (
           <>
-            <span className="lq-fb" role="status">
-              <span className={`lq-fbicon ${feedback.tone}`} aria-hidden="true">
-                {feedback.tone === "right" ? <Tick size={16} /> : feedback.tone === "wrong" ? <Cross size={16} /> : <Ic name="lock" size={14} />}
-              </span>
-              <span className="lq-footmsg">
-                <b>{feedback.title}</b>
-                <span>{feedback.sub}</span>
-              </span>
+            <span className="lq-footmsg lq-fb">
+              <b>{feedback.title}</b>
+              <span>{feedback.sub}</span>
             </span>
             {done && onNext ? (
               <button type="button" className="fv-btn primary lq-teambtn" onClick={onNext}>
@@ -355,7 +358,7 @@ export function TeamQuestion({
               <b>All on {question.kind === "mc" ? agreed : text(agreed)}</b>
             </span>
             <button type="button" className="fv-btn primary lq-teambtn" disabled={busy} onClick={() => void submit()}>
-              <Ic name="lock" size={15} /> {submitLabel} {question.kind === "mc" ? agreed : ""}
+              <Ic name="lock" size={15} /> {busy ? "Submitting…" : `${submitLabel} ${question.kind === "mc" ? agreed : ""}`}
             </button>
           </>
         ) : (
@@ -374,7 +377,7 @@ export function TeamQuestion({
             </span>
             {rule === "any" && mine ? (
               <button type="button" className="fv-btn primary lq-teambtn" disabled={busy} onClick={() => void submit()}>
-                <Ic name="lock" size={15} /> Submit {question.kind === "mc" ? mine : ""}
+                <Ic name="lock" size={15} /> {busy ? "Submitting…" : `Submit ${question.kind === "mc" ? mine : ""}`}
               </button>
             ) : null}
           </>
@@ -401,12 +404,14 @@ function Propose({ q, tried, onPropose }: { q: LiveQuestion; tried: Set<string>;
     >
       <input
         className="lq-numin"
+        name="proposal"
+        autoComplete="off"
         inputMode={q.kind === "number" ? "decimal" : "text"}
         autoCapitalize="off"
         autoCorrect="off"
         spellCheck={false}
         value={text}
-        placeholder="Propose another answer"
+        placeholder="Propose another answer…"
         aria-label="Propose another answer"
         onChange={(e) => setText(e.target.value)}
       />

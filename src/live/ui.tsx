@@ -24,8 +24,9 @@ export function Av({ p, size = 24, dim = false, ring = false }: { p: Person; siz
 }
 
 /**
- * One answer, as a chip. `right` marks it right or wrong; leave it undefined
- * (or null, when the key isn't known) and it's just the answer.
+ * One answer, as a chip. `right` colours it green or red — colour only, with
+ * the verdict spelled out for screen readers; leave it undefined (or null,
+ * when the key isn't known) and it's just the answer.
  */
 export function Pick({
   value,
@@ -51,7 +52,7 @@ export function Pick({
   return (
     <span className={`lq-pick ${size} ${verdict}`} title={many ? `${value} · ${tries} tries` : value}>
       <span className="lq-pickv">{value}</span>
-      {verdict === "right" ? <Tick /> : verdict === "wrong" ? <Cross /> : null}
+      {verdict ? <span className="lq-sr">{verdict === "right" ? ", right" : ", not right"}</span> : null}
       {many ? <span className="lq-picktries fv-num">{tries}</span> : null}
     </span>
   );
@@ -81,27 +82,11 @@ export function Tries({
     return <span className="lq-tries hidden fv-sub fv-num">{tries.length === 1 ? "1 try" : `${tries.length} tries`}</span>;
   }
   return (
-    <span className="lq-tries" aria-label={`Tries: ${tries.map((t) => t.answer).join(", ")}`}>
+    <span className="lq-tries">
       {tries.map((t) => (
         <Pick key={t.attempt} value={t.answer} right={t.correct ?? m.right(q, t.answer)} size={size} />
       ))}
     </span>
-  );
-}
-
-export function Tick({ size = 10 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 12 12" aria-label="correct" className="lq-mark">
-      <path d="M2.5 6.4l2.3 2.3L9.6 3.6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-export function Cross({ size = 10 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 12 12" aria-label="incorrect" className="lq-mark">
-      <path d="M3.4 3.4l5.2 5.2M8.6 3.4L3.4 8.6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
   );
 }
 
