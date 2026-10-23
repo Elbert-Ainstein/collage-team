@@ -257,15 +257,15 @@ declare
 begin
   -- Own + team: own answers by the key, as before.
   perform pg_temp.expect(pg_temp.score(L, 'individual', A1), 2, 'own + team: A1 own score is 2 of 3');
-  -- Team A: q1 on try 2 (½), q2 never (0), q3 on try 1 (1).
-  perform pg_temp.expect(pg_temp.score(L, 'team', tA), 1.5, 'own + team: team A is ½ + 0 + 1');
-  -- Team B: q1 on try 3 (¼), q2 not tried (0), q3 on try 3 (¼).
-  perform pg_temp.expect(pg_temp.score(L, 'team', tB), 0.5, 'own + team: team B is ¼ + 0 + ¼');
+  -- Team A: q1 on try 2 (0.5), q2 never (0), q3 on try 1 (1).
+  perform pg_temp.expect(pg_temp.score(L, 'team', tA), 1.5, 'own + team: team A is 0.5 + 0 + 1');
+  -- Team B: q1 on try 3 (0.25), q2 not tried (0), q3 on try 3 (0.25).
+  perform pg_temp.expect(pg_temp.score(L, 'team', tB), 0.5, 'own + team: team B is 0.25 + 0 + 0.25');
   perform pg_temp.expect((select max_points from check_ins where activity_id = L and kind = 'team'), 3,
     'the team half is out of the number of questions');
 
   -- Team only: the same team scoring; own answers for completion.
-  perform pg_temp.expect(pg_temp.score(M, 'team', tA), 0.5, 'team only: team A, right on try 2, gets ½');
+  perform pg_temp.expect(pg_temp.score(M, 'team', tA), 0.5, 'team only: team A, right on try 2, gets 0.5');
   perform pg_temp.expect(pg_temp.score(M, 'team', tB), 1, 'team only: team B, right first time, gets 1');
   select r2.is_ci, r2.ci_met, r2.score into r from check_in_results r2 join check_ins c on c.id = r2.check_in_id
    where c.activity_id = M and c.kind = 'individual' and r2.student_id = A1;
@@ -319,9 +319,9 @@ begin
   raise notice 'ok    prints compare as samePrint does';
 
   if live_attempt_credit(1) <> 1 or live_attempt_credit(2) <> 0.5 or live_attempt_credit(3) <> 0.25 or live_attempt_credit(4) <> 0 then
-    raise exception 'FAIL  credit should be 1, ½, ¼, 0';
+    raise exception 'FAIL  credit should be 1, 0.5, 0.25, 0';
   end if;
-  raise notice 'ok    credit is 1, ½, ¼, then nothing';
+  raise notice 'ok    credit is 1, 0.5, 0.25, then nothing';
 end $$;
 
 -- Nobody signed out calls any of it, and the key's helpers nobody at all.

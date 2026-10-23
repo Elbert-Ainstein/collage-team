@@ -10,7 +10,7 @@ import type { Assignment, Enrolment } from "@/checkins/studentData";
 import { Ic, LiveDot } from "@/live/ui";
 import { Brief, OnYourOwn } from "./OnYourOwn";
 import { Results } from "./Results";
-import { TeamDone, TeamIntro, TeamQuestion } from "./TeamVote";
+import { TeamIntro, TeamPlay } from "./TeamVote";
 import { useAnswerSaver } from "./useAnswerSaver";
 import { useLiveSession } from "./useLiveSession";
 import "@/live/live.css";
@@ -121,11 +121,7 @@ export function LiveAssignment({ assignment, enrolment, onBack }: Props) {
           />
         );
       }
-      return m.current(team.id) ? (
-        <TeamQuestion m={m} team={team} onError={setError} onTried={reload} />
-      ) : (
-        <TeamDone m={m} team={team} meId={me} />
-      );
+      return <TeamPlay m={m} team={team} meId={me} onError={setError} onTried={reload} />;
     }
     return <Results m={m} team={team} meId={me} />;
   };

@@ -237,14 +237,8 @@ export function outcomeOf(ownRight: boolean | null, teamRightOn: number | null):
   return { label: "Missed both times", tone: "bad" };
 }
 
-/** A score in quarters (team credit is 1, ½, ¼), the way it's read: "3", "2½", "¾". */
-export function fmtPoints(n: number): string {
-  const quarters = Math.round(n * 4);
-  if (Math.abs(n * 4 - quarters) > 1e-6) return String(Math.round(n * 100) / 100);
-  const whole = Math.floor(quarters / 4);
-  const part = ["", "¼", "½", "¾"][quarters % 4];
-  return whole === 0 && part ? part : `${whole}${part}`;
-}
+/** Points as they're shown: "3", "2.5", "0.75" — two places at most, as team credit (1, 0.5, 0.25) needs. */
+export const fmtPoints = (n: number): string => String(Math.round(n * 100) / 100);
 
 export const mmss = (sec: number): string => {
   const t = Math.max(0, Math.round(sec));

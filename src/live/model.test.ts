@@ -175,7 +175,7 @@ describe("team tries", () => {
     expect(m.rightOn("t1", 2)).toBe(0);
   });
 
-  it("is worth less the more tries it took: 1, ½, ¼, then nothing", () => {
+  it("is worth less the more tries it took: 1, 0.5, 0.25, then nothing", () => {
     const m = model({
       locks: [lock("q1", "B", true), lock("q2", "19.6", true), lock("q3", "F/2", true)],
       attempts: [
@@ -233,11 +233,11 @@ describe("team tries", () => {
 });
 
 describe("fmtPoints", () => {
-  it("reads quarters the way they're said", () => {
+  it("shows points as decimals, two places at most", () => {
     expect(fmtPoints(3)).toBe("3");
-    expect(fmtPoints(2.5)).toBe("2½");
-    expect(fmtPoints(0.75)).toBe("¾");
-    expect(fmtPoints(0.25)).toBe("¼");
+    expect(fmtPoints(2.5)).toBe("2.5");
+    expect(fmtPoints(1.75)).toBe("1.75");
+    expect(fmtPoints(0.25)).toBe("0.25");
     expect(fmtPoints(0)).toBe("0");
     expect(fmtPoints(1 / 3)).toBe("0.33");
   });
