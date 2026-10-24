@@ -4,7 +4,7 @@
 // current, and shows either the builder or the activity page.
 //
 // Current means three things. Realtime wakes it on any change to the session
-// state, a vote or a lock (watchLive) — the in-class part. Own answers aren't
+// state, a vote, a try or a lock (watchLive) — the in-class part. Own answers aren't
 // published (an autosave per keystroke from a whole class), so while students
 // are still answering at home it re-reads every 20 s instead. And during team
 // mode the clock ticks every second so "Q3 · 2:14" counts up.
@@ -118,7 +118,7 @@ export function LiveDetail({ data, activity, fresh, onBack, onChanged, onError }
       return;
     }
     let live = true;
-    void expressionVerdicts(snap.questions, snap.keys, [...snap.responses, ...snap.locks]).then((v) => {
+    void expressionVerdicts(snap.questions, snap.keys, [...snap.responses, ...snap.locks, ...snap.attempts]).then((v) => {
       if (live) setVerdicts(v);
     });
     return () => {

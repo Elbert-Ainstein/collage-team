@@ -1,5 +1,5 @@
-// Team scores as a CSV: one row per team, its members, the score, and the
-// answer it locked on each question.
+// Team scores as a CSV: one row per team, its members, the score, and its
+// tries at each question in order ("C → B": wrong, then right).
 
 import { mmss, type LiveModel } from "@/live/model";
 
@@ -24,7 +24,7 @@ export function teamCsv(m: LiveModel): string {
       m.score(t.id),
       m.questions.length,
       finished === null ? "" : mmss(finished),
-      ...m.locks(t.id).map((l) => l?.answer ?? ""),
+      ...m.questions.map((_, q) => m.tries(t.id, q).map((a) => a.answer).join(" → ")),
     ];
   });
   return [head, ...rows].map((r) => r.map(cell).join(",")).join("\n");

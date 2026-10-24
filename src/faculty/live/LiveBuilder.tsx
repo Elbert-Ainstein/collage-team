@@ -12,7 +12,9 @@
 import { useMemo, useState } from "react";
 import { updateActivity } from "@/checkins/data";
 import type { Activity } from "@/checkins/types";
+import { TRY_CREDIT, TYPED_TRIES } from "@/live/answers";
 import { loadLive, saveLiveQuestions, scoreLive, setLiveSettings } from "@/live/data";
+import { fmtPoints } from "@/live/model";
 import type { LiveGrading, LiveSnapshot, LockRule, ShowAnswers } from "@/live/types";
 import { Ic } from "@/live/ui";
 import { fromLocalInput, toLocalInput } from "../ActivityDetail";
@@ -41,7 +43,7 @@ function Seg<T extends string>({ value, options, disabled, onChange }: { value: 
   return (
     <div className="fv-seg">
       {options.map(([v, label]) => (
-        <button key={v} type="button" className={value === v ? "on" : ""} disabled={disabled} onClick={() => onChange(v)}>
+        <button key={v} type="button" className={value === v ? "on" : ""} aria-pressed={value === v} disabled={disabled} onClick={() => onChange(v)}>
           {label}
         </button>
       ))}
@@ -298,12 +300,19 @@ export function LiveBuilder({ data, activity, snapshot, startStep, onLeave, onDo
                   </div>
                   <div className="fv-field">
                     <span className="fv-eyebrow">Show answers</span>
-                    <Seg value={show} disabled={frozen} onChange={setShow} options={[["close", "When I close"], ["lock", "As teams lock"]]} />
+                    <Seg value={show} disabled={frozen} onChange={setShow} options={[["close", "When I close"], ["lock", "As teams finish each"]]} />
                   </div>
                   <div className="fv-field">
                     <span className="fv-eyebrow">Grade</span>
                     <Seg value={grading} disabled={frozen} onChange={setGrading} options={[["both", "Own + team"], ["team", "Team only"]]} />
                   </div>
+                  {/* The same either way: grading only decides what own answers count for (0049). */}
+                  <p className="lq-bnote">
+                    {grading === "both" ? "Own answers score a point each when right. " : "Own answers count for completion. "}
+                    Teams see right or wrong as soon as they submit and try again until they have it:{" "}
+                    {TRY_CREDIT.map((c, i) => `${fmtPoints(c)} on try ${i + 1}`).join(", ")}, nothing after. Typed answers get{" "}
+                    {TYPED_TRIES} tries.
+                  </p>
                 </div>
               </aside>
             </div>

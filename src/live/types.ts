@@ -3,7 +3,7 @@
 // One activity of type "live" has a state row, its questions, and — readable
 // only by staff, or by students once the rules in 0047 let them — a key per
 // question. Students write their own answers before class; in class their
-// votes and their team's locked answers go through the RPCs, never straight
+// votes and their team's tries (0049) go through the RPCs, never straight
 // into the tables.
 
 export type LivePhase = "individual" | "team" | "closed";
@@ -70,11 +70,31 @@ export interface LiveVote {
   updated_at: string;
 }
 
+/** The team is done with a question (0049): it got it right, or it's out of tries. */
 export interface LiveLock {
   question_id: string;
   activity_id: string;
   team_id: string;
+  /** The last try's answer. */
   answer: string;
+  correct: boolean | null;
+  locked_by: string | null;
+  locked_at: string;
+}
+
+/** One try a team had at a question (0049), told right or wrong as it landed. */
+export interface LiveAttempt {
+  question_id: string;
+  activity_id: string;
+  team_id: string;
+  /** 1 for the first. */
+  attempt: number;
+  answer: string;
+  /**
+   * The verdict the team was given; score_live gives it again with the key as
+   * it is by then. Null only on a lock carried over from before 0049 and not
+   * yet scored.
+   */
   correct: boolean | null;
   locked_by: string | null;
   locked_at: string;
@@ -89,4 +109,6 @@ export interface LiveSnapshot {
   responses: LiveResponse[];
   votes: LiveVote[];
   locks: LiveLock[];
+  /** Every try, the wrong ones included. Empty on a database without 0049. */
+  attempts: LiveAttempt[];
 }

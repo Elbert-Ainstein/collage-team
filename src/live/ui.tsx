@@ -2,6 +2,7 @@
 // the live dot, and the stroked icon set (inline, so nothing is fetched).
 
 import { initials, tintFor } from "@/checkins/data";
+import type { LiveModel } from "./model";
 
 interface Person {
   id: string;
@@ -23,17 +24,21 @@ export function Av({ p, size = 24, dim = false, ring = false }: { p: Person; siz
 }
 
 /**
- * One answer, as a chip. `right` marks it right or wrong; leave it undefined
- * (or null, when the key isn't known) and it's just the answer.
+ * One answer, as a chip. `right` colours it green or red — colour only, with
+ * the verdict spelled out for screen readers; leave it undefined (or null,
+ * when the key isn't known) and it's just the answer.
  */
 export function Pick({
   value,
   right,
   size = "md",
+  tries,
 }: {
   value: string | null;
   right?: boolean | null;
   size?: "sm" | "md" | "lg";
+  /** A team's answer that took more than one try: how many, in the corner. */
+  tries?: number;
 }) {
   if (!value) {
     return (
@@ -43,27 +48,45 @@ export function Pick({
     );
   }
   const verdict = right === true ? "right" : right === false ? "wrong" : "";
+  const many = tries !== undefined && tries > 1;
   return (
-    <span className={`lq-pick ${size} ${verdict}`} title={value}>
+    <span className={`lq-pick ${size} ${verdict}`} title={many ? `${value} · ${tries} tries` : value}>
       <span className="lq-pickv">{value}</span>
-      {verdict === "right" ? <Tick /> : verdict === "wrong" ? <Cross /> : null}
+      {verdict ? <span className="lq-sr">{verdict === "right" ? ", right" : ", not right"}</span> : null}
+      {many ? <span className="lq-picktries fv-num">{tries}</span> : null}
     </span>
   );
 }
 
-export function Tick({ size = 10 }: { size?: number }) {
+/**
+ * A team's tries at one question, in order — "C ✗ B ✓" — each marked with the
+ * verdict the team was given. With `reveal` off (the instructor's screen on
+ * the projector) only how many: the answers themselves would say which is right.
+ */
+export function Tries({
+  m,
+  teamId,
+  q,
+  size = "sm",
+  reveal = true,
+}: {
+  m: LiveModel;
+  teamId: string;
+  q: number;
+  size?: "sm" | "md" | "lg";
+  reveal?: boolean;
+}) {
+  const tries = m.tries(teamId, q);
+  if (tries.length === 0) return <Pick value={null} size={size} />;
+  if (!reveal) {
+    return <span className="lq-tries hidden fv-sub fv-num">{tries.length === 1 ? "1 try" : `${tries.length} tries`}</span>;
+  }
   return (
-    <svg width={size} height={size} viewBox="0 0 12 12" aria-label="correct" className="lq-mark">
-      <path d="M2.5 6.4l2.3 2.3L9.6 3.6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-export function Cross({ size = 10 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 12 12" aria-label="incorrect" className="lq-mark">
-      <path d="M3.4 3.4l5.2 5.2M8.6 3.4L3.4 8.6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
+    <span className="lq-tries">
+      {tries.map((t) => (
+        <Pick key={t.attempt} value={t.answer} right={t.correct ?? m.right(q, t.answer)} size={size} />
+      ))}
+    </span>
   );
 }
 

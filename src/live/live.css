@@ -196,8 +196,17 @@
   border-style: dashed;
   background: transparent;
 }
-.lq-mark {
-  flex: none;
+/* Words for a screen reader that the screen says with colour. */
+.lq-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .lq-livedot {
@@ -253,9 +262,20 @@
 @media (prefers-reduced-motion: reduce) {
   .lq-livedot::after,
   .lq-voterpop,
-  .lq-toast,
-  .lq-pip.now {
+  .lq-fb,
+  .lq-pip.now,
+  .lq-confirm,
+  .lq-detail,
+  .lq-newmenu,
+  .lq-joinbanner,
+  .lq-srow.live,
+  .lq-agentsteps li,
+  .lq-agentdot i,
+  .lq-published {
     animation: none;
+  }
+  .lq-choice {
+    transition: none;
   }
 }
 
@@ -1806,18 +1826,6 @@ button.lq-tr:hover {
 .lq-sfoot.agreed .lq-footmsg b {
   color: var(--lq-team);
 }
-.lq-toast {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  margin-bottom: 14px;
-  border-radius: var(--fv-r-lg);
-  background: var(--lq-team-100);
-  color: var(--lq-team);
-  font-size: 13px;
-  animation: lq-rise 200ms ease;
-}
 .lq-ownstrip {
   display: flex;
   flex-wrap: wrap;
@@ -1879,8 +1887,17 @@ button.lq-tr:hover {
 button.lq-reviewrow {
   cursor: pointer;
 }
+/* A long question takes the row and the answers drop beneath it, rather
+   than the question being squeezed to a word a line. */
+.lq-reviewrow {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
 .lq-reviewrow .lq-qshort {
-  flex: 1;
+  flex: 1 1 14em;
+}
+.lq-reviewrow .lq-youteam {
+  flex-wrap: wrap;
 }
 .lq-waiting {
   border-style: dashed;
@@ -2131,6 +2148,10 @@ button.lq-reviewrow {
 }
 .lq-descin:focus {
   outline: none;
+}
+/* Borderless so it reads as the page, until it's being typed in. */
+.lq-descin:focus-visible {
+  box-shadow: 0 1px 0 var(--fv-neutral-300);
 }
 .lq-vis {
   display: inline-flex;
@@ -3464,4 +3485,145 @@ button.lq-reviewrow {
 }
 .lq-qcells .lq-pick {
   max-width: 58px;
+}
+
+/* ------------------------------------------- team tries (0049): told at once */
+/* A team is told right or wrong as each answer lands and goes again when it's
+   wrong, for less — Khan Academy's way: the answer turns green or red where it
+   sits, the bar at the bottom says so, and "worth" says what the next try earns. */
+.lq-introline.lq-introrule {
+  margin-top: -10px;
+  font-size: 13px;
+}
+.lq-sqrow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-bottom: 6px;
+}
+.lq-sqrow .lq-sq {
+  margin-bottom: 0;
+}
+.lq-worth {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--lq-team);
+  font-variant-numeric: tabular-nums;
+}
+.lq-worth.retry {
+  color: var(--fv-amber);
+}
+.lq-choice:disabled,
+span.lq-spip {
+  cursor: default;
+}
+.lq-choice.wrong,
+.lq-choice.wrong:hover {
+  border-color: var(--lq-wrong);
+  box-shadow: inset 0 0 0 1px var(--lq-wrong);
+  background: var(--lq-wrong-100);
+  color: var(--lq-wrong);
+}
+.lq-choice.wrong .lq-choicel {
+  border-color: var(--lq-wrong);
+  background: var(--lq-wrong);
+  color: #fff;
+}
+.lq-choice.right,
+.lq-choice.right:hover {
+  border-color: var(--lq-right);
+  box-shadow: inset 0 0 0 1px var(--lq-right);
+  background: var(--lq-right-100);
+  color: var(--lq-right-ink);
+}
+.lq-choice.right .lq-choicel {
+  border-color: var(--lq-right);
+  background: var(--lq-right);
+  color: #fff;
+}
+/* The bottom bar as Khan Academy's: what happened on the left, in green or
+   red, and the way on — Next — on the right. */
+.lq-sfoot.fb.right {
+  background: var(--lq-right-100);
+  border-top-color: #a5dcc3;
+}
+.lq-sfoot.fb.wrong {
+  background: var(--lq-wrong-100);
+  border-top-color: #f2b8b8;
+}
+.lq-fb {
+  animation: lq-rise 200ms ease;
+}
+.lq-sfoot.fb .lq-footmsg b {
+  font-size: 15px;
+}
+.lq-sfoot.fb.right .lq-footmsg {
+  color: var(--lq-right-ink);
+}
+.lq-sfoot.fb.wrong .lq-footmsg {
+  color: var(--lq-wrong);
+}
+/* The student's question boxes: right and wrong win over the team purple. */
+.lq-spip.team.filled.right {
+  background: var(--lq-right-100);
+  border-color: #a5dcc3;
+  color: var(--lq-right-ink);
+}
+.lq-spip.team.filled.wrong {
+  background: var(--lq-wrong-100);
+  border-color: #f2b8b8;
+  color: var(--lq-wrong);
+}
+.lq-donescore {
+  margin: 0 0 6px;
+  font-size: 15px;
+  color: var(--fv-navy);
+}
+.lq-donescore b {
+  font-size: 22px;
+  color: var(--lq-team);
+}
+.lq-tries {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3px;
+  min-width: 0;
+}
+.lq-tries.hidden {
+  font-size: 12px;
+  white-space: nowrap;
+}
+/* What the question earned the team: 1, 0.5, 0.25 or 0. */
+.lq-credit {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--lq-team);
+  white-space: nowrap;
+}
+.lq-picktries {
+  align-self: flex-start;
+  margin: 1px 0 0 1px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0.8;
+}
+.lq-piptries {
+  margin-left: 1px;
+  font-size: 9px;
+  line-height: 0;
+  opacity: 0.8;
+}
+.lq-tag.tried {
+  background: var(--lq-wrong-100);
+  color: var(--lq-wrong);
+}
+.lq-bnote {
+  margin: 4px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--fv-muted);
 }

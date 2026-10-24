@@ -3,14 +3,16 @@
 // Everything a client may change goes one of two ways. The instructor's own
 // rows — questions, keys, settings — are written directly, under RLS. Anything
 // that has to be checked against someone else's rows or the clock — moving the
-// phase, a vote, a team's lock, scoring — goes through an RPC that checks for
+// phase, a vote, a team's try, scoring — goes through an RPC that checks for
 // itself. A database that hasn't run 0047 reads as "no live data" rather than
-// failing the page.
+// failing the page; one that hasn't run 0049 reads as every lock being a
+// single try, told nothing until the session closes.
 
 import { requireSupabase } from "@/lib/supabaseClient";
 import { dbError, selectAll, selectAllIn } from "@/checkins/data";
-import { expressionVerdicts } from "./answers";
+import { answerPrint, expressionPrint, expressionVerdicts, type ExpressionPrint } from "./answers";
 import type {
+  LiveAttempt,
   LiveGrading,
   LiveKey,
   LiveKind,
@@ -32,7 +34,10 @@ function unwrap<T>(res: { data: T | null; error: { message: string } | null }): 
 }
 
 /** 0047 not run here: the tables simply aren't there. */
-const missing = (m: string) => /live_(state|questions|keys|responses|votes|locks)|schema cache|does not exist/i.test(m);
+const missing = (m: string) => /live_(state|questions|keys|responses|votes|locks|attempts)|schema cache|does not exist/i.test(m);
+
+/** 0049 not run here: no live_attempts, no prints, the one-argument lock_team_answer. */
+const before0049 = (m: string) => /live_attempts|prints|lock_team_answer|schema cache|does not exist/i.test(m);
 
 const QUESTION_COLS = "id, activity_id, position, kind, stem, options, unit, figure_path, created_at";
 const KEY_COLS = "question_id, activity_id, correct_option, answer, tolerance, accept";
@@ -63,7 +68,7 @@ export async function loadLive(activityId: string): Promise<LiveSnapshot | null>
   }
   if (!stateRes.data) return null;
 
-  const [questions, keys, responses, votes, locks] = await Promise.all([
+  const [questions, keys, responses, votes, locks, attempts] = await Promise.all([
     selectAll<Record<string, unknown>>((from, to) =>
       db().from("live_questions").select(QUESTION_COLS).eq("activity_id", activityId)
         .order("position").order("id").range(from, to),
@@ -83,6 +88,13 @@ export async function loadLive(activityId: string): Promise<LiveSnapshot | null>
       db().from("live_locks").select("*").eq("activity_id", activityId)
         .order("question_id").order("team_id").range(from, to),
     ),
+    selectAll<LiveAttempt>((from, to) =>
+      db().from("live_attempts").select("*").eq("activity_id", activityId)
+        .order("question_id").order("team_id").order("attempt").range(from, to),
+    ).catch((e: unknown) => {
+      if (e instanceof Error && before0049(e.message)) return [] as LiveAttempt[];
+      throw e;
+    }),
   ]);
 
   return {
@@ -92,6 +104,7 @@ export async function loadLive(activityId: string): Promise<LiveSnapshot | null>
     responses,
     votes,
     locks,
+    attempts,
   };
 }
 
@@ -140,14 +153,36 @@ export interface QuestionDraft {
   accept: string[];
 }
 
-const keyRow = (activityId: string) => (d: QuestionDraft) => ({
-  question_id: d.id,
-  activity_id: activityId,
-  correct_option: d.kind === "mc" ? d.correct_option : null,
-  answer: d.kind === "number" ? d.answer : null,
-  tolerance: d.kind === "number" ? d.tolerance : null,
-  accept: d.kind === "expression" ? d.accept : [],
-});
+/** Every accepted form's print: what a team's answer is held to as it submits (0049). */
+async function printsOf(accept: string[]): Promise<ExpressionPrint[]> {
+  const prints = await Promise.all(accept.map((form) => expressionPrint(form)));
+  return prints.filter((p): p is ExpressionPrint => p !== null);
+}
+
+const keyRows = (activityId: string, drafts: QuestionDraft[]) =>
+  Promise.all(
+    drafts.map(async (d) => ({
+      question_id: d.id,
+      activity_id: activityId,
+      correct_option: d.kind === "mc" ? d.correct_option : null,
+      answer: d.kind === "number" ? d.answer : null,
+      tolerance: d.kind === "number" ? d.tolerance : null,
+      accept: d.kind === "expression" ? d.accept : [],
+      prints: d.kind === "expression" ? await printsOf(d.accept) : [],
+    })),
+  );
+
+type KeyRow = Awaited<ReturnType<typeof keyRows>>[number];
+
+async function upsertKeys(rows: KeyRow[]): Promise<void> {
+  const res = await db().from("live_keys").upsert(rows).select("question_id");
+  if (res.error && before0049(res.error.message)) {
+    // Before 0049: no prints column, and nothing that would read one.
+    unwrap(await db().from("live_keys").upsert(rows.map(({ prints: _, ...row }) => row)).select("question_id"));
+    return;
+  }
+  unwrap(res);
+}
 
 /**
  * Make the activity's questions exactly `drafts`, in that order.
@@ -179,7 +214,7 @@ export async function saveLiveQuestions(
       ) as unknown[];
       if (rows.length === 0) throw new Error("A question has gone since this page loaded. Reload and try again.");
     }
-    unwrap(await db().from("live_keys").upsert(drafts.map(keyRow(activityId))).select("question_id"));
+    await upsertKeys(await keyRows(activityId, drafts));
     return;
   }
   if (drafts.length > 0) {
@@ -200,7 +235,7 @@ export async function saveLiveQuestions(
         )
         .select("id"),
     );
-    unwrap(await db().from("live_keys").upsert(drafts.map(keyRow(activityId))).select("question_id"));
+    await upsertKeys(await keyRows(activityId, drafts));
   }
 
   const keep = drafts.map((d) => d.id);
@@ -258,14 +293,49 @@ export async function castVote(questionId: string, answer: string): Promise<void
   unwrap(await db().rpc("cast_vote", { qid: questionId, ans: answer }));
 }
 
-export async function lockTeamAnswer(questionId: string): Promise<LiveLock> {
-  return unwrap(await db().rpc("lock_team_answer", { qid: questionId })) as LiveLock;
+/**
+ * Submit the caller's vote as the team's next try, and hear at once whether
+ * it's right (0049). `answer` is the vote as this screen has it; for an
+ * expression its print goes along, since the database can't do the algebra,
+ * and the database uses the print only if it is of the answer it holds.
+ */
+export async function lockTeamAnswer(question: LiveQuestion, answer: string | null): Promise<LiveAttempt> {
+  const print = question.kind === "expression" && answer ? await answerPrint(answer) : null;
+  if (print) {
+    const res = await db().rpc("lock_team_answer", { qid: question.id, print });
+    if (!res.error || !before0049(res.error.message)) return unwrap(res) as LiveAttempt;
+  }
+  const lock = unwrap(await db().rpc("lock_team_answer", { qid: question.id })) as LiveLock | LiveAttempt;
+  return { attempt: 1, ...lock };
 }
 
 // ------------------------------------------------------- in the room
 
 export async function startTeamMode(activityId: string): Promise<LiveState> {
   return unwrap(await db().rpc("start_live_team", { aid: activityId })) as LiveState;
+}
+
+/**
+ * Give prints to expression keys saved before 0049, which have none — so a
+ * team's "0.5F" for "F/2" would be told wrong until the session was scored.
+ * The owner's, on the way into team mode (only she writes keys); quiet on a
+ * database without 0049.
+ */
+export async function printOldKeys(activityId: string, questions: LiveQuestion[]): Promise<void> {
+  const ids = questions.filter((q) => q.kind === "expression").map((q) => q.id);
+  if (ids.length === 0) return;
+  const res = await db().from("live_keys").select("question_id, accept, prints").eq("activity_id", activityId).in("question_id", ids);
+  if (res.error) {
+    if (before0049(res.error.message)) return;
+    throw dbError(res.error);
+  }
+  for (const row of (res.data ?? []) as { question_id: string; accept: unknown; prints: unknown }[]) {
+    const accept = Array.isArray(row.accept) ? (row.accept as string[]) : [];
+    if (accept.length === 0 || (Array.isArray(row.prints) && row.prints.length > 0)) continue;
+    const prints = await printsOf(accept);
+    if (prints.length === 0) continue;
+    unwrap(await db().from("live_keys").update({ prints }).eq("question_id", row.question_id).select("question_id"));
+  }
 }
 
 export async function closeLive(activityId: string): Promise<LiveState> {
@@ -285,6 +355,7 @@ export async function scoreLive(snapshot: LiveSnapshot): Promise<{ students: num
   const verdicts = await expressionVerdicts(snapshot.questions, snapshot.keys, [
     ...snapshot.responses,
     ...snapshot.locks,
+    ...snapshot.attempts,
   ]);
   return unwrap(
     await db().rpc("score_live", { aid: snapshot.state.activity_id, verdicts }),
@@ -294,34 +365,44 @@ export async function scoreLive(snapshot: LiveSnapshot): Promise<{ students: num
 // ------------------------------------------------------------- live
 
 /**
- * Wake on any change to this activity's state, votes or locks, from anyone.
- * Filtered on activity_id server-side and limited by RLS to rows the caller
- * may read (a team sees only its own votes). Rows that BECOME readable — a
- * teammate's own answers once team mode starts, keys once it closes — are not
- * re-sent by realtime, so the caller reloads the whole snapshot on any event.
- * Returns the unsubscribe.
+ * Wake on any change to this activity's state, votes, tries or locks, from
+ * anyone. Filtered on activity_id server-side and limited by RLS to rows the
+ * caller may read (a team sees only its own votes). Rows that BECOME readable
+ * — a teammate's own answers once team mode starts, keys once it closes — are
+ * not re-sent by realtime, so the caller reloads the whole snapshot on any
+ * event. Returns the unsubscribe.
  */
 let watchers = 0;
+
+type LiveTable = "live_state" | "live_votes" | "live_locks" | "live_attempts";
 
 export function watchLive(
   activityId: string,
   onChange: () => void,
   /** Fewer, for a screen that only cares when the session moves (live_state). */
-  tables: readonly ("live_state" | "live_votes" | "live_locks")[] = ["live_state", "live_votes", "live_locks"],
+  tables: readonly LiveTable[] = ["live_state", "live_votes", "live_locks", "live_attempts"],
 ): () => void {
   // Its own topic per watcher: the student list and the open activity both
   // watch the same session, and removing one shared channel would deafen both.
-  const channel = db().channel(`live:${activityId}:${++watchers}`);
-  for (const table of tables) {
-    channel.on(
-      "postgres_changes",
-      { event: "*", schema: "public", table, filter: `activity_id=eq.${activityId}` },
-      () => onChange(),
-    );
-  }
-  channel.subscribe();
+  // live_attempts on a channel of its own: a database without 0049 has no
+  // such table, and refusing it mustn't take the others down with it.
+  const groups = [tables.filter((t) => t !== "live_attempts"), tables.filter((t) => t === "live_attempts")];
+  const channels = groups
+    .filter((group) => group.length > 0)
+    .map((group) => {
+      const channel = db().channel(`live:${activityId}:${++watchers}`);
+      for (const table of group) {
+        channel.on(
+          "postgres_changes",
+          { event: "*", schema: "public", table, filter: `activity_id=eq.${activityId}` },
+          () => onChange(),
+        );
+      }
+      channel.subscribe();
+      return channel;
+    });
   return () => {
-    void db().removeChannel(channel);
+    for (const channel of channels) void db().removeChannel(channel);
   };
 }
 

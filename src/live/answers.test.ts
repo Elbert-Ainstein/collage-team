@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  answerPrint,
   canonicalAnswer,
+  expressionPrint,
   expressionsEquivalent,
   expressionVerdicts,
   isRight,
   letterIndex,
+  maxTries,
   normalizeNumber,
   optionLetter,
+  samePrint,
+  TRIALS,
+  tryCredit,
 } from "./answers";
 import type { LiveKey, LiveQuestion } from "./types";
 
@@ -160,5 +166,50 @@ describe("expressionVerdicts", () => {
     expect(await expressionVerdicts(questions, keys, answers)).toEqual({
       e1: { "0.5F": true, "2F": false },
     });
+  });
+});
+
+describe("team tries", () => {
+  it("halves what a question is worth with each try, then nothing", () => {
+    expect([1, 2, 3, 4, 8].map(tryCredit)).toEqual([1, 0.5, 0.25, 0, 0]);
+  });
+
+  it("lets multiple choice try every option, and a typed answer three times", () => {
+    expect(maxTries(q({ kind: "mc", options: ["a", "b", "c", "d"] }))).toBe(4);
+    expect(maxTries(q({ kind: "number" }))).toBe(3);
+    expect(maxTries(q({ kind: "expression" }))).toBe(3);
+  });
+});
+
+describe("expression prints", () => {
+  it("evaluates in sorted variable order, so the same expression prints the same", async () => {
+    const a = await expressionPrint("x*y");
+    const b = await expressionPrint("y x");
+    expect(a?.vars).toEqual(["x", "y"]);
+    expect(a?.values).toHaveLength(TRIALS);
+    expect(samePrint(a!, b!)).toBe(true);
+  });
+
+  // The print goes to the database as JSON and is compared there: it has to
+  // survive the trip exactly, or a right answer would be told it's wrong.
+  it("survives JSON, which is how it reaches the database", async () => {
+    const key = await expressionPrint("sqrt(2*g*h)");
+    const sent = JSON.parse(JSON.stringify(await answerPrint("(2 g h)^(1/2)")));
+    expect(sent.answer).toBe("(2 g h)^(1/2)");
+    expect(samePrint(JSON.parse(JSON.stringify(key)), sent)).toBe(true);
+  });
+
+  it("marks where an expression isn't real, and holds the key to it", async () => {
+    const p = await expressionPrint("sqrt(F-2)");
+    expect(p?.values.some((v) => v === null)).toBe(true);
+    expect(samePrint((await expressionPrint("F/2"))!, (await expressionPrint("F/2 + 0*sqrt(F-2)"))!)).toBe(false);
+  });
+
+  it("sends nothing that can match for an answer it can't check", async () => {
+    const sent = await answerPrint("F/(");
+    expect(sent.vars).toEqual([]);
+    expect(sent.values.every((v) => v === null)).toBe(true);
+    expect(await expressionPrint("F/(")).toBeNull();
+    expect(await expressionPrint("sum(range(1, 1e9))")).toBeNull();
   });
 });
