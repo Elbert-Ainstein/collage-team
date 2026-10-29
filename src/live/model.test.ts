@@ -294,6 +294,17 @@ describe("the team's leader, roll and explanations (0051)", () => {
     expect(m.isAbsent("s2")).toBe(true);
   });
 
+  it("gives someone marked absent nothing for team time, and their teammates the team's score", () => {
+    const m = led({
+      locks: [lock("q1", "B", true)],
+      absences: [{ activity_id: "a", team_id: "t1", student_id: "s2", source: "roll" }],
+    });
+    expect(m.score("t1")).toBe(1);
+    expect(m.memberScore("s1")).toBe(1);
+    expect(m.memberScore("s2")).toBe(0);
+    expect(m.memberScore("nobody")).toBeNull();
+  });
+
   it("reads an explanation by question index", () => {
     expect(led().explanation(1)).toBe("Because g.");
     expect(led().explanation(0)).toBeNull();

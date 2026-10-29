@@ -305,6 +305,11 @@ select '0051 team leader, roll and explanations',
                             and column_name = 'source')
             then 'applied'
             else 'NOT APPLIED — run 0051_live_team_leader.sql' end
+union all
+select '0052 the roll on every phone',
+       case when to_regprocedure('public.set_live_absences(uuid,uuid[],boolean)') is not null
+            then 'applied'
+            else 'NOT APPLIED — run 0052_live_roll_for_everyone.sql' end
 order by 1;
 
 -- ------------------------------------------------------- and the buckets

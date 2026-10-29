@@ -146,6 +146,11 @@ describe("the leader and the roll", () => {
       { fn: "set_live_absences", args: { aid: "a", absent: ["s3", "s4"] } },
     ]);
   });
+
+  it("saves a tap on the roll without finishing it (0052)", async () => {
+    await setAbsences("a", ["s3"], false);
+    expect(rpcs).toEqual([{ fn: "set_live_absences", args: { aid: "a", absent: ["s3"], done: false } }]);
+  });
 });
 
 describe("saving explanations", () => {

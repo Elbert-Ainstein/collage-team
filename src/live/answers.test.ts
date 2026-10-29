@@ -48,10 +48,23 @@ describe("normalizeNumber", () => {
     expect(normalizeNumber("-0")).toBe("0");
   });
 
+  it("reads a fraction as the number it is", () => {
+    expect(normalizeNumber("1/2")).toBe("0.5");
+    expect(normalizeNumber(" 3 / 4 ")).toBe("0.75");
+    expect(normalizeNumber("-1/4")).toBe("-0.25");
+    expect(normalizeNumber("1/-4")).toBe("-0.25");
+    expect(normalizeNumber("9.8/2")).toBe("4.9");
+    expect(normalizeNumber("1/3")).toBe(String(1 / 3));
+    // The same vote as the decimal, so a team that types both agrees.
+    expect(normalizeNumber("2/4")).toBe(normalizeNumber("0.5"));
+  });
+
   it("refuses what isn't a number", () => {
     expect(normalizeNumber("")).toBeNull();
     expect(normalizeNumber("abc")).toBeNull();
-    expect(normalizeNumber("1/3")).toBeNull();
+    expect(normalizeNumber("1/0")).toBeNull();
+    expect(normalizeNumber("1/2/3")).toBeNull();
+    expect(normalizeNumber("F/2")).toBeNull();
     expect(normalizeNumber("Infinity")).toBeNull();
     expect(normalizeNumber("4.37*10^-3")).toBeNull();
   });
@@ -60,7 +73,7 @@ describe("normalizeNumber", () => {
   // app saves has to pass it, or a right answer would score as wrong.
   it("always produces something the database reads as a number", () => {
     const sql = /^[-+]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][-+]?[0-9]+)?$/;
-    for (const raw of ["0.3", "1e21", "-1e-7", "12345678901234567890", "0.000001", "5", "-2.5"]) {
+    for (const raw of ["1/3", "-2/3", "0.3", "1e21", "-1e-7", "12345678901234567890", "0.000001", "5", "-2.5"]) {
       const n = normalizeNumber(raw);
       expect(n).not.toBeNull();
       expect(sql.test(n!)).toBe(true);

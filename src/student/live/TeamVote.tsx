@@ -139,7 +139,8 @@ function keyText(m: LiveModel, q: number): string | null {
  * has it or is out of tries, that question held in its answered state with a
  * Next button, the way Khan Academy does it; then the summary once every
  * question is done. The hold is this phone's own: a teammate pressing Next
- * moves nobody else's screen.
+ * moves nobody else's screen. Back steps to the questions before, as they
+ * ended, for anyone on the team; Next steps forward again.
  */
 export function TeamPlay({
   m,
@@ -166,8 +167,15 @@ export function TeamPlay({
     setSeen(now);
     if (seen !== null && held === null && m.locks(team.id)[seen]) setHeld(seen);
   }
-  const q = held ?? now;
-  if (q === null) return <TeamDone m={m} team={team} meId={meId} onRoll={onRoll} />;
+  // An earlier question this phone stepped back to: always one the team is done with.
+  const [back, setBack] = useState<number | null>(null);
+  const N = m.questions.length;
+  const front = held ?? now ?? N;
+  const q = back ?? front;
+  const goBack = q > 0 ? () => setBack(q - 1) : undefined;
+  if (q >= N) return <TeamDone m={m} team={team} meId={meId} onRoll={onRoll} onBack={goBack} />;
+  const onNext =
+    back !== null ? () => setBack(back + 1 < front ? back + 1 : null) : held !== null ? () => setHeld(null) : undefined;
   return (
     <TeamQuestion
       key={q}
@@ -176,10 +184,21 @@ export function TeamPlay({
       q={q}
       onError={onError}
       onTried={onTried}
-      onNext={held === null ? undefined : () => setHeld(null)}
-      hasNext={now !== null}
-      onRoll={onRoll}
+      onNext={onNext}
+      hasNext={back !== null ? back + 1 < N : now !== null}
+      onBack={goBack}
+      onRoll={back === null ? onRoll : undefined}
     />
+  );
+}
+
+/** Back a question: on every team screen but the first question's. */
+function BackButton({ onBack }: { onBack: () => void }) {
+  return (
+    <button type="button" className="fv-btn outline lq-teambtn lq-backbtn" aria-label="Previous question" onClick={onBack}>
+      <Ic name="chevronLeft" size={15} />
+      <span className="lq-backlabel">Back</span>
+    </button>
   );
 }
 
@@ -193,6 +212,7 @@ export function TeamQuestion({
   onTried,
   onNext,
   hasNext = true,
+  onBack,
   onRoll,
 }: {
   m: LiveModel;
@@ -205,6 +225,8 @@ export function TeamQuestion({
   onNext?: () => void;
   /** A question is left after this one — what the Next button says. */
   hasNext?: boolean;
+  /** Step back to the question before. */
+  onBack?: () => void;
   /** This phone's student leads the team: take the roll again. */
   onRoll?: () => void;
 }) {
@@ -400,6 +422,7 @@ export function TeamQuestion({
         {feedback ? `${feedback.title}. ${feedback.sub}` : ""}
       </span>
       <footer className={`lq-sfoot team${feedback ? ` fb ${feedback.tone}` : agreed ? " agreed" : ""}`}>
+        {onBack ? <BackButton onBack={onBack} /> : null}
         {feedback ? (
           <>
             <span className="lq-footmsg lq-fb">
@@ -479,7 +502,7 @@ function Propose({ q, tried, onPropose }: { q: LiveQuestion; tried: Set<string>;
         className="lq-numin"
         name="proposal"
         autoComplete="off"
-        inputMode={q.kind === "number" ? "decimal" : "text"}
+        inputMode="text"
         autoCapitalize="off"
         autoCorrect="off"
         spellCheck={false}
@@ -514,50 +537,63 @@ interface TeamDoneProps {
   meId: string;
   /** The leader, until the session closes: someone late still gets the team's points. */
   onRoll?: () => void;
+  /** Step back to the last question. */
+  onBack?: () => void;
 }
 
-export function TeamDone({ m, team, meId, onRoll }: TeamDoneProps) {
+/** Every question done: the team has submitted, what it scored, and each answer. */
+export function TeamDone({ m, team, meId, onRoll, onBack }: TeamDoneProps) {
   const together = m.score(team.id);
   const away = new Set(m.absentIds(team.id));
   const here = team.members.filter((s) => !away.has(s.id)).length;
   return (
-    <div className="lq-sscroll">
-      <TeamPips m={m} team={team} current={-1} />
-      <div className="lq-scard">
+    <>
+      <div className="lq-sscroll">
+        <TeamPips m={m} team={team} current={-1} />
         {onRoll ? <LeadLine here={here} of={team.members.length} onRoll={onRoll} /> : null}
-        <h2 className="lq-h2">All done</h2>
-        {together !== null ? (
-          <p className="lq-donescore">
-            <span className="fv-num">
-              <b>{fmtPoints(together)}</b> of {m.questions.length}
-            </span>{" "}
-            together
-          </p>
-        ) : null}
-        <p className="fv-sub" style={{ margin: "0 0 10px" }}>
-          How you did on your own shows here when your instructor closes the session.
-        </p>
-        <div className="lq-reviewlist">
-          {m.questions.map((q, i) => {
-            const own = m.own(meId, i);
-            const credit = m.credit(team.id, i);
-            return (
-              <div key={q.id} className="lq-reviewrow">
-                <span className="lq-qn">Q{i + 1}</span>
-                <span className="lq-qshort">{q.stem}</span>
-                <span className="lq-youteam">
-                  <span className="fv-sub">You</span>
-                  <Pick value={own} right={own ? m.right(i, own) : undefined} size="sm" />
-                  <Ic name="arrowRight" size={12} />
-                  <span className="fv-sub">Team</span>
-                  <Tries m={m} teamId={team.id} q={i} />
-                  {credit !== null ? <span className="lq-credit fv-num">{fmtPoints(credit)}</span> : null}
-                </span>
-              </div>
-            );
-          })}
+        <div className="lq-scard lq-intro lq-donecard wide">
+          <span className="lq-introicon lq-doneicon">
+            <Ic name="check" size={26} />
+          </span>
+          <h2 className="lq-h2">Your team has submitted</h2>
+          {together !== null ? (
+            <p className="lq-donescore">
+              <span className="fv-num">
+                <b>{fmtPoints(together)}</b> of {m.questions.length}
+              </span>{" "}
+              together
+            </p>
+          ) : null}
+          <p className="fv-sub">How you did on your own shows here when your instructor closes the session.</p>
+        </div>
+        <div className="lq-scard">
+          <div className="lq-reviewlist">
+            {m.questions.map((q, i) => {
+              const own = m.own(meId, i);
+              const credit = m.credit(team.id, i);
+              return (
+                <div key={q.id} className="lq-reviewrow">
+                  <span className="lq-qn">Q{i + 1}</span>
+                  <span className="lq-qshort">{q.stem}</span>
+                  <span className="lq-youteam">
+                    <span className="fv-sub">You</span>
+                    <Pick value={own} right={own ? m.right(i, own) : undefined} size="sm" />
+                    <Ic name="arrowRight" size={12} />
+                    <span className="fv-sub">Team</span>
+                    <Tries m={m} teamId={team.id} q={i} />
+                    {credit !== null ? <span className="lq-credit fv-num">{fmtPoints(credit)}</span> : null}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </div>
-    </div>
+      {onBack ? (
+        <footer className="lq-sfoot team">
+          <BackButton onBack={onBack} />
+        </footer>
+      ) : null}
+    </>
   );
 }

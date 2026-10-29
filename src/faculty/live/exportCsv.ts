@@ -1,4 +1,5 @@
-// Team scores as a CSV: one row per team, its members, the score, and its
+// Team scores as a CSV: one row per team, its members and who of them was
+// absent (they get none of the score), the score, and its
 // tries at each question in order ("C → B": wrong, then right).
 
 import { mmss, type LiveModel } from "@/live/model";
@@ -15,12 +16,14 @@ const cell = (v: string | number | null): string => {
 };
 
 export function teamCsv(m: LiveModel): string {
-  const head = ["Team", "Members", "Score", "Out of", "Time", ...m.questions.map((_, i) => `Q${i + 1}`)];
+  const head = ["Team", "Members", "Absent", "Score", "Out of", "Time", ...m.questions.map((_, i) => `Q${i + 1}`)];
   const rows = m.teams.map((t) => {
     const finished = m.finishedAt(t.id);
+    const away = new Set(m.absentIds(t.id));
     return [
       t.name,
       t.members.map((s) => s.name).join("; "),
+      t.members.filter((s) => away.has(s.id)).map((s) => s.name).join("; "),
       m.score(t.id),
       m.questions.length,
       finished === null ? "" : mmss(finished),

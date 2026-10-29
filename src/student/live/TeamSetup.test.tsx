@@ -180,7 +180,7 @@ describe("once everyone has voted the same", () => {
   // vote_live_leader set the leader on the last vote: no Confirm needed.
   const all = [pick("s1", "s1"), pick("s2", "s1"), pick("s3", "s1")];
 
-  it("the leader takes the roll: all here by default, tap to mark absent", async () => {
+  it("the leader takes the roll: all here by default, each tap saved as it goes", async () => {
     const onChanged = vi.fn();
     await session({ leaderVotes: all, setups: [setup("s1")] }, onChanged);
     expect(host.querySelector(".lq-setupq")?.textContent).toBe("Who’s here?");
@@ -190,8 +190,10 @@ describe("once everyone has voted the same", () => {
     expect(row("Cy Park").getAttribute("aria-checked")).toBe("false");
     expect(row("Cy Park").textContent).toContain("Absent");
     expect(foot().textContent).toContain("2 of 3 here");
+    // The team sees it at once; the roll isn't finished until Continue.
+    expect(setAbsences).toHaveBeenLastCalledWith("a", ["s3"], false);
     await act(async () => button("Continue")!.click());
-    expect(setAbsences).toHaveBeenCalledWith("a", ["s3"]);
+    expect(setAbsences).toHaveBeenLastCalledWith("a", ["s3"], true);
     expect(onChanged).toHaveBeenCalled();
   });
 
@@ -202,14 +204,20 @@ describe("once everyone has voted the same", () => {
     expect(foot().textContent).toContain("2 of 3 here");
     await act(async () => row("Cy Park").click());
     await act(async () => button("Continue")!.click());
-    expect(setAbsences).toHaveBeenCalledWith("a", ["s3"]);
+    expect(setAbsences).toHaveBeenLastCalledWith("a", ["s3"], true);
   });
 
-  it("everyone else waits, told who the leader is", async () => {
-    await session({ me: "s2", leaderVotes: all, setups: [setup("s1")] });
-    expect(host.textContent).toContain("Ana submits for the team");
-    expect(host.textContent).toContain("Taking the roll");
-    expect(host.querySelector(".lq-choice")).toBeNull();
+  it("everyone else sees the same roll, as the leader takes it", async () => {
+    await session({ me: "s2", leaderVotes: all, setups: [setup("s1")], absent: ["s3"] });
+    expect(host.querySelector(".lq-setupq")?.textContent).toBe("Who’s here?");
+    // Everyone but the leader, who is plainly there.
+    expect([...host.querySelectorAll(".lq-choicet")].map((n) => n.textContent)).toEqual(["You", "Cy Park"]);
+    expect(row("Cy Park").textContent).toContain("Absent");
+    expect(foot().textContent).toContain("2 of 3 here");
+    expect(foot().textContent).toContain("Ana submits for the team");
+    expect(button("Continue")).toBeUndefined();
+    await act(async () => row("You").click());
+    expect(setAbsences).not.toHaveBeenCalled();
   });
 });
 
@@ -245,32 +253,40 @@ describe("playing, with a leader", () => {
     expect(button("Submit")).toBeUndefined();
   });
 
-  it("the leader can take the roll again, and back out", async () => {
+  it("the leader can take the roll again", async () => {
     await session(playing);
     await act(async () => button("Who’s here")!.click());
     expect(host.querySelector(".lq-setupq")?.textContent).toBe("Who’s here?");
     expect(row("Cy Park").getAttribute("aria-checked")).toBe("false");
     await act(async () => row("Cy Park").click());
-    await act(async () => button("Save")!.click());
-    expect(setAbsences).toHaveBeenCalledWith("a", []);
+    expect(setAbsences).toHaveBeenLastCalledWith("a", [], false);
+    await act(async () => button("Done")!.click());
+    expect(setAbsences).toHaveBeenLastCalledWith("a", [], true);
     expect(host.querySelector(".lq-sstem")?.textContent).toBe("Which?");
   });
 
   it("the leader can still fix the roll once the team is done", async () => {
     const lockQ2: LiveLock = { ...lockQ1, question_id: "q2", answer: "A" };
     await session({ ...playing, locks: [lockQ1, lockQ2] });
-    expect(host.textContent).toContain("All done");
+    expect(host.textContent).toContain("Your team has submitted");
     expect(button("Who’s here · 2/3")).toBeDefined();
     await act(async () => button("Who’s here")!.click());
     await act(async () => row("Cy Park").click());
-    await act(async () => button("Save")!.click());
-    expect(setAbsences).toHaveBeenCalledWith("a", []);
+    await act(async () => button("Done")!.click());
+    expect(setAbsences).toHaveBeenLastCalledWith("a", [], true);
+  });
+
+  it("anyone can go back a question, not just the leader", async () => {
+    await session({ ...playing, me: "s2", locks: [lockQ1] });
+    expect(host.querySelector(".lq-sstem")?.textContent).toBe("And then?");
+    await act(async () => host.querySelector<HTMLButtonElement>('footer [aria-label="Previous question"]')!.click());
+    expect(host.querySelector(".lq-sstem")?.textContent).toBe("Which?");
   });
 
   it("a teammate's done screen has no roll", async () => {
     const lockQ2: LiveLock = { ...lockQ1, question_id: "q2", answer: "A" };
     await session({ ...playing, me: "s2", locks: [lockQ1, lockQ2] });
-    expect(host.textContent).toContain("All done");
+    expect(host.textContent).toContain("Your team has submitted");
     expect(button("Who’s here")).toBeUndefined();
   });
 });

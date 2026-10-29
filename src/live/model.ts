@@ -68,6 +68,8 @@ export interface LiveModel {
   credit(teamId: string, q: number): number | null;
   /** Credit summed over the questions: what the gradebook's team score is. */
   score(teamId: string): number | null;
+  /** What team time earned this student: their team's score, or 0 if marked absent. Null with no team. */
+  memberScore(studentId: string): number | null;
   current(teamId: string): TeamCurrent | null;
   /** Seconds from team mode starting to the last lock, once every question is locked. */
   finishedAt(teamId: string): number | null;
@@ -165,6 +167,17 @@ export function buildLiveModel(input: LiveModelInput): LiveModel {
       .map((l) => Date.parse(l.locked_at))
       .sort((a, b) => a - b);
 
+  /** Credit summed over the questions: null while any question's isn't known. */
+  const score = (tid: string): number | null => {
+    let n = 0;
+    for (let i = 0; i < questions.length; i++) {
+      const c = credit(tid, i);
+      if (c === null) return null;
+      n += c;
+    }
+    return n;
+  };
+
   return {
     state: snapshot.state,
     questions,
@@ -190,14 +203,11 @@ export function buildLiveModel(input: LiveModelInput): LiveModel {
     tries,
     rightOn,
     credit,
-    score: (tid) => {
-      let n = 0;
-      for (let i = 0; i < questions.length; i++) {
-        const c = credit(tid, i);
-        if (c === null) return null;
-        n += c;
-      }
-      return n;
+    score,
+    memberScore: (sid) => {
+      const t = teamByStudent.get(sid);
+      if (!t) return null;
+      return isAbsent(snapshot, sid) ? 0 : score(t.id);
     },
     current: (tid) => {
       if (snapshot.state.phase !== "team" || started === null) return null;

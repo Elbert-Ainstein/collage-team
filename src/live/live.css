@@ -1003,6 +1003,17 @@ button.lq-tr:hover {
   color: var(--lq-team);
   font-weight: 600;
 }
+.lq-teamnum.absent {
+  color: var(--fv-muted);
+}
+/* Marked absent for team time (0051): no points from it. */
+.lq-absent {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--lq-wrong);
+}
 
 .lq-db {
   position: relative;
@@ -3589,6 +3600,36 @@ span.lq-spip {
   font-size: 15px;
   color: var(--fv-navy);
 }
+/* Submitted, on their own or as a team: a check, what it came to, and a way back. */
+.lq-donecard .lq-h2 {
+  margin-bottom: 6px;
+}
+.lq-donecard .fv-sub {
+  margin: 0 0 4px;
+}
+.lq-donecard .lq-teambtn {
+  margin-top: 16px;
+}
+.lq-doneicon {
+  background: var(--lq-right-100);
+  color: var(--lq-right-ink);
+}
+.lq-donecard.wide {
+  max-width: 680px !important;
+}
+.lq-donecard + .lq-scard {
+  margin-top: 12px;
+}
+/* Back, in the team's bar: the word goes on a narrow phone, the arrow stays. */
+.lq-sfoot .fv-btn.lq-backbtn {
+  flex: none;
+  padding: 0 12px;
+}
+@media (max-width: 420px) {
+  .lq-backlabel {
+    display: none;
+  }
+}
 .lq-donescore b {
   font-size: 22px;
   color: var(--lq-team);
@@ -3703,7 +3744,11 @@ span.lq-spip {
 .lq-roll.away .lq-rollstate {
   color: var(--fv-muted);
 }
-/* Waiting on the leader, or marked absent: a name and a line, nothing to press. */
+/* The roll on a teammate's phone: the leader's taps land here, nothing to press. */
+.lq-choice.lq-readonly {
+  cursor: default;
+}
+/* Marked absent: a name and a line, nothing to press. */
 .lq-wait {
   display: flex;
   flex-direction: column;
