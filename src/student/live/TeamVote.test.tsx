@@ -181,6 +181,20 @@ describe("TeamQuestion on a typed answer", () => {
     await act(async () => finish());
   });
 
+  it("takes a fraction as a proposal, and votes for its value", async () => {
+    await show(<TeamQuestion m={model([], "7", onQ3, "q3")} team={team} q={2} onError={() => {}} onTried={() => {}} />);
+    const input = host.querySelector<HTMLInputElement>('input[name="proposal"]')!;
+    expect(input.inputMode).toBe("text");
+    await act(async () => {
+      const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+      set.call(input, "1/2");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => host.querySelector<HTMLFormElement>(".lq-propose")!.requestSubmit());
+    expect(castVote).toHaveBeenCalledWith("q3", "0.5");
+    expect(choice("0.5 m")).toBeDefined();
+  });
+
   it("doesn't offer moving on while another try still pays", async () => {
     await show(<TeamQuestion m={model(wrongTries(2), "7", onQ3, "q3")} team={team} q={2} onError={() => {}} onTried={() => {}} />);
     expect(button("Submit")).toBeDefined();
@@ -216,5 +230,42 @@ describe("TeamPlay once the team has it", () => {
 
     await act(async () => foot().querySelector<HTMLButtonElement>("button")!.click());
     expect(host.querySelector(".lq-sstem")?.textContent).toBe("And then?");
+  });
+});
+
+describe("TeamPlay, going back", () => {
+  const q1 = lockOf(tryAt(1, "B", true, "q1"));
+  const q2 = lockOf(tryAt(1, "A", true, "q2"));
+  const back = () => host.querySelector<HTMLButtonElement>('footer [aria-label="Previous question"]');
+
+  it("steps back to a question the team has done, and forward again", async () => {
+    await show(<TeamPlay m={model([tryAt(1, "B", true, "q1")], "A", [q1], "q2")} team={team} meId="s1" onError={() => {}} onTried={() => {}} />);
+    expect(host.querySelector(".lq-sstem")?.textContent).toBe("And then?");
+    await act(async () => back()!.click());
+    expect(host.querySelector(".lq-sstem")?.textContent).toBe("Which?");
+    // Done: shown as it ended, with nothing to vote on or submit.
+    expect(choice("two").className).toContain("right");
+    expect(choice("three").disabled).toBe(true);
+    expect(foot().textContent).toContain("Correct!");
+    expect(button("Submit")).toBeUndefined();
+    // The first question has nothing before it.
+    expect(back()).toBeNull();
+    await act(async () => button("Next question")!.click());
+    expect(host.querySelector(".lq-sstem")?.textContent).toBe("And then?");
+  });
+
+  it("has nothing to go back to on the first question", async () => {
+    await show(<TeamPlay m={model([], "A")} team={team} meId="s1" onError={() => {}} onTried={() => {}} />);
+    expect(back()).toBeNull();
+  });
+
+  it("goes back from the end to the last question", async () => {
+    const q3 = lockOf(tryAt(1, "5", true, "q3"));
+    await show(<TeamPlay m={model([], "A", [q1, q2, q3])} team={team} meId="s1" onError={() => {}} onTried={() => {}} />);
+    expect(host.querySelector(".lq-h2")?.textContent).toBe("Your team has submitted");
+    await act(async () => back()!.click());
+    expect(host.querySelector(".lq-sstem")?.textContent).toBe("How far?");
+    await act(async () => button("See how you did")!.click());
+    expect(host.querySelector(".lq-h2")?.textContent).toBe("Your team has submitted");
   });
 });

@@ -493,11 +493,15 @@ export async function confirmLeader(activityId: string): Promise<LiveTeamSetup> 
 
 /**
  * The leader's roll (0051): exactly these teammates are absent, the rest of
- * the team is here. Taking it again replaces it.
+ * the team is here. Taking it again replaces it. Each tap is saved with
+ * `done` false (0052), so the team watches the roll being taken; the team
+ * moves on to play once it's saved done. `done` is sent only when false, so
+ * finishing the roll still works on a database without 0052.
  */
-export async function setAbsences(activityId: string, absentIds: string[]): Promise<LiveTeamSetup> {
+export async function setAbsences(activityId: string, absentIds: string[], done = true): Promise<LiveTeamSetup> {
   const absent = [...new Set(absentIds)];
-  return unwrap(await db().rpc("set_live_absences", { aid: activityId, absent })) as LiveTeamSetup;
+  const args = done ? { aid: activityId, absent } : { aid: activityId, absent, done: false };
+  return unwrap(await db().rpc("set_live_absences", args)) as LiveTeamSetup;
 }
 
 // ------------------------------------------------------- in the room

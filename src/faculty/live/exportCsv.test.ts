@@ -44,4 +44,16 @@ describe("teamCsv", () => {
     // A trail isn't a plain number, so a leading minus is defused like any other.
     expect(row.slice(-4)).toEqual(["0.5", "1", "", "'-9.7 → -9.8"]);
   });
+
+  it("names who was absent, beside the members", () => {
+    const m = buildLiveModel({
+      snapshot: { ...snap, absences: [{ activity_id: "x", team_id: "t", student_id: "b", source: "roll" }] },
+      students: team.members,
+      teams: [team],
+      now: 0,
+    });
+    const [head, row] = teamCsv(m).split("\n");
+    expect(head.split(",").slice(0, 4)).toEqual(["Team", "Members", "Absent", "Score"]);
+    expect(row).toContain('"Zoë, A; Bo",Bo,');
+  });
 });

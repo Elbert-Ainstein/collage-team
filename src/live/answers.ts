@@ -30,16 +30,25 @@ export function letterIndex(letter: string): number | null {
   return i === -1 ? null : i;
 }
 
+const PLAIN_NUMBER = /^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/;
+
+/** A plain number, or one over another ("1/2", "9.8 / 2"): its value, or null. */
+function readNumber(t: string): number | null {
+  const parts = t.split("/").map((p) => p.trim());
+  if (parts.length > 2 || !parts.every((p) => PLAIN_NUMBER.test(p))) return null;
+  const n = parts.length === 2 ? Number(parts[0]) / Number(parts[1]) : Number(parts[0]);
+  return Number.isFinite(n) ? n : null;
+}
+
 /**
- * "0.30", " .3 ", "3e-1" all become "0.3"; "1,200" becomes "1200". Anything
- * that isn't a plain number — a fraction, an expression, Infinity — is null.
- * The output always matches the pattern score_live checks before casting.
+ * "0.30", " .3 ", "3e-1" all become "0.3"; "1,200" becomes "1200"; a fraction
+ * becomes its decimal, so "1/2" and "0.5" are the same answer and the same
+ * vote. Anything else — an expression, Infinity, 1/0 — is null. The output
+ * always matches the pattern score_live checks before casting.
  */
 export function normalizeNumber(text: string): string | null {
-  const t = text.trim().replace(/,/g, "");
-  if (!/^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/.test(t)) return null;
-  const n = Number(t);
-  if (!Number.isFinite(n)) return null;
+  const n = readNumber(text.trim().replace(/,/g, ""));
+  if (n === null) return null;
   // String(-0) is "0" already; String(1e21) is "1e+21", which still parses.
   return String(n === 0 ? 0 : n);
 }

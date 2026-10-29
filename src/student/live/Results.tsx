@@ -16,7 +16,7 @@ export function Results({ m, team, meId }: { m: LiveModel; team: TeamWithMembers
   // Marked absent by the team's leader (0051) or on the sheet: the team's
   // points went to the people in the room, as 0031 has it, and not to them.
   const absent = team !== null && m.isAbsent(meId);
-  const together = team ? (absent ? 0 : m.score(team.id)) : null;
+  const together = m.memberScore(meId);
 
   if (own === null) {
     return (

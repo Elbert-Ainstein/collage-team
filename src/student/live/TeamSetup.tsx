@@ -2,10 +2,11 @@
 
 // Before a team plays (0051): it picks who submits for it, then that person
 // takes the roll. Every phone votes for itself and watches the same tally come
-// back over realtime. Where the team is comes from the database, so a refresh
-// lands on the same step, and a student marked absent sees only that.
+// back over realtime; the roll shows on every phone too, as the leader takes
+// it. Where the team is comes from the database, so a refresh lands on the
+// same step, and a student marked absent sees only that.
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { Student, TeamWithMembers } from "@/checkins/types";
 import { confirmLeader, setAbsences, voteLeader } from "@/live/data";
 import type { LiveModel } from "@/live/model";
@@ -45,14 +46,7 @@ export function TeamSession(props: SetupProps) {
   // A team of one has nobody to call.
   const alone = team.members.length < 2;
   if (!alone && (stage === "roll" || (reroll && leads))) {
-    if (!leads) return <RollWait team={team} leaderId={leader} />;
-    return (
-      <RollCall
-        {...props}
-        again={stage === "play"}
-        onDone={() => setReroll(false)}
-      />
-    );
+    return <RollCall {...props} leaderId={leader} leads={leads} again={stage === "play"} onDone={() => setReroll(false)} />;
   }
   return (
     <TeamPlay
@@ -170,21 +164,50 @@ function LeaderVote({ m, team, meId, onError, onChanged }: SetupProps) {
 
 // -------------------------------------------------------------- the roll
 
-function RollCall({ m, team, meId, onError, onChanged, again, onDone }: SetupProps & { again: boolean; onDone: () => void }) {
-  const mates = team.members.filter((s) => s.id !== meId);
+interface RollProps extends SetupProps {
+  leaderId: string | null;
+  /** This phone's student is the leader: they tap, and finish it. */
+  leads: boolean;
+  /** Taken again during play, for someone who turned up late. */
+  again: boolean;
+  onDone: () => void;
+}
+
+/**
+ * The roll, on every phone, like any other question: the team bar the leader,
+ * who is plainly there. Only the leader taps. Each tap is saved as it lands
+ * (0052), so everyone watches the roll being taken, and Continue finishes it.
+ */
+function RollCall({ m, team, meId, onError, onChanged, leaderId, leads, again, onDone }: RollProps) {
+  const listed = team.members.filter((s) => s.id !== leaderId);
   // Marked on the sheet by staff: fixed here, and set_live_absences leaves them be.
   const fixed = new Set(m.absentIds(team.id, "sheet"));
-  const [away, setAway] = useState<ReadonlySet<string>>(() => new Set(m.absentIds(team.id, "roll").filter((id) => id !== meId)));
+  const saved = m.absentIds(team.id, "roll");
+  // The leader's taps are the roll: kept here, and sent as they land.
+  const [mine, setMine] = useState<ReadonlySet<string>>(() => new Set(saved.filter((id) => id !== meId)));
   const [busy, setBusy] = useState(false);
-  const toggle = (id: string) =>
-    setAway((prev) => (prev.has(id) ? new Set([...prev].filter((x) => x !== id)) : new Set([...prev, id])));
+  // Taps go out one after another, so the last one is what the team ends up seeing.
+  const sending = useRef<Promise<void>>(Promise.resolve());
+  const away: ReadonlySet<string> = leads ? mine : new Set(saved);
   const out = (id: string) => fixed.has(id) || away.has(id);
   const here = team.members.filter((s) => !out(s.id)).length;
+  const aid = m.state.activity_id;
+  const ids = (set: ReadonlySet<string>) => [...set].filter((id) => !fixed.has(id));
 
-  const save = async () => {
+  const toggle = (id: string) => {
+    if (!leads || busy) return;
+    const next: ReadonlySet<string> = mine.has(id) ? new Set([...mine].filter((x) => x !== id)) : new Set([...mine, id]);
+    setMine(next);
+    sending.current = sending.current
+      .then(() => setAbsences(aid, ids(next), false))
+      .then(() => onChanged())
+      .catch((e: unknown) => onError(forStudent(e, "Couldn’t save that. Try again.")));
+  };
+  const finish = async () => {
     setBusy(true);
     try {
-      await setAbsences(m.state.activity_id, [...away].filter((id) => !fixed.has(id)));
+      await sending.current;
+      await setAbsences(aid, ids(mine), true);
       await onChanged();
       onDone();
     } catch (e) {
@@ -200,7 +223,7 @@ function RollCall({ m, team, meId, onError, onChanged, again, onDone }: SetupPro
         <span className="fv-eyebrow lq-sq">{team.name} · Roll</span>
         <h2 className="lq-setupq">Who’s here?</h2>
         <div className="lq-choices" role="group" aria-label="Who’s here">
-          {mates.map((s) => {
+          {listed.map((s) => {
             const gone = out(s.id);
             const byStaff = fixed.has(s.id);
             return (
@@ -209,12 +232,13 @@ function RollCall({ m, team, meId, onError, onChanged, again, onDone }: SetupPro
                 type="button"
                 role="checkbox"
                 aria-checked={!gone}
+                aria-disabled={!leads || undefined}
                 disabled={byStaff}
-                className={`lq-choice team lq-leadpick lq-roll${gone ? " away" : " on"}`}
+                className={`lq-choice team lq-leadpick lq-roll${gone ? " away" : " on"}${leads ? "" : " lq-readonly"}`}
                 onClick={() => toggle(s.id)}
               >
                 <Av p={s} size={30} dim={gone} />
-                <span className="lq-choicet">{s.name}</span>
+                <span className="lq-choicet">{s.id === meId ? "You" : s.name}</span>
                 <span className="lq-rollstate">{byStaff ? "Absent · instructor" : gone ? "Absent" : "Here"}</span>
               </button>
             );
@@ -226,32 +250,17 @@ function RollCall({ m, team, meId, onError, onChanged, again, onDone }: SetupPro
           <b>
             {here} of {team.members.length} here
           </b>
+          {leads ? null : <span className="fv-sub">{callName(team, meId, leaderId)} submits for the team</span>}
         </span>
-        <span className="lq-footbtns">
-          {again ? (
-            <button type="button" className="fv-btn outline lq-teambtn" disabled={busy} onClick={onDone}>
-              Cancel
+        {leads ? (
+          <span className="lq-footbtns">
+            <button type="button" className="fv-btn primary lq-teambtn" disabled={busy} onClick={() => void finish()}>
+              {busy ? "Saving…" : again ? "Done" : <>Continue <Ic name="arrowRight" size={15} /></>}
             </button>
-          ) : null}
-          <button type="button" className="fv-btn primary lq-teambtn" disabled={busy} onClick={() => void save()}>
-            {busy ? "Saving…" : again ? "Save" : <>Continue <Ic name="arrowRight" size={15} /></>}
-          </button>
-        </span>
+          </span>
+        ) : null}
       </footer>
     </>
-  );
-}
-
-function RollWait({ team, leaderId }: { team: TeamWithMembers; leaderId: string | null }) {
-  const leader = memberOf(team, leaderId);
-  return (
-    <div className="lq-sscroll lq-center">
-      <div className="lq-scard lq-intro lq-wait">
-        {leader ? <Av p={leader} size={44} /> : null}
-        <h2 className="lq-h2">{leader ? firstName(leader.name) : "Your leader"} submits for the team</h2>
-        <p className="fv-sub">Taking the roll…</p>
-      </div>
-    </div>
   );
 }
 

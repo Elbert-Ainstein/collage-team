@@ -137,6 +137,8 @@ export function OnYourOwn({
   activityId: string;
 }) {
   const [submittedHere, setSubmitted] = useState(() => readSubmitted(activityId));
+  // Submitted: the page that says so, until they ask to see their answers.
+  const [reviewing, setReviewing] = useState(false);
   const N = m.questions.length;
   const answerOf = (i: number) => saver.answers[m.questions[i]?.id] ?? null;
   const filled = (i: number) => answerOf(i) !== null;
@@ -147,6 +149,16 @@ export function OnYourOwn({
     const saving = m.questions.some((q) => saver.state[q.id]?.kind === "saving");
     const failed = m.questions.flatMap((q, i) => (saver.state[q.id]?.kind === "failed" ? [i + 1] : []));
     const submitted = submittedHere && missing.length === 0;
+    if (submitted && !reviewing) {
+      return (
+        <Submitted
+          answered={done}
+          of={N}
+          onReview={() => setReviewing(true)}
+          onBack={() => onCursor(N - 1)}
+        />
+      );
+    }
     return (
       <>
       <div className="lq-sscroll">
@@ -256,6 +268,34 @@ export function OnYourOwn({
   );
 }
 
+/** The end of before class: they're done, and can still look or change. */
+function Submitted({ answered, of, onReview, onBack }: { answered: number; of: number; onReview: () => void; onBack: () => void }) {
+  return (
+    <>
+      <div className="lq-sscroll lq-center">
+        <div className="lq-scard lq-intro lq-donecard">
+          <span className="lq-introicon lq-doneicon">
+            <Ic name="check" size={26} />
+          </span>
+          <h2 className="lq-h2">You’ve submitted</h2>
+          <p className="lq-donescore fv-num">
+            {answered} of {of} answered
+          </p>
+          <p className="fv-sub">You can still change an answer until class starts.</p>
+          <button type="button" className="fv-btn outline lq-teambtn" onClick={onReview}>
+            Review answers
+          </button>
+        </div>
+      </div>
+      <footer className="lq-sfoot">
+        <button type="button" className="fv-btn outline" onClick={onBack}>
+          <Ic name="chevronLeft" size={15} /> Back
+        </button>
+      </footer>
+    </>
+  );
+}
+
 /**
  * A number (with its unit beside it) or an expression. Saves once what's typed
  * reads as an answer; until then it says why it doesn't.
@@ -268,7 +308,8 @@ function TypedEntry({ q, value, onChange }: { q: LiveQuestion; value: string | n
       <label className="lq-numfield">
         <input
           className="lq-numin"
-          inputMode={q.kind === "number" ? "decimal" : "text"}
+          // Not "decimal": a phone's number pad has no slash, and 1/2 is an answer.
+          inputMode="text"
           autoCapitalize="off"
           autoCorrect="off"
           spellCheck={false}
@@ -283,7 +324,7 @@ function TypedEntry({ q, value, onChange }: { q: LiveQuestion; value: string | n
         />
         {q.unit ? <span className="lq-numunit">{q.unit}</span> : null}
       </label>
-      {text && !parsed ? <span className="lq-numhint bad">Numbers only</span> : null}
+      {text && !parsed ? <span className="lq-numhint bad">A number or fraction, like 0.5 or 1/2</span> : null}
       {q.kind === "expression" ? <span className="lq-numhint">Any equivalent form counts.</span> : null}
     </div>
   );

@@ -381,6 +381,7 @@ export function TeamDetail({
               <button key={s.id} type="button" className="lq-memberchip" onClick={() => onStudent(s.id)}>
                 <Av p={s} size={22} />
                 {s.name}
+                {m.isAbsent(s.id) ? <span className="lq-absent">Absent</span> : null}
                 <Ic name="chevronRight" size={13} />
               </button>
             ))}
@@ -611,16 +612,20 @@ export function StudentsView({ m, reveal, onStudent }: { m: LiveModel; reveal: b
         {rows.map((s) => {
           const team = m.teamOf(s.id);
           const own = reveal ? m.ownScore(s.id) : m.answered(s.id);
-          const teamScore = team ? m.score(team.id) : null;
+          const teamScore = m.memberScore(s.id);
+          const absent = m.isAbsent(s.id);
           return (
             <button key={s.id} type="button" className="lq-tr" role="row" onClick={() => onStudent(s.id)}>
               <span className="lq-namecell">
                 <Av p={s} size={24} />
                 {s.name}
+                {absent ? <span className="lq-absent">Absent</span> : null}
               </span>
               <span className="fv-sub lq-hide-xs">{team?.name ?? "No team"}</span>
               <span className="r fv-num">{own === null ? "—" : `${own}/${N}`}</span>
-              <span className="r fv-num lq-teamnum">{scored && teamScore !== null ? `${fmtPoints(teamScore)}/${N}` : ""}</span>
+              <span className={`r fv-num lq-teamnum${absent ? " absent" : ""}`}>
+                {scored && teamScore !== null ? `${fmtPoints(teamScore)}/${N}` : ""}
+              </span>
               <span className="lq-qcells lq-hide-sm">
                 {m.questions.map((q, qi) => {
                   const a = m.own(s.id, qi);
@@ -665,7 +670,8 @@ export function StudentDetail({
   const matched = firsts.filter((a, q) => a !== null && a === m.own(studentId, q)).length;
   const tried = firsts.filter(Boolean).length;
   const ownScore = m.ownScore(studentId);
-  const teamScore = team ? m.score(team.id) : null;
+  const teamScore = m.memberScore(studentId);
+  const teamLabel = team ? `With ${team.name}${m.isAbsent(studentId) ? " · Absent" : ""}` : "Team";
   return (
     <div className="lq-detail">
       <button type="button" className="lq-crumb" onClick={onBack}>
@@ -695,7 +701,7 @@ export function StudentDetail({
           ) : reveal && ownScore !== null ? (
             <>
               <Stat label="On their own" value={`${ownScore}/${N}`} tone="own" />
-              <Stat label={team ? `With ${team.name}` : "Team"} value={teamScore === null ? "—" : `${fmtPoints(teamScore)}/${N}`} tone="team" />
+              <Stat label={teamLabel} value={teamScore === null ? "—" : `${fmtPoints(teamScore)}/${N}`} tone="team" />
             </>
           ) : (
             <Stat label="Answered on their own" value={`${m.answered(studentId)}/${N}`} tone="own" />
