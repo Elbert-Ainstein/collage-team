@@ -211,6 +211,33 @@ export async function loadLive(activityId: string): Promise<LiveSnapshot | null>
   };
 }
 
+/** The parts of a snapshot that move while a team picks its leader and takes the roll. */
+export type LiveSetupParts = Pick<LiveSnapshot, "leaderVotes" | "setups" | "absences">;
+
+/**
+ * Just the leader votes, setups and roll (0051) — three small reads in place of
+ * loadLive's dozen, so a room of phones can check every couple of seconds
+ * without reading every answer each time. Null without 0051.
+ */
+export async function loadLiveSetup(activityId: string): Promise<LiveSetupParts | null> {
+  const setupRes = await db().from("live_team_setup").select("*").eq("activity_id", activityId).order("team_id");
+  if (setupRes.error) {
+    if (before0051(setupRes.error.message)) return null;
+    throw dbError(setupRes.error);
+  }
+  const [leaderVotes, absences] = await Promise.all([
+    selectAll<LiveLeaderVote>((from, to) =>
+      db().from("live_leader_votes").select("*").eq("activity_id", activityId)
+        .order("team_id").order("student_id").range(from, to),
+    ),
+    selectAll<Record<string, unknown>>((from, to) =>
+      db().from("tutorial_absences").select("activity_id, team_id, student_id, source").eq("activity_id", activityId)
+        .order("team_id").order("student_id").range(from, to),
+    ).then((rows) => rows.map(asAbsence)),
+  ]);
+  return { leaderVotes, setups: (setupRes.data ?? []) as LiveTeamSetup[], absences };
+}
+
 /** States and own-answer progress for many activities at once — the Activities list. */
 export async function listLiveProgress(activityIds: string[]): Promise<{
   states: LiveState[];
@@ -569,7 +596,7 @@ export async function scoreLive(snapshot: LiveSnapshot): Promise<{ students: num
  */
 let watchers = 0;
 
-type LiveTable =
+export type LiveTable =
   | "live_state"
   | "live_votes"
   | "live_locks"
@@ -579,11 +606,12 @@ type LiveTable =
   | "tutorial_absences";
 
 /** 0051's tables, and the sheet's absences its roll writes to. */
-const SETUP_TABLES: readonly LiveTable[] = ["live_leader_votes", "live_team_setup", "tutorial_absences"];
+export const SETUP_TABLES: readonly LiveTable[] = ["live_leader_votes", "live_team_setup", "tutorial_absences"];
 
 export function watchLive(
   activityId: string,
-  onChange: () => void,
+  /** Told which table moved, so a screen can read less for some of them. */
+  onChange: (table: LiveTable) => void,
   /** Fewer, for a screen that only cares when the session moves (live_state). */
   tables: readonly LiveTable[] = ["live_state", "live_votes", "live_locks", "live_attempts", ...SETUP_TABLES],
 ): () => void {
@@ -606,7 +634,7 @@ export function watchLive(
         channel.on(
           "postgres_changes",
           { event: "*", schema: "public", table, filter: `activity_id=eq.${activityId}` },
-          () => onChange(),
+          () => onChange(table),
         );
       }
       channel.subscribe();

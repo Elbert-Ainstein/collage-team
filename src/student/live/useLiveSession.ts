@@ -10,9 +10,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Enrolment } from "@/checkins/studentData";
 import type { TeamWithMembers } from "@/checkins/types";
 import { expressionVerdicts } from "@/live/answers";
-import { loadLive, watchLive } from "@/live/data";
+import { loadLive, loadLiveSetup, SETUP_TABLES, watchLive } from "@/live/data";
 import { teamStage } from "@/live/leader";
 import { buildLiveModel, type LiveModel } from "@/live/model";
+import { singleFlight, spread } from "@/live/singleFlight";
 import type { LiveSnapshot } from "@/live/types";
 import { teamFor } from "./teamFor";
 
@@ -20,9 +21,19 @@ const POLL_MS = 30_000;
 /**
  * While the team picks its leader or takes the roll: a minute of everyone
  * tapping at once, where a teammate's tap that waits on the slow poll reads as
- * broken. Realtime still leads; this is how late it can ever be.
+ * broken. Realtime still leads; this is how late it can ever be. It reads only
+ * the leader and the roll, not the whole activity.
  */
 const SETUP_POLL_MS = 2_000;
+/** How far a room's reads after one realtime event are spread. */
+const REALTIME_SPREAD_MS = 1_000;
+/**
+ * After a failed read, try again on its own — sooner at first, then backing off
+ * to the last step for as long as it takes. Nobody has to press anything, and a
+ * room of devices that all lost the database at once don't all come back at the
+ * same instant: each wait is stretched by up to half again at random.
+ */
+const RETRY_MS = [1_000, 2_000, 4_000, 8_000, 15_000];
 
 export interface LiveSession {
   snap: LiveSnapshot | null;
@@ -30,7 +41,7 @@ export interface LiveSession {
   model: LiveModel | null;
   team: TeamWithMembers | null;
   loading: boolean;
-  /** The last read failed (a dropped connection): the screen offers a retry. */
+  /** The last read failed (a dropped connection or a swamped database): it is already trying again. */
   failed: boolean;
   reload: () => Promise<void>;
 }
@@ -38,52 +49,87 @@ export interface LiveSession {
 export function useLiveSession(activityId: string, enrolment: Enrolment, teamId: string | null): LiveSession {
   const [snap, setSnap] = useState<LiveSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
+  // Reads failed in a row; 0 once one lands.
+  const [fails, setFails] = useState(0);
   const [verdicts, setVerdicts] = useState<Record<string, Record<string, boolean>>>({});
   const [now, setNow] = useState(() => Date.now());
   const alive = useRef(true);
-  // Overlapping reads (realtime, the poll, coming back to the tab): a read
-  // older than the last one applied is dropped, so a lock can't vanish under
-  // a poll that started before it.
-  const issued = useRef(0);
-  const applied = useRef(0);
+  // The next read reads everything; otherwise (the setup poll) just the leader
+  // and the roll. Reads run one at a time (singleFlight), so a full read and a
+  // setup check can never land out of order and undo each other.
+  const whole = useRef(true);
 
-  const reload = useCallback(async () => {
-    const n = ++issued.current;
+  const read = useCallback(async () => {
+    const full = whole.current;
+    whole.current = false;
     try {
-      const next = await loadLive(activityId);
-      if (!alive.current || n < applied.current) return;
-      applied.current = n;
-      setSnap(next);
-      setFailed(false);
+      if (full) {
+        const next = await loadLive(activityId);
+        if (!alive.current) return;
+        setSnap(next);
+      } else {
+        const parts = await loadLiveSetup(activityId);
+        if (!alive.current) return;
+        if (parts) setSnap((s) => (s ? { ...s, ...parts } : s));
+      }
+      setFails(0);
     } catch {
-      if (alive.current && n >= applied.current) setFailed(true);
+      // The next read must be a whole one: this one may have been.
+      whole.current = whole.current || full;
+      if (alive.current) setFails((n) => n + 1);
     } finally {
       if (alive.current) setLoading(false);
     }
   }, [activityId]);
+  const flight = useMemo(() => singleFlight(read), [read]);
+  const reload = useCallback(() => {
+    whole.current = true;
+    return flight();
+  }, [flight]);
 
   useEffect(() => {
     alive.current = true;
     void reload();
     let timer: number | undefined;
-    const unwatch = watchLive(activityId, () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => void reload(), 200);
+    let wantAll = false;
+    const unwatch = watchLive(activityId, (table) => {
+      // A leader vote or a roll moves only the setup; anything else reads it all.
+      wantAll = wantAll || !SETUP_TABLES.includes(table);
+      // One read for a burst — but not pushed back by every event in it, or a
+      // busy room would never read at all. Every phone hears the same event,
+      // so their reads are spread out.
+      if (timer !== undefined) return;
+      timer = window.setTimeout(() => {
+        timer = undefined;
+        const all = wantAll;
+        wantAll = false;
+        void (all ? reload() : flight());
+      }, spread(200, REALTIME_SPREAD_MS));
     });
     const poll = window.setInterval(() => void reload(), POLL_MS);
     const back = () => {
       if (document.visibilityState === "visible") void reload();
     };
     document.addEventListener("visibilitychange", back);
+    // Wifi back after a drop: no need to wait for the next retry.
+    const online = () => void reload();
+    window.addEventListener("online", online);
     return () => {
       alive.current = false;
       window.clearTimeout(timer);
       window.clearInterval(poll);
       document.removeEventListener("visibilitychange", back);
+      window.removeEventListener("online", online);
       unwatch();
     };
-  }, [activityId, reload]);
+  }, [activityId, reload, flight]);
+
+  useEffect(() => {
+    if (fails === 0) return;
+    const wait = RETRY_MS[Math.min(fails, RETRY_MS.length) - 1];
+    const t = window.setTimeout(() => void reload(), spread(wait, wait / 2));
+    return () => window.clearTimeout(t);
+  }, [fails, reload]);
 
   const phase = snap?.state.phase;
   useEffect(() => {
@@ -109,12 +155,14 @@ export function useLiveSession(activityId: string, enrolment: Enrolment, teamId:
 
   const team = useMemo(() => teamFor(enrolment, teamId, snap), [enrolment, teamId, snap]);
 
-  const settingUp = phase === "team" && snap !== null && team !== null && teamStage(snap, team.id) !== "play";
+  // Not while failing: the retry above is already paced for a struggling server.
+  const settingUp =
+    fails === 0 && phase === "team" && snap !== null && team !== null && teamStage(snap, team.id) !== "play";
   useEffect(() => {
     if (!settingUp) return;
-    const t = window.setInterval(() => void reload(), SETUP_POLL_MS);
+    const t = window.setInterval(() => void flight(), SETUP_POLL_MS);
     return () => window.clearInterval(t);
-  }, [settingUp, reload]);
+  }, [settingUp, flight]);
   const model = useMemo(
     () =>
       snap
@@ -123,5 +171,5 @@ export function useLiveSession(activityId: string, enrolment: Enrolment, teamId:
     [snap, team, enrolment.student, verdicts, now],
   );
 
-  return { snap, model, team, loading, failed, reload };
+  return { snap, model, team, loading, failed: fails > 0, reload };
 }
