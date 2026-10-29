@@ -1823,6 +1823,14 @@ button.lq-tr:hover {
   min-width: 0;
   font-size: 13px;
 }
+.lq-footbtns {
+  flex: none;
+  display: flex;
+  gap: 8px;
+}
+.lq-footbtns:empty {
+  display: none;
+}
 .lq-sfoot.agreed .lq-footmsg b {
   color: var(--lq-team);
 }
@@ -3626,4 +3634,110 @@ span.lq-spip {
   font-size: 12px;
   line-height: 1.45;
   color: var(--fv-muted);
+}
+
+/* ------------------------------------- builder: explanations (0051, faculty) */
+
+.lq-explain {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0 0 var(--lq-bcol);
+}
+.lq-explainta {
+  field-sizing: content;
+  min-height: 4.5em;
+  font-size: 13px;
+}
+.lq-explainta:disabled {
+  opacity: 0.6;
+}
+.lq-explainfoot {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px 14px;
+  flex-wrap: wrap;
+}
+.lq-explainerr {
+  margin-right: auto;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--lq-wrong);
+}
+@container lqf (max-width: 560px) {
+  .lq-explain {
+    margin-left: 0;
+  }
+}
+
+/* ------------------------- student: leader, roll and explanations (0051) */
+
+/* The question a setup step asks, set like a question stem. */
+.lq-setupq {
+  margin: 0 0 16px;
+  font-family: var(--fv-serif);
+  font-size: 19px;
+  font-weight: 400;
+  line-height: 1.36;
+  letter-spacing: -0.01em;
+}
+/* A person to pick, in the same box as an answer: avatar where the letter goes. */
+.lq-choice.lq-leadpick .lq-choicet {
+  font-weight: 600;
+}
+.lq-choice.lq-roll.away {
+  background: transparent;
+  border-style: dashed;
+  box-shadow: none;
+  color: var(--fv-muted);
+}
+.lq-rollstate {
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--lq-team);
+}
+.lq-roll.away .lq-rollstate {
+  color: var(--fv-muted);
+}
+/* Waiting on the leader, or marked absent: a name and a line, nothing to press. */
+.lq-wait {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.lq-wait .fv-sub {
+  margin: 0;
+}
+/* The leader's line above the question: they submit, and can take the roll again. */
+.lq-leadline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: -6px 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--lq-team);
+}
+/* Why the answer is the answer, under the question once the team is done with it. */
+.lq-swhy {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--lq-team);
+  background: var(--fv-cream-300);
+}
+.lq-sres .lq-swhy {
+  margin-top: 10px;
+}
+.lq-swhy p {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-line;
+  color: var(--fv-navy);
 }

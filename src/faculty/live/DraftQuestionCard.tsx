@@ -8,13 +8,14 @@
 // `locked` is team mode or later: 0047 freezes what a question IS once teams
 // have voted on it — its kind and its options — but the wording, the image and
 // the key can still change, so a wrong key can be fixed and the session
-// re-scored.
+// re-scored. So can the explanation (ExplanationField.tsx).
 
 import { useRef, useState } from "react";
 import { normalizeNumber, optionLetter } from "@/live/answers";
 import { Figure, uploadFigure } from "@/live/figure";
 import { Ic } from "@/live/ui";
 import { keyLabel, MAX_OPTIONS, type DraftQuestion } from "./draft";
+import { ExplanationField } from "./ExplanationField";
 import type { LiveKind } from "@/live/types";
 
 /** 1.1 − 0.05 without the floating-point tail. */
@@ -32,6 +33,8 @@ interface Props {
   activityId: string;
   onlyOne: boolean;
   locked: boolean;
+  /** The database can keep an explanation (0051). Without it there's no box to fill. */
+  explains: boolean;
   onChange: (next: DraftQuestion) => void;
   /** A change that lands later (an upload), merged into the question as it is then. */
   onPatch: (change: Partial<DraftQuestion>) => void;
@@ -39,7 +42,7 @@ interface Props {
   onError: (e: unknown) => void;
 }
 
-export function DraftQuestionCard({ q, n, activityId, onlyOne, locked, onChange, onPatch, onRemove, onError }: Props) {
+export function DraftQuestionCard({ q, n, activityId, onlyOne, locked, explains, onChange, onPatch, onRemove, onError }: Props) {
   const [adding, setAdding] = useState("");
   const [uploading, setUploading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -256,6 +259,16 @@ export function DraftQuestionCard({ q, n, activityId, onlyOne, locked, onChange,
             + Option
           </button>
         </div>
+      ) : null}
+
+      {explains ? (
+        <ExplanationField
+          q={q}
+          n={n}
+          activityId={activityId}
+          onChange={(explanation) => onChange({ ...q, explanation })}
+          onPatch={(explanation) => onPatch({ explanation })}
+        />
       ) : null}
 
       {pick && src?.note ? (

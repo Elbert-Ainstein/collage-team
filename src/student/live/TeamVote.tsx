@@ -3,22 +3,26 @@
 // In class, as a team: everyone sees how each of them answered on their own,
 // votes, and the team submits one answer at a time. Each try turns green or
 // red as it lands (0049); a red one is off the table and the team goes again,
-// for less. Votes and tries go through the RPCs and come back over realtime,
-// so every phone on the team shows the same thing.
+// for less, as many times as it likes — or, once another try is worth
+// nothing, moves on (0050). Votes and tries go through the RPCs and come back
+// over realtime, so every phone on the team shows the same thing. Once the
+// team has a leader (0051), everyone still votes, but only the leader submits
+// and moves the team on; whoever the roll marked absent drops out of the count.
 
 import { useRef, useState } from "react";
 import type { TeamWithMembers } from "@/checkins/types";
-import { canonicalAnswer, maxTries, normalizeNumber, optionLetter, TRY_CREDIT, tryCredit } from "@/live/answers";
-import { castVote, lockTeamAnswer } from "@/live/data";
+import { canMoveOn, canonicalAnswer, maxTries, normalizeNumber, optionLetter, TRY_CREDIT, tryCredit } from "@/live/answers";
+import { castVote, lockTeamAnswer, moveTeamOn } from "@/live/data";
 import { Figure } from "@/live/figure";
 import { fmtPoints, type LiveModel } from "@/live/model";
 import type { LiveQuestion } from "@/live/types";
 import { Av, Ic, Pick, Tries, voteSummary } from "@/live/ui";
+import { Explanation } from "./Explanation";
 import { forStudent } from "./forStudent";
 
 const MAX_TYPED_CHOICES = 8;
 
-const firstName = (name: string) => name.split(/\s+/)[0] ?? name;
+export const firstName = (name: string): string => name.split(/\s+/)[0] ?? name;
 
 /** "1 point", "0.5 points", "no points". */
 const worth = (n: number) => (n === 0 ? "no points" : n === 1 ? "1 point" : `${fmtPoints(n)} points`);
@@ -26,7 +30,30 @@ const worth = (n: number) => (n === 0 ? "no points" : n === 1 ? "1 point" : `${f
 /** The rule, as it's said out loud: "1 point first try, then 0.5, then 0.25". */
 const RULE = `${fmtPoints(TRY_CREDIT[0])} point first try, then ${TRY_CREDIT.slice(1).map(fmtPoints).join(", then ")}`;
 
-export function TeamIntro({ team, rule, onStart }: { team: TeamWithMembers; rule: "any" | "all"; onStart: () => void }) {
+/** How the team answers, as the intro says it: with a leader (0051), they submit. */
+function howLine(rule: "any" | "all", n: number, leader: boolean): string {
+  if (!leader) {
+    return rule === "any"
+      ? "See each other’s answers, agree, then one of you submits."
+      : `See each other’s answers, then all ${n} pick the same one.`;
+  }
+  return rule === "any"
+    ? "First, pick who submits for the team. Then see each other’s answers, agree, and they submit."
+    : `First, pick who submits for the team. Then see each other’s answers; once all of you pick the same one, they lock it in.`;
+}
+
+export function TeamIntro({
+  team,
+  rule,
+  leader = false,
+  onStart,
+}: {
+  team: TeamWithMembers;
+  rule: "any" | "all";
+  /** The team picks a leader first (0051). */
+  leader?: boolean;
+  onStart: () => void;
+}) {
   return (
     <div className="lq-sscroll lq-center">
       <div className="lq-scard lq-intro">
@@ -42,11 +69,7 @@ export function TeamIntro({ team, rule, onStart }: { team: TeamWithMembers; rule
             </span>
           ))}
         </div>
-        <p className="lq-introline">
-          {rule === "any"
-            ? "See each other’s answers, agree, then one of you submits."
-            : `See each other’s answers, then all ${team.members.length} pick the same one.`}
-        </p>
+        <p className="lq-introline">{howLine(rule, team.members.length, leader)}</p>
         <p className="lq-introline lq-introrule">
           You’ll know straight away if it’s right. If it isn’t, try again — {RULE}.
         </p>
@@ -124,12 +147,15 @@ export function TeamPlay({
   meId,
   onError,
   onTried,
+  onRoll,
 }: {
   m: LiveModel;
   team: TeamWithMembers;
   meId: string;
   onError: (message: string) => void;
   onTried: () => Promise<void> | void;
+  /** This phone's student leads the team: take the roll again. */
+  onRoll?: () => void;
 }) {
   const now = m.current(team.id)?.q ?? null;
   const [seen, setSeen] = useState(now);
@@ -141,7 +167,7 @@ export function TeamPlay({
     if (seen !== null && held === null && m.locks(team.id)[seen]) setHeld(seen);
   }
   const q = held ?? now;
-  if (q === null) return <TeamDone m={m} team={team} meId={meId} />;
+  if (q === null) return <TeamDone m={m} team={team} meId={meId} onRoll={onRoll} />;
   return (
     <TeamQuestion
       key={q}
@@ -152,6 +178,7 @@ export function TeamPlay({
       onTried={onTried}
       onNext={held === null ? undefined : () => setHeld(null)}
       hasNext={now !== null}
+      onRoll={onRoll}
     />
   );
 }
@@ -166,6 +193,7 @@ export function TeamQuestion({
   onTried,
   onNext,
   hasNext = true,
+  onRoll,
 }: {
   m: LiveModel;
   team: TeamWithMembers;
@@ -177,9 +205,12 @@ export function TeamQuestion({
   onNext?: () => void;
   /** A question is left after this one — what the Next button says. */
   hasNext?: boolean;
+  /** This phone's student leads the team: take the roll again. */
+  onRoll?: () => void;
 }) {
   const [pending, setPending] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  // Which button is waiting on the server, so only that one says so.
+  const [busy, setBusy] = useState<"submit" | "move" | null>(null);
   // The vote on its way to the server, so a submit right after a tap sends the answer on screen.
   const voting = useRef<Promise<void> | null>(null);
 
@@ -192,6 +223,7 @@ export function TeamQuestion({
   const last = tries[tries.length - 1];
   const tryNo = tries.length + 1;
   const max = maxTries(question);
+  const movable = !done && canMoveOn(question, tries.length);
   const cur = m.current(team.id);
   const live = !done && cur?.q === q ? cur : null;
   // My vote: the one I just cast, until the server's copy catches up — unless
@@ -199,12 +231,21 @@ export function TeamQuestion({
   const votes = (live?.votes ?? team.members.map(() => null)).map((v, i) =>
     i === 0 && pending !== null && !tried.has(pending) ? pending : v,
   );
+  // Whoever the roll marked absent (0051) is out of the count, as lock_team_answer has it.
+  const away = new Set(m.absentIds(team.id));
+  const seats = team.members
+    .map((s, i) => ({ s, v: votes[i] ?? null, name: i === 0 ? "You" : firstName(s.name) }))
+    .filter(({ s }) => !away.has(s.id));
+  const hereVotes = seats.map((x) => x.v);
   const mine = done ? null : votes[0];
-  const agreed = !done && votes.length > 0 && votes[0] && votes.every((v) => v === votes[0]) ? votes[0] : null;
-  const names = team.members.map((s, i) => (i === 0 ? "You" : firstName(s.name)));
+  const agreed = !done && hereVotes.length > 0 && hereVotes[0] && hereVotes.every((v) => v === hereVotes[0]) ? hereVotes[0] : null;
   const rule = m.state.lock_rule;
-  const others = votes.slice(1).filter((v) => v && v !== mine).length;
-  const holdout = mine && !agreed && others === votes.length - 1 && votes.length > 2;
+  const others = hereVotes.slice(1).filter((v) => v && v !== mine).length;
+  const holdout = mine && !agreed && others === hereVotes.length - 1 && hereVotes.length > 2;
+  // Only the leader submits and moves the team on, once there is one (0051).
+  const leads = m.mayLead(team.id, team.members[0]?.id ?? "");
+  const leaderId = m.leaderOf(team.id);
+  const leaderLine = `${leaderId ? byWhom(team, leaderId) : "Your leader"} submits for the team`;
   const text = (a: string) => (question.kind === "mc" ? question.options[a.charCodeAt(0) - 65] ?? a : m.label(q, a));
   const short = (a: string) => (a.length > 12 ? "your answer" : question.kind === "number" ? m.label(q, a) : a);
   const verdictOf = (a: string): boolean | null => {
@@ -221,7 +262,7 @@ export function TeamQuestion({
     });
   };
   const submit = async () => {
-    setBusy(true);
+    setBusy("submit");
     try {
       await voting.current;
       await lockTeamAnswer(question, mine);
@@ -229,7 +270,18 @@ export function TeamQuestion({
     } catch (e) {
       onError(forStudent(e, "Couldn’t submit it. Try again."));
     } finally {
-      setBusy(false);
+      setBusy(null);
+    }
+  };
+  const moveOn = async () => {
+    setBusy("move");
+    try {
+      await moveTeamOn(question.id);
+      await onTried();
+    } catch (e) {
+      onError(forStudent(e, "Couldn’t move on. Try again."));
+    } finally {
+      setBusy(null);
     }
   };
 
@@ -250,7 +302,8 @@ export function TeamQuestion({
       };
     } else {
       const key = keyText(m, q);
-      feedback = { tone: "wrong", title: "Out of tries", sub: key ? `The answer is ${key} · no points` : "No points for this one" };
+      const title = tries.length >= max ? "Out of tries" : "Moved on";
+      feedback = { tone: "wrong", title, sub: key ? `The answer is ${key} · no points` : "No points for this one" };
     }
   } else if (last && !mine) {
     const by = byWhom(team, last.locked_by);
@@ -258,7 +311,7 @@ export function TeamQuestion({
     feedback = {
       tone: "wrong",
       title: "Not quite",
-      sub: `${by === "You" ? "" : `${by} submitted `}${short(last.answer)} — ${next > 0 ? `pick another, worth ${worth(next)}` : "no points left, but find it to move on"}`,
+      sub: `${by === "You" ? "" : `${by} submitted `}${short(last.answer)} — ${next > 0 ? `pick another, worth ${worth(next)}` : question.kind === "mc" ? "no points left, but find it to move on" : "no points left: keep trying, or move on"}`,
     };
   }
 
@@ -269,6 +322,11 @@ export function TeamQuestion({
         ? tries.map((t) => t.answer)
         : [...typedChoices(m, team, q, votes).filter((a) => !tried.has(a)), ...tries.map((t) => t.answer)];
   const submitLabel = rule === "any" ? "Submit" : "Lock in";
+  const moveOnButton = movable && leads ? (
+    <button type="button" className="fv-btn outline lq-teambtn" disabled={busy !== null} onClick={() => void moveOn()}>
+      {busy === "move" ? "Moving on…" : <>Move on <Ic name="arrowRight" size={15} /></>}
+    </button>
+  ) : null;
 
   return (
     <>
@@ -280,22 +338,23 @@ export function TeamQuestion({
           </span>
           {done ? null : (
             <span className={`lq-worth${tries.length ? " retry" : ""}`}>
-              {tries.length ? `Try ${tryNo}${question.kind === "mc" ? "" : ` of ${max}`} · worth ` : "Worth "}
+              {tries.length ? `Try ${tryNo} · worth ` : "Worth "}
               {worth(tryCredit(tryNo))}
             </span>
           )}
         </div>
+        {onRoll ? <LeadLine here={seats.length} of={team.members.length} onRoll={onRoll} /> : null}
         <p className="lq-sstem">{question.stem}</p>
         <Figure path={question.figure_path} alt={`Figure for question ${q + 1}`} className="lq-sfig" />
 
         <div className="lq-ownstrip" role="group" aria-label="How each of you answered on your own">
           <span className="lq-ownlabel">On your own</span>
-          {team.members.map((s, i) => {
+          {seats.map(({ s, name }) => {
             const own = m.own(s.id, q);
             return (
               <span key={s.id} className="lq-ownchip">
                 <Av p={s} size={22} />
-                <span className="lq-ownname">{names[i]}</span>
+                <span className="lq-ownname">{name}</span>
                 <Pick value={own} right={own && tried.has(own) ? verdictOf(own) : undefined} size="sm" />
               </span>
             );
@@ -306,7 +365,7 @@ export function TeamQuestion({
           {choices.map((a) => {
             // A tried answer is green or red by the verdict the team was given, and can't be picked again.
             const v = verdictOf(a);
-            const voters = v !== null || done ? [] : team.members.filter((_, i) => votes[i] === a);
+            const voters = v !== null || done ? [] : team.members.filter((s, i) => votes[i] === a && !away.has(s.id));
             const isMine = mine === a;
             return (
               <button
@@ -333,6 +392,7 @@ export function TeamQuestion({
           })}
         </div>
         {question.kind !== "mc" && !done ? <Propose q={question} tried={tried} onPropose={vote} /> : null}
+        {done ? <Explanation body={m.explanation(q)} /> : null}
       </div>
 
       {/* Always there, so a screen reader hears the verdict the moment it changes. */}
@@ -350,36 +410,49 @@ export function TeamQuestion({
               <button type="button" className="fv-btn primary lq-teambtn" onClick={onNext}>
                 {hasNext ? "Next question" : "See how you did"} <Ic name="arrowRight" size={15} />
               </button>
-            ) : null}
+            ) : (
+              moveOnButton
+            )}
           </>
         ) : agreed ? (
           <>
             <span className="lq-footmsg">
               <b>All on {question.kind === "mc" ? agreed : text(agreed)}</b>
+              {leads ? null : <span className="fv-sub">{leaderLine}</span>}
             </span>
-            <button type="button" className="fv-btn primary lq-teambtn" disabled={busy} onClick={() => void submit()}>
-              <Ic name="lock" size={15} /> {busy ? "Submitting…" : `${submitLabel} ${question.kind === "mc" ? agreed : ""}`}
-            </button>
+            {leads ? (
+              <span className="lq-footbtns">
+                {moveOnButton}
+                <button type="button" className="fv-btn primary lq-teambtn" disabled={busy !== null} onClick={() => void submit()}>
+                  <Ic name="lock" size={15} /> {busy === "submit" ? "Submitting…" : `${submitLabel} ${question.kind === "mc" ? agreed : ""}`}
+                </button>
+              </span>
+            ) : null}
           </>
         ) : (
           <>
             <span className="lq-footmsg">
-              <b>{voteSummary(votes, names)}</b>
+              <b>{voteSummary(hereVotes, seats.map((x) => x.name))}</b>
               <span className="fv-sub">
                 {!mine
                   ? "Pick one"
                   : rule === "any"
-                    ? "Submit counts for the team"
+                    ? leads
+                      ? "Submit counts for the team"
+                      : leaderLine
                     : holdout
                       ? "You’re the holdout"
-                      : `Locks when all ${team.members.length} agree`}
+                      : `Locks when all ${seats.length} agree`}
               </span>
             </span>
-            {rule === "any" && mine ? (
-              <button type="button" className="fv-btn primary lq-teambtn" disabled={busy} onClick={() => void submit()}>
-                <Ic name="lock" size={15} /> {busy ? "Submitting…" : `Submit ${question.kind === "mc" ? mine : ""}`}
-              </button>
-            ) : null}
+            <span className="lq-footbtns">
+              {moveOnButton}
+              {rule === "any" && mine && leads ? (
+                <button type="button" className="fv-btn primary lq-teambtn" disabled={busy !== null} onClick={() => void submit()}>
+                  <Ic name="lock" size={15} /> {busy === "submit" ? "Submitting…" : `Submit ${question.kind === "mc" ? mine : ""}`}
+                </button>
+              ) : null}
+            </span>
           </>
         )}
       </footer>
@@ -423,12 +496,35 @@ function Propose({ q, tried, onPropose }: { q: LiveQuestion; tried: Set<string>;
   );
 }
 
-export function TeamDone({ m, team, meId }: { m: LiveModel; team: TeamWithMembers; meId: string }) {
+/** The leader's line: they submit, and the roll is a tap away. */
+function LeadLine({ here, of, onRoll }: { here: number; of: number; onRoll: () => void }) {
+  return (
+    <div className="lq-leadline">
+      <span>You submit for the team</span>
+      <button type="button" className="fv-btn ghost sm" onClick={onRoll}>
+        Who’s here · {here}/{of}
+      </button>
+    </div>
+  );
+}
+
+interface TeamDoneProps {
+  m: LiveModel;
+  team: TeamWithMembers;
+  meId: string;
+  /** The leader, until the session closes: someone late still gets the team's points. */
+  onRoll?: () => void;
+}
+
+export function TeamDone({ m, team, meId, onRoll }: TeamDoneProps) {
   const together = m.score(team.id);
+  const away = new Set(m.absentIds(team.id));
+  const here = team.members.filter((s) => !away.has(s.id)).length;
   return (
     <div className="lq-sscroll">
       <TeamPips m={m} team={team} current={-1} />
       <div className="lq-scard">
+        {onRoll ? <LeadLine here={here} of={team.members.length} onRoll={onRoll} /> : null}
         <h2 className="lq-h2">All done</h2>
         {together !== null ? (
           <p className="lq-donescore">

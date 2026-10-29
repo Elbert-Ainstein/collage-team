@@ -63,6 +63,18 @@ describe("saving", () => {
     expect(back.id).toBe(q.id);
   });
 
+  it("carries the explanation both ways, trimmed, and blank when there is none", () => {
+    const q = mc({ explanation: "  Down, because gravity.  " });
+    expect(toQuestionDraft(q).explanation).toBe("Down, because gravity.");
+    // Always sent, so clearing the box removes the saved one.
+    expect(toQuestionDraft(mc()).explanation).toBe("");
+    const row = { id: q.id, activity_id: "a", position: 0, kind: "mc" as const, stem: "Which way?", options: ["Up", "Down"], unit: null, figure_path: null, created_at: "" };
+    const [back] = draftsFrom([row], [], [{ question_id: q.id, activity_id: "a", body: "Down, because gravity." }]);
+    expect(back.explanation).toBe("Down, because gravity.");
+    expect(draftsFrom([row], [])[0].explanation).toBe("");
+    expect(blankQuestion().explanation).toBe("");
+  });
+
   it("gives every new question its own id", () => {
     expect(blankQuestion().id).not.toBe(blankQuestion().id);
   });

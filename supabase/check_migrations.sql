@@ -289,6 +289,22 @@ select '0049 team tries, told at once',
              and to_regprocedure('public.lock_team_answer(uuid)') is null
             then 'applied'
             else 'NOT APPLIED — run 0049_live_team_attempts.sql' end
+union all
+select '0050 typed answers, no last try',
+       case when to_regprocedure('public.move_team_on(uuid)') is not null
+            then 'applied'
+            else 'NOT APPLIED — run 0050_live_unlimited_typed_tries.sql' end
+union all
+select '0051 team leader, roll and explanations',
+       case when to_regclass('public.live_team_setup') is not null
+             and to_regclass('public.live_explanations') is not null
+             and to_regprocedure('public.set_live_absences(uuid,uuid[])') is not null
+             and to_regprocedure('public.live_leads(uuid,uuid,uuid)') is not null
+             and exists (select 1 from information_schema.columns
+                          where table_schema = 'public' and table_name = 'tutorial_absences'
+                            and column_name = 'source')
+            then 'applied'
+            else 'NOT APPLIED — run 0051_live_team_leader.sql' end
 order by 1;
 
 -- ------------------------------------------------------- and the buckets

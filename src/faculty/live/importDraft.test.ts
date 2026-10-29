@@ -54,6 +54,8 @@ describe("withImported", () => {
     expect(withImported([blankQuestion()], imported)).toHaveLength(4);
     const written = { ...blankQuestion(), stem: "Mine" };
     expect(withImported([written], imported)[0].stem).toBe("Mine");
+    const explained = { ...blankQuestion(), explanation: "Mine" };
+    expect(withImported([explained], imported)[0].explanation).toBe("Mine");
   });
 });
 

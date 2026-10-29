@@ -11,9 +11,11 @@ import type { LiveAttempt, LiveLock, LiveSnapshot } from "@/live/types";
 
 const castVote = vi.fn(async () => {});
 const lockTeamAnswer = vi.fn(async () => ({}));
+const moveTeamOn = vi.fn(async () => ({}));
 vi.mock("@/live/data", () => ({
   castVote: (...a: unknown[]) => castVote(...(a as [])),
   lockTeamAnswer: (...a: unknown[]) => lockTeamAnswer(...(a as [])),
+  moveTeamOn: (...a: unknown[]) => moveTeamOn(...(a as [])),
 }));
 vi.mock("@/live/figure", () => ({ Figure: () => null }));
 
@@ -46,7 +48,7 @@ const lockOf = (t: LiveAttempt): LiveLock => ({
   locked_at: t.locked_at,
 });
 
-function model(attempts: LiveAttempt[], myVote: string, locks: LiveLock[] = []) {
+function model(attempts: LiveAttempt[], myVote: string, locks: LiveLock[] = [], voteOn = "q1") {
   const snap: LiveSnapshot = {
     state: {
       activity_id: "a",
@@ -62,15 +64,22 @@ function model(attempts: LiveAttempt[], myVote: string, locks: LiveLock[] = []) 
     questions: [
       { id: "q1", activity_id: "a", position: 0, kind: "mc", stem: "Which?", options: ["one", "two", "three", "four"], unit: null, figure_path: null, created_at: "" },
       { id: "q2", activity_id: "a", position: 1, kind: "mc", stem: "And then?", options: ["yes", "no"], unit: null, figure_path: null, created_at: "" },
+      { id: "q3", activity_id: "a", position: 2, kind: "number", stem: "How far?", options: [], unit: "m", figure_path: null, created_at: "" },
     ],
     keys: [],
     responses: [],
     votes: [
-      { question_id: "q1", activity_id: "a", team_id: "t1", student_id: "s1", answer: myVote, updated_at: "" },
-      { question_id: "q1", activity_id: "a", team_id: "t1", student_id: "s2", answer: "A", updated_at: "" },
+      { question_id: voteOn, activity_id: "a", team_id: "t1", student_id: "s1", answer: myVote, updated_at: "" },
+      { question_id: voteOn, activity_id: "a", team_id: "t1", student_id: "s2", answer: voteOn === "q1" ? "A" : myVote, updated_at: "" },
     ],
     locks,
     attempts,
+    teamSetup: false,
+    leaderVotes: [],
+    setups: [],
+    absences: [],
+    roster: [],
+    explanations: [],
   };
   return buildLiveModel({ snapshot: snap, students: team.members, teams: [team], now: T0 + 60_000 });
 }
@@ -83,6 +92,7 @@ beforeEach(() => {
   root = createRoot(host);
   castVote.mockClear();
   lockTeamAnswer.mockClear();
+  moveTeamOn.mockClear();
 });
 afterEach(() => {
   act(() => root.unmount());
@@ -92,6 +102,7 @@ afterEach(() => {
 const choice = (text: string) =>
   [...host.querySelectorAll<HTMLButtonElement>(".lq-choice")].find((b) => b.querySelector(".lq-choicet")?.textContent === text)!;
 const foot = () => host.querySelector("footer")!;
+const button = (label: string) => [...foot().querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.includes(label));
 const show = (node: React.ReactNode) => act(async () => root.render(node));
 
 describe("TeamQuestion after a wrong try", () => {
@@ -127,11 +138,64 @@ describe("TeamQuestion after a wrong try", () => {
     expect(onTried).toHaveBeenCalled();
   });
 
-  it("says when no points are left, and still lets the team find it", async () => {
+  it("says when no points are left on multiple choice, and keeps the team at it", async () => {
     await show(<TeamQuestion m={model([tryAt(1, "A"), tryAt(2, "C"), tryAt(3, "D")], "D")} team={team} q={0} onError={() => {}} onTried={() => {}} />);
     expect(host.querySelector(".lq-worth")?.textContent).toBe("Try 4 · worth no points");
     expect(foot().textContent).toContain("no points left, but find it to move on");
     expect(choice("two").disabled).toBe(false);
+    // The options run out, so there's no moving on from multiple choice.
+    expect(button("Move on")).toBeUndefined();
+  });
+});
+
+describe("TeamQuestion on a typed answer", () => {
+  const wrongTries = (n: number) => Array.from({ length: n }, (_, i) => tryAt(i + 1, String(i + 1), false, "q3"));
+  // Questions 1 and 2 done, so question 3 is the one the team is on and its votes show.
+  const onQ3 = [lockOf(tryAt(1, "B", true, "q1")), lockOf(tryAt(1, "A", true, "q2"))];
+
+  it("keeps going past three tries, with no count of tries left", async () => {
+    await show(<TeamQuestion m={model(wrongTries(5), "A")} team={team} q={2} onError={() => {}} onTried={() => {}} />);
+    expect(host.querySelector(".lq-worth")?.textContent).toBe("Try 6 · worth no points");
+    expect(host.querySelector(".lq-propose")).not.toBeNull();
+    expect(foot().textContent).toContain("Not quite");
+    expect(foot().textContent).toContain("no points left: keep trying, or move on");
+  });
+
+  it("moves the team on, once no points are left", async () => {
+    const onTried = vi.fn();
+    await show(<TeamQuestion m={model(wrongTries(3), "A")} team={team} q={2} onError={() => {}} onTried={onTried} />);
+    await act(async () => button("Move on")!.click());
+    expect(moveTeamOn).toHaveBeenCalledWith("q3");
+    expect(onTried).toHaveBeenCalled();
+  });
+
+  it("offers moving on beside Submit, and says which one is busy", async () => {
+    let finish = () => {};
+    moveTeamOn.mockImplementationOnce(() => new Promise((done) => (finish = () => done({}))));
+    await show(<TeamQuestion m={model(wrongTries(3), "7", onQ3, "q3")} team={team} q={2} onError={() => {}} onTried={() => {}} />);
+    expect(button("Submit")).toBeDefined();
+    await act(async () => button("Move on")!.click());
+    expect(button("Moving on…")?.disabled).toBe(true);
+    expect(button("Submit")?.disabled).toBe(true);
+    expect(button("Submitting…")).toBeUndefined();
+    await act(async () => finish());
+  });
+
+  it("doesn't offer moving on while another try still pays", async () => {
+    await show(<TeamQuestion m={model(wrongTries(2), "7", onQ3, "q3")} team={team} q={2} onError={() => {}} onTried={() => {}} />);
+    expect(button("Submit")).toBeDefined();
+    expect(button("Move on")).toBeUndefined();
+  });
+
+  it("says the team moved on, once it has", async () => {
+    const wrong = wrongTries(3);
+    await show(
+      <TeamQuestion m={model(wrong, "A", [lockOf(wrong[2])])} team={team} q={2} onError={() => {}} onTried={() => {}} onNext={() => {}} />,
+    );
+    expect(foot().textContent).toContain("Moved on");
+    expect(foot().textContent).toContain("No points for this one");
+    expect(button("Next question")).toBeDefined();
+    expect(button("Move on")).toBeUndefined();
   });
 });
 

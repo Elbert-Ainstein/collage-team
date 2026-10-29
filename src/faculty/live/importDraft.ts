@@ -70,6 +70,6 @@ export function leftOutLine(leftOut: LeftOut[]): string | null {
 /** The builder's questions after an import: drafted ones replace an untouched blank start. */
 export function withImported(current: DraftQuestion[], imported: DraftQuestion[]): DraftQuestion[] {
   const untouched = (q: DraftQuestion) =>
-    !q.stem.trim() && q.options.every((o) => !o.trim()) && q.correct === null && !q.answer.trim() && q.accept.length === 0 && !q.figure_path;
+    !q.stem.trim() && q.options.every((o) => !o.trim()) && q.correct === null && !q.answer.trim() && q.accept.length === 0 && !q.figure_path && !q.explanation.trim();
   return [...current.filter((q) => !untouched(q)), ...imported];
 }
