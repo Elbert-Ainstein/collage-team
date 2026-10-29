@@ -3,18 +3,26 @@
 // One live activity, from a student's seat: the rows RLS lets them read
 // (their own answers; their team's answers, votes and locks once team mode is
 // on, its pick of leader and roll (0051); the key and explanations once shown), kept current by realtime with a slow poll
-// behind it in case a socket drops on a classroom's wifi.
+// behind it in case a socket drops on a classroom's wifi — and a quick one
+// while the team is picking its leader and taking the roll.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Enrolment } from "@/checkins/studentData";
 import type { TeamWithMembers } from "@/checkins/types";
 import { expressionVerdicts } from "@/live/answers";
 import { loadLive, watchLive } from "@/live/data";
+import { teamStage } from "@/live/leader";
 import { buildLiveModel, type LiveModel } from "@/live/model";
 import type { LiveSnapshot } from "@/live/types";
 import { teamFor } from "./teamFor";
 
 const POLL_MS = 30_000;
+/**
+ * While the team picks its leader or takes the roll: a minute of everyone
+ * tapping at once, where a teammate's tap that waits on the slow poll reads as
+ * broken. Realtime still leads; this is how late it can ever be.
+ */
+const SETUP_POLL_MS = 2_000;
 
 export interface LiveSession {
   snap: LiveSnapshot | null;
@@ -100,6 +108,13 @@ export function useLiveSession(activityId: string, enrolment: Enrolment, teamId:
   }, [snap]);
 
   const team = useMemo(() => teamFor(enrolment, teamId, snap), [enrolment, teamId, snap]);
+
+  const settingUp = phase === "team" && snap !== null && team !== null && teamStage(snap, team.id) !== "play";
+  useEffect(() => {
+    if (!settingUp) return;
+    const t = window.setInterval(() => void reload(), SETUP_POLL_MS);
+    return () => window.clearInterval(t);
+  }, [settingUp, reload]);
   const model = useMemo(
     () =>
       snap
