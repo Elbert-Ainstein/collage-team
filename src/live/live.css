@@ -2012,6 +2012,10 @@ button.lq-reviewrow {
   min-width: 0;
   padding: 12px 14px;
 }
+/* On their own only (no team, or released without it): one card, not half a row. */
+.lq-sresults > .lq-stat:only-child {
+  grid-column: 1 / -1;
+}
 .lq-sresults .lq-statnum {
   font-size: 30px;
 }
@@ -3570,6 +3574,43 @@ span.lq-spip {
   border-color: var(--lq-right);
   background: var(--lq-right);
   color: #fff;
+}
+/* Results, a question at a time (ReviewQuestion): the choices as they were
+   answered, read-only — green the right one, red theirs if it wasn't. */
+.lq-choice.static {
+  cursor: default;
+}
+.lq-choice.static:not(.right):not(.wrong),
+.lq-choice.static:not(.right):not(.wrong):hover {
+  border-color: var(--fv-neutral-200);
+  box-shadow: none;
+}
+.lq-choicetag {
+  flex: none;
+  font-size: 12px;
+  font-weight: 700;
+}
+.lq-choicek {
+  flex: none;
+  width: 58px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.lq-snone {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--fv-muted);
+}
+.lq-steamline {
+  margin-top: 14px;
+}
+.lq-spip.now.right {
+  border: 1.5px solid var(--lq-right);
+}
+.lq-spip.now.wrong {
+  border: 1.5px solid var(--lq-wrong);
 }
 /* The bottom bar as Khan Academy's: what happened on the left, in green or
    red, and the way on — Next — on the right. */

@@ -1,19 +1,22 @@
 "use client";
 
-// After the instructor closes the session: how they did on their own, how the
-// team did, and each question's answer beside both of theirs — the team's as
-// every try it took, what that question earned it, and why the answer is the
-// answer when the instructor wrote that down (0051).
+// After the instructor closes the session: how they did on their own and how
+// the team did, every question in a list, and Review answers — which goes
+// through them one at a time the way they were answered, the right answer
+// and why under each (ReviewQuestion).
 
+import { useState } from "react";
 import type { TeamWithMembers } from "@/checkins/types";
 import { fmtPoints, type LiveModel } from "@/live/model";
-import { Pick, Tries } from "@/live/ui";
-import { Explanation } from "./Explanation";
+import { Ic, Pick } from "@/live/ui";
+import { ReviewQuestion } from "./ReviewQuestion";
 
 export function Results({ m, team: onTeam, meId }: { m: LiveModel; team: TeamWithMembers | null; meId: string }) {
   // Released without team mode (0053): there's no team half to show, and a 0
   // for a session that never happened would read as a grade.
   const team = m.state.team_skipped ? null : onTeam;
+  // Null: the summary. Otherwise the question being reviewed.
+  const [at, setAt] = useState<number | null>(null);
   const N = m.questions.length;
   const own = m.ownScore(meId);
   // Marked absent by the team's leader (0051) or on the sheet: the team's
@@ -32,84 +35,50 @@ export function Results({ m, team: onTeam, meId }: { m: LiveModel; team: TeamWit
     );
   }
 
+  if (at !== null && at < N) {
+    return <ReviewQuestion m={m} team={team} meId={meId} q={at} onGo={setAt} onDone={() => setAt(null)} />;
+  }
+
   return (
-    <div className="lq-sscroll">
-      <div className="lq-sresults">
-        <div className="lq-stat own">
-          <span className="fv-eyebrow">You, on your own</span>
-          <span className="lq-statnum fv-num">
-            {own}
-            <small>/{N}</small>
-          </span>
-        </div>
-        {team && together !== null ? (
-          <div className="lq-stat team">
-            <span className="fv-eyebrow">{absent ? `${team.name} · Absent` : `${team.name}, together`}</span>
+    <>
+      <div className="lq-sscroll">
+        <div className="lq-sresults">
+          <div className="lq-stat own">
+            <span className="fv-eyebrow">You, on your own</span>
             <span className="lq-statnum fv-num">
-              {fmtPoints(together)}
+              {own}
               <small>/{N}</small>
             </span>
           </div>
-        ) : null}
-      </div>
-      <div className="lq-sreslist">
-        {m.questions.map((q, i) => {
-          const mine = m.own(meId, i);
-          const first = team ? m.tries(team.id, i)[0]?.answer ?? null : null;
-          const on = team ? m.rightOn(team.id, i) : null;
-          const credit = team ? m.credit(team.id, i) : null;
-          const key = m.key(i);
-          const keyText =
-            q.kind === "mc"
-              ? key?.correct_option !== null && key?.correct_option !== undefined
-                ? q.options[key.correct_option]
-                : null
-              : q.kind === "number"
-                ? key?.answer !== null && key?.answer !== undefined
-                  ? m.label(i, String(key.answer))
-                  : null
-                : key?.accept[0] ?? null;
-          const mineRight = mine ? m.right(i, mine) : false;
-          return (
-            <div key={q.id} className="lq-scard lq-sres">
-              <div className="lq-sreshead">
+          {team && together !== null ? (
+            <div className="lq-stat team">
+              <span className="fv-eyebrow">{absent ? `${team.name} · Absent` : `${team.name}, together`}</span>
+              <span className="lq-statnum fv-num">
+                {fmtPoints(together)}
+                <small>/{N}</small>
+              </span>
+            </div>
+          ) : null}
+        </div>
+        <div className="lq-reviewlist">
+          {m.questions.map((q, i) => {
+            const mine = m.own(meId, i);
+            return (
+              <button key={q.id} type="button" className="lq-reviewrow" onClick={() => setAt(i)}>
                 <span className="lq-qn">Q{i + 1}</span>
                 <span className="lq-qshort">{q.stem}</span>
-              </div>
-              {keyText ? (
-                <div className="lq-sresanswer">
-                  {q.kind === "mc" && key?.correct_option != null ? <Pick value={String.fromCharCode(65 + key.correct_option)} size="sm" /> : null}
-                  <span>{keyText}</span>
-                </div>
-              ) : null}
-              <div className="lq-srespicks">
-                <span>
-                  You <Pick value={mine} right={mine ? mineRight : undefined} size="sm" />
-                </span>
-                {team ? (
-                  <span>
-                    Team <Tries m={m} teamId={team.id} q={i} />
-                    {credit !== null ? <span className="lq-credit fv-num">{fmtPoints(credit)}</span> : null}
-                  </span>
-                ) : null}
-                {/* Said beside the team's; with no team, there's nothing to set it against. */}
-                {team ? (
-                  <span className="fv-sub">
-                    {mine && mine === first
-                      ? "Team went with yours"
-                      : on === 1 && !mineRight
-                        ? "Team got there"
-                        : mineRight && on !== 1
-                          ? "You had it"
-                          : ""}
-                  </span>
-                ) : null}
-              </div>
-              <Explanation body={m.explanation(i)} />
-            </div>
-          );
-        })}
+                <Pick value={mine} right={mine ? m.right(i, mine) : undefined} size="sm" />
+              </button>
+            );
+          })}
+        </div>
       </div>
-    </div>
+      <footer className="lq-sfoot">
+        <span />
+        <button type="button" className="fv-btn primary" disabled={N === 0} onClick={() => setAt(0)}>
+          Review answers <Ic name="chevronRight" size={15} />
+        </button>
+      </footer>
+    </>
   );
 }

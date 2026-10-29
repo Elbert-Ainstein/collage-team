@@ -312,10 +312,11 @@ describe("explanations", () => {
     const own: LiveResponse = { question_id: "q1", activity_id: "a", student_id: "s1", answer: "A", correct: false, updated_at: iso(0) };
     const { m, team } = model({ ...playing, locks: [lockQ1], phase: "closed", keys: [key("q1", 1), key("q2", 0)], responses: [own] });
     await show(<Results m={m} team={team} meId="s1" />);
-    const cards = host.querySelectorAll(".lq-sres");
-    expect(cards).toHaveLength(2);
-    expect(cards[0].querySelector(".lq-swhy")?.textContent).toContain("Because two is the one.");
-    expect(cards[1].querySelector(".lq-swhy")).toBeNull();
+    // A question at a time, from Review answers.
+    await act(async () => [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.includes("Review answers"))!.click());
+    expect(host.querySelector(".lq-swhy")?.textContent).toContain("Because two is the one.");
+    await act(async () => [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.trim().startsWith("Next"))!.click());
+    expect(host.querySelector(".lq-swhy")).toBeNull();
   });
 });
 
