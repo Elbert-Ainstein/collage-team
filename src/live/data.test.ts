@@ -67,7 +67,7 @@ vi.mock("@/lib/supabaseClient", () => ({
   isSupabaseConfigured: true,
 }));
 
-const { confirmLeader, loadLive, saveLiveQuestions, setAbsences, voteLeader, EXPLANATION_MAX } = await import("./data");
+const { confirmLeader, loadLive, releaseLiveIndividual, saveLiveQuestions, setAbsences, voteLeader, EXPLANATION_MAX } = await import("./data");
 
 const state = { activity_id: "a", phase: "team", lock_rule: "any", show_answers: "close", grading: "both" };
 const question = { id: "q1", activity_id: "a", position: 0, kind: "mc", stem: "", options: ["x", "y"], unit: null, figure_path: null, created_at: "" };
@@ -150,6 +150,13 @@ describe("the leader and the roll", () => {
   it("saves a tap on the roll without finishing it (0052)", async () => {
     await setAbsences("a", ["s3"], false);
     expect(rpcs).toEqual([{ fn: "set_live_absences", args: { aid: "a", absent: ["s3"], done: false } }]);
+  });
+});
+
+describe("releasing the answers without team mode (0053)", () => {
+  it("goes through its RPC", async () => {
+    await releaseLiveIndividual("a");
+    expect(rpcs).toEqual([{ fn: "release_live_individual", args: { aid: "a" } }]);
   });
 });
 

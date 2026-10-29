@@ -564,6 +564,11 @@ export async function closeLive(activityId: string): Promise<LiveState> {
   return unwrap(await db().rpc("close_live", { aid: activityId })) as LiveState;
 }
 
+/** Close it without team mode (0053): students read the key and the why, and only their own answers are scored. */
+export async function releaseLiveIndividual(activityId: string): Promise<LiveState> {
+  return unwrap(await db().rpc("release_live_individual", { aid: activityId })) as LiveState;
+}
+
 export async function addLiveMember(activityId: string, studentId: string, teamId: string): Promise<void> {
   unwrap(await db().rpc("add_live_member", { aid: activityId, sid: studentId, tid: teamId }));
 }

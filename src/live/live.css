@@ -2356,6 +2356,15 @@ button.lq-reviewrow {
   color: var(--fv-muted);
   line-height: 1.45;
 }
+/* Release to individual mode (0053): a long label in a narrow side card. */
+.fv-btn.lq-release {
+  height: auto;
+  min-height: 34px;
+  padding: 8px 14px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.3;
+}
 @container lqf (max-width: 900px) {
   .lq-builder {
     grid-template-columns: minmax(0, 1fr);

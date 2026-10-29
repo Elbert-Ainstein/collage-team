@@ -22,6 +22,11 @@ export interface LiveState {
   closed_at: string | null;
   scored_at: string | null;
   updated_at: string;
+  /**
+   * Closed without its team half: the answers were released straight from
+   * before class or a broken team mode (0053). Absent on a database without it.
+   */
+  team_skipped?: boolean;
 }
 
 export interface LiveQuestion {
