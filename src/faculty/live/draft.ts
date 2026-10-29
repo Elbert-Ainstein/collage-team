@@ -8,7 +8,7 @@
 
 import { normalizeNumber } from "@/live/answers";
 import type { QuestionDraft } from "@/live/data";
-import type { LiveKey, LiveKind, LiveQuestion } from "@/live/types";
+import type { LiveExplanation, LiveKey, LiveKind, LiveQuestion } from "@/live/types";
 
 export const MAX_OPTIONS = 8;
 
@@ -27,6 +27,12 @@ export interface DraftQuestion {
   /** Expression: every form that counts as right. */
   accept: string[];
   figure_path: string | null;
+  /**
+   * What students read once their team is done with the question (0051). Not
+   * part of what a question IS, so it stays editable after team mode starts,
+   * like the key. Empty is none.
+   */
+  explanation: string;
   /** Set on questions the PDF import drafted. */
   source?: {
     page: number;
@@ -55,11 +61,17 @@ export const blankQuestion = (): DraftQuestion => ({
   tolerance: "",
   accept: [],
   figure_path: null,
+  explanation: "",
 });
 
 /** The saved questions, back as drafts, in order. */
-export function draftsFrom(questions: LiveQuestion[], keys: LiveKey[]): DraftQuestion[] {
+export function draftsFrom(
+  questions: LiveQuestion[],
+  keys: LiveKey[],
+  explanations: readonly LiveExplanation[] = [],
+): DraftQuestion[] {
   const keyOf = new Map(keys.map((k) => [k.question_id, k]));
+  const explained = new Map(explanations.map((e) => [e.question_id, e.body]));
   return [...questions]
     .sort((a, b) => a.position - b.position)
     .map((q) => {
@@ -75,6 +87,7 @@ export function draftsFrom(questions: LiveQuestion[], keys: LiveKey[]): DraftQue
         tolerance: k?.tolerance === null || k?.tolerance === undefined ? "" : String(k.tolerance),
         accept: k ? [...k.accept] : [],
         figure_path: q.figure_path,
+        explanation: explained.get(q.id) ?? "",
       };
     });
 }
@@ -144,6 +157,8 @@ export function toQuestionDraft(q: DraftQuestion): QuestionDraft {
     answer: q.kind === "number" && n !== null ? Number(n) : null,
     tolerance: q.kind === "number" ? (t === null ? 0 : Number(t)) : null,
     accept: q.kind === "expression" ? q.accept.map((a) => a.trim()).filter(Boolean) : [],
+    // Always a string, so clearing the box deletes the saved one (data.ts).
+    explanation: q.explanation.trim(),
   };
 }
 

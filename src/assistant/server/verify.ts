@@ -49,3 +49,30 @@ export function supabaseVerifier(url: string, anonKey: string) {
     return { ok: true, userId: auth.user.id, email: auth.user.email ?? null };
   };
 }
+
+/**
+ * The same check for an activity, for the explanation route: does this
+ * sign-in own the course the activity is on? Asked through owns_activity
+ * (0044), the rule that lets her save an explanation (0051) — so nobody is
+ * handed a draft they could not keep. A TF gets a 403, as with the import.
+ */
+export function supabaseActivityVerifier(url: string, anonKey: string) {
+  return async (token: string, activityId: string): Promise<Verified> => {
+    const sb = createClient(url, anonKey, {
+      auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+
+    const { data: auth, error: authError } = await sb.auth.getUser(token);
+    if (authError || !auth.user) {
+      return { ok: false, status: 401, error: "Your sign-in has expired. Reload the page and sign in again." };
+    }
+
+    const { data: owns, error } = await sb.rpc("owns_activity", { aid: activityId });
+    if (error) throw new Error(`checking the activity failed: ${error.message}`);
+    if (owns !== true) {
+      return { ok: false, status: 403, error: "Only this course's instructor can write explanations." };
+    }
+    return { ok: true, userId: auth.user.id, email: auth.user.email ?? null };
+  };
+}

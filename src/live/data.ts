@@ -6,21 +6,27 @@
 // phase, a vote, a team's try, scoring — goes through an RPC that checks for
 // itself. A database that hasn't run 0047 reads as "no live data" rather than
 // failing the page; one that hasn't run 0049 reads as every lock being a
-// single try, told nothing until the session closes.
+// single try, told nothing until the session closes; one that hasn't run 0051
+// reads as teams with no leader, no roll and no explanations.
 
 import { requireSupabase } from "@/lib/supabaseClient";
 import { dbError, selectAll, selectAllIn } from "@/checkins/data";
 import { answerPrint, expressionPrint, expressionVerdicts, type ExpressionPrint } from "./answers";
 import type {
+  LiveAbsence,
   LiveAttempt,
+  LiveExplanation,
   LiveGrading,
   LiveKey,
   LiveKind,
+  LiveLeaderVote,
   LiveLock,
   LiveQuestion,
   LiveResponse,
+  LiveRosterMember,
   LiveSnapshot,
   LiveState,
+  LiveTeamSetup,
   LiveVote,
   LockRule,
   ShowAnswers,
@@ -38,6 +44,13 @@ const missing = (m: string) => /live_(state|questions|keys|responses|votes|locks
 
 /** 0049 not run here: no live_attempts, no prints, the one-argument lock_team_answer. */
 const before0049 = (m: string) => /live_attempts|prints|lock_team_answer|schema cache|does not exist/i.test(m);
+
+/** 0051 not run here: no leader votes, no setup, no explanations, none of their RPCs. */
+const before0051 = (m: string) =>
+  /live_leader_votes|live_team_setup|live_explanations|vote_live_leader|confirm_live_leader|set_live_absences|schema cache|does not exist/i.test(m);
+
+/** The longest explanation the database keeps (0051's check). */
+export const EXPLANATION_MAX = 8000;
 
 const QUESTION_COLS = "id, activity_id, position, kind, stem, options, unit, figure_path, created_at";
 const KEY_COLS = "question_id, activity_id, correct_option, answer, tolerance, accept";
@@ -59,6 +72,89 @@ const asQuestion = (row: Record<string, unknown>): LiveQuestion => ({
 
 // ------------------------------------------------------------------ read
 
+/** A read that is simply empty on a database without the migration that made it. */
+function orEmpty<T>(read: Promise<T[]>, before: (m: string) => boolean): Promise<T[]> {
+  return read.catch((e: unknown) => {
+    if (e instanceof Error && before(e.message)) return [] as T[];
+    throw e;
+  });
+}
+
+const asAbsence = (row: Record<string, unknown>): LiveAbsence => ({
+  activity_id: row.activity_id as string,
+  team_id: row.team_id as string,
+  student_id: row.student_id as string,
+  source: row.source === "roll" ? "roll" : "sheet",
+});
+
+/** A roster row, with the name embedded through students' own RLS. */
+const asRosterMember = (row: Record<string, unknown>): LiveRosterMember => {
+  const who = (Array.isArray(row.students) ? row.students[0] : row.students) as
+    | { name?: string | null; avatar_tint?: string | null }
+    | null
+    | undefined;
+  return {
+    team_id: row.team_id as string,
+    student_id: row.student_id as string,
+    name: who?.name ?? null,
+    avatar_tint: who?.avatar_tint ?? null,
+  };
+};
+
+/** Leader votes, setups, absences, roster and explanations (0051); `present` is false without it. */
+async function loadTeamSetup(activityId: string): Promise<{
+  present: boolean;
+  leaderVotes: LiveLeaderVote[];
+  setups: LiveTeamSetup[];
+  absences: LiveAbsence[];
+  roster: LiveRosterMember[];
+  explanations: LiveExplanation[];
+}> {
+  const setupRes = await db().from("live_team_setup").select("*").eq("activity_id", activityId).order("team_id");
+  const present = !setupRes.error;
+  if (setupRes.error && !before0051(setupRes.error.message)) throw dbError(setupRes.error);
+  const [leaderVotes, absences, roster, explanations] = await Promise.all([
+    present
+      ? selectAll<LiveLeaderVote>((from, to) =>
+          db().from("live_leader_votes").select("*").eq("activity_id", activityId)
+            .order("team_id").order("student_id").range(from, to),
+        )
+      : Promise.resolve([] as LiveLeaderVote[]),
+    // tutorial_absences is 0016's, and RLS decides how much of it comes back.
+    orEmpty(
+      selectAll<Record<string, unknown>>((from, to) => {
+        // `source` is 0051's column; asking for it without 0051 would fail the read.
+        const absences = db().from("tutorial_absences");
+        return (present
+          ? absences.select("activity_id, team_id, student_id, source")
+          : absences.select("activity_id, team_id, student_id")
+        ).eq("activity_id", activityId).order("team_id").order("student_id").range(from, to);
+      }),
+      (m) => /tutorial_absences|schema cache|does not exist/i.test(m),
+    ).then((rows) => rows.map(asAbsence)),
+    present
+      ? selectAll<Record<string, unknown>>((from, to) =>
+          db().from("activity_rosters").select("team_id, student_id, students(name, avatar_tint)")
+            .eq("activity_id", activityId).order("team_id").order("student_id").range(from, to),
+        ).then((rows) => rows.map(asRosterMember))
+      : Promise.resolve([] as LiveRosterMember[]),
+    present
+      ? selectAll<LiveExplanation>((from, to) =>
+          db().from("live_explanations").select("question_id, activity_id, body").eq("activity_id", activityId)
+            .order("question_id").range(from, to),
+        )
+      : Promise.resolve([] as LiveExplanation[]),
+  ]);
+  return {
+    present,
+    leaderVotes,
+    setups: present ? ((setupRes.data ?? []) as LiveTeamSetup[]) : [],
+    absences,
+    roster,
+    explanations,
+  };
+}
+
 /** One live activity, as much of it as the caller may see; null if it has no live data. */
 export async function loadLive(activityId: string): Promise<LiveSnapshot | null> {
   const stateRes = await db().from("live_state").select("*").eq("activity_id", activityId).maybeSingle();
@@ -68,7 +164,7 @@ export async function loadLive(activityId: string): Promise<LiveSnapshot | null>
   }
   if (!stateRes.data) return null;
 
-  const [questions, keys, responses, votes, locks, attempts] = await Promise.all([
+  const [questions, keys, responses, votes, locks, attempts, setup] = await Promise.all([
     selectAll<Record<string, unknown>>((from, to) =>
       db().from("live_questions").select(QUESTION_COLS).eq("activity_id", activityId)
         .order("position").order("id").range(from, to),
@@ -88,13 +184,14 @@ export async function loadLive(activityId: string): Promise<LiveSnapshot | null>
       db().from("live_locks").select("*").eq("activity_id", activityId)
         .order("question_id").order("team_id").range(from, to),
     ),
-    selectAll<LiveAttempt>((from, to) =>
-      db().from("live_attempts").select("*").eq("activity_id", activityId)
-        .order("question_id").order("team_id").order("attempt").range(from, to),
-    ).catch((e: unknown) => {
-      if (e instanceof Error && before0049(e.message)) return [] as LiveAttempt[];
-      throw e;
-    }),
+    orEmpty(
+      selectAll<LiveAttempt>((from, to) =>
+        db().from("live_attempts").select("*").eq("activity_id", activityId)
+          .order("question_id").order("team_id").order("attempt").range(from, to),
+      ),
+      before0049,
+    ),
+    loadTeamSetup(activityId),
   ]);
 
   return {
@@ -105,6 +202,12 @@ export async function loadLive(activityId: string): Promise<LiveSnapshot | null>
     votes,
     locks,
     attempts,
+    teamSetup: setup.present,
+    leaderVotes: setup.leaderVotes,
+    setups: setup.setups,
+    absences: setup.absences,
+    roster: setup.roster,
+    explanations: setup.explanations,
   };
 }
 
@@ -151,6 +254,11 @@ export interface QuestionDraft {
   answer: number | null;
   tolerance: number | null;
   accept: string[];
+  /**
+   * Why the answer is the answer (0051). Blank removes it; left out, whatever
+   * is saved stays as it is.
+   */
+  explanation?: string;
 }
 
 /** Every accepted form's print: what a team's answer is held to as it submits (0049). */
@@ -184,6 +292,56 @@ async function upsertKeys(rows: KeyRow[]): Promise<void> {
   unwrap(res);
 }
 
+/** Refuse an explanation the database would, before anything is written. */
+function checkExplanations(drafts: QuestionDraft[]): void {
+  if (drafts.some((d) => (d.explanation ?? "").trim().length > EXPLANATION_MAX)) {
+    throw new Error(`An explanation can be at most ${EXPLANATION_MAX.toLocaleString()} characters.`);
+  }
+}
+
+/**
+ * A written explanation needs 0051. Asked before anything is saved, so a
+ * database without it refuses the whole save rather than half of it.
+ */
+async function checkExplanationsFit(activityId: string, drafts: QuestionDraft[]): Promise<void> {
+  if (!drafts.some((d) => (d.explanation ?? "").trim() !== "")) return;
+  const res = await db().from("live_explanations").select("question_id").eq("activity_id", activityId).limit(1);
+  if (!res.error) return;
+  if (before0051(res.error.message)) {
+    throw new Error("Explanations need 0051_live_team_leader.sql run on the database first. Nothing was saved.");
+  }
+  throw dbError(res.error);
+}
+
+/**
+ * Each draft's explanation, written or removed (0051). Drafts without one are
+ * left alone. On a database without 0051 blank ones are nothing to do, and a
+ * written one is an error rather than quietly dropped.
+ */
+async function saveExplanations(activityId: string, drafts: QuestionDraft[]): Promise<void> {
+  const given = drafts.filter((d): d is QuestionDraft & { explanation: string } => d.explanation !== undefined);
+  const rows = given
+    .filter((d) => d.explanation.trim() !== "")
+    .map((d) => ({ question_id: d.id, activity_id: activityId, body: d.explanation.trim() }));
+  const cleared = given.filter((d) => d.explanation.trim() === "").map((d) => d.id);
+  try {
+    if (rows.length > 0) {
+      unwrap(await db().from("live_explanations").upsert(rows).select("question_id"));
+    }
+    if (cleared.length > 0) {
+      unwrap(
+        await db().from("live_explanations").delete().eq("activity_id", activityId).in("question_id", cleared)
+          .select("question_id"),
+      );
+    }
+  } catch (e) {
+    if (!(e instanceof Error) || !before0051(e.message)) throw e;
+    if (rows.length > 0) {
+      throw new Error("Questions saved, but explanations need 0051_live_team_leader.sql run on the database first.");
+    }
+  }
+}
+
 /**
  * Make the activity's questions exactly `drafts`, in that order.
  *
@@ -202,6 +360,8 @@ export async function saveLiveQuestions(
    */
   frozen = false,
 ): Promise<void> {
+  checkExplanations(drafts);
+  await checkExplanationsFit(activityId, drafts);
   if (frozen) {
     for (const d of drafts) {
       const rows = unwrap(
@@ -215,6 +375,7 @@ export async function saveLiveQuestions(
       if (rows.length === 0) throw new Error("A question has gone since this page loaded. Reload and try again.");
     }
     await upsertKeys(await keyRows(activityId, drafts));
+    await saveExplanations(activityId, drafts);
     return;
   }
   if (drafts.length > 0) {
@@ -242,6 +403,8 @@ export async function saveLiveQuestions(
   let remove = db().from("live_questions").delete().eq("activity_id", activityId);
   if (keep.length > 0) remove = remove.not("id", "in", `(${keep.join(",")})`);
   unwrap(await remove.select("id"));
+  // Last: the questions are as they should be whatever happens here.
+  await saveExplanations(activityId, drafts);
 }
 
 export async function setLiveSettings(
@@ -309,6 +472,34 @@ export async function lockTeamAnswer(question: LiveQuestion, answer: string | nu
   return { attempt: 1, ...lock };
 }
 
+/** Done with a question the team hasn't got, once another try is worth nothing (0050). */
+export async function moveTeamOn(questionId: string): Promise<LiveLock> {
+  return unwrap(await db().rpc("move_team_on", { qid: questionId })) as LiveLock;
+}
+
+/**
+ * The caller's pick for their team's leader (0051): anyone on the team who is
+ * there, themselves included. The database sets the leader itself once
+ * everyone there has picked the same person. Returns the team's setup row.
+ */
+export async function voteLeader(activityId: string, candidateId: string): Promise<LiveTeamSetup> {
+  return unwrap(await db().rpc("vote_live_leader", { aid: activityId, candidate: candidateId })) as LiveTeamSetup;
+}
+
+/** "Confirm <name>": settle on the one name every vote is for, once two have voted (0051). */
+export async function confirmLeader(activityId: string): Promise<LiveTeamSetup> {
+  return unwrap(await db().rpc("confirm_live_leader", { aid: activityId })) as LiveTeamSetup;
+}
+
+/**
+ * The leader's roll (0051): exactly these teammates are absent, the rest of
+ * the team is here. Taking it again replaces it.
+ */
+export async function setAbsences(activityId: string, absentIds: string[]): Promise<LiveTeamSetup> {
+  const absent = [...new Set(absentIds)];
+  return unwrap(await db().rpc("set_live_absences", { aid: activityId, absent })) as LiveTeamSetup;
+}
+
 // ------------------------------------------------------- in the room
 
 export async function startTeamMode(activityId: string): Promise<LiveState> {
@@ -365,8 +556,8 @@ export async function scoreLive(snapshot: LiveSnapshot): Promise<{ students: num
 // ------------------------------------------------------------- live
 
 /**
- * Wake on any change to this activity's state, votes, tries or locks, from
- * anyone. Filtered on activity_id server-side and limited by RLS to rows the
+ * Wake on any change to this activity's state, votes, tries or locks — or a
+ * team's leader votes, setup and roll (0051) — from anyone. Filtered on activity_id server-side and limited by RLS to rows the
  * caller may read (a team sees only its own votes). Rows that BECOME readable
  * — a teammate's own answers once team mode starts, keys once it closes — are
  * not re-sent by realtime, so the caller reloads the whole snapshot on any
@@ -374,19 +565,35 @@ export async function scoreLive(snapshot: LiveSnapshot): Promise<{ students: num
  */
 let watchers = 0;
 
-type LiveTable = "live_state" | "live_votes" | "live_locks" | "live_attempts";
+type LiveTable =
+  | "live_state"
+  | "live_votes"
+  | "live_locks"
+  | "live_attempts"
+  | "live_leader_votes"
+  | "live_team_setup"
+  | "tutorial_absences";
+
+/** 0051's tables, and the sheet's absences its roll writes to. */
+const SETUP_TABLES: readonly LiveTable[] = ["live_leader_votes", "live_team_setup", "tutorial_absences"];
 
 export function watchLive(
   activityId: string,
   onChange: () => void,
   /** Fewer, for a screen that only cares when the session moves (live_state). */
-  tables: readonly LiveTable[] = ["live_state", "live_votes", "live_locks", "live_attempts"],
+  tables: readonly LiveTable[] = ["live_state", "live_votes", "live_locks", "live_attempts", ...SETUP_TABLES],
 ): () => void {
   // Its own topic per watcher: the student list and the open activity both
   // watch the same session, and removing one shared channel would deafen both.
-  // live_attempts on a channel of its own: a database without 0049 has no
-  // such table, and refusing it mustn't take the others down with it.
-  const groups = [tables.filter((t) => t !== "live_attempts"), tables.filter((t) => t === "live_attempts")];
+  // live_attempts on a channel of its own, and 0051's on another: a database
+  // without 0049 or 0051 has no such tables, and refusing them mustn't take
+  // the others down with them.
+  const later = (t: LiveTable) => t === "live_attempts" || SETUP_TABLES.includes(t);
+  const groups = [
+    tables.filter((t) => !later(t)),
+    tables.filter((t) => t === "live_attempts"),
+    tables.filter((t) => SETUP_TABLES.includes(t)),
+  ];
   const channels = groups
     .filter((group) => group.length > 0)
     .map((group) => {
@@ -409,11 +616,12 @@ export function watchLive(
 // ------------------------------------------------------------ duplicate
 
 /**
- * Copy one live activity's questions, keys and settings into another (a
- * duplicate made by duplicateActivity). Nothing about how it went — answers,
- * votes, locks — comes along. Figures are copied as new objects under the new
- * activity: two rows naming one object would lose it for both when either
- * activity is deleted (see duplicateActivity on attachments).
+ * Copy one live activity's questions, keys, explanations and settings into
+ * another (a duplicate made by duplicateActivity). Nothing about how it went —
+ * answers, votes, locks, leaders, the roll — comes along. Figures are copied
+ * as new objects under the new activity: two rows naming one object would lose
+ * it for both when either activity is deleted (see duplicateActivity on
+ * attachments).
  */
 export async function copyLive(fromId: string, toId: string): Promise<number> {
   const source = await loadLive(fromId);
@@ -443,6 +651,10 @@ export async function copyLive(fromId: string, toId: string): Promise<number> {
       answer: k?.answer ?? null,
       tolerance: k?.tolerance ?? null,
       accept: k?.accept ?? [],
+      // Left out without 0051, where there's nowhere to put one.
+      ...(source.teamSetup
+        ? { explanation: source.explanations.find((e) => e.question_id === q.id)?.body ?? "" }
+        : {}),
     };
   });
   await saveLiveQuestions(toId, drafts);

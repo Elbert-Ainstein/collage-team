@@ -184,6 +184,12 @@ export interface Assignment {
   grade: string;
   /** The team half's grade on its own, for activities that have both. */
   teamGrade: string;
+  /**
+   * Live questions only: their team's leader (or staff) ticked them absent for
+   * the session (0051), so the team's points are not theirs — teamGrade reads
+   * 0, and teamResult is still the team's row, which everyone else on it keeps.
+   */
+  teamAbsent?: boolean;
   submitted: string | null;
   /**
    * The instructor has reopened this student's hand-in past its deadline
@@ -262,6 +268,17 @@ function gradeOf(r: CheckInResult | null, ci: CheckIn | null): string {
 }
 
 /**
+ * The team half for someone who wasn't in the room: nothing until it's scored,
+ * like anyone's, and then 0 of what the team was marked out of. Said as an
+ * absence rather than a bare 0, which would read as the team having got
+ * nothing — the same words the live Results screen uses.
+ */
+function absentGradeOf(r: CheckInResult | null, ci: CheckIn | null): string {
+  if (!r || r.status !== "scored") return "—";
+  return ci?.max_points ? `0 / ${ci.max_points} · absent` : "0 · absent";
+}
+
+/**
  * Whether a student may see this activity yet.
  *
  * A NULL opens_at means visible, not hidden: every activity authored before
@@ -325,9 +342,15 @@ export async function listAssignments(enrolment: Enrolment): Promise<Assignment[
   // A live activity's progress is in its own tables until it's scored. A
   // failed read leaves those rows on their gradebook status, as before 0047.
   const liveIds = activities.filter((a) => a.type === "live").map((a) => a.id);
-  const live = liveIds.length
-    ? await listLiveProgress(liveIds).catch(() => null)
-    : null;
+  const [live, absentFrom] = liveIds.length
+    ? await Promise.all([
+        listLiveProgress(liveIds).catch(() => null),
+        // A failed read reads as "there", which is how this list worked
+        // before 0051: the team's number, not an assignment list that won't
+        // load over who was in the room.
+        listMyLiveAbsences(enrolment.student.id, liveIds).catch(() => new Set<string>()),
+      ])
+    : [null, new Set<string>()];
   const liveOf = (activityId: string): LiveProgress | undefined => {
     const state = live?.states.find((st) => st.activity_id === activityId);
     if (!live || !state) return undefined;
@@ -368,6 +391,9 @@ export async function listAssignments(enrolment: Enrolment): Promise<Assignment[
     const elsewhere = !teamOnly && INDIV_ELSEWHERE[activity.type] !== null;
 
     const progress = activity.type === "live" ? liveOf(activity.id) : undefined;
+    // Live only. A tutorial sheet's absence is already in the student's own
+    // marks (studentMarks, 0031), and no other activity takes the roll.
+    const teamAbsent = activity.type === "live" && absentFrom.has(activity.id);
     const plain = elsewhere
       ? statusOfElsewhere(lead, activity.stage)
       : statusOf(lead, activity.stage);
@@ -384,11 +410,25 @@ export async function listAssignments(enrolment: Enrolment): Promise<Assignment[
         ? liveStatus(progress, plain, activity.due_at ?? activity.individual_due_at)
         : plain,
       grade: gradeOf(lead, leadCheckIn),
-      teamGrade: gradeOf(teamResult, teamCheckIn),
+      teamGrade: teamAbsent ? absentGradeOf(teamResult, teamCheckIn) : gradeOf(teamResult, teamCheckIn),
+      ...(teamAbsent ? { teamAbsent } : {}),
       submitted: lead?.updated_at ?? null,
       reopened: reopened.has(activity.id),
     };
   });
+}
+
+/**
+ * The live activities this student was ticked absent for, in one read for the
+ * whole list. RLS (0031) returns their own rows; the student_id filter keeps
+ * it to those once 0051 also lets them read their teammates'.
+ */
+async function listMyLiveAbsences(studentId: string, activityIds: string[]): Promise<Set<string>> {
+  const { data, error } = await db().from("tutorial_absences").select("activity_id")
+    .eq("student_id", studentId)
+    .in("activity_id", activityIds);
+  if (error) throw dbError(error);
+  return new Set(((data as { activity_id: string }[] | null) ?? []).map((r) => r.activity_id));
 }
 
 /**

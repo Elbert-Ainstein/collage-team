@@ -2,15 +2,17 @@
 
 // A live-questions assignment, from the student's side. Where it opens
 // follows the session: before class, the brief and their own answers; once
-// the instructor starts team mode, their team's voting; once it's closed, the
-// results. The instructor's move changes this screen on its own (realtime).
+// the instructor starts team mode, their team's pick of leader and roll
+// (0051), then its voting; once it's closed, the results. The instructor's
+// move changes this screen on its own (realtime).
 
 import { useMemo, useState } from "react";
 import type { Assignment, Enrolment } from "@/checkins/studentData";
 import { Ic, LiveDot } from "@/live/ui";
 import { Brief, OnYourOwn } from "./OnYourOwn";
 import { Results } from "./Results";
-import { TeamIntro, TeamPlay } from "./TeamVote";
+import { TeamSession } from "./TeamSetup";
+import { TeamIntro } from "./TeamVote";
 import { useAnswerSaver } from "./useAnswerSaver";
 import { useLiveSession } from "./useLiveSession";
 import "@/live/live.css";
@@ -40,7 +42,7 @@ function fmtDue(iso: string | null): string | null {
 export function LiveAssignment({ assignment, enrolment, onBack }: Props) {
   const { activity } = assignment;
   const me = enrolment.student.id;
-  const { model: m, team, loading, failed, reload } = useLiveSession(activity.id, enrolment, assignment.teamId ?? null);
+  const { snap, model: m, team, loading, failed, reload } = useLiveSession(activity.id, enrolment, assignment.teamId ?? null);
   const [cursor, setCursor] = useState<number | null>(null);
   const [intro, setIntro] = useState(() => seenIntro(activity.id));
   const [error, setError] = useState<string | null>(null);
@@ -110,6 +112,7 @@ export function LiveAssignment({ assignment, enrolment, onBack }: Props) {
           <TeamIntro
             team={team}
             rule={m.state.lock_rule}
+            leader={snap?.teamSetup ?? false}
             onStart={() => {
               setIntro(true);
               try {
@@ -121,7 +124,7 @@ export function LiveAssignment({ assignment, enrolment, onBack }: Props) {
           />
         );
       }
-      return <TeamPlay m={m} team={team} meId={me} onError={setError} onTried={reload} />;
+      return <TeamSession m={m} team={team} meId={me} onError={setError} onChanged={reload} />;
     }
     return <Results m={m} team={team} meId={me} />;
   };

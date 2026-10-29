@@ -14,6 +14,12 @@ const snap: LiveSnapshot = {
   votes: [],
   locks: [{ question_id: "q", activity_id: "x", team_id: "t", answer: "-9.8", correct: null, locked_by: "a", locked_at: "" }],
   attempts: [],
+  teamSetup: false,
+  leaderVotes: [],
+  setups: [],
+  absences: [],
+  roster: [],
+  explanations: [],
 };
 
 describe("teamCsv", () => {

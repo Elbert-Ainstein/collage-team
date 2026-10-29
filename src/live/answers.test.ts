@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   answerPrint,
+  canMoveOn,
   canonicalAnswer,
   expressionPrint,
   expressionsEquivalent,
@@ -174,10 +175,20 @@ describe("team tries", () => {
     expect([1, 2, 3, 4, 8].map(tryCredit)).toEqual([1, 0.5, 0.25, 0, 0]);
   });
 
-  it("lets multiple choice try every option, and a typed answer three times", () => {
+  it("lets multiple choice try every option, and a typed answer a hundred times", () => {
     expect(maxTries(q({ kind: "mc", options: ["a", "b", "c", "d"] }))).toBe(4);
-    expect(maxTries(q({ kind: "number" }))).toBe(3);
-    expect(maxTries(q({ kind: "expression" }))).toBe(3);
+    expect(maxTries(q({ kind: "number" }))).toBe(100);
+    expect(maxTries(q({ kind: "expression" }))).toBe(100);
+  });
+
+  it("lets a team move on from a typed answer once another try is worth nothing", () => {
+    const typed = q({ kind: "number" });
+    expect([0, 1, 2, 3, 4, 12].map((n) => canMoveOn(typed, n))).toEqual([false, false, false, true, true, true]);
+    expect(canMoveOn(q({ kind: "expression" }), 3)).toBe(true);
+  });
+
+  it("never moves a team on from multiple choice: the options run out instead", () => {
+    expect(canMoveOn(q({ kind: "mc", options: ["a", "b", "c", "d", "e"] }), 3)).toBe(false);
   });
 });
 

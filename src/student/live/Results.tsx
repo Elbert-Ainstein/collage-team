@@ -2,16 +2,21 @@
 
 // After the instructor closes the session: how they did on their own, how the
 // team did, and each question's answer beside both of theirs — the team's as
-// every try it took, and what that question earned it.
+// every try it took, what that question earned it, and why the answer is the
+// answer when the instructor wrote that down (0051).
 
 import type { TeamWithMembers } from "@/checkins/types";
 import { fmtPoints, type LiveModel } from "@/live/model";
 import { Pick, Tries } from "@/live/ui";
+import { Explanation } from "./Explanation";
 
 export function Results({ m, team, meId }: { m: LiveModel; team: TeamWithMembers | null; meId: string }) {
   const N = m.questions.length;
   const own = m.ownScore(meId);
-  const together = team ? m.score(team.id) : null;
+  // Marked absent by the team's leader (0051) or on the sheet: the team's
+  // points went to the people in the room, as 0031 has it, and not to them.
+  const absent = team !== null && m.isAbsent(meId);
+  const together = team ? (absent ? 0 : m.score(team.id)) : null;
 
   if (own === null) {
     return (
@@ -36,7 +41,7 @@ export function Results({ m, team, meId }: { m: LiveModel; team: TeamWithMembers
         </div>
         {team && together !== null ? (
           <div className="lq-stat team">
-            <span className="fv-eyebrow">{team.name}, together</span>
+            <span className="fv-eyebrow">{absent ? `${team.name} · Absent` : `${team.name}, together`}</span>
             <span className="lq-statnum fv-num">
               {fmtPoints(together)}
               <small>/{N}</small>
@@ -94,6 +99,7 @@ export function Results({ m, team, meId }: { m: LiveModel; team: TeamWithMembers
                         : ""}
                 </span>
               </div>
+              <Explanation body={m.explanation(i)} />
             </div>
           );
         })}

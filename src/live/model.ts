@@ -8,7 +8,18 @@
 
 import type { Student, TeamWithMembers } from "@/checkins/types";
 import { isRight, optionLetter, tryCredit } from "./answers";
-import type { LiveAttempt, LiveKey, LiveLock, LiveQuestion, LiveSnapshot, LiveState } from "./types";
+import {
+  absentIds,
+  explanationFor,
+  isAbsent,
+  leaderOf,
+  leaderTally,
+  mayLead,
+  teamStage,
+  type LeaderTally,
+  type TeamStage,
+} from "./leader";
+import type { AbsenceSource, LiveAttempt, LiveKey, LiveLock, LiveQuestion, LiveSnapshot, LiveState } from "./types";
 
 export interface LiveModelInput {
   snapshot: LiveSnapshot;
@@ -46,7 +57,7 @@ export interface LiveModel {
   /** Own answers right, or null without the keys. */
   ownScore(studentId: string): number | null;
   teamOf(studentId: string): TeamWithMembers | null;
-  /** Each question's lock: the team is done with it, right or out of tries. */
+  /** Each question's lock: the team is done with it — right, out of tries, or moved on. */
   locks(teamId: string): (LiveLock | null)[];
   done(teamId: string): number;
   /** The team's tries at question q, first first. A lock from before 0049 is one try. */
@@ -64,6 +75,19 @@ export interface LiveModel {
   durations(teamId: string): number[];
   /** What a value looks like on screen: "B", "19.6 m/s", "F/2". */
   label(q: number, answer: string): string;
+  /** Picking a leader, taking the roll, or playing (0051); always "play" without it. */
+  stage(teamId: string): TeamStage;
+  /** Where the team's vote for leader stands, among its members who are there. */
+  leaderTally(teamId: string): LeaderTally;
+  /** The team's leader; null until picked, or while the one picked is marked absent. */
+  leaderOf(teamId: string): string | null;
+  /** May this student submit for the team and move it on? */
+  mayLead(teamId: string, studentId: string): boolean;
+  /** Who on the team is marked absent — by either, or only by the sheet or the roll. */
+  absentIds(teamId: string, source?: AbsenceSource): string[];
+  isAbsent(studentId: string): boolean;
+  /** Question q's explanation, if the caller may read it yet. */
+  explanation(q: number): string | null;
 }
 
 const seconds = (ms: number) => Math.max(0, Math.round(ms / 1000));
@@ -209,6 +233,14 @@ export function buildLiveModel(input: LiveModelInput): LiveModel {
       if (question.kind === "number" && question.unit) return `${answer} ${question.unit}`;
       return answer;
     },
+    stage: (tid) => teamStage(snapshot, tid),
+    leaderTally: (tid) =>
+      leaderTally(snapshot, tid, (teams.find((t) => t.id === tid)?.members ?? []).map((m) => m.id)),
+    leaderOf: (tid) => leaderOf(snapshot, tid),
+    mayLead: (tid, sid) => mayLead(snapshot, tid, sid),
+    absentIds: (tid, source) => absentIds(snapshot, tid, source),
+    isAbsent: (sid) => isAbsent(snapshot, sid),
+    explanation: (q) => (questions[q] ? explanationFor(snapshot, questions[q].id) : null),
   };
 }
 

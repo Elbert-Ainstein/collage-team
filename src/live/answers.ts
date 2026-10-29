@@ -84,11 +84,22 @@ export function isRight(question: LiveQuestion, key: LiveKey | null | undefined,
 export const TRY_CREDIT: readonly number[] = [1, 0.5, 0.25];
 export const tryCredit = (n: number): number => TRY_CREDIT[n - 1] ?? 0;
 
-/** Tries a team gets at a typed answer. Multiple choice may try every option. */
-export const TYPED_TRIES = 3;
-/** 0049's live_max_attempts. */
+/**
+ * Tries a team gets at a typed answer: as many as it likes, in practice. The
+ * ceiling bounds a script, not a team (0050).
+ */
+export const TYPED_TRIES = 100;
+/** 0050's live_max_attempts. Multiple choice may try every option. */
 export const maxTries = (q: Pick<LiveQuestion, "kind" | "options">): number =>
   q.kind === "mc" ? Math.max(1, q.options.length) : TYPED_TRIES;
+
+/**
+ * May a team that hasn't got this question, after this many tries, move on
+ * from it? A typed answer, once another try is worth nothing — 0050's
+ * move_team_on. Never multiple choice: the options run out instead.
+ */
+export const canMoveOn = (q: Pick<LiveQuestion, "kind">, tries: number): boolean =>
+  q.kind !== "mc" && tries > 0 && tryCredit(tries + 1) === 0;
 
 // --------------------------------------------------------- expressions
 

@@ -2,16 +2,17 @@
 
 // One live activity, from a student's seat: the rows RLS lets them read
 // (their own answers; their team's answers, votes and locks once team mode is
-// on; the key once it's shown), kept current by realtime with a slow poll
+// on, its pick of leader and roll (0051); the key and explanations once shown), kept current by realtime with a slow poll
 // behind it in case a socket drops on a classroom's wifi.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Enrolment } from "@/checkins/studentData";
-import type { Student, TeamWithMembers } from "@/checkins/types";
+import type { TeamWithMembers } from "@/checkins/types";
 import { expressionVerdicts } from "@/live/answers";
 import { loadLive, watchLive } from "@/live/data";
 import { buildLiveModel, type LiveModel } from "@/live/model";
 import type { LiveSnapshot } from "@/live/types";
+import { teamFor } from "./teamFor";
 
 const POLL_MS = 30_000;
 
@@ -24,35 +25,6 @@ export interface LiveSession {
   /** The last read failed (a dropped connection): the screen offers a retry. */
   failed: boolean;
   reload: () => Promise<void>;
-}
-
-/**
- * Who's on the team this activity runs with. Before team mode, the team they
- * are on now. After, the frozen one (`teamId`, 0045) — usually the same
- * people; if not, whoever the answers and votes they can read belong to, with
- * the names of the ones they know.
- */
-function teamFor(enrolment: Enrolment, teamId: string | null, snap: LiveSnapshot | null): TeamWithMembers | null {
-  const id = teamId ?? enrolment.team?.id ?? null;
-  if (!id) return null;
-  const known = new Map<string, Student>([
-    [enrolment.student.id, enrolment.student],
-    ...enrolment.teammates.map((s) => [s.id, s] as const),
-  ]);
-  const sameTeam = enrolment.team?.id === id;
-  const ids = new Set<string>([enrolment.student.id]);
-  if (sameTeam) for (const s of enrolment.teammates) ids.add(s.id);
-  for (const v of snap?.votes ?? []) if (v.team_id === id) ids.add(v.student_id);
-  if (snap && snap.state.phase !== "individual") for (const r of snap.responses) ids.add(r.student_id);
-  const members = [...ids]
-    .map((sid) => known.get(sid) ?? ({ ...enrolment.student, id: sid, name: "Teammate", avatar_tint: null } as Student))
-    .sort((a, b) => (a.id === enrolment.student.id ? -1 : b.id === enrolment.student.id ? 1 : a.name.localeCompare(b.name)));
-  return {
-    ...(enrolment.team ?? { id, name: "Your team" }),
-    id,
-    name: sameTeam && enrolment.team ? enrolment.team.name : "Your team",
-    members,
-  } as TeamWithMembers;
 }
 
 export function useLiveSession(activityId: string, enrolment: Enrolment, teamId: string | null): LiveSession {

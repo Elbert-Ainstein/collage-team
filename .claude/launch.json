@@ -4,8 +4,19 @@
     {
       "name": "dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
       "port": 5180
+    },
+    {
+      "name": "dev-local",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "scripts/dev-local.sh"
+      ],
+      "port": 5181
     }
   ]
 }

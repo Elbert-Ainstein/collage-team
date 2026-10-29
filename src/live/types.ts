@@ -4,7 +4,7 @@
 // only by staff, or by students once the rules in 0047 let them — a key per
 // question. Students write their own answers before class; in class their
 // votes and their team's tries (0049) go through the RPCs, never straight
-// into the tables.
+// into the tables — and so do a team's pick of leader and its roll (0051).
 
 export type LivePhase = "individual" | "team" | "closed";
 export type LockRule = "any" | "all";
@@ -70,7 +70,7 @@ export interface LiveVote {
   updated_at: string;
 }
 
-/** The team is done with a question (0049): it got it right, or it's out of tries. */
+/** The team is done with a question (0049): it got it right, ran out of tries, or moved on (0050). */
 export interface LiveLock {
   question_id: string;
   activity_id: string;
@@ -100,6 +100,54 @@ export interface LiveAttempt {
   locked_at: string;
 }
 
+/** One member's current pick for their team's leader (0051). */
+export interface LiveLeaderVote {
+  activity_id: string;
+  team_id: string;
+  student_id: string;
+  candidate_id: string;
+  updated_at: string;
+}
+
+/** Where a team is in getting started (0051). No row until its first vote. */
+export interface LiveTeamSetup {
+  activity_id: string;
+  team_id: string;
+  /** Submits for the team. Not the leader any more if since marked absent. */
+  leader_id: string | null;
+  leader_at: string | null;
+  /** When the leader last took the roll; null until they have. */
+  roll_at: string | null;
+}
+
+/** Who wrote an absence: staff on the sheet, or a team leader's roll (0051). */
+export type AbsenceSource = "sheet" | "roll";
+
+/** Someone marked absent for this activity: the sheet's tutorial_absences (0016). */
+export interface LiveAbsence {
+  activity_id: string;
+  team_id: string;
+  student_id: string;
+  /** The roll takes back only its own; "sheet" on a database without 0051. */
+  source: AbsenceSource;
+}
+
+/** One person on a team's frozen roster for this activity (0045), as 0051 lets a team read it. */
+export interface LiveRosterMember {
+  team_id: string;
+  student_id: string;
+  /** Null when the caller may not read their name. */
+  name: string | null;
+  avatar_tint: string | null;
+}
+
+/** Why the answer is the answer (0051). Readable by a student only once their team is done with it. */
+export interface LiveExplanation {
+  question_id: string;
+  activity_id: string;
+  body: string;
+}
+
 /** Everything one live activity needs on screen, for whoever is looking. */
 export interface LiveSnapshot {
   state: LiveState;
@@ -111,4 +159,25 @@ export interface LiveSnapshot {
   locks: LiveLock[];
   /** Every try, the wrong ones included. Empty on a database without 0049. */
   attempts: LiveAttempt[];
+  /**
+   * The database has 0051: teams pick a leader and take the roll before they
+   * play. False without it, and team play goes on as before.
+   */
+  teamSetup: boolean;
+  /** The caller's team's votes for leader (every team's, for staff). Empty without 0051. */
+  leaderVotes: LiveLeaderVote[];
+  /** The caller's team's setup row (every team's, for staff). Empty without 0051. */
+  setups: LiveTeamSetup[];
+  /**
+   * Who is marked absent: every team's, for staff; a student's own team once
+   * team mode has started (0051), or only their own row without it (0031).
+   */
+  absences: LiveAbsence[];
+  /**
+   * The frozen roster the leader RPCs count: every team's, for staff; a
+   * student's own team once team mode has started. Empty without 0051.
+   */
+  roster: LiveRosterMember[];
+  /** Only the explanations the caller may read (0051 decides). Empty without it. */
+  explanations: LiveExplanation[];
 }

@@ -46,6 +46,12 @@ function snapshot(over: Partial<LiveSnapshot> = {}): LiveSnapshot {
     ],
     locks: [{ question_id: "q1", activity_id: "a", team_id: "t1", answer: "B", correct: null, locked_by: "s1", locked_at: iso(70) }],
     attempts: [],
+    teamSetup: false,
+    leaderVotes: [],
+    setups: [],
+    absences: [],
+    roster: [],
+    explanations: [],
     ...over,
   };
 }
@@ -252,5 +258,50 @@ describe("outcomeOf", () => {
     expect(outcomeOf(false, 3).label).toBe("Team got there on try 3");
     expect(outcomeOf(false, 0).label).toBe("Missed both times");
     expect(outcomeOf(null, null).tone).toBe("muted");
+  });
+});
+
+describe("the team's leader, roll and explanations (0051)", () => {
+  const led = (over: Partial<LiveSnapshot> = {}) =>
+    model({
+      teamSetup: true,
+      setups: [{ activity_id: "a", team_id: "t1", leader_id: "s1", leader_at: iso(5), roll_at: null }],
+      leaderVotes: [
+        { activity_id: "a", team_id: "t1", student_id: "s1", candidate_id: "s1", updated_at: "" },
+        { activity_id: "a", team_id: "t1", student_id: "s2", candidate_id: "s1", updated_at: "" },
+      ],
+      explanations: [{ question_id: "q2", activity_id: "a", body: "Because g." }],
+      ...over,
+    });
+
+  it("tallies the team's own members", () => {
+    expect(led().leaderTally("t1")).toMatchObject({ agreed: "s1", voted: 2, present: 2, everyoneVoted: true });
+    expect(led().leaderTally("t2")).toMatchObject({ voted: 0, present: 1 });
+  });
+
+  it("says who leads and who may submit, and where the team is", () => {
+    const m = led();
+    expect(m.leaderOf("t1")).toBe("s1");
+    expect(m.mayLead("t1", "s1")).toBe(true);
+    expect(m.mayLead("t1", "s2")).toBe(false);
+    expect(m.stage("t1")).toBe("roll");
+    expect(m.stage("t2")).toBe("leader");
+  });
+
+  it("knows who is out", () => {
+    const m = led({ absences: [{ activity_id: "a", team_id: "t1", student_id: "s2", source: "roll" }] });
+    expect(m.absentIds("t1")).toEqual(["s2"]);
+    expect(m.isAbsent("s2")).toBe(true);
+  });
+
+  it("reads an explanation by question index", () => {
+    expect(led().explanation(1)).toBe("Because g.");
+    expect(led().explanation(0)).toBeNull();
+    expect(led().explanation(9)).toBeNull();
+  });
+
+  it("is plain team play without 0051", () => {
+    expect(model().stage("t1")).toBe("play");
+    expect(model().mayLead("t1", "s2")).toBe(true);
   });
 });

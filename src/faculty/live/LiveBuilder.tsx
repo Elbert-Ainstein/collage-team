@@ -12,7 +12,7 @@
 import { useMemo, useState } from "react";
 import { updateActivity } from "@/checkins/data";
 import type { Activity } from "@/checkins/types";
-import { TRY_CREDIT, TYPED_TRIES } from "@/live/answers";
+import { TRY_CREDIT } from "@/live/answers";
 import { loadLive, saveLiveQuestions, scoreLive, setLiveSettings } from "@/live/data";
 import { fmtPoints } from "@/live/model";
 import type { LiveGrading, LiveSnapshot, LockRule, ShowAnswers } from "@/live/types";
@@ -63,7 +63,7 @@ export function LiveBuilder({ data, activity, snapshot, startStep, onLeave, onDo
       saving this step must not close the builder under them. */
   const [sawQuestions, setSawQuestions] = useState(startStep === 1);
   const [questions, setQuestions] = useState<DraftQuestion[]>(() =>
-    firstTime ? [blankQuestion()] : draftsFrom(snapshot.questions, snapshot.keys),
+    firstTime ? [blankQuestion()] : draftsFrom(snapshot.questions, snapshot.keys, snapshot.explanations),
   );
   const [rule, setRule] = useState<LockRule>(snapshot.state.lock_rule);
   const [show, setShow] = useState<ShowAnswers>(snapshot.state.show_answers);
@@ -81,7 +81,10 @@ export function LiveBuilder({ data, activity, snapshot, startStep, onLeave, onDo
   // it is then, not as it was when the upload started.
   const patch = (id: string, change: Partial<DraftQuestion>) =>
     setQuestions((qs) => qs.map((q) => (q.id === id ? { ...q, ...change } : q)));
-  const saved = useMemo(() => draftsFrom(snapshot.questions, snapshot.keys), [snapshot.questions, snapshot.keys]);
+  const saved = useMemo(
+    () => draftsFrom(snapshot.questions, snapshot.keys, snapshot.explanations),
+    [snapshot.questions, snapshot.keys, snapshot.explanations],
+  );
   const answered = useMemo(() => {
     const n = new Map<string, number>();
     for (const r of snapshot.responses) n.set(r.question_id, (n.get(r.question_id) ?? 0) + 1);
@@ -270,6 +273,7 @@ export function LiveBuilder({ data, activity, snapshot, startStep, onLeave, onDo
                     activityId={activity.id}
                     onlyOne={questions.length === 1}
                     locked={frozen}
+                    explains={snapshot.teamSetup}
                     onChange={(next) => replace(i, next)}
                     onPatch={(change) => patch(q.id, change)}
                     onRemove={() => setQuestions((qs) => qs.filter((_, j) => j !== i))}
@@ -310,8 +314,8 @@ export function LiveBuilder({ data, activity, snapshot, startStep, onLeave, onDo
                   <p className="lq-bnote">
                     {grading === "both" ? "Own answers score a point each when right. " : "Own answers count for completion. "}
                     Teams see right or wrong as soon as they submit and try again until they have it:{" "}
-                    {TRY_CREDIT.map((c, i) => `${fmtPoints(c)} on try ${i + 1}`).join(", ")}, nothing after. Typed answers get{" "}
-                    {TYPED_TRIES} tries.
+                    {TRY_CREDIT.map((c, i) => `${fmtPoints(c)} on try ${i + 1}`).join(", ")}, nothing after. On a typed answer they can
+                    then keep going or move on.
                   </p>
                 </div>
               </aside>
