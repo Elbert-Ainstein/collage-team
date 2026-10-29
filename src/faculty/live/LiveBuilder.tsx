@@ -13,7 +13,7 @@ import { useMemo, useState } from "react";
 import { updateActivity } from "@/checkins/data";
 import type { Activity } from "@/checkins/types";
 import { TRY_CREDIT } from "@/live/answers";
-import { loadLive, saveLiveQuestions, scoreLive, setLiveSettings } from "@/live/data";
+import { loadLive, releaseLiveIndividual, saveLiveQuestions, scoreLive, setLiveSettings } from "@/live/data";
 import { fmtPoints } from "@/live/model";
 import type { LiveGrading, LiveSnapshot, LockRule, ShowAnswers } from "@/live/types";
 import { Ic } from "@/live/ui";
@@ -25,6 +25,7 @@ import { answersAtRisk, blankQuestion, draftsFrom, summarizeProblems, toQuestion
 import { ConfirmDialog } from "../ConfirmDialog";
 import { ImportCard, type Imported } from "./ImportCard";
 import { leftOutLine, withImported } from "./importDraft";
+import { ReleaseAnswers } from "./ReleaseAnswers";
 
 interface Props {
   data: FacultyData;
@@ -145,6 +146,22 @@ export function LiveBuilder({ data, activity, snapshot, startStep, onLeave, onDo
       onError(e);
       setBusy(false);
     }
+  };
+
+  // Release to individual mode (0053). The questions on screen are saved first,
+  // so an explanation written just now goes out with the rest.
+  const release = async () => {
+    if (problem) throw new Error(problem);
+    if (answersAtRisk(saved, questions, answered).length) {
+      throw new Error("Students have answered questions you’ve changed. Save those changes first, then release.");
+    }
+    await saveLiveQuestions(activity.id, questions.map(toQuestionDraft), frozen);
+    await releaseLiveIndividual(activity.id);
+    if (data.can.grade) {
+      const fresh = await loadLive(activity.id);
+      if (fresh) await scoreLive(fresh);
+    }
+    onDone(false);
   };
 
   const weekName = (w: number | null) => {
@@ -318,6 +335,11 @@ export function LiveBuilder({ data, activity, snapshot, startStep, onLeave, onDo
                     then keep going or move on.
                   </p>
                 </div>
+                {firstTime || snapshot.state.team_skipped === undefined || snapshot.state.phase === "closed" ? null : (
+                  <div className="fv-card lq-bcard">
+                    <ReleaseAnswers state={snapshot.state} grades={data.can.grade} release={release} onError={onError} />
+                  </div>
+                )}
               </aside>
             </div>
             <div className="fv-editbar lq-step2bar">

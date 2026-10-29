@@ -10,7 +10,10 @@ import { fmtPoints, type LiveModel } from "@/live/model";
 import { Pick, Tries } from "@/live/ui";
 import { Explanation } from "./Explanation";
 
-export function Results({ m, team, meId }: { m: LiveModel; team: TeamWithMembers | null; meId: string }) {
+export function Results({ m, team: onTeam, meId }: { m: LiveModel; team: TeamWithMembers | null; meId: string }) {
+  // Released without team mode (0053): there's no team half to show, and a 0
+  // for a session that never happened would read as a grade.
+  const team = m.state.team_skipped ? null : onTeam;
   const N = m.questions.length;
   const own = m.ownScore(meId);
   // Marked absent by the team's leader (0051) or on the sheet: the team's
@@ -89,15 +92,18 @@ export function Results({ m, team, meId }: { m: LiveModel; team: TeamWithMembers
                     {credit !== null ? <span className="lq-credit fv-num">{fmtPoints(credit)}</span> : null}
                   </span>
                 ) : null}
-                <span className="fv-sub">
-                  {mine && mine === first
-                    ? "Team went with yours"
-                    : on === 1 && !mineRight
-                      ? "Team got there"
-                      : mineRight && on !== 1
-                        ? "You had it"
-                        : ""}
-                </span>
+                {/* Said beside the team's; with no team, there's nothing to set it against. */}
+                {team ? (
+                  <span className="fv-sub">
+                    {mine && mine === first
+                      ? "Team went with yours"
+                      : on === 1 && !mineRight
+                        ? "Team got there"
+                        : mineRight && on !== 1
+                          ? "You had it"
+                          : ""}
+                  </span>
+                ) : null}
               </div>
               <Explanation body={m.explanation(i)} />
             </div>
