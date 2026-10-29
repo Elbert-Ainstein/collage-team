@@ -15,6 +15,7 @@ import type { Activity } from "@/checkins/types";
 import { expressionVerdicts } from "@/live/answers";
 import { loadLive, watchLive } from "@/live/data";
 import { buildLiveModel } from "@/live/model";
+import { singleFlight } from "@/live/singleFlight";
 import type { LiveSnapshot } from "@/live/types";
 import type { FacultyData } from "../FacultyApp";
 import { LiveBuilder } from "./LiveBuilder";
@@ -44,24 +45,24 @@ export function LiveDetail({ data, activity, fresh, onBack, onChanged, onError }
   const errorRef = useRef(onError);
   errorRef.current = onError;
 
-  // Reads overlap — realtime, the poll, a move made here — and the slowest
-  // isn't the newest. Each read is numbered; one older than the last applied
-  // is dropped, so a lock can't vanish under a poll that started before it.
-  const issued = useRef(0);
-  const applied = useRef(0);
   // One message per run of failures, not one per poll.
   const failing = useRef(false);
+  // A read for an activity that's no longer open lands nowhere.
+  const open = useRef(activity.id);
+  open.current = activity.id;
 
-  const reload = useCallback(async () => {
-    const n = ++issued.current;
+  // Reads overlap — realtime, the poll, a move made here. They run one at a
+  // time (singleFlight): a call while one is running queues one more after it,
+  // so they land in order and a lock can't vanish under an older poll, and a
+  // busy room's stream of votes is a read at a time, never a pile of them.
+  const read = useCallback(async () => {
     try {
       const snap = await loadLive(activity.id);
-      if (n < applied.current) return;
-      applied.current = n;
+      if (open.current !== activity.id) return;
       failing.current = false;
       setLoaded(snap ? { kind: "ready", snap } : { kind: "missing" });
     } catch (e) {
-      if (n < applied.current) return;
+      if (open.current !== activity.id) return;
       // Nothing on screen yet: say so there, with a retry. Otherwise keep what's
       // shown and report it once.
       setLoaded((l) => (l.kind === "ready" ? l : { kind: "failed" }));
@@ -69,15 +70,20 @@ export function LiveDetail({ data, activity, fresh, onBack, onChanged, onError }
       failing.current = true;
     }
   }, [activity.id]);
+  const reload = useMemo(() => singleFlight(read), [read]);
 
   useEffect(() => {
     setLoaded({ kind: "loading" });
     void reload();
     let timer: number | undefined;
     const unwatch = watchLive(activity.id, () => {
-      // A lock lands as a burst (the lock, then the votes it settled): one read.
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => void reload(), 250);
+      // A lock lands as a burst (the lock, then the votes it settled): one read
+      // for it — but not pushed back by each event, or a busy room never reads.
+      if (timer !== undefined) return;
+      timer = window.setTimeout(() => {
+        timer = undefined;
+        void reload();
+      }, 250);
     });
     return () => {
       window.clearTimeout(timer);

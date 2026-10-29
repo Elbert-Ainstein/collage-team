@@ -28,6 +28,7 @@ import { SubmitScreen } from "./SubmitScreen";
 import "./student.css";
 import { LiveAssignment } from "./live/LiveAssignment";
 import { watchLive } from "@/live/data";
+import { spread } from "@/live/singleFlight";
 
 type Screen = "list" | "detail" | "work" | "submit" | "tr" | "trDetail";
 
@@ -849,9 +850,10 @@ export function StudentApp({
     // Only the session moving (live_state), not every vote — votes are the open
     // activity's business — and one reload for a burst of them.
     let timer: number | undefined;
+    // Every phone in the room hears Start team mode at once: spread the reads.
     const again = () => {
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => void load().catch(() => undefined), 400);
+      timer = window.setTimeout(() => void load().catch(() => undefined), spread(400, 1_600));
     };
     const unwatch = liveIds.split(",").map((id) => watchLive(id, again, ["live_state"]));
     return () => {
