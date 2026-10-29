@@ -27,6 +27,13 @@ const POLL_MS = 30_000;
 const SETUP_POLL_MS = 2_000;
 /** How far a room's reads after one realtime event are spread. */
 const REALTIME_SPREAD_MS = 1_000;
+/**
+ * After a failed read, try again on its own — sooner at first, then backing off
+ * to the last step for as long as it takes. Nobody has to press anything, and a
+ * room of devices that all lost the database at once don't all come back at the
+ * same instant: each wait is stretched by up to half again at random.
+ */
+const RETRY_MS = [1_000, 2_000, 4_000, 8_000, 15_000];
 
 export interface LiveSession {
   snap: LiveSnapshot | null;
@@ -34,7 +41,7 @@ export interface LiveSession {
   model: LiveModel | null;
   team: TeamWithMembers | null;
   loading: boolean;
-  /** The last read failed (a dropped connection): the screen offers a retry. */
+  /** The last read failed (a dropped connection or a swamped database): it is already trying again. */
   failed: boolean;
   reload: () => Promise<void>;
 }
@@ -42,7 +49,8 @@ export interface LiveSession {
 export function useLiveSession(activityId: string, enrolment: Enrolment, teamId: string | null): LiveSession {
   const [snap, setSnap] = useState<LiveSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
-  const [failed, setFailed] = useState(false);
+  // Reads failed in a row; 0 once one lands.
+  const [fails, setFails] = useState(0);
   const [verdicts, setVerdicts] = useState<Record<string, Record<string, boolean>>>({});
   const [now, setNow] = useState(() => Date.now());
   const alive = useRef(true);
@@ -64,11 +72,11 @@ export function useLiveSession(activityId: string, enrolment: Enrolment, teamId:
         if (!alive.current) return;
         if (parts) setSnap((s) => (s ? { ...s, ...parts } : s));
       }
-      setFailed(false);
+      setFails(0);
     } catch {
       // The next read must be a whole one: this one may have been.
       whole.current = whole.current || full;
-      if (alive.current) setFailed(true);
+      if (alive.current) setFails((n) => n + 1);
     } finally {
       if (alive.current) setLoading(false);
     }
@@ -103,14 +111,25 @@ export function useLiveSession(activityId: string, enrolment: Enrolment, teamId:
       if (document.visibilityState === "visible") void reload();
     };
     document.addEventListener("visibilitychange", back);
+    // Wifi back after a drop: no need to wait for the next retry.
+    const online = () => void reload();
+    window.addEventListener("online", online);
     return () => {
       alive.current = false;
       window.clearTimeout(timer);
       window.clearInterval(poll);
       document.removeEventListener("visibilitychange", back);
+      window.removeEventListener("online", online);
       unwatch();
     };
   }, [activityId, reload, flight]);
+
+  useEffect(() => {
+    if (fails === 0) return;
+    const wait = RETRY_MS[Math.min(fails, RETRY_MS.length) - 1];
+    const t = window.setTimeout(() => void reload(), spread(wait, wait / 2));
+    return () => window.clearTimeout(t);
+  }, [fails, reload]);
 
   const phase = snap?.state.phase;
   useEffect(() => {
@@ -136,7 +155,9 @@ export function useLiveSession(activityId: string, enrolment: Enrolment, teamId:
 
   const team = useMemo(() => teamFor(enrolment, teamId, snap), [enrolment, teamId, snap]);
 
-  const settingUp = phase === "team" && snap !== null && team !== null && teamStage(snap, team.id) !== "play";
+  // Not while failing: the retry above is already paced for a struggling server.
+  const settingUp =
+    fails === 0 && phase === "team" && snap !== null && team !== null && teamStage(snap, team.id) !== "play";
   useEffect(() => {
     if (!settingUp) return;
     const t = window.setInterval(() => void flight(), SETUP_POLL_MS);
@@ -150,5 +171,5 @@ export function useLiveSession(activityId: string, enrolment: Enrolment, teamId:
     [snap, team, enrolment.student, verdicts, now],
   );
 
-  return { snap, model, team, loading, failed, reload };
+  return { snap, model, team, loading, failed: fails > 0, reload };
 }

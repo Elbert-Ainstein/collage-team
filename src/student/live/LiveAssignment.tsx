@@ -65,6 +65,8 @@ export function LiveAssignment({ assignment, enrolment, onBack }: Props) {
   const body = () => {
     if (loading) return <div className="lq-sscroll fv-sub">Loading…</div>;
     if (!m) {
+      // A failed read is already being tried again on its own (useLiveSession);
+      // Retry just doesn't wait for it.
       return (
         <div className="lq-sscroll">
           <div className="lq-scard">

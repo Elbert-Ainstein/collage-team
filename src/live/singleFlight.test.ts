@@ -58,6 +58,33 @@ describe("singleFlight", () => {
     expect(calls).toBe(2);
   });
 
+  it("leaves no gap between one read ending and the queued one starting", async () => {
+    const gates = [gate(), gate(), gate()];
+    let calls = 0;
+    let inFlight = 0;
+    let most = 0;
+    const read = singleFlight(async () => {
+      const g = gates[calls++];
+      inFlight++;
+      most = Math.max(most, inFlight);
+      try {
+        await g.p;
+      } finally {
+        inFlight--;
+      }
+    });
+    const first = read();
+    void read(); // queued
+    // A call made the moment the first read lands — as a timer or an event can.
+    const late = first.then(() => read());
+    gates[0].open();
+    await first;
+    gates[1].open();
+    gates[2].open();
+    await late;
+    expect(most).toBe(1);
+  });
+
   it("starts fresh once everything has landed", async () => {
     let calls = 0;
     const read = singleFlight(async () => {
