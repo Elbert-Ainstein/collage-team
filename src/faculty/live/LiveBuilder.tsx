@@ -25,7 +25,7 @@ import { answersAtRisk, blankQuestion, draftsFrom, summarizeProblems, toQuestion
 import { ConfirmDialog } from "../ConfirmDialog";
 import { ImportCard, type Imported } from "./ImportCard";
 import { leftOutLine, withImported } from "./importDraft";
-import { ReleaseAnswers } from "./ReleaseAnswers";
+import { canRelease, ReleaseAnswers } from "./ReleaseAnswers";
 
 interface Props {
   data: FacultyData;
@@ -335,7 +335,7 @@ export function LiveBuilder({ data, activity, snapshot, startStep, onLeave, onDo
                     then keep going or move on.
                   </p>
                 </div>
-                {firstTime || snapshot.state.team_skipped === undefined || snapshot.state.phase === "closed" ? null : (
+                {firstTime || !canRelease(snapshot.state) ? null : (
                   <div className="fv-card lq-bcard">
                     <ReleaseAnswers state={snapshot.state} grades={data.can.grade} release={release} onError={onError} />
                   </div>

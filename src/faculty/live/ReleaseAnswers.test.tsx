@@ -40,7 +40,7 @@ describe("Release answers and explanations", () => {
     await show(<ReleaseAnswers state={stateOf("team")} grades release={release} onError={() => {}} />);
     await act(async () => button("Release answers and explanations")!.click());
     expect(release).not.toHaveBeenCalled();
-    expect(document.body.textContent).toContain("Team mode won’t run");
+    expect(document.body.textContent).toContain("No team scores");
     await act(async () => confirmBtn().click());
     expect(release).toHaveBeenCalledTimes(1);
   });
@@ -65,8 +65,13 @@ describe("Release answers and explanations", () => {
     expect(onError).toHaveBeenCalledWith(err);
   });
 
-  it("isn't there once closed, or without 0053", async () => {
+  it("is there on a session closed but not yet scored — team mode broke and someone closed it (0054)", async () => {
     await show(<ReleaseAnswers state={stateOf("closed")} grades release={async () => {}} onError={() => {}} />);
+    expect(button("Release answers and explanations")).toBeDefined();
+  });
+
+  it("isn't there once scored, or without 0053", async () => {
+    await show(<ReleaseAnswers state={{ ...stateOf("closed"), scored_at: "2026-10-29T15:00:00Z" }} grades release={async () => {}} onError={() => {}} />);
     expect(button("Release answers and explanations")).toBeUndefined();
     await show(<ReleaseAnswers state={stateOf("team", null)} grades release={async () => {}} onError={() => {}} />);
     expect(button("Release answers and explanations")).toBeUndefined();
