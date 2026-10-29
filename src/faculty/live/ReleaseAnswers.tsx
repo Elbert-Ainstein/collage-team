@@ -1,9 +1,10 @@
 "use client";
 
 // Release the answers and explanations to individual mode (0053): for a class
-// whose team mode couldn't run. Any time before the session closes, it closes
-// it without its team half: every student reads the key and the explanations
-// beside their own answers, and their own answers are what gets scored.
+// whose team mode couldn't run. Any time until the session is scored — before
+// class, in team mode, or closed when it broke (0054) — it closes it without
+// its team half: every student reads the key and the explanations beside their
+// own answers, and their own answers are what gets scored.
 
 import { useState } from "react";
 import type { LiveState } from "@/live/types";
@@ -17,10 +18,17 @@ interface Props {
   onError: (e: unknown) => void;
 }
 
+/**
+ * May it be released now? Not on a database without 0053 (no team_skipped, no
+ * RPC to call), and not once scored: its grades are out.
+ */
+export function canRelease(state: LiveState): boolean {
+  return state.team_skipped !== undefined && !(state.phase === "closed" && state.scored_at);
+}
+
 export function ReleaseAnswers({ state, grades, release, onError }: Props) {
   const [ask, setAsk] = useState<"ask" | "busy" | null>(null);
-  // A database without 0053 has no team_skipped, and no RPC to call.
-  if (state.team_skipped === undefined || state.phase === "closed") return null;
+  if (!canRelease(state)) return null;
 
   const go = async () => {
     setAsk("busy");
@@ -44,8 +52,8 @@ export function ReleaseAnswers({ state, grades, release, onError }: Props) {
           body={
             <>
               Every student sees the right answers and why beside their own.{" "}
-              {grades ? "Their own answers are scored." : "The instructor scores their own answers after."} Team mode
-              won’t run for this one.
+              {grades ? "Their own answers are scored." : "The instructor scores their own answers after."} No team
+              scores.
             </>
           }
           confirmLabel="Release"
