@@ -300,7 +300,7 @@ function Submitted({ answered, of, onReview, onBack }: { answered: number; of: n
  * A number (with its unit beside it) or an expression. Saves once what's typed
  * reads as an answer; until then it says why it doesn't.
  */
-function TypedEntry({ q, value, onChange }: { q: LiveQuestion; value: string | null; onChange: (v: string) => void }) {
+export function TypedEntry({ q, value, onChange }: { q: LiveQuestion; value: string | null; onChange: (v: string) => void }) {
   const [text, setText] = useState(value ?? "");
   const parsed = q.kind === "number" ? normalizeNumber(text) : canonicalAnswer("expression", text);
   return (

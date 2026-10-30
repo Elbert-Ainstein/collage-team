@@ -57,7 +57,7 @@ function ResultPips({ m, meId, current, onPick }: { m: LiveModel; meId: string; 
   );
 }
 
-function Choices({ m, q, mine }: { m: LiveModel; q: number; mine: string | null }) {
+export function Choices({ m, q, mine }: { m: LiveModel; q: number; mine: string | null }) {
   const question = m.questions[q];
   const correct = m.key(q)?.correct_option ?? null;
   return (
@@ -81,7 +81,7 @@ function Choices({ m, q, mine }: { m: LiveModel; q: number; mine: string | null 
   );
 }
 
-function Typed({ m, q, mine, right }: { m: LiveModel; q: number; mine: string | null; right: boolean }) {
+export function Typed({ m, q, mine, right }: { m: LiveModel; q: number; mine: string | null; right: boolean }) {
   const answer = keyText(m, q);
   // Shown when they missed it, and when theirs counted but was written
   // another way (9.81 for 9.8, F*0.5 for F/2): the answer as written is worth seeing.
