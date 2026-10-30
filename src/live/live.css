@@ -3438,6 +3438,17 @@ button.lq-reviewrow {
   background: var(--lq-wrong-100);
   color: var(--lq-wrong);
 }
+/* Practice's verdict, with Try again beside it once it's checked. */
+.lq-practicestatus {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.lq-practicestatus .lq-saved.good {
+  color: var(--lq-right-ink);
+  font-weight: 600;
+}
 
 /* Where the student shell lets the page scroll (student.css, 900px), the
    answer bar has to hold itself at the bottom of the screen. */

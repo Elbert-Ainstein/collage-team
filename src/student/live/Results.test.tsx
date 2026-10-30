@@ -188,3 +188,23 @@ describe("the team's half", () => {
     expect(host.querySelector(".lq-stat.team")).not.toBeNull();
   });
 });
+
+describe("trying them again", () => {
+  it("starts on the first question with nothing picked, not their old answers", async () => {
+    await show(<Results m={model(true)} team={TEAM} meId="s1" />);
+    await press("Try them again");
+    expect(host.querySelector(".lq-sq")?.textContent).toBe("Practice · Question 1 of 3");
+    expect(host.querySelectorAll(".lq-choice.on")).toHaveLength(0);
+    expect(host.textContent).not.toContain("You");
+    expect(button("Check")!.disabled).toBe(true);
+  });
+
+  it("leaves their results as they were", async () => {
+    await show(<Results m={model(true)} team={TEAM} meId="s1" />);
+    await press("Try them again");
+    await act(async () => choice("one").click());
+    await press("Check");
+    await press("Back");
+    expect(host.querySelector(".lq-stat.own")?.textContent).toContain("1/3");
+  });
+});

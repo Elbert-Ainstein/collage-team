@@ -3,12 +3,14 @@
 // After the instructor closes the session: how they did on their own and how
 // the team did, every question in a list, and Review answers — which goes
 // through them one at a time the way they were answered, the right answer
-// and why under each (ReviewQuestion).
+// and why under each (ReviewQuestion). Try them again goes through them
+// fresh, checked here and saved nowhere (Practice).
 
 import { useState } from "react";
 import type { TeamWithMembers } from "@/checkins/types";
 import { fmtPoints, type LiveModel } from "@/live/model";
 import { Ic, Pick } from "@/live/ui";
+import { Practice } from "./Practice";
 import { ReviewQuestion } from "./ReviewQuestion";
 
 export function Results({ m, team: onTeam, meId }: { m: LiveModel; team: TeamWithMembers | null; meId: string }) {
@@ -17,6 +19,7 @@ export function Results({ m, team: onTeam, meId }: { m: LiveModel; team: TeamWit
   const team = m.state.team_skipped ? null : onTeam;
   // Null: the summary. Otherwise the question being reviewed.
   const [at, setAt] = useState<number | null>(null);
+  const [practising, setPractising] = useState(false);
   const N = m.questions.length;
   const own = m.ownScore(meId);
   // Marked absent by the team's leader (0051) or on the sheet: the team's
@@ -33,6 +36,10 @@ export function Results({ m, team: onTeam, meId }: { m: LiveModel; team: TeamWit
         </div>
       </div>
     );
+  }
+
+  if (practising && N > 0) {
+    return <Practice m={m} onDone={() => setPractising(false)} />;
   }
 
   if (at !== null && at < N) {
@@ -74,7 +81,9 @@ export function Results({ m, team: onTeam, meId }: { m: LiveModel; team: TeamWit
         </div>
       </div>
       <footer className="lq-sfoot">
-        <span />
+        <button type="button" className="fv-btn outline" disabled={N === 0} onClick={() => setPractising(true)}>
+          Try them again
+        </button>
         <button type="button" className="fv-btn primary" disabled={N === 0} onClick={() => setAt(0)}>
           Review answers <Ic name="chevronRight" size={15} />
         </button>
