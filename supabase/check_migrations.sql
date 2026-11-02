@@ -310,6 +310,15 @@ select '0052 the roll on every phone',
        case when to_regprocedure('public.set_live_absences(uuid,uuid[],boolean)') is not null
             then 'applied'
             else 'NOT APPLIED — run 0052_live_roll_for_everyone.sql' end
+union all
+select '0055 TFs reopen hand-ins and release grades',
+       case when to_regprocedure('public.can_release_check_in(uuid)') is not null
+             and to_regprocedure('public.can_close_reopen(uuid)') is not null
+             and exists (select 1 from information_schema.columns
+                          where table_schema = 'public' and table_name = 'courses'
+                            and column_name = 'tf_can_release')
+            then 'applied'
+            else 'NOT APPLIED — run 0055_tf_reopen_and_release.sql' end
 order by 1;
 
 -- ------------------------------------------------------- and the buckets

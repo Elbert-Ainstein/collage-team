@@ -475,6 +475,58 @@ export function GradingScreen({
     ladder?.find((r) => r.id === id)?.deduction ?? 0;
 
   /**
+   * The line that takes nothing off, for every question that has one.
+   *
+   * Full marks in one press. Diego gives a lot of 100s, and each was a pick per
+   * question. The question's own line wins over the shared ladder's, which is
+   * the same order a grader would reach for them in.
+   */
+  const fullLines = useMemo(() => {
+    if (!ladder) return [];
+    return questions.flatMap((q) => {
+      const free = (r: RubricItem) => r.deduction === 0;
+      const line =
+        ladder.find((r) => r.question_label === q.label && free(r)) ??
+        ladder.find((r) => !r.question_label && free(r));
+      return line ? [{ q, line }] : [];
+    });
+  }, [ladder, questions]);
+  const isFull =
+    fullLines.length === questions.length &&
+    fullLines.every(({ q, line }) => pickOf(picks, q) === line.id);
+  const [filling, setFilling] = useState(false);
+
+  async function fullMarks() {
+    if (!subject || !fullLines.length) return;
+    const rid = subject.result.id;
+    setEditIdx(null);
+    setMarks((prev) => {
+      const next = new Map(prev);
+      const inner = new Map(next.get(rid) ?? []);
+      for (const { q, line } of fullLines) {
+        inner.delete(`#${q.position}`);
+        inner.set(keyOf(q), line.id);
+      }
+      next.set(rid, inner);
+      return next;
+    });
+    setFilling(true);
+    try {
+      // One at a time: every mark re-scores the same row (0007), and writes
+      // racing on it could leave the score one mark behind.
+      for (const { q, line } of fullLines) {
+        await setMark(rid, q.position, line.id, isSynthetic(q) ? null : q.id);
+      }
+      onChanged();
+    } catch (e) {
+      onError(e);
+      await loadMarks().catch(() => undefined);
+    } finally {
+      setFilling(false);
+    }
+  }
+
+  /**
    * Every question's score and the submission's, out of one walk.
    *
    * The total is the activity's points minus every deduction on the row —
@@ -1109,6 +1161,22 @@ export function GradingScreen({
               it gets labels only, and only when there is more than one: the
               list is then purely how you move the pages on the left, and one
               row would be a control that does nothing. */}
+          {!forCompletion && data.can.grade && fullLines.length ? (
+            <button
+              type="button"
+              className="fv-btn outline sm full"
+              disabled={filling || isFull}
+              onClick={() => void fullMarks()}
+              title={
+                fullLines.length < qCount
+                  ? `${qCount - fullLines.length} of ${qCount} questions have no line worth full marks and are left as they are`
+                  : undefined
+              }
+            >
+              {filling ? "Marking…" : isFull ? "Full marks given" : "Give full marks"}
+            </button>
+          ) : null}
+
           {forCompletion && qCount < 2 ? null : (
             <div className="fv-card" style={{ padding: 0, overflow: "hidden" }}>
               {questions.map((q, i) => {

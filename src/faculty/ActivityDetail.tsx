@@ -917,8 +917,8 @@ export function ActivityDetail(props: {
   // deadline every student can hand in, and a button that changes nothing
   // reads as though it does something.
   const closedNow = handsInHere && pastDeadline(activity);
-  // The owner's alone, in 0044 as here. A TF reads the list and presses nothing.
-  const canReopen = data.can.isOwner;
+  // Whoever grades (0055): the owner, and a TF when grading is on for TFs.
+  const canReopen = data.can.grade;
 
   async function setHandInOpen(studentId: string, open: boolean) {
     setReopenBusy(studentId);

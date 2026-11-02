@@ -122,9 +122,14 @@ afterEach(async () => {
 const button = (text: string) =>
   [...host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.includes(text))!;
 
-// The only question is already open, so its ladder is on screen.
+// The only question is already open, so its ladder is on screen. Its line is
+// called "Full marks" too, so this finds the ladder row, not "Give full marks".
 async function markFull() {
-  await act(async () => button("Full marks").click());
+  await act(async () =>
+    [...host.querySelectorAll<HTMLButtonElement>("button")]
+      .find((b) => b.textContent?.includes("Full marks") && !b.textContent.includes("Give"))!
+      .click(),
+  );
 }
 
 describe("the finish button on a combo", () => {
@@ -289,5 +294,49 @@ describe("a TF's finish button", () => {
     const btn = button("Released");
     expect(btn.disabled).toBe(true);
     expect(btn.title).toBe("Released by the instructor");
+  });
+});
+
+// One press puts every question on the line that takes nothing off.
+describe("Give full marks", () => {
+  const twoQuestions = (): FacultyData => {
+    const d = facultyData(false);
+    return {
+      ...d,
+      activities: [{ ...combo, question_count: 2, points_total: 4 } as Activity, tutorial],
+      questions: [
+        { id: "q1", activity_id: "act1", label: "Mark-up", position: 0, points: 2 },
+        { id: "q2", activity_id: "act1", label: "Graph", position: 1, points: 2 },
+      ],
+    } as unknown as FacultyData;
+  };
+  const shared = { id: "ri3", activity_id: "act1", row_index: 2, description: "All there", deduction: 0, is_custom: true, question_label: null };
+
+  it("marks every question at full, the question's own line first, then the shared one", async () => {
+    const { ensureRubric, setMark } = await import("./facultyData");
+    vi.mocked(ensureRubric).mockResolvedValueOnce([...ladder, shared] as never);
+    await mount(twoQuestions());
+
+    await act(async () => button("Give full marks").click());
+
+    expect(setMark).toHaveBeenCalledTimes(2);
+    expect(setMark).toHaveBeenNthCalledWith(1, "r1", 0, "ri1", "q1");
+    expect(setMark).toHaveBeenNthCalledWith(2, "r1", 1, "ri3", "q2");
+    expect(onChanged).toHaveBeenCalled();
+    expect(button("Full marks given").disabled).toBe(true);
+    // Every question has a pick, so the TF can send it on.
+    expect(button("Send for review").disabled).toBe(false);
+  });
+
+  it("leaves a question with no zero line alone, and says so", async () => {
+    const { setMark } = await import("./facultyData");
+    await mount(twoQuestions());
+
+    const give = button("Give full marks");
+    expect(give.title).toContain("1 of 2 questions");
+    await act(async () => give.click());
+
+    expect(setMark).toHaveBeenCalledTimes(1);
+    expect(setMark).toHaveBeenCalledWith("r1", 0, "ri1", "q1");
   });
 });

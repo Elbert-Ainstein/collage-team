@@ -75,11 +75,15 @@ export function TFsScreen(props: {
   // until the props do change, otherwise the switch appears not to move.
   const [gradeOv, setGradeOv] = useState<boolean | null>(null);
   const [checkinOv, setCheckinOv] = useState<boolean | null>(null);
+  const [releaseOv, setReleaseOv] = useState<boolean | null>(null);
   useEffect(() => setGradeOv(null), [course.tf_can_grade]);
   useEffect(() => setCheckinOv(null), [course.tf_can_checkin]);
+  useEffect(() => setReleaseOv(null), [course.tf_can_release]);
 
   const grading = gradeOv ?? course.tf_can_grade;
   const checkin = checkinOv ?? course.tf_can_checkin;
+  // Undefined is a database without 0055, where TFs can only send for review.
+  const releasing = releaseOv ?? course.tf_can_release === true;
 
   const nextPosition = useMemo(
     () => tfs.reduce((n, t) => Math.max(n, t.position), -1) + 1,
@@ -274,17 +278,16 @@ export function TFsScreen(props: {
     }
   }
 
-  async function setPerm(key: "tf_can_grade" | "tf_can_checkin", next: boolean) {
-    if (key === "tf_can_grade") setGradeOv(next);
-    else setCheckinOv(next);
+  async function setPerm(key: "tf_can_grade" | "tf_can_checkin" | "tf_can_release", next: boolean) {
+    const hold = { tf_can_grade: setGradeOv, tf_can_checkin: setCheckinOv, tf_can_release: setReleaseOv }[key];
+    hold(next);
     setError(null);
     try {
       await setTFPermissions(course.id, { [key]: next });
       onChanged();
     } catch (e) {
       // Put the switch back where it was; the write never landed.
-      if (key === "tf_can_grade") setGradeOv(null);
-      else setCheckinOv(null);
+      hold(null);
       fail(e);
     }
   }
@@ -547,11 +550,20 @@ export function TFsScreen(props: {
 
             {permRow(
               "Grading",
-              "Can score submissions, release marks, and edit rubric criteria and questions.",
+              "Can score submissions and edit rubric criteria and questions.",
               grading,
               () => void setPerm("tf_can_grade", !grading),
               true,
             )}
+            {grading
+              ? permRow(
+                  "Release grades",
+                  "Off: grades go to your Review tab, and you release them.",
+                  releasing,
+                  () => void setPerm("tf_can_release", !releasing),
+                  false,
+                )
+              : null}
             {permRow(
               "Check-in",
               "Can post and unpost check-ins to students, and set which week is live. Not grading — that is the switch above.",

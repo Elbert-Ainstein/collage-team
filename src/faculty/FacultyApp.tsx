@@ -85,9 +85,9 @@ export interface Capabilities {
   /** Put marks on submissions. */
   grade: boolean;
   /**
-   * Send a grade to the student. The instructor's alone (0038): a TF who
-   * grades sends their marks for review, and the instructor releases them
-   * from the Review tab once they have looked.
+   * Send a grade to the student. The instructor always; a TF who grades when
+   * the course lets TFs release (0055). Otherwise the TF sends their marks for
+   * review and the instructor releases them from the Review tab (0038).
    */
   release: boolean;
   /**
@@ -114,7 +114,9 @@ export function capabilitiesFor(
     isOwner,
     author: isOwner,
     grade: isOwner || course.tf_can_grade,
-    release: isOwner,
+    // Strictly true: undefined is a database without 0055, which still holds
+    // TFs to review, and a Release button there would only ever fail.
+    release: isOwner || (course.tf_can_grade && course.tf_can_release === true),
     rubric: isOwner || (rubric ?? course.tf_can_grade),
     runCheckIns: isOwner || course.tf_can_checkin,
     manageRoster: isOwner,
@@ -130,14 +132,30 @@ export function capabilitiesFor(
  * are granted is the same lie the switch itself used to tell.
  */
 function tfNote(can: Capabilities): string {
-  const rest = "the instructor reviews and releases grades, and edits activities and the roster.";
-  const grade = can.rubric ? "grade submissions and edit rubrics" : "grade submissions";
+  const rest = can.release
+    ? "the instructor edits activities and the roster."
+    : "the instructor reviews and releases grades, and edits activities and the roster.";
+  const marks = can.release ? "grade and release submissions" : "grade submissions";
+  const grade = can.rubric ? `${marks} and edit rubrics` : marks;
   if (can.grade && can.runCheckIns) {
     return `You can ${grade}, post check-ins and set the live week; ${rest}`;
   }
   if (can.grade) return `You can ${grade}; ${rest}`;
   if (can.runCheckIns) return `You can post check-ins and set the live week, but not grade; ${rest}`;
   return "Grading and check-ins are both turned off for TFs on this course, so this view is read-only.";
+}
+
+/**
+ * Whether the instructor gets the Review tab.
+ *
+ * Theirs alone, and only while it can hold something: when TFs release their
+ * own grades (0055) nothing is sent for review, so the tab stays until the
+ * last row sent before the switch is released, then goes.
+ */
+function showReview(data: FacultyData): boolean {
+  if (!data.can.isOwner) return false;
+  if (data.course.tf_can_release !== true) return true;
+  return data.results.some((r) => r.status === "needs_review");
 }
 
 /** Everything the screens read. Loaded once here, refreshed on any write. */
@@ -730,7 +748,7 @@ export function FacultyApp({
     const shut =
       (screen === "checkin" && !data.can.runCheckIns) ||
       (screen === "tfs" && !data.can.manageTFs) ||
-      (screen === "review" && !data.can.release);
+      (screen === "review" && !data.can.isOwner);
     if (!shut) return;
     replaceNext.current = true;
     setError(
@@ -836,7 +854,7 @@ export function FacultyApp({
           />
         ) : null;
       case "review":
-        return data.can.release ? (
+        return data.can.isOwner ? (
           <ReviewScreen
             data={data}
             selId={selId}
@@ -1150,7 +1168,7 @@ export function FacultyApp({
               // thing worth avoiding.
               .filter((t) => t.id !== "tfs" || (data?.can.manageTFs ?? true))
               .filter((t) => t.id !== "checkin" || (data?.can.runCheckIns ?? true))
-              .filter((t) => t.id !== "review" || (data?.can.release ?? true))
+              .filter((t) => t.id !== "review" || (data ? showReview(data) : true))
               .map((t) => (
               <button
                 key={t.id}

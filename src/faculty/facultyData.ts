@@ -1366,13 +1366,18 @@ export async function releaseMany(
 
 // ---------------------------------------------------------- reopened hand-ins
 //
-// A student's hand-in closes at the individual deadline (0044). The instructor
-// reopens it for one student at a time; while the row stands that student can
-// hand in, and what they hand in still reads Late against due_at.
+// A student's hand-in closes at the individual deadline (0044). The instructor,
+// or a TF who grades (0055), reopens it for one student at a time; while the
+// row stands that student can hand in, and what they hand in still reads Late
+// against due_at.
 
 const NO_REOPENS =
   "This project cannot reopen hand-ins yet — run supabase/migrations/0044_hand_in_deadline.sql " +
   "in the Supabase SQL editor.";
+
+const NO_TF_REOPENS =
+  "Only the instructor can reopen hand-ins on this project until " +
+  "supabase/migrations/0055_tf_reopen_and_release.sql is run in the Supabase SQL editor.";
 
 /**
  * Who this activity's hand-in has been reopened for, as student ids.
@@ -1391,8 +1396,9 @@ export async function listReopens(activityId: string): Promise<string[]> {
 }
 
 /**
- * Let one student hand in past the deadline. The course owner's alone (0044).
- * Pressing it twice is not an error: the second press finds them reopened.
+ * Let one student hand in past the deadline. The course owner's, or a grading
+ * TF's (0055). Pressing it twice is not an error: the second press finds them
+ * reopened.
  */
 export async function reopenHandIn(activityId: string, studentId: string): Promise<void> {
   const { error } = await db().from("hand_in_reopens")
@@ -1401,6 +1407,7 @@ export async function reopenHandIn(activityId: string, studentId: string): Promi
   if (/hand_in_reopens/.test(error.message) && /does not exist|schema cache|could not find/i.test(error.message)) {
     throw new Error(NO_REOPENS);
   }
+  if (/row-level security/i.test(error.message)) throw new Error(NO_TF_REOPENS);
   throw dbError(error);
 }
 
@@ -1409,13 +1416,28 @@ export async function reopenHandIn(activityId: string, studentId: string): Promi
  * they just cannot change it any more.
  */
 export async function closeHandIn(activityId: string, studentId: string): Promise<void> {
-  const { error } = await db().from("hand_in_reopens").delete()
-    .eq("activity_id", activityId).eq("student_id", studentId);
-  if (!error) return;
+  // Read back what went: a delete RLS refuses is not an error, just no rows,
+  // and a TF on a project without 0055 would see Close work and nothing close.
+  const { data, error } = await db().from("hand_in_reopens").delete()
+    .eq("activity_id", activityId).eq("student_id", studentId).select("student_id");
+  if (!error) {
+    if ((data as unknown[] | null)?.length) return;
+    // Nothing went: already closed, or refused. Only the second is a problem.
+    if (await stillReopened(activityId, studentId)) throw new Error(NO_TF_REOPENS);
+    return;
+  }
   if (/hand_in_reopens/.test(error.message) && /does not exist|schema cache|could not find/i.test(error.message)) {
     throw new Error(NO_REOPENS);
   }
   throw dbError(error);
+}
+
+/** Whether the reopen row is still there — after a delete that took nothing. */
+async function stillReopened(activityId: string, studentId: string): Promise<boolean> {
+  const { data, error } = await db().from("hand_in_reopens").select("student_id")
+    .eq("activity_id", activityId).eq("student_id", studentId);
+  if (error) throw dbError(error);
+  return ((data as unknown[] | null) ?? []).length > 0;
 }
 
 // ---------------------------------------------------------------------- TFs
@@ -1523,7 +1545,7 @@ export async function removeTF(id: string): Promise<void> {
 /** Course-wide, exactly as the design specifies — never per person. */
 export async function setTFPermissions(
   courseId: string,
-  perms: { tf_can_grade?: boolean; tf_can_checkin?: boolean },
+  perms: { tf_can_grade?: boolean; tf_can_checkin?: boolean; tf_can_release?: boolean },
 ): Promise<void> {
   const { error } = await db().from("courses").update(perms).eq("id", courseId);
   if (error) throw dbError(error);

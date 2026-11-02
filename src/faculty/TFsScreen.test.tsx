@@ -172,3 +172,28 @@ describe("adding a TF who is on the student roster", () => {
     expect(countWorkForStudent).not.toHaveBeenCalled();
   });
 });
+
+// 0055: whether TFs release their own grades or send them for review.
+describe("the Release grades switch", () => {
+  const sw = () => host.querySelector<HTMLButtonElement>('[role="switch"][aria-label="Release grades"]');
+
+  it("is on when the course lets TFs release, and turning it off writes tf_can_release", async () => {
+    const { setTFPermissions } = await import("./facultyData");
+    await mount({ ...facultyData([]), course: { ...course, tf_can_release: true } });
+
+    expect(sw()?.getAttribute("aria-checked")).toBe("true");
+    await act(async () => sw()!.click());
+    expect(setTFPermissions).toHaveBeenCalledWith("c1", { tf_can_release: false });
+    expect(sw()?.getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("reads off on a database without 0055", async () => {
+    await mount(facultyData([]));
+    expect(sw()?.getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("is not offered while TFs cannot grade", async () => {
+    await mount({ ...facultyData([]), course: { ...course, tf_can_grade: false, tf_can_release: true } });
+    expect(sw()).toBeNull();
+  });
+});
