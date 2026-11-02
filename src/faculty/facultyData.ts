@@ -1440,6 +1440,53 @@ async function stillReopened(activityId: string, studentId: string): Promise<boo
   return ((data as unknown[] | null) ?? []).length > 0;
 }
 
+/**
+ * Which of these results have a PDF on them, and when it went up.
+ *
+ * Uploading is not handing in: Submit is its own press. A reopened student who
+ * stopped at the upload has a draft row with their work on it, and no pile
+ * counted them as in. This is how the Reopened pile tells them apart from a
+ * student with nothing.
+ */
+export async function listUploads(resultIds: string[]): Promise<Map<string, string>> {
+  if (!resultIds.length) return new Map();
+  const rows = await selectAllIn<{ result_id: string; created_at: string }>(
+    resultIds,
+    (chunk, from, to) =>
+      db().from("submission_files").select("result_id, created_at").in("result_id", chunk)
+        .order("result_id")
+        .range(from, to),
+  );
+  return new Map(rows.map((r) => [r.result_id, r.created_at]));
+}
+
+/**
+ * Hand in an uploaded PDF the student never submitted, so it can be graded.
+ *
+ * Stamped with when the PDF went up, not now. 0044's trigger stamps a draft
+ * that becomes submitted with the time of the change, which would be when the
+ * grader pressed the button, so a second write puts the upload time back. The
+ * Late flag then reads the student's own timing.
+ *
+ * Only from a draft. If the student pressed Submit in the meantime, their own
+ * stamp stands and nothing here touches it.
+ */
+export async function handInUpload(resultId: string, uploadedAt: string): Promise<void> {
+  const moved = await db().from("check_in_results")
+    .update({ status: "submitted", updated_at: new Date().toISOString() })
+    .eq("id", resultId)
+    .in("status", ["none", "draft"])
+    .select("id");
+  if (moved.error) throw dbError(moved.error);
+  if (!(moved.data as unknown[] | null)?.length) return;
+
+  const { error } = await db().from("check_in_results")
+    .update({ submitted_at: uploadedAt })
+    .eq("id", resultId)
+    .eq("status", "submitted");
+  if (error) throw dbError(error);
+}
+
 // ---------------------------------------------------------------------- TFs
 
 /** A name worth printing, or null: blank and whitespace are both "no name". */

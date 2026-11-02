@@ -31,11 +31,19 @@ vi.mock("./ActivityTeamPanel", () => ({ ActivityTeamPanel: () => null }));
 const reopens = { value: [] as string[] };
 const reopenHandIn = vi.fn(async () => undefined);
 const closeHandIn = vi.fn(async () => undefined);
+// Which result rows have a PDF on them, and when it was uploaded.
+const uploads = { value: new Map<string, string>() };
+const listUploads = vi.fn(async (ids: string[]) =>
+  new Map([...uploads.value].filter(([id]) => ids.includes(id))),
+);
+const handInUpload = vi.fn(async () => undefined);
 vi.mock("./facultyData", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   listReopens: vi.fn(async () => reopens.value),
   reopenHandIn,
   closeHandIn,
+  listUploads,
+  handInUpload,
 }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -262,6 +270,89 @@ describe("reopening a hand-in for one student", () => {
     await click(buttonIn(rowFor("Di"), "Reopen")!);
     expect(reopenHandIn).toHaveBeenCalledWith("combo", "s4");
     expect([...host.querySelectorAll("button")].some((b) => b.textContent?.trim() === "Close")).toBe(true);
+  });
+
+  // A reopened student who uploaded and never pressed Submit has a draft row,
+  // which no pile counted as handed in. They sat under Reopened with nothing to
+  // press, and the grading page never listed them.
+  describe("what a reopened student has handed in", () => {
+    const UPLOADED = "2026-09-14T08:30:00Z";
+    const withDraft = (d: FacultyData) => ({
+      ...d,
+      results: [
+        ...d.results,
+        { id: "r4", check_in_id: "ci", student_id: "s4", team_id: null, status: "draft", score: null, is_ci: false, submitted_at: null },
+      ],
+    }) as unknown as FacultyData;
+    // Reopened is the last pile, so its rows are the ones after its header.
+    const reopenedRow = (name: string) => {
+      const head = pile("Reopened");
+      return [...host.querySelectorAll<HTMLElement>(".fv-person")].find(
+        (el) =>
+          head !== undefined &&
+          Boolean(head.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) &&
+          el.textContent?.includes(name),
+      );
+    };
+
+    beforeEach(() => {
+      uploads.value = new Map();
+    });
+
+    it("says a draft with a PDF was uploaded, and Grade hands it in and opens it", async () => {
+      reopens.value = ["s4"];
+      uploads.value = new Map([["r4", UPLOADED]]);
+      const onChanged = vi.fn();
+      await act(async () => {
+        root.render(
+          <ActivityDetail
+            data={withDraft(owner())}
+            activity={dueIn(-DAY)}
+            onBack={vi.fn()}
+            onRubric={vi.fn()}
+            onGrade={onGrade}
+            onCheckIn={vi.fn()}
+            onDuplicate={vi.fn()}
+            onChanged={onChanged}
+            onError={vi.fn()}
+          />,
+        );
+      });
+
+      const row = reopenedRow("Di Ott");
+      expect(row?.textContent).toContain("PDF uploaded");
+      await click(buttonIn(row, "Grade")!);
+
+      expect(handInUpload).toHaveBeenCalledWith("r4", UPLOADED);
+      expect(onChanged).toHaveBeenCalled();
+      expect(onGrade).toHaveBeenLastCalledWith({ subjectId: "s4", kind: "individual" });
+    });
+
+    it("says nothing is in yet when there is no PDF, and offers no Grade", async () => {
+      reopens.value = ["s4"];
+      await mount(withDraft(owner()), dueIn(-DAY));
+      const row = reopenedRow("Di Ott");
+      expect(row?.textContent).toContain("Nothing yet");
+      expect(buttonIn(row, "Grade")).toBeFalsy();
+    });
+
+    it("says handed in for a reopened student who pressed Submit", async () => {
+      reopens.value = ["s3"];
+      await mount(owner(), dueIn(-DAY));
+      expect(reopenedRow("Cy Ng")?.textContent).toContain("Handed in");
+    });
+
+    it("offers no Grade to a TF who cannot grade", async () => {
+      reopens.value = ["s4"];
+      uploads.value = new Map([["r4", UPLOADED]]);
+      await mount(
+        withDraft(data({ can: { isOwner: false, grade: false, author: false, rubric: false, release: false, runCheckIns: true } } as Partial<FacultyData>)),
+        dueIn(-DAY),
+      );
+      const row = reopenedRow("Di Ott");
+      expect(row?.textContent).toContain("PDF uploaded");
+      expect(buttonIn(row, "Grade")).toBeFalsy();
+    });
   });
 
   // With grading off for TFs, a TF reads who was let in late and presses nothing.

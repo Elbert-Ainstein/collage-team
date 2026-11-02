@@ -238,6 +238,27 @@ describe("the hand-in screen", () => {
     expect(host.querySelector("[data-testid=pdf]")?.getAttribute("data-locked")).toBe("false");
   });
 
+  // Uploading is not handing in, and students who stopped at the upload were
+  // left out of grading with nothing on screen saying so.
+  it("says an uploaded PDF is not handed in until Submit", async () => {
+    hasFile.value = true;
+    await showSubmit(assignment({ due: iso(DAY), result: { status: "draft" } }));
+    expect(host.textContent).toContain("Not handed in until you press Submit");
+  });
+
+  it("says nothing about Submit once it is pressed", async () => {
+    hasFile.value = true;
+    await showSubmit(assignment({ due: iso(DAY), result: { status: "submitted" } }));
+    expect(host.textContent).not.toContain("Not handed in until you press Submit");
+  });
+
+  it("tells a student whose upload was never submitted, once closed, that it did not go in", async () => {
+    hasFile.value = true;
+    findMyResult.mockResolvedValueOnce("r1");
+    await showSubmit(assignment({ due: iso(-DAY), result: { status: "draft" } }));
+    expect(host.textContent).toContain("uploaded a PDF but never pressed Submit");
+  });
+
   // The last-minute upload: the screen was opened before the deadline and is
   // still open after it. Submit has to go when the hand-in closes, not at the
   // next refetch.
