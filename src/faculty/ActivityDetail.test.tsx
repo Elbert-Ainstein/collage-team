@@ -254,11 +254,23 @@ describe("reopening a hand-in for one student", () => {
     expect(buttonIn(rowFor("Di"), "Reopen")).toBeFalsy();
   });
 
-  // 0044 lets only the course owner write a reopen. A TF reads who was let in
-  // late, and has nothing to press.
-  it("a TF sees who it was reopened for, and can neither reopen nor close", async () => {
-    reopens.value = ["s4"];
+  // 0055: a TF who grades reopens and closes, as the owner does.
+  it("a grading TF can reopen and close", async () => {
     await mount(tf(), dueIn(-DAY));
+    await openNotSubmitted();
+
+    await click(buttonIn(rowFor("Di"), "Reopen")!);
+    expect(reopenHandIn).toHaveBeenCalledWith("combo", "s4");
+    expect([...host.querySelectorAll("button")].some((b) => b.textContent?.trim() === "Close")).toBe(true);
+  });
+
+  // With grading off for TFs, a TF reads who was let in late and presses nothing.
+  it("a TF who cannot grade sees who it was reopened for, and can neither reopen nor close", async () => {
+    reopens.value = ["s4"];
+    await mount(
+      data({ can: { isOwner: false, grade: false, author: false, rubric: false, release: false, runCheckIns: true } } as Partial<FacultyData>),
+      dueIn(-DAY),
+    );
     await openNotSubmitted();
 
     expect(pile("Reopened")).toBeTruthy();

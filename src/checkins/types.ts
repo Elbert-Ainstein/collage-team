@@ -13,6 +13,12 @@ export interface Course {
   tf_can_grade: boolean;
   tf_can_checkin: boolean;
   /**
+   * Whether a TF who grades releases grades themselves, or sends them for the
+   * instructor's review (0055). Optional because a database without 0055 has
+   * no column, and there the database still holds TFs to review.
+   */
+  tf_can_release?: boolean;
+  /**
    * When this course's uploaded media was cleared, if it ever was (0027).
    * Optional because a database without 0027 has no column at all, and
    * undefined reads as "not cleared", which is the truth there.
