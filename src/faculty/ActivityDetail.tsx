@@ -33,7 +33,9 @@ import {
   closeHandIn,
   countWorkForActivity,
   ensureCheckIn,
+  handInUpload,
   listReopens,
+  listUploads,
   removeActivityFileAt,
   reopenHandIn,
   seedRubricTemplate,
@@ -93,6 +95,8 @@ interface Subject {
   late: boolean;
   /** What they got, on the released and sent-for-review lists. Null elsewhere. */
   grade?: string | null;
+  /** Where their work stands, on the Reopened list: handed in, uploaded, nothing. */
+  note?: string | null;
 }
 
 const pad2 = (n: number) => String(n).padStart(2, "0");
@@ -283,16 +287,25 @@ function PersonRows({
         list.map((s) => (
           <PersonRow key={s.id} s={s} muted={muted} onOpen={onOpen} action={action}>
             <FAvatar name={s.name} tint={s.tint} size={22} />
-            <span
-              style={{
-                flex: 1,
-                minWidth: 0,
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {s.name}
+            {/* The note goes under the name: the column is narrow, and beside it
+                the name and the row's buttons had no room left. */}
+            <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {s.name}
+              </span>
+              {s.note ? (
+                <span
+                  className="fv-sub"
+                  style={{
+                    fontSize: "var(--fv-2xs)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {s.note}
+                </span>
+              ) : null}
             </span>
             <Stamp s={s} />
             {s.grade ? (
@@ -939,11 +952,93 @@ export function ActivityDetail(props: {
     }
   }
 
+  // Each reopened student's row on the individual half, the only half a reopen
+  // opens. Any status: a draft is exactly the case worth seeing here.
+  const reopenedRows = useMemo(() => {
+    const ids = new Set(
+      data.checkIns
+        .filter((c) => c.activity_id === activity.id && c.kind === "individual")
+        .map((c) => c.id),
+    );
+    const out = new Map<string, ResultRow>();
+    for (const r of data.results) {
+      if (ids.has(r.check_in_id) && r.student_id && reopened.has(r.student_id)) {
+        out.set(r.student_id, r);
+      }
+    }
+    return out;
+  }, [data.checkIns, data.results, activity.id, reopened]);
+
+  // Uploading is not handing in. A reopened student who stopped at the upload
+  // has a draft row with a PDF on it, and no pile counted them as in, so they
+  // sat here with nothing to press and never reached the grading page.
+  const draftIds = [...reopenedRows.values()]
+    .filter((r) => !isIn(r))
+    .map((r) => r.id)
+    .sort()
+    .join(",");
+  const [uploads, setUploads] = useState<Map<string, string>>(() => new Map());
+  useEffect(() => {
+    if (!draftIds) {
+      setUploads(new Map());
+      return;
+    }
+    let alive = true;
+    listUploads(draftIds.split(","))
+      .then((m) => {
+        if (alive) setUploads(m);
+      })
+      .catch((e) => {
+        if (alive) setReopenError(e instanceof Error ? e.message : "Could not read what was uploaded.");
+      });
+    return () => {
+      alive = false;
+    };
+  }, [draftIds]);
+
+  const uploadOf = (studentId: string): { resultId: string; at: string } | null => {
+    const r = reopenedRows.get(studentId);
+    const at = r && !isIn(r) ? uploads.get(r.id) : undefined;
+    return r && at ? { resultId: r.id, at } : null;
+  };
+
+  const noteFor = (studentId: string): string => {
+    const r = reopenedRows.get(studentId);
+    if (r && isIn(r)) return "Handed in";
+    return uploadOf(studentId) ? "PDF uploaded" : "Nothing yet";
+  };
+
+  // Hand the upload in for them and open it to grade. Stamped with the upload
+  // time, so Late still reads the student's own timing.
+  const [grading, setGrading] = useState<string | null>(null);
+  async function gradeUpload(studentId: string) {
+    const up = uploadOf(studentId);
+    if (!up) return;
+    setGrading(studentId);
+    setReopenError(null);
+    try {
+      await handInUpload(up.resultId, up.at);
+      await onChanged();
+      onGrade({ subjectId: studentId, kind: "individual" });
+    } catch (e) {
+      setReopenError(e instanceof Error ? e.message : "That didn't save. Try again.");
+    } finally {
+      setGrading(null);
+    }
+  }
+
   // Off the roster, not off the piles: a reopened student who has since handed
   // in has left Not submitted, and the reopen still stands until it is closed.
   const reopenedList: Subject[] = data.roster
     .filter((st) => reopened.has(st.id))
-    .map((st) => ({ id: st.id, name: st.name, tint: st.avatar_tint, stamp: null, late: false }));
+    .map((st) => ({
+      id: st.id,
+      name: st.name,
+      tint: st.avatar_tint,
+      stamp: null,
+      late: false,
+      note: noteFor(st.id),
+    }));
 
   // Which half of the activity is on screen. Scope decides which halves exist:
   // an individual-only activity has no team side to look at, and a team-only
@@ -2376,16 +2471,30 @@ export function ActivityDetail(props: {
                       action={
                         canReopen
                           ? (s) => (
-                              <button
-                                type="button"
-                                className="fv-btn ghost sm"
-                                style={{ height: 26, padding: "0 9px" }}
-                                disabled={reopenBusy !== null}
-                                onClick={() => void setHandInOpen(s.id, false)}
-                                title={`Stop ${s.name} handing in or changing this`}
-                              >
-                                {reopenBusy === s.id ? "Closing…" : "Close"}
-                              </button>
+                              <>
+                                {uploadOf(s.id) ? (
+                                  <button
+                                    type="button"
+                                    className="fv-btn outline sm"
+                                    style={{ height: 26, padding: "0 9px" }}
+                                    disabled={reopenBusy !== null || grading !== null}
+                                    onClick={() => void gradeUpload(s.id)}
+                                    title={`Hand in the PDF ${s.name} uploaded and open it to grade`}
+                                  >
+                                    {grading === s.id ? "Opening…" : "Grade"}
+                                  </button>
+                                ) : null}
+                                <button
+                                  type="button"
+                                  className="fv-btn ghost sm"
+                                  style={{ height: 26, padding: "0 9px" }}
+                                  disabled={reopenBusy !== null || grading !== null}
+                                  onClick={() => void setHandInOpen(s.id, false)}
+                                  title={`Stop ${s.name} handing in or changing this`}
+                                >
+                                  {reopenBusy === s.id ? "Closing…" : "Close"}
+                                </button>
+                              </>
                             )
                           : undefined
                       }

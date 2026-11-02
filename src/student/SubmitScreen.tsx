@@ -238,7 +238,9 @@ export function SubmitScreen({
           >
             {handedIn
               ? `Hand-ins closed ${dueLine}. This is what you handed in, and it can no longer be changed.`
-              : `Hand-ins closed ${dueLine}, and nothing was handed in before then. If you need to hand it in late, ask your instructor to reopen it for you.`}
+              : hasFile
+                ? `Hand-ins closed ${dueLine}. You uploaded a PDF but never pressed Submit, so it was not handed in. Ask your instructor to reopen it for you.`
+                : `Hand-ins closed ${dueLine}, and nothing was handed in before then. If you need to hand it in late, ask your instructor to reopen it for you.`}
           </div>
         ) : !locked && lateWindow && dueLine ? (
           <div
@@ -247,6 +249,17 @@ export function SubmitScreen({
           >
             Your instructor reopened this for you. It was due {dueLine}, so anything you
             hand in now is marked late.
+          </div>
+        ) : null}
+
+        {/* Uploading is not handing in, and a student who stopped at the upload
+            was left out of grading with nothing here saying so. */}
+        {!handedIn && !locked && !closed && hasFile ? (
+          <div
+            className="sv-sub"
+            style={{ marginTop: 6, color: "var(--amber-700)", fontSize: "var(--text-xs)" }}
+          >
+            Uploaded. Not handed in until you press Submit.
           </div>
         ) : null}
 
