@@ -2944,18 +2944,6 @@ button.lq-reviewrow {
 .lq-opt.num .lq-optl:empty {
   border-style: dashed;
 }
-/* Select multiple (0056): a set of letters in a square pill, not one in a circle. */
-.lq-optl.multi {
-  width: auto;
-  min-width: 22px;
-  padding: 0 5px;
-  border-radius: 6px;
-  letter-spacing: 0.08em;
-  justify-self: start;
-}
-.lq-sqopt .lq-optl.multi {
-  width: auto;
-}
 .lq-numentry {
   display: flex;
   flex-direction: column;
