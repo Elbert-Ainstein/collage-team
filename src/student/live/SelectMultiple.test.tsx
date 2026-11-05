@@ -99,12 +99,18 @@ describe("before class", () => {
     const saver: AnswerSaver = { answers: {}, state: {}, save };
     await show(<OnYourOwn m={model({}, "individual")} saver={saver} cursor={0} onCursor={() => {}} activityId="a" />);
     expect(boxes()).toHaveLength(4);
+    // The rule is said above the boxes, and the count follows the ticks.
+    expect(host.querySelector(".lq-multitag")?.textContent).toContain("Select all that apply");
+    expect(host.querySelector(".lq-multicount")?.textContent).toBe("Pick one or more");
     await tick("Friction");
     expect(save).toHaveBeenLastCalledWith("q1", "C", true);
     await tick("Gravity");
     expect(save).toHaveBeenLastCalledWith("q1", "AC", true);
     expect(box("Gravity").getAttribute("aria-checked")).toBe("true");
     expect(box("Normal").getAttribute("aria-checked")).toBe("false");
+    expect(host.querySelector(".lq-multicount")?.textContent).toBe("2 selected");
+    expect(box("Gravity").querySelector(".lq-checkbox")?.className).toContain("on");
+    expect(box("Normal").querySelector(".lq-checkbox")?.className).not.toContain("on");
   });
 
   it("shows the saved set ticked, and unticking the last box saves nothing", async () => {

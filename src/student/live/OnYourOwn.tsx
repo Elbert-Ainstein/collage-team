@@ -321,7 +321,8 @@ export function MultiEntry({
   const on = new Set(picked ? multiIndexes(picked) : []);
   return (
     <div className="lq-numentry">
-      <div className="lq-choices" role="group" aria-label={`Question ${n}, pick every answer that applies`}>
+      <MultiHead count={on.size} />
+      <div className="lq-choices" role="group" aria-label={`Question ${n}, select all that apply`}>
         {q.options.map((text, i) => (
           <button
             key={i}
@@ -337,13 +338,35 @@ export function MultiEntry({
           >
             <span className="lq-choicel">{optionLetter(i)}</span>
             <span className="lq-choicet">{text}</span>
+            <Checkbox on={on.has(i)} />
           </button>
         ))}
       </div>
-      <span className={`lq-numhint${value && !picked ? " bad" : ""}`}>
-        {value && !picked ? "Pick at least one — your last answer still stands" : "Pick every one that applies."}
+      {value && !picked ? <span className="lq-numhint bad">Pick at least one — your last answer still stands</span> : null}
+    </div>
+  );
+}
+
+/** Says the rule out loud, above the boxes, and keeps count: "Select all that apply · 2 selected". */
+export function MultiHead({ count, label = "Select all that apply" }: { count: number; label?: string }) {
+  return (
+    <div className="lq-multihead">
+      <span className="lq-multitag">
+        <Ic name="check" size={12} /> {label}
+      </span>
+      <span className={`lq-multicount${count ? " some" : ""}`}>
+        {count === 0 ? "Pick one or more" : `${count} selected`}
       </span>
     </div>
+  );
+}
+
+/** The box at the end of a select-multiple row: empty, or ticked. Colour and shape only; the button says the rest. */
+export function Checkbox({ on }: { on: boolean }) {
+  return (
+    <span className={`lq-checkbox${on ? " on" : ""}`} aria-hidden="true">
+      {on ? <Ic name="check" size={14} /> : null}
+    </span>
   );
 }
 
