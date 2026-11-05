@@ -1744,6 +1744,11 @@ button.lq-tr:hover {
 .lq-choice:hover {
   border-color: var(--fv-neutral-300);
 }
+.lq-choice:focus-visible,
+.lq-bcorrect:focus-visible {
+  outline: 2px solid var(--fv-navy-700);
+  outline-offset: 2px;
+}
 .lq-choice.on {
   border-color: var(--fv-navy);
   box-shadow: inset 0 0 0 1px var(--fv-navy);
@@ -3048,6 +3053,7 @@ button.lq-reviewrow {
 .lq-multicount {
   font-size: 13px;
   color: var(--fv-muted);
+  font-variant-numeric: tabular-nums;
 }
 .lq-multicount.some {
   color: var(--fv-navy);
@@ -3058,8 +3064,9 @@ button.lq-reviewrow {
   width: 24px;
   height: 24px;
   border-radius: 6px;
-  border: 2px solid var(--fv-neutral-300);
-  background: #fff;
+  /* Muted, not neutral-300: an empty box has to be seen against the card (3:1). */
+  border: 2px solid var(--fv-muted);
+  background: var(--fv-cream-100);
   display: inline-flex;
   align-items: center;
   justify-content: center;

@@ -342,7 +342,10 @@ export function MultiEntry({
           </button>
         ))}
       </div>
-      {value && !picked ? <span className="lq-numhint bad">Pick at least one — your last answer still stands</span> : null}
+      {/* Always there, so a screen reader hears it the moment the last box is unticked. */}
+      <span className="lq-numhint bad" role="status">
+        {value && !picked ? "Pick at least one — your last answer still stands" : ""}
+      </span>
     </div>
   );
 }

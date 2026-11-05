@@ -170,6 +170,8 @@ export function DraftQuestionCard({ q, n, activityId, onlyOne, locked, explains,
                   type="button"
                   role={q.kind === "mc" ? "radio" : "checkbox"}
                   aria-checked={right}
+                  // Named by its letter: ticked, the letter gives way to a tick mark that says nothing.
+                  aria-label={`Option ${optionLetter(i)}`}
                   className={`lq-bcorrect${q.kind === "multi" ? " multi" : ""}`}
                   title={q.kind === "mc" ? "Mark as the correct answer" : right ? "Not a correct answer" : "Mark as a correct answer"}
                   onClick={() => (q.kind === "mc" ? settle({ correct: i }) : toggleCorrect(i))}
