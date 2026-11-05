@@ -12,13 +12,14 @@ import { EXPLAIN_LIMITS, type ExplainQuestion } from "../liveExplain";
 import type { LiveKind } from "../liveDraft";
 import type { ToolSpec } from "../tools";
 
-const KINDS: readonly LiveKind[] = ["mc", "number", "expression"];
+const KINDS: readonly LiveKind[] = ["mc", "multi", "number", "expression"];
 const LETTERS = "ABCDEFGH";
 
 export const LIVE_EXPLAIN_PROMPT = [
   "You write the short explanation a physics student reads right after their team has answered one question in class.",
   "You are given the question and its answer key. The key is correct: explain why that answer is right. Never disagree with it or offer a different answer.",
   "Write 2 to 5 plain sentences: the idea or principle that decides it, the step that gets there, and for multiple choice the tempting wrong option and why it is wrong.",
+  "For select all that apply, say briefly why each right option is right and why the tempting wrong one is wrong.",
   "Plain text only: no headings, no bullet points, no bold, no LaTeX. Write math inline as plain text, e.g. v = d/t or F = ma, with units.",
   "Speak to the student directly and briefly. No greeting, no praise, no restating the whole question.",
   "If the question has a figure you are not shown, do not describe it or guess what it shows; explain from the words and the key.",
@@ -42,6 +43,10 @@ const tidy = (x: number): string => String(Number(x.toPrecision(12)));
 /** The answer key, in words, for the user turn. */
 function keyLine(q: ExplainQuestion): string {
   if (q.kind === "mc") return `Correct answer: ${LETTERS[q.correctOption ?? 0]}`;
+  if (q.kind === "multi") {
+    const letters = [...q.correctOptions].sort((a, b) => a - b).map((i) => LETTERS[i]);
+    return `Correct answers: ${letters.join(", ")} (all of these, and only these)`;
+  }
   if (q.kind === "number") {
     const unit = q.unit ? ` ${q.unit}` : "";
     const within = q.tolerance ? ` (anything within ±${tidy(q.tolerance)}${unit} counts)` : "";
@@ -52,11 +57,12 @@ function keyLine(q: ExplainQuestion): string {
 
 /** The question as the model reads it. */
 export function describeQuestion(q: ExplainQuestion): string {
-  const kind = q.kind === "mc" ? "multiple choice" : q.kind === "number" ? "number answer" : "expression answer";
+  const kind =
+    q.kind === "mc" ? "multiple choice" : q.kind === "multi" ? "select all that apply" : q.kind === "number" ? "number answer" : "expression answer";
   return [
     `Question (${kind}):`,
     q.stem,
-    ...(q.kind === "mc" ? ["Options:", ...q.options.map((o, i) => `${LETTERS[i]}. ${o}`)] : []),
+    ...(q.kind === "mc" || q.kind === "multi" ? ["Options:", ...q.options.map((o, i) => `${LETTERS[i]}. ${o}`)] : []),
     keyLine(q),
     ...(q.figure ? ["(The question has a figure you are not shown.)"] : []),
   ].join("\n");
@@ -80,6 +86,25 @@ function parseMc(b: Obj): Parsed<Pick<ExplainQuestion, "options" | "correctOptio
     return { ok: false, error: "no correct option" };
   }
   return { ok: true, value: { options: options.map((o) => o.trim()), correctOption: correctOption as number } };
+}
+
+function parseMulti(b: Obj): Parsed<Pick<ExplainQuestion, "options" | "correctOptions">> {
+  const { options, correctOptions } = b;
+  const L = EXPLAIN_LIMITS;
+  if (!texts(options, L.option) || options.length < L.minOptions || options.length > L.maxOptions) {
+    return { ok: false, error: "the options are not 2 to 8 filled-in options" };
+  }
+  if (
+    !Array.isArray(correctOptions) ||
+    correctOptions.length === 0 ||
+    !correctOptions.every((i) => Number.isInteger(i) && (i as number) >= 0 && (i as number) < options.length)
+  ) {
+    return { ok: false, error: "no correct options" };
+  }
+  return {
+    ok: true,
+    value: { options: options.map((o) => o.trim()), correctOptions: [...new Set(correctOptions as number[])].sort((a, b) => a - b) },
+  };
 }
 
 function parseNumber(b: Obj): Parsed<Pick<ExplainQuestion, "answer" | "tolerance" | "unit">> {
@@ -117,13 +142,14 @@ export function parseExplainQuestion(v: unknown): Parsed<ExplainQuestion> {
     stem: stem.trim(),
     options: [],
     correctOption: null,
+    correctOptions: [],
     answer: null,
     tolerance: null,
     unit: null,
     accept: [],
     figure: figure === true,
   };
-  const rest = kind === "mc" ? parseMc(v) : kind === "number" ? parseNumber(v) : parseExpression(v);
+  const rest = kind === "mc" ? parseMc(v) : kind === "multi" ? parseMulti(v) : kind === "number" ? parseNumber(v) : parseExpression(v);
   return rest.ok ? { ok: true, value: { ...base, ...rest.value } } : rest;
 }
 

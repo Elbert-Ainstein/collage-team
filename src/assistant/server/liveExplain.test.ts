@@ -10,6 +10,7 @@ const base: ExplainQuestion = {
   stem: "Which way does friction act on a box sliding right?",
   options: ["Left", "Right"],
   correctOption: 0,
+  correctOptions: [],
   answer: null,
   tolerance: null,
   unit: null,
@@ -41,6 +42,15 @@ describe("parseExplainQuestion", () => {
     expect(parseExplainQuestion({ ...base, stem: "x".repeat(EXPLAIN_LIMITS.stem + 1) }).ok).toBe(false);
   });
 
+  it("takes select all that apply with its set of right options, and refuses one without (0056)", () => {
+    const m = { ...base, kind: "multi" as const, correctOption: null, correctOptions: [1, 0, 1] };
+    expect(parseExplainQuestion(m)).toEqual({ ok: true, value: { ...m, correctOptions: [0, 1] } });
+    expect(parseExplainQuestion({ ...m, correctOptions: [] }).ok).toBe(false);
+    expect(parseExplainQuestion({ ...m, correctOptions: [2] }).ok).toBe(false);
+    expect(parseExplainQuestion({ ...m, correctOptions: "A" }).ok).toBe(false);
+    expect(parseExplainQuestion({ ...m, options: ["Left"] }).ok).toBe(false);
+  });
+
   it("refuses a negative tolerance and an odd figure flag", () => {
     expect(parseExplainQuestion({ kind: "number", stem: "v?", answer: 3, tolerance: -1 }).ok).toBe(false);
     expect(parseExplainQuestion({ ...base, figure: "yes" }).ok).toBe(false);
@@ -53,6 +63,13 @@ describe("describeQuestion", () => {
     expect(text).toContain("A. Left\nB. Right");
     expect(text).toContain("Correct answer: A");
     expect(text).toContain("figure you are not shown");
+  });
+
+  it("letters select all that apply and names every right option", () => {
+    const text = describeQuestion({ ...base, kind: "multi", correctOption: null, correctOptions: [1, 0] });
+    expect(text).toContain("Question (select all that apply):");
+    expect(text).toContain("A. Left\nB. Right");
+    expect(text).toContain("Correct answers: A, B (all of these, and only these)");
   });
 
   it("gives a number its unit and tolerance, and an expression its forms", () => {

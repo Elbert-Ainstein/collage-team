@@ -10,7 +10,8 @@ export type LivePhase = "individual" | "team" | "closed";
 export type LockRule = "any" | "all";
 export type ShowAnswers = "close" | "lock";
 export type LiveGrading = "both" | "team";
-export type LiveKind = "mc" | "number" | "expression";
+/** Multiple choice, a number, an expression, or select all that apply (0056). */
+export type LiveKind = "mc" | "number" | "expression" | "multi";
 
 export interface LiveState {
   activity_id: string;
@@ -35,7 +36,7 @@ export interface LiveQuestion {
   position: number;
   kind: LiveKind;
   stem: string;
-  /** Multiple choice: option texts, A first. Empty for the other kinds. */
+  /** Multiple choice and select multiple: option texts, A first. Empty for the other kinds. */
   options: string[];
   /** Number: the unit shown beside the box. */
   unit: string | null;
@@ -49,6 +50,11 @@ export interface LiveKey {
   activity_id: string;
   /** Multiple choice: the index of the right option. */
   correct_option: number | null;
+  /**
+   * Select multiple (0056): the indexes of the right options, in no particular
+   * order. Absent on a database without 0056, where there is no such kind.
+   */
+  correct_options?: number[];
   /** Number: the answer and how far off still counts. */
   answer: number | null;
   tolerance: number | null;

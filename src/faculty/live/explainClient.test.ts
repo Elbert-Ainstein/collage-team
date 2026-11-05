@@ -25,6 +25,7 @@ describe("explainQuestionOf", () => {
       stem: "Which way?",
       options: ["Up", "Down"],
       correctOption: 1,
+      correctOptions: [],
       answer: null,
       tolerance: null,
       unit: null,

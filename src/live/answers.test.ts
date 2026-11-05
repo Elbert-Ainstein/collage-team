@@ -3,17 +3,23 @@ import {
   answerPrint,
   canMoveOn,
   canonicalAnswer,
+  canonicalMulti,
   expressionPrint,
   expressionsEquivalent,
   expressionVerdicts,
   isRight,
   letterIndex,
   maxTries,
+  multiAnswer,
+  multiIndexes,
+  multiLabel,
   normalizeNumber,
   optionLetter,
   samePrint,
+  toggleOption,
   TRIALS,
   tryCredit,
+  TYPED_TRIES,
 } from "./answers";
 import type { LiveKey, LiveQuestion } from "./types";
 
@@ -98,6 +104,61 @@ describe("canonicalAnswer", () => {
     expect(canonicalAnswer("number", "x")).toBeNull();
     expect(canonicalAnswer("expression", "  F  /  2 ")).toBe("F / 2");
     expect(canonicalAnswer("expression", "   ")).toBeNull();
+    expect(canonicalAnswer("multi", "c, a")).toBe("AC");
+    expect(canonicalAnswer("multi", "zz")).toBeNull();
+  });
+});
+
+describe("select multiple (0056)", () => {
+  it("spells a set one way: letters in order, each once", () => {
+    expect(multiAnswer([2, 0])).toBe("AC");
+    expect(multiAnswer([0, 0, 1])).toBe("AB");
+    expect(multiAnswer([])).toBeNull();
+    expect(multiAnswer([9])).toBeNull();
+    expect(canonicalMulti("C A")).toBe("AC");
+    expect(canonicalMulti("ca")).toBe("AC");
+    expect(canonicalMulti("A, A, B")).toBe("AB");
+    expect(canonicalMulti("")).toBeNull();
+  });
+
+  // live_answer_fits checks a multi answer against ^A?B?C?D?E?F?G?H?$: what
+  // the app saves has to pass it, or a right answer would be refused.
+  it("always produces something the database takes", () => {
+    const sql = /^A?B?C?D?E?F?G?H?$/;
+    for (const picks of [[0], [7, 0], [3, 1, 2], [0, 1, 2, 3, 4, 5, 6, 7]]) {
+      const a = multiAnswer(picks)!;
+      expect(sql.test(a)).toBe(true);
+    }
+  });
+
+  it("reads a set back, labels it, and ticks one box at a time", () => {
+    expect(multiIndexes("AC")).toEqual([0, 2]);
+    expect(multiIndexes("ca")).toEqual([0, 2]);
+    expect(multiLabel("ACD")).toBe("A, C, D");
+    expect(toggleOption(null, 2)).toBe("C");
+    expect(toggleOption("C", 0)).toBe("AC");
+    expect(toggleOption("AC", 2)).toBe("A");
+    expect(toggleOption("A", 0)).toBeNull();
+  });
+
+  it("is right only as the whole set — all or nothing", () => {
+    const qq = q({ kind: "multi", options: ["w", "x", "y", "z"] });
+    const kk = k({ correct_options: [2, 0] });
+    expect(isRight(qq, kk, "AC")).toBe(true);
+    expect(isRight(qq, kk, "ac")).toBe(true);
+    expect(isRight(qq, kk, "A")).toBe(false);
+    expect(isRight(qq, kk, "ABC")).toBe(false);
+    expect(isRight(qq, k({ correct_options: [] }), "A")).toBe(false);
+    // A key read from a database without 0056 has no set at all.
+    expect(isRight(qq, k({}), "A")).toBe(false);
+  });
+
+  it("is tried like a typed answer in team mode: no limit, and moving on once a try pays nothing", () => {
+    const qq = q({ kind: "multi", options: ["w", "x", "y", "z"] });
+    expect(maxTries(qq)).toBe(TYPED_TRIES);
+    expect(canMoveOn(qq, 2)).toBe(false);
+    expect(canMoveOn(qq, 3)).toBe(true);
+    expect(canMoveOn(q({ kind: "mc", options: ["w", "x", "y", "z"] }), 3)).toBe(false);
   });
 });
 

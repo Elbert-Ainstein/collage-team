@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildLiveModel, fmtPoints, outcomeOf } from "./model";
+import { buildLiveModel, fmtPoints, hasOptions, optionText, outcomeOf } from "./model";
 import type { LiveAttempt, LiveSnapshot } from "./types";
 import type { Student, TeamWithMembers } from "@/checkins/types";
 
@@ -115,6 +115,29 @@ describe("own answers", () => {
     const m = model({ keys: [] });
     expect(m.right(0, "B")).toBeNull();
     expect(m.ownScore("s1")).toBeNull();
+  });
+
+  it("marks select multiple as the whole set, and labels it by its letters and texts (0056)", () => {
+    const q4 = { id: "q4", activity_id: "a", position: 3, kind: "multi" as const, stem: "", options: ["w", "x", "y"], unit: null, figure_path: null, created_at: "" };
+    const m = model({
+      questions: [...snapshot().questions, q4],
+      keys: [...snapshot().keys, { question_id: "q4", activity_id: "a", correct_option: null, correct_options: [2, 0], answer: null, tolerance: null, accept: [] }],
+      responses: [
+        ...snapshot().responses,
+        { question_id: "q4", activity_id: "a", student_id: "s1", answer: "AC", correct: null, updated_at: "" },
+        { question_id: "q4", activity_id: "a", student_id: "s2", answer: "A", correct: null, updated_at: "" },
+      ],
+    });
+    expect(m.right(3, "AC")).toBe(true);
+    expect(m.right(3, "A")).toBe(false);
+    expect(m.ownScore("s1")).toBe(4);
+    expect(m.label(3, "AC")).toBe("A, C");
+    expect(optionText(q4, "AC")).toBe("w · y");
+    expect(optionText(q4, "Z")).toBeNull();
+    expect(optionText(snapshot().questions[0], "B")).toBe("y");
+    expect(optionText(snapshot().questions[1], "20")).toBeNull();
+    expect(hasOptions(q4)).toBe(true);
+    expect(hasOptions(snapshot().questions[1])).toBe(false);
   });
 });
 

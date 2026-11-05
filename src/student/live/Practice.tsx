@@ -9,10 +9,10 @@
 import { useEffect, useRef, useState } from "react";
 import { optionLetter } from "@/live/answers";
 import { Figure } from "@/live/figure";
-import type { LiveModel } from "@/live/model";
+import { hasOptions, type LiveModel } from "@/live/model";
 import { Ic } from "@/live/ui";
 import { Explanation } from "./Explanation";
-import { TypedEntry } from "./OnYourOwn";
+import { MultiEntry, TypedEntry } from "./OnYourOwn";
 import { practiceRight } from "./practiceCheck";
 import { Choices, Typed } from "./ReviewQuestion";
 
@@ -121,11 +121,13 @@ export function Practice({ m, onDone }: Props) {
         <p className="lq-sstem">{question.stem}</p>
         <Figure path={question.figure_path} alt={`Figure for question ${at + 1}`} className="lq-sfig" />
         {checked ? (
-          question.kind === "mc" ? (
+          hasOptions(question) ? (
             <Choices m={m} q={at} mine={pick} />
           ) : (
             <Typed m={m} q={at} mine={pick} right={verdict === true} />
           )
+        ) : question.kind === "multi" ? (
+          <MultiEntry key={`${question.id}:${tries[question.id] ?? 0}`} q={question} n={at + 1} value={pick} onChange={choose} />
         ) : question.kind === "mc" ? (
           <div className="lq-choices" role="radiogroup" aria-label={`Question ${at + 1}`}>
             {question.options.map((text, i) => {

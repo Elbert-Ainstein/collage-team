@@ -319,6 +319,14 @@ select '0055 TFs reopen hand-ins and release grades',
                             and column_name = 'tf_can_release')
             then 'applied'
             else 'NOT APPLIED — run 0055_tf_reopen_and_release.sql' end
+union all
+select '0056 live select multiple',
+       case when to_regprocedure('public.live_multi_answer(jsonb)') is not null
+             and exists (select 1 from information_schema.columns
+                          where table_schema = 'public' and table_name = 'live_keys'
+                            and column_name = 'correct_options')
+            then 'applied'
+            else 'NOT APPLIED — run 0056_live_select_multiple.sql' end
 order by 1;
 
 -- ------------------------------------------------------- and the buckets

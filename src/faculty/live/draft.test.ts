@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { answersAtRisk, blankQuestion, draftsFrom, keyLabel, problemWith, summarizeProblems, toQuestionDraft, type DraftQuestion } from "./draft";
+import {
+  answersAtRisk,
+  blankQuestion,
+  draftsFrom,
+  keyLabel,
+  problemWith,
+  summarizeProblems,
+  toQuestionDraft,
+  withKind,
+  type DraftQuestion,
+} from "./draft";
 
 const mc = (over: Partial<DraftQuestion> = {}): DraftQuestion => ({
   ...blankQuestion(),
@@ -8,6 +18,8 @@ const mc = (over: Partial<DraftQuestion> = {}): DraftQuestion => ({
   correct: 1,
   ...over,
 });
+const multi = (over: Partial<DraftQuestion> = {}): DraftQuestion =>
+  mc({ kind: "multi", options: ["Up", "Down", "Left"], correct: null, corrects: [2, 0], ...over });
 
 describe("problemWith", () => {
   it("passes a finished question", () => {
@@ -31,6 +43,28 @@ describe("problemWith", () => {
   it("holds an imported question until she picks its key", () => {
     expect(problemWith(mc({ source: { page: 3, needsPick: true } }))).toBe("needs an answer");
   });
+
+  it("checks select multiple's options and its ticked boxes (0056)", () => {
+    expect(problemWith(multi())).toBeNull();
+    expect(keyLabel(multi())).toBe("A, C");
+    expect(problemWith(multi({ options: ["Up", ""] }))).toBe("has an empty option");
+    expect(problemWith(multi({ corrects: [] }))).toBe("needs an answer");
+    // A box ticked on an option since removed is no key.
+    expect(problemWith(multi({ corrects: [5] }))).toBe("needs an answer");
+  });
+});
+
+describe("withKind", () => {
+  it("carries one right option across between multiple choice and select multiple, and nothing else", () => {
+    const m = withKind(mc(), "multi");
+    expect(m).toMatchObject({ kind: "multi", options: ["Up", "Down"], corrects: [1] });
+    expect(withKind(m, "mc")).toMatchObject({ kind: "mc", correct: 1 });
+    // Two boxes ticked are not one right option.
+    expect(withKind(multi({ correct: null }), "mc").correct).toBeNull();
+    expect(withKind(mc(), "number").kind).toBe("number");
+    const same = mc();
+    expect(withKind(same, "mc")).toBe(same);
+  });
 });
 
 describe("summarizeProblems", () => {
@@ -50,6 +84,18 @@ describe("saving", () => {
     const d = toQuestionDraft({ ...mc(), kind: "number", answer: "19.60", unit: " m/s ", tolerance: "" });
     expect(d).toMatchObject({ kind: "number", options: [], unit: "m/s", answer: 19.6, tolerance: 0, correct_option: null, accept: [] });
     expect(toQuestionDraft(mc()).correct_option).toBe(1);
+    expect(toQuestionDraft(mc()).correct_options).toEqual([]);
+  });
+
+  it("saves select multiple's options and its key in order, and reads them back", () => {
+    const d = toQuestionDraft(multi({ corrects: [2, 0, 0, 7] }));
+    expect(d).toMatchObject({ kind: "multi", options: ["Up", "Down", "Left"], correct_option: null, correct_options: [0, 2] });
+    const [back] = draftsFrom(
+      [{ id: d.id, activity_id: "a", position: 0, kind: "multi", stem: d.stem, options: d.options, unit: null, figure_path: null, created_at: "" }],
+      [{ question_id: d.id, activity_id: "a", correct_option: null, correct_options: [0, 2], answer: null, tolerance: null, accept: [] }],
+    );
+    expect(back).toMatchObject({ kind: "multi", options: ["Up", "Down", "Left"], corrects: [0, 2] });
+    expect(keyLabel(back)).toBe("A, C");
   });
 
   it("round-trips through the saved rows", () => {
@@ -96,6 +142,15 @@ describe("answersAtRisk", () => {
       "Q1 is removed, with its 4 answers.",
       "Q2 changes type; its 4 answers were given as the old one.",
       "Q3 loses an option; its 4 answers may now point at a different one.",
+    ]);
+  });
+
+  it("counts multiple choice becoming select multiple as a change of type, and a lost box as a lost option", () => {
+    const was = [multi(), mc()];
+    const now = [{ ...was[0], options: ["Up", "Down"] }, withKind(was[1], "multi")];
+    expect(answersAtRisk(was, now, new Map(was.map((q) => [q.id, 2])))).toEqual([
+      "Q1 loses an option; its 2 answers may now point at a different one.",
+      "Q2 changes type; its 2 answers were given as the old one.",
     ]);
   });
 });

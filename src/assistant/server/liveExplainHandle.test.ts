@@ -152,6 +152,7 @@ describe("parseLiveExplainRequest", () => {
           stem: "How fast?",
           options: [],
           correctOption: null,
+          correctOptions: [],
           answer: 19.6,
           tolerance: 0.1,
           unit: "m/s",

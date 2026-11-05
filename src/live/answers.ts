@@ -1,11 +1,13 @@
 // What counts as an answer, and what counts as the right one.
 //
 // Answers are stored as text in ONE canonical spelling per kind (0047): an
-// option letter, a number as normalizeNumber writes it, or an expression with
-// its spacing tidied. That matters twice. In team mode, "everyone agrees"
-// compares strings — "0.30" and "0.3" have to be the same vote. And score_live
-// checks multiple choice and numbers in SQL with exactly the rules isRight
-// uses here, so the screen and the gradebook never disagree.
+// option letter, a set of letters in order ("AC", 0056), a number as
+// normalizeNumber writes it, or an expression with its spacing tidied. That
+// matters twice. In team mode, "everyone agrees" compares strings — "0.30" and
+// "0.3" have to be the same vote, and so do "A and C" and "C and A". And
+// score_live checks multiple choice, select multiple and numbers in SQL with
+// exactly the rules isRight uses here, so the screen and the gradebook never
+// disagree.
 //
 // Expressions are the one kind the database can't check: it doesn't do
 // algebra. The staff client decides them here — by evaluating both sides at a
@@ -28,6 +30,42 @@ export const optionLetter = (i: number): string => LETTERS[i] ?? "?";
 export function letterIndex(letter: string): number | null {
   const i = LETTERS.indexOf(letter.trim().toUpperCase());
   return i === -1 ? null : i;
+}
+
+// ------------------------------------------------------- select multiple
+
+/**
+ * A set of options as an answer is spelled (0056): its letters in order, each
+ * once — "AC". Null for no options. The one spelling, so two students who
+ * ticked the same boxes have given the same answer.
+ */
+export function multiAnswer(indexes: readonly number[]): string | null {
+  const picked = [...new Set(indexes)].filter((i) => i >= 0 && i < LETTERS.length).sort((a, b) => a - b);
+  return picked.length ? picked.map(optionLetter).join("") : null;
+}
+
+/** The options a select-multiple answer names, as indexes in order: "AC" → [0, 2]. */
+export function multiIndexes(answer: string): number[] {
+  return [...new Set([...answer.toUpperCase()].map((c) => LETTERS.indexOf(c)).filter((i) => i !== -1))].sort((a, b) => a - b);
+}
+
+/**
+ * Letters however they were written — "A, C", "ca", "AC" — as one answer,
+ * "AC". Null when there is no letter A–H in it. Words aren't read: the app
+ * ticks boxes (toggleOption) and never asks anyone to type a set.
+ */
+export function canonicalMulti(raw: string): string | null {
+  const letters = raw.toUpperCase().match(/[A-H]/g);
+  return letters ? multiAnswer(letters.map((c) => LETTERS.indexOf(c))) : null;
+}
+
+/** "AC" → "A, C": the letters as they're read out. */
+export const multiLabel = (answer: string): string => multiIndexes(answer).map(optionLetter).join(", ");
+
+/** The answer with one option ticked or unticked; null once none is. */
+export function toggleOption(answer: string | null, i: number): string | null {
+  const now = answer ? multiIndexes(answer) : [];
+  return multiAnswer(now.includes(i) ? now.filter((x) => x !== i) : [...now, i]);
 }
 
 const PLAIN_NUMBER = /^[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?$/;
@@ -59,19 +97,26 @@ export function canonicalAnswer(kind: LiveKind, raw: string): string | null {
     const i = letterIndex(raw);
     return i === null ? null : optionLetter(i);
   }
+  if (kind === "multi") return canonicalMulti(raw);
   if (kind === "number") return normalizeNumber(raw);
   const t = raw.trim().replace(/\s+/g, " ");
   return t === "" || t.length > MAX_EXPRESSION_LENGTH ? null : t;
 }
 
 /**
- * Multiple choice and number, exactly as live_answer_correct (0047) decides
- * them. Expressions need expressionsEquivalent — this says false for them.
+ * Multiple choice, select multiple and number, exactly as live_answer_correct
+ * (0047, 0056) decides them. Expressions need expressionsEquivalent — this
+ * says false for them.
  */
 export function isRight(question: LiveQuestion, key: LiveKey | null | undefined, answer: string | null): boolean {
   if (answer === null || !key) return false;
   if (question.kind === "mc") {
     return key.correct_option !== null && answer.trim().toUpperCase() === optionLetter(key.correct_option);
+  }
+  if (question.kind === "multi") {
+    // All or nothing: the set has to be the key's, as live_answer_correct has it.
+    const want = multiAnswer(key.correct_options ?? []);
+    return want !== null && answer.trim().toUpperCase() === want;
   }
   if (question.kind === "number") {
     const n = normalizeNumber(answer);
@@ -98,14 +143,19 @@ export const tryCredit = (n: number): number => TRY_CREDIT[n - 1] ?? 0;
  * ceiling bounds a script, not a team (0050).
  */
 export const TYPED_TRIES = 100;
-/** 0050's live_max_attempts. Multiple choice may try every option. */
+/**
+ * 0050's live_max_attempts. Multiple choice may try every option. Select
+ * multiple counts as typed: four options make fifteen answers, and "every
+ * option" would mean nothing (0056).
+ */
 export const maxTries = (q: Pick<LiveQuestion, "kind" | "options">): number =>
   q.kind === "mc" ? Math.max(1, q.options.length) : TYPED_TRIES;
 
 /**
  * May a team that hasn't got this question, after this many tries, move on
- * from it? A typed answer, once another try is worth nothing — 0050's
- * move_team_on. Never multiple choice: the options run out instead.
+ * from it? A typed answer (select multiple included), once another try is
+ * worth nothing — 0050's move_team_on. Never multiple choice: the options run
+ * out instead.
  */
 export const canMoveOn = (q: Pick<LiveQuestion, "kind">, tries: number): boolean =>
   q.kind !== "mc" && tries > 0 && tryCredit(tries + 1) === 0;
