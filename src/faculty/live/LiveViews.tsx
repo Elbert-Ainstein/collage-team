@@ -12,8 +12,9 @@
 
 import { useState } from "react";
 import type { Student, TeamWithMembers } from "@/checkins/types";
-import { optionLetter } from "@/live/answers";
-import { fmtPoints, mmss, optionText, outcomeOf, type LiveModel } from "@/live/model";
+import { multiIndexes, optionLetter } from "@/live/answers";
+import { fmtPoints, hasOptions, mmss, optionText, outcomeOf, type LiveModel } from "@/live/model";
+import type { LiveKey, LiveQuestion } from "@/live/types";
 import { Av, Ic, LiveDot, Pick, Tries, voteSummary } from "@/live/ui";
 
 /** Seconds on one question before a card asks for a look. */
@@ -37,6 +38,27 @@ const agreed = (votes: (string | null)[]): string | null => {
 };
 
 const tryWord = (n: number) => (n === 1 ? "1 try" : `${n} tries`);
+
+/**
+ * Does this answer name this option? "B" names B; "AC" (select multiple)
+ * names A and C. How the option rows count answers for both lettered kinds.
+ */
+const names = (answer: string, letter: string): boolean => multiIndexes(answer).includes(letter.charCodeAt(0) - 65);
+
+/** How many of these answers name the option. */
+const naming = (entries: Map<string, number>, letter: string): number =>
+  [...entries.entries()].filter(([a]) => names(a, letter)).reduce((n, [, c]) => n + c, 0);
+
+/**
+ * Is this option one of the right ones? For multiple choice that is the right
+ * answer; for select multiple, one of the key's set — the whole set is what
+ * scores, but each option is what the rows show.
+ */
+const optionRight = (q: LiveQuestion, key: LiveKey | undefined, letter: string): boolean => {
+  if (!key) return false;
+  const i = letter.charCodeAt(0) - 65;
+  return q.kind === "multi" ? (key.correct_options ?? []).includes(i) : key.correct_option === i;
+};
 
 /** The team's first try at each question: what it agreed on before it was told anything. */
 const firstTries = (m: LiveModel, teamId: string | null): (string | null)[] =>
@@ -495,19 +517,24 @@ export function QuestionsView({ m, reveal }: { m: LiveModel; reveal: boolean }) 
             teamN++;
           }
         }
-        // Every option for multiple choice. For the rest — select multiple
-        // included, whose answers are sets — the answers most given.
-        const rows =
-          q.kind === "mc"
-            ? q.options.map((_, i) => optionLetter(i))
-            : [...new Set([...own.keys(), ...team.keys()])]
-                .sort((a, b) => (own.get(b) ?? 0) + (team.get(b) ?? 0) - ((own.get(a) ?? 0) + (team.get(a) ?? 0)))
-                .slice(0, 5);
+        // Every option for multiple choice and select multiple — a select-
+        // multiple bar counts everyone who ticked that option, so a question
+        // nobody has answered still shows what it asks. For typed answers, the
+        // answers most given.
+        const lettered = hasOptions(q);
+        const rows = lettered
+          ? q.options.map((_, i) => optionLetter(i))
+          : [...new Set([...own.keys(), ...team.keys()])]
+              .sort((a, b) => (own.get(b) ?? 0) + (team.get(b) ?? 0) - ((own.get(a) ?? 0) + (team.get(a) ?? 0)))
+              .slice(0, 5);
         const shown = new Set(rows);
-        const otherOwn = [...own.entries()].filter(([a]) => !shown.has(a)).reduce((n, [, c]) => n + c, 0);
-        const otherTeam = [...team.entries()].filter(([a]) => !shown.has(a)).reduce((n, [, c]) => n + c, 0);
+        const otherOwn = lettered ? 0 : [...own.entries()].filter(([a]) => !shown.has(a)).reduce((n, [, c]) => n + c, 0);
+        const otherTeam = lettered ? 0 : [...team.entries()].filter(([a]) => !shown.has(a)).reduce((n, [, c]) => n + c, 0);
+        const count = (entries: Map<string, number>, a: string) => (lettered ? naming(entries, a) : entries.get(a) ?? 0);
+        // Right is the whole answer: for select multiple, exactly the key's set.
         const rightOf = (entries: Map<string, number>) =>
           [...entries.entries()].filter(([a]) => m.right(qi, a) === true).reduce((n, [, c]) => n + c, 0);
+        const key = m.key(qi);
         return (
           <article key={q.id} className="fv-card lq-qcard">
             <header className="lq-qhead">
@@ -525,17 +552,18 @@ export function QuestionsView({ m, reveal }: { m: LiveModel; reveal: boolean }) 
                   {reveal && teamN ? <em className="fv-num"> · {Math.round((100 * rightOf(team)) / teamN)}% right</em> : null}
                 </span>
               ) : null}
+              {q.kind === "multi" ? <span className="fv-sub">Select all that apply · each bar counts who ticked that option</span> : null}
             </div>
             <div className="lq-opts">
               {rows.length === 0 ? <div className="fv-sub">No answers yet.</div> : null}
               {rows.map((a) => {
-                const right = reveal && m.right(qi, a) === true;
+                const right = reveal && (lettered ? optionRight(q, key, a) : m.right(qi, a) === true);
                 return (
-                  <div key={a} className={`lq-opt${right ? " right" : ""}${q.kind === "mc" ? "" : " num"}`}>
-                    <span className={`lq-optl${q.kind === "multi" ? " multi" : ""}`}>{q.kind === "mc" || q.kind === "multi" ? a : ""}</span>
-                    {right ? <span className="lq-sr">The right answer:</span> : null}
+                  <div key={a} className={`lq-opt${right ? " right" : ""}${lettered ? "" : " num"}`}>
+                    <span className="lq-optl">{lettered ? a : ""}</span>
+                    {right ? <span className="lq-sr">{q.kind === "multi" ? "One of the right answers:" : "The right answer:"}</span> : null}
                     <span className="lq-opttext">{optionText(q, a) ?? m.label(qi, a)}</span>
-                    <Bars own={own.get(a) ?? 0} ownN={ownN} team={team.get(a) ?? 0} teamN={teamN} showTeams={showTeams} />
+                    <Bars own={count(own, a)} ownN={ownN} team={count(team, a)} teamN={teamN} showTeams={showTeams} />
                   </div>
                 );
               })}
@@ -802,7 +830,9 @@ export function StudentQuestion({
           ? outcomeOf(own ? m.right(q, own) : false, m.rightOn(team.id, q))
           : { label: own === tries[0].answer ? "Team went with theirs" : "Team chose differently", tone: "muted" as const };
 
-  // Rows: every option for multiple choice; for typed answers, what the class gave.
+  // Rows: every option for multiple choice and select multiple (where a row
+  // counts everyone who ticked that option); for typed answers, what the class gave.
+  const lettered = hasOptions(question);
   const counts = new Map<string, number>();
   let given = 0;
   for (const st of m.students) {
@@ -812,12 +842,14 @@ export function StudentQuestion({
       given++;
     }
   }
-  const rows =
-    question.kind === "mc"
-      ? question.options.map((_, i) => optionLetter(i))
-      : [...new Set([...counts.keys(), ...(reveal ? tries.map((t) => t.answer) : [])])]
-          .sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0))
-          .slice(0, 6);
+  const rows = lettered
+    ? question.options.map((_, i) => optionLetter(i))
+    : [...new Set([...counts.keys(), ...(reveal ? tries.map((t) => t.answer) : [])])]
+        .sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0))
+        .slice(0, 6);
+  /** Does an answer land on this row? The row itself for typed answers; the option it names for lettered ones. */
+  const onRow = (answer: string | null, a: string) => (answer !== null && lettered ? names(answer, a) : answer === a);
+  const key = m.key(q);
 
   return (
     <div className="lq-detail">
@@ -895,24 +927,25 @@ export function StudentQuestion({
 
       <div className="fv-card lq-sqopts">
         <div className="lq-sqoptshead" aria-hidden="true">
-          <span>{question.kind === "mc" ? "Options" : question.kind === "multi" ? "Combinations given" : "Answers given"}</span>
+          <span>{lettered ? (question.kind === "multi" ? "Options · select all that apply" : "Options") : "Answers given"}</span>
           <span>{team ? `${team.name} on their own` : ""}</span>
           <span className="lq-hide-sm">Class</span>
         </div>
         {rows.map((a) => {
-          const pickers = (team?.members ?? []).filter((st) => m.own(st.id, q) === a);
-          const right = reveal && m.right(q, a) === true;
-          const isOwn = own === a;
+          const pickers = (team?.members ?? []).filter((st) => onRow(m.own(st.id, q), a));
+          const right = reveal && (lettered ? optionRight(question, key, a) : m.right(q, a) === true);
+          const isOwn = onRow(own, a);
           // Which of the team's tries this was — hidden with the answers, since it says right or wrong.
-          const teamTry = reveal ? tries.find((t) => t.answer === a) : undefined;
-          const isTeam = teamTry !== undefined && (teamTry.correct ?? m.right(q, a)) === true;
-          const voters = voting ? (team?.members ?? []).filter((_, vi) => voting.votes[vi] === a) : [];
+          // For select multiple: the right try that named this option, else the first wrong one that did.
+          const teamTries = reveal ? tries.filter((t) => onRow(t.answer, a)) : [];
+          const teamTry = teamTries.find((t) => (t.correct ?? m.right(q, t.answer)) === true) ?? teamTries[0];
+          const isTeam = teamTry !== undefined && (teamTry.correct ?? m.right(q, teamTry.answer)) === true;
+          const voters = voting ? (team?.members ?? []).filter((_, vi) => onRow(voting.votes[vi], a)) : [];
+          const rowCount = lettered ? naming(counts, a) : counts.get(a) ?? 0;
           return (
             <div key={a} className={`lq-sqopt${isOwn ? " own" : ""}${isTeam ? " team" : ""}`}>
-              <span className={`lq-optl${right ? " right" : ""}${question.kind === "multi" ? " multi" : ""}`}>
-                {question.kind === "mc" || question.kind === "multi" ? a : ""}
-              </span>
-              {right ? <span className="lq-sr">The right answer:</span> : null}
+              <span className={`lq-optl${right ? " right" : ""}`}>{lettered ? a : ""}</span>
+              {right ? <span className="lq-sr">{question.kind === "multi" ? "One of the right answers:" : "The right answer:"}</span> : null}
               <span className="lq-sqopttext">
                 {text(a)}
                 <span className="lq-sqtags">
@@ -936,7 +969,7 @@ export function StudentQuestion({
                   </button>
                 ))}
               </span>
-              <span className="lq-sqclass fv-num lq-hide-sm">{given ? `${counts.get(a) ?? 0} of ${given}` : "—"}</span>
+              <span className="lq-sqclass fv-num lq-hide-sm">{given ? `${rowCount} of ${given}` : "—"}</span>
             </div>
           );
         })}

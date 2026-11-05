@@ -1744,6 +1744,11 @@ button.lq-tr:hover {
 .lq-choice:hover {
   border-color: var(--fv-neutral-300);
 }
+.lq-choice:focus-visible,
+.lq-bcorrect:focus-visible {
+  outline: 2px solid var(--fv-navy-700);
+  outline-offset: 2px;
+}
 .lq-choice.on {
   border-color: var(--fv-navy);
   box-shadow: inset 0 0 0 1px var(--fv-navy);
@@ -2939,18 +2944,6 @@ button.lq-reviewrow {
 .lq-opt.num .lq-optl:empty {
   border-style: dashed;
 }
-/* Select multiple (0056): a set of letters in a square pill, not one in a circle. */
-.lq-optl.multi {
-  width: auto;
-  min-width: 22px;
-  padding: 0 5px;
-  border-radius: 6px;
-  letter-spacing: 0.08em;
-  justify-self: start;
-}
-.lq-sqopt .lq-optl.multi {
-  width: auto;
-}
 .lq-numentry {
   display: flex;
   flex-direction: column;
@@ -3022,6 +3015,61 @@ button.lq-reviewrow {
   min-width: 30px;
   padding: 0 8px;
   letter-spacing: 0.08em;
+}
+/* The rule said above the boxes, with a count, and a box at the end of each
+   row that fills with a tick — so "one or more" is seen, not read in a footnote. */
+.lq-multihead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.lq-multitag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--fv-navy);
+  color: var(--fv-cream-100);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.lq-multicount {
+  font-size: 13px;
+  color: var(--fv-muted);
+  font-variant-numeric: tabular-nums;
+}
+.lq-multicount.some {
+  color: var(--fv-navy);
+  font-weight: 600;
+}
+.lq-checkbox {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  /* Muted, not neutral-300: an empty box has to be seen against the card (3:1). */
+  border: 2px solid var(--fv-muted);
+  background: var(--fv-cream-100);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fv-cream-100);
+}
+.lq-choice.multi:hover .lq-checkbox {
+  border-color: var(--fv-navy);
+}
+.lq-checkbox.on {
+  background: var(--fv-navy);
+  border-color: var(--fv-navy);
+}
+.lq-propose.multi .lq-multitag {
+  background: var(--fv-cream-300);
+  color: var(--fv-navy);
 }
 .lq-propose.multi {
   flex-direction: column;

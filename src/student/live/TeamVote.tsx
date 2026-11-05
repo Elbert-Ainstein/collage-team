@@ -30,6 +30,7 @@ import type { LiveQuestion } from "@/live/types";
 import { Av, Ic, Pick, Tries, voteSummary } from "@/live/ui";
 import { Explanation } from "./Explanation";
 import { forStudent } from "./forStudent";
+import { Checkbox, MultiHead } from "./OnYourOwn";
 
 const MAX_TYPED_CHOICES = 8;
 
@@ -556,7 +557,7 @@ function MultiPropose({ q, tried, onPropose }: { q: LiveQuestion; tried: Set<str
         setPicked(null);
       }}
     >
-      <span className="fv-eyebrow">Propose another combination</span>
+      <MultiHead count={on.size} label="Propose another combination" />
       <div className="lq-choices" role="group" aria-label="Propose another combination">
         {q.options.map((text, i) => (
           <button
@@ -569,6 +570,7 @@ function MultiPropose({ q, tried, onPropose }: { q: LiveQuestion; tried: Set<str
           >
             <span className="lq-choicel">{optionLetter(i)}</span>
             <span className="lq-choicet">{text}</span>
+            <Checkbox on={on.has(i)} />
           </button>
         ))}
       </div>
