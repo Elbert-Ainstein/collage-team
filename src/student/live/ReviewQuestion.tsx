@@ -7,9 +7,9 @@
 
 import { useEffect, useRef } from "react";
 import type { TeamWithMembers } from "@/checkins/types";
-import { optionLetter } from "@/live/answers";
+import { multiIndexes, optionLetter } from "@/live/answers";
 import { Figure } from "@/live/figure";
-import { fmtPoints, type LiveModel } from "@/live/model";
+import { fmtPoints, hasOptions, type LiveModel } from "@/live/model";
 import { Ic, Tries } from "@/live/ui";
 import { Explanation } from "./Explanation";
 
@@ -57,18 +57,28 @@ function ResultPips({ m, meId, current, onPick }: { m: LiveModel; meId: string; 
   );
 }
 
+/**
+ * Multiple choice, or select multiple: every option, the right one(s) green,
+ * theirs red where it wasn't. For select multiple that reads option by option
+ * — a right one they missed says "Answer", a wrong one they ticked says "You"
+ * — though the question itself was marked all or nothing.
+ */
 export function Choices({ m, q, mine }: { m: LiveModel; q: number; mine: string | null }) {
   const question = m.questions[q];
-  const correct = m.key(q)?.correct_option ?? null;
+  const key = m.key(q);
+  const right = new Set(
+    question.kind === "multi" ? key?.correct_options ?? [] : key?.correct_option === null || key?.correct_option === undefined ? [] : [key.correct_option],
+  );
+  const picked = new Set(mine ? multiIndexes(mine) : []);
   return (
-    <div className="lq-choices" role="list" aria-label={`Question ${q + 1} choices`}>
+    <div className={`lq-choices${question.kind === "multi" ? " multi" : ""}`} role="list" aria-label={`Question ${q + 1} choices`}>
       {question.options.map((text, i) => {
         const l = optionLetter(i);
-        const isRight = i === correct;
-        const isMine = mine === l;
+        const isRight = right.has(i);
+        const isMine = picked.has(i);
         const tone = isRight ? " right" : isMine ? " wrong" : "";
         return (
-          <div key={l} role="listitem" className={`lq-choice static${tone}`}>
+          <div key={l} role="listitem" className={`lq-choice static${question.kind === "multi" ? " multi" : ""}${tone}`}>
             <span className="lq-choicel">{l}</span>
             <span className="lq-choicet">{text}</span>
             {/* Said, not just coloured: this is where they learn which is which. Theirs and right is "You" in green. */}
@@ -130,7 +140,7 @@ export function ReviewQuestion({ m, team, meId, q, onGo, onDone }: Props) {
         </div>
         <p className="lq-sstem">{question.stem}</p>
         <Figure path={question.figure_path} alt={`Figure for question ${q + 1}`} className="lq-sfig" />
-        {question.kind === "mc" ? <Choices m={m} q={q} mine={mine} /> : <Typed m={m} q={q} mine={mine} right={right} />}
+        {hasOptions(question) ? <Choices m={m} q={q} mine={mine} /> : <Typed m={m} q={q} mine={mine} right={right} />}
         {mine ? null : <p className="lq-snone">You didn’t answer this one</p>}
         {team ? (
           <div className="lq-srespicks lq-steamline">

@@ -35,9 +35,10 @@ const BOX_SCALE = 1_000;
 /** A figure narrower or shorter than this (2% of the page) is a mis-read, not a figure. */
 const MIN_BOX_SIDE = 0.02;
 
-export const LIVE_KINDS: readonly LiveKind[] = ["mc", "number", "expression"];
+export const LIVE_KINDS: readonly LiveKind[] = ["mc", "multi", "number", "expression"];
 export const SOURCE_KINDS: readonly SourceKind[] = [
   "mc",
+  "multi",
   "numerical",
   "expression",
   "direction",
@@ -68,24 +69,30 @@ export const DRAFT_QUESTIONS: ToolSpec = {
               type: "string",
               enum: [...LIVE_KINDS],
               description:
-                "What it becomes: mc (multiple choice), number (a numeric answer with an optional unit), " +
-                "or expression (a symbolic answer).",
+                "What it becomes: mc (multiple choice, one right option), multi (select all that apply: a set of " +
+                "right options), number (a numeric answer with an optional unit), or expression (a symbolic answer).",
             },
             source: {
               type: "string",
               enum: [...SOURCE_KINDS],
               description:
-                "What it was in the PDF: mc, numerical, expression, direction (draw an arrow), click (click on a figure), or other.",
+                "What it was in the PDF: mc, multi (select all that apply), numerical, expression, direction (draw an arrow), " +
+                "click (click on a figure), or other.",
             },
             stem: { type: "string", description: "The question in the PDF's own words, complete." },
             options: {
               type: "array",
-              description: "mc only: 2 to 8 options, in the PDF's order (or the ones you wrote, for a converted question).",
+              description: "mc and multi: 2 to 8 options, in the PDF's order (or the ones you wrote, for a converted question).",
               items: { type: "string" },
             },
             correct_option: {
               type: "integer",
               description: "mc only: 0-based index into options of the answer you worked out. Omit when needs_pick.",
+            },
+            correct_options: {
+              type: "array",
+              description: "multi only: 0-based indexes into options of every right answer you worked out. Omit when needs_pick.",
+              items: { type: "integer" },
             },
             answer: {
               type: "string",
@@ -150,6 +157,9 @@ export const LIVE_IMPORT_PROMPT = [
   "- Keep each question's wording exactly as the PDF has it. Do not shorten, reword or fix it.",
   "- Write maths as plain text: x^2, sqrt(x), 3*10^8, and symbols such as μ, θ, °, ± as they appear.",
   "- Multiple choice stays mc, with its options in the PDF's order (2 to 8).",
+  "- A question that says to select all that apply, choose every right answer, or mark each true",
+  "  statement is multi, with its options in the PDF's order (2 to 8) and every right one in",
+  "  correct_options. It is marked all or nothing.",
   "- A numeric free-response question stays free response: kind number, with answer, unit and a",
   "  tolerance. Use about 2% of the answer for the tolerance unless the PDF says otherwise; for an",
   "  answer of 0, use a small absolute tolerance in the same unit.",
@@ -161,8 +171,8 @@ export const LIVE_IMPORT_PROMPT = [
   "  question. List each in left_out with a few words of reason.",
   "",
   "Keys:",
-  "- Work out the answer to every question and give it: correct_option, answer, or accept. Put",
-  "  your working in why.",
+  "- Work out the answer to every question and give it: correct_option, correct_options, answer,",
+  "  or accept. Put your working in why.",
   "- If the answer rests on an assumption, say so in note.",
   "- If the answer depends on a figure you cannot read well enough, give no key and set",
   "  needs_pick. Never guess a key you are not confident of.",
@@ -264,18 +274,33 @@ function sourceOf(v: unknown): SourceKind | undefined {
   return SOURCE_KINDS.includes(v as SourceKind) ? (v as SourceKind) : undefined;
 }
 
+/** mc and multi: the options as given, or Unusable when there aren't 2 to 8 of them. */
+function optionsOf(raw: Obj): string[] {
+  if (Array.isArray(raw.options) && raw.options.length > MAX_OPTIONS) {
+    unusable(`it came back with ${raw.options.length} options; the most is ${MAX_OPTIONS}`);
+  }
+  const options = strings(raw.options, MAX_OPTION);
+  if (options.length < MIN_OPTIONS) unusable(`it came back with ${options.length} option${options.length === 1 ? "" : "s"}`);
+  return options;
+}
+
 /** The kind-specific half of an item: its answer fields, and whether it still needs a key. */
 function keyOf(kind: LiveKind, raw: Obj, flagged: boolean): Partial<DraftItem> & { needsPick: boolean } {
   if (kind === "mc") {
-    if (Array.isArray(raw.options) && raw.options.length > MAX_OPTIONS) {
-      unusable(`it came back with ${raw.options.length} options; the most is ${MAX_OPTIONS}`);
-    }
-    const options = strings(raw.options, MAX_OPTION);
-    if (options.length < MIN_OPTIONS) unusable(`it came back with ${options.length} option${options.length === 1 ? "" : "s"}`);
+    const options = optionsOf(raw);
     const i = int(raw.correct_option);
     // An index past the end means the key is noise; the question is still good.
     const correctOption = !flagged && i !== null && i >= 0 && i < options.length ? i : null;
     return { options, correctOption, needsPick: correctOption === null };
+  }
+  if (kind === "multi") {
+    const options = optionsOf(raw);
+    // Any index past the end means the key is noise: a set with one option
+    // missing is a different (wrong) key, not most of one.
+    const given = Array.isArray(raw.correct_options) ? raw.correct_options.map(int) : [];
+    const sound = !flagged && given.length > 0 && given.every((i) => i !== null && i >= 0 && i < options.length);
+    const correctOptions = sound ? [...new Set(given as number[])].sort((a, b) => a - b) : [];
+    return { options, correctOptions, needsPick: correctOptions.length === 0 };
   }
   if (kind === "number") {
     const read = flagged ? null : readNumber(raw.answer);

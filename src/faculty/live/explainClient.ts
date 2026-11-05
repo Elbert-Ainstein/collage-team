@@ -19,6 +19,7 @@ export function explainQuestionOf(q: DraftQuestion): ExplainQuestion {
     stem: d.stem,
     options: d.options,
     correctOption: d.correct_option,
+    correctOptions: d.correct_options,
     answer: d.answer,
     tolerance: d.tolerance,
     unit: d.unit,

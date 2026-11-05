@@ -26,10 +26,12 @@ export const EXPLAIN_LIMITS = {
 export interface ExplainQuestion {
   kind: LiveKind;
   stem: string;
-  /** mc: 2–8 options, in order. Empty otherwise. */
+  /** mc and multi: 2–8 options, in order. Empty otherwise. */
   options: string[];
   /** mc: index into options of the right one. Null otherwise. */
   correctOption: number | null;
+  /** multi: indexes into options of every right one. Empty otherwise. */
+  correctOptions: number[];
   /** number: the right answer. Null otherwise. */
   answer: number | null;
   /** number: how far off still counts, ± in the unit. Null otherwise. */

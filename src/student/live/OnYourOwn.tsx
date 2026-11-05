@@ -6,7 +6,7 @@
 import { useState } from "react";
 import { BriefText } from "@/checkins/BriefText";
 import type { TeamWithMembers } from "@/checkins/types";
-import { canonicalAnswer, normalizeNumber, optionLetter } from "@/live/answers";
+import { canonicalAnswer, multiIndexes, normalizeNumber, optionLetter, toggleOption } from "@/live/answers";
 import { Figure } from "@/live/figure";
 import type { LiveModel } from "@/live/model";
 import type { LiveQuestion } from "@/live/types";
@@ -249,6 +249,9 @@ export function OnYourOwn({
               );
             })}
           </div>
+        ) : question.kind === "multi" ? (
+          // Saved after a pause, like typing: ticking A then C is one answer, "AC", not two.
+          <MultiEntry key={question.id} q={question} n={cursor + 1} value={mine} onChange={(v) => saver.save(question.id, v, true)} />
         ) : (
           <TypedEntry key={question.id} q={question} value={mine} onChange={(v) => saver.save(question.id, v, true)} />
         )}
@@ -293,6 +296,54 @@ function Submitted({ answered, of, onReview, onBack }: { answered: number; of: n
         </button>
       </footer>
     </>
+  );
+}
+
+/**
+ * Select multiple (0056): every option, ticked or not. Each tick gives the
+ * whole set as one answer ("AC"). Unticking the last box is nothing to save —
+ * an answer is at least one option — so the boxes show empty while the last
+ * set given stays saved, until they tick again.
+ */
+export function MultiEntry({
+  q,
+  n,
+  value,
+  onChange,
+}: {
+  q: LiveQuestion;
+  /** The question's number, for the group's name. */
+  n: number;
+  value: string | null;
+  onChange: (v: string) => void;
+}) {
+  const [picked, setPicked] = useState<string | null>(value);
+  const on = new Set(picked ? multiIndexes(picked) : []);
+  return (
+    <div className="lq-numentry">
+      <div className="lq-choices" role="group" aria-label={`Question ${n}, pick every answer that applies`}>
+        {q.options.map((text, i) => (
+          <button
+            key={i}
+            type="button"
+            role="checkbox"
+            aria-checked={on.has(i)}
+            className={`lq-choice multi${on.has(i) ? " on" : ""}`}
+            onClick={() => {
+              const next = toggleOption(picked, i);
+              setPicked(next);
+              if (next) onChange(next);
+            }}
+          >
+            <span className="lq-choicel">{optionLetter(i)}</span>
+            <span className="lq-choicet">{text}</span>
+          </button>
+        ))}
+      </div>
+      <span className={`lq-numhint${value && !picked ? " bad" : ""}`}>
+        {value && !picked ? "Pick at least one — your last answer still stands" : "Pick every one that applies."}
+      </span>
+    </div>
   );
 }
 

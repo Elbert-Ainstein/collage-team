@@ -73,7 +73,7 @@ const state = { activity_id: "a", phase: "team", lock_rule: "any", show_answers:
 const question = { id: "q1", activity_id: "a", position: 0, kind: "mc", stem: "", options: ["x", "y"], unit: null, figure_path: null, created_at: "" };
 const draft = (over: Row = {}) => ({
   id: "q1", kind: "mc" as const, stem: "Which?", options: ["x", "y"], unit: null, figure_path: null,
-  correct_option: 1, answer: null, tolerance: null, accept: [], ...over,
+  correct_option: 1, correct_options: [], answer: null, tolerance: null, accept: [], ...over,
 });
 
 beforeEach(() => {

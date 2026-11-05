@@ -331,8 +331,8 @@ export function LiveBuilder({ data, activity, snapshot, startStep, onLeave, onDo
                   <p className="lq-bnote">
                     {grading === "both" ? "Own answers score a point each when right. " : "Own answers count for completion. "}
                     Teams see right or wrong as soon as they submit and try again until they have it:{" "}
-                    {TRY_CREDIT.map((c, i) => `${fmtPoints(c)} on try ${i + 1}`).join(", ")}, nothing after. On a typed answer they can
-                    then keep going or move on.
+                    {TRY_CREDIT.map((c, i) => `${fmtPoints(c)} on try ${i + 1}`).join(", ")}, nothing after. On a typed or
+                    select-multiple answer they can then keep going or move on.
                   </p>
                 </div>
                 {firstTime || !canRelease(snapshot.state) ? null : (

@@ -27,15 +27,24 @@ export function draftToQuestions(draft: LiveDraft): ImportedQuestion[] {
       item.kind === "mc" && item.correctOption !== null && item.correctOption !== undefined && item.correctOption < options.length
         ? item.correctOption
         : null;
+    const corrects = item.kind === "multi" ? (item.correctOptions ?? []).filter((i) => i >= 0 && i < options.length) : [];
     const keyed =
-      item.kind === "mc" ? correct !== null : item.kind === "number" ? Boolean(item.answer?.trim()) : accept.length > 0;
+      item.kind === "mc"
+        ? correct !== null
+        : item.kind === "multi"
+          ? corrects.length > 0
+          : item.kind === "number"
+            ? Boolean(item.answer?.trim())
+            : accept.length > 0;
+    const lettered = item.kind === "mc" || item.kind === "multi";
     const question: DraftQuestion = {
       ...base,
       kind: item.kind,
       stem: item.stem,
       // Two options at least, so a short one still shows where to type.
-      options: item.kind === "mc" ? (options.length >= 2 ? options : [...options, "", ""].slice(0, 2)) : base.options,
+      options: lettered ? (options.length >= 2 ? options : [...options, "", ""].slice(0, 2)) : base.options,
       correct,
+      corrects,
       answer: item.answer ?? "",
       unit: item.unit ?? "",
       tolerance: item.tolerance ?? "",
@@ -52,6 +61,7 @@ export function draftToQuestions(draft: LiveDraft): ImportedQuestion[] {
 
 const KIND_WORD: Record<SourceKind, string> = {
   mc: "multiple choice",
+  multi: "select multiple",
   numerical: "number",
   expression: "expression",
   direction: "direction",
@@ -70,6 +80,13 @@ export function leftOutLine(leftOut: LeftOut[]): string | null {
 /** The builder's questions after an import: drafted ones replace an untouched blank start. */
 export function withImported(current: DraftQuestion[], imported: DraftQuestion[]): DraftQuestion[] {
   const untouched = (q: DraftQuestion) =>
-    !q.stem.trim() && q.options.every((o) => !o.trim()) && q.correct === null && !q.answer.trim() && q.accept.length === 0 && !q.figure_path && !q.explanation.trim();
+    !q.stem.trim() &&
+    q.options.every((o) => !o.trim()) &&
+    q.correct === null &&
+    q.corrects.length === 0 &&
+    !q.answer.trim() &&
+    q.accept.length === 0 &&
+    !q.figure_path &&
+    !q.explanation.trim();
   return [...current.filter((q) => !untouched(q)), ...imported];
 }

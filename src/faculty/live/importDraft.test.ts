@@ -9,6 +9,7 @@ const draft: LiveDraft = {
     { page: 2, kind: "mc", stem: "Which way?", options: ["Up", "Down", "Left"], correctOption: 1, needsPick: false },
     { page: 3, kind: "number", stem: "How fast?", answer: "9.8", unit: "m/s", tolerance: "0.1", needsPick: false },
     { page: 4, kind: "expression", stem: "Tension?", accept: ["F/2", "x".repeat(200)], needsPick: false },
+    { page: 4, kind: "multi", stem: "Which are true?", options: ["a", "b", "c"], correctOptions: [0, 2], needsPick: false },
     {
       page: 5,
       kind: "mc",
@@ -31,6 +32,8 @@ describe("draftToQuestions", () => {
     expect(out[1].question).toMatchObject({ kind: "number", answer: "9.8", unit: "m/s", tolerance: "0.1" });
     expect(problemWith(out[0].question)).toBeNull();
     expect(problemWith(out[1].question)).toBeNull();
+    expect(out[3].question).toMatchObject({ kind: "multi", options: ["a", "b", "c"], corrects: [0, 2], correct: null });
+    expect(problemWith(out[3].question)).toBeNull();
   });
 
   it("drops accepted forms the checker could never match", () => {
@@ -38,20 +41,20 @@ describe("draftToQuestions", () => {
   });
 
   it("holds an unkeyed question until she picks, and keeps its figure to crop", () => {
-    expect(out[3].question.source).toMatchObject({ page: 5, needsPick: true, note: "Depends on the figure" });
-    expect(out[3].figure).toEqual({ page: 5, box: { x: 0.1, y: 0.2, w: 0.5, h: 0.3 } });
-    expect(summarizeProblems(out.map((o) => o.question))).toBe("Q4 needs an answer");
+    expect(out[4].question.source).toMatchObject({ page: 5, needsPick: true, note: "Depends on the figure" });
+    expect(out[4].figure).toEqual({ page: 5, box: { x: 0.1, y: 0.2, w: 0.5, h: 0.3 } });
+    expect(summarizeProblems(out.map((o) => o.question))).toBe("Q5 needs an answer");
   });
 
   it("gives every drafted question its own id", () => {
-    expect(new Set(out.map((o) => o.question.id)).size).toBe(4);
+    expect(new Set(out.map((o) => o.question.id)).size).toBe(5);
   });
 });
 
 describe("withImported", () => {
   it("replaces the blank question a new activity starts with, and keeps written ones", () => {
     const imported = draftToQuestions(draft).map((o) => o.question);
-    expect(withImported([blankQuestion()], imported)).toHaveLength(4);
+    expect(withImported([blankQuestion()], imported)).toHaveLength(5);
     const written = { ...blankQuestion(), stem: "Mine" };
     expect(withImported([written], imported)[0].stem).toBe("Mine");
     const explained = { ...blankQuestion(), explanation: "Mine" };

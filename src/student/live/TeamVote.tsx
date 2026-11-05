@@ -11,10 +11,21 @@
 
 import { useRef, useState } from "react";
 import type { TeamWithMembers } from "@/checkins/types";
-import { canMoveOn, canonicalAnswer, maxTries, normalizeNumber, optionLetter, TRY_CREDIT, tryCredit } from "@/live/answers";
+import {
+  canMoveOn,
+  canonicalAnswer,
+  maxTries,
+  multiAnswer,
+  multiIndexes,
+  normalizeNumber,
+  optionLetter,
+  toggleOption,
+  TRY_CREDIT,
+  tryCredit,
+} from "@/live/answers";
 import { castVote, lockTeamAnswer, moveTeamOn } from "@/live/data";
 import { Figure } from "@/live/figure";
-import { fmtPoints, type LiveModel } from "@/live/model";
+import { fmtPoints, hasOptions, optionText, type LiveModel } from "@/live/model";
 import type { LiveQuestion } from "@/live/types";
 import { Av, Ic, Pick, Tries, voteSummary } from "@/live/ui";
 import { Explanation } from "./Explanation";
@@ -129,6 +140,10 @@ function keyText(m: LiveModel, q: number): string | null {
   if (!question || !key) return null;
   if (question.kind === "mc") {
     return key.correct_option === null ? null : `${optionLetter(key.correct_option)} (${question.options[key.correct_option] ?? ""})`;
+  }
+  if (question.kind === "multi") {
+    const set = multiAnswer(key.correct_options ?? []);
+    return set === null ? null : `${m.label(q, set)} (${optionText(question, set) ?? ""})`;
   }
   if (question.kind === "number") return key.answer === null ? null : m.label(q, String(key.answer));
   return key.accept[0] ?? null;
@@ -268,8 +283,10 @@ export function TeamQuestion({
   const leads = m.mayLead(team.id, team.members[0]?.id ?? "");
   const leaderId = m.leaderOf(team.id);
   const leaderLine = `${leaderId ? byWhom(team, leaderId) : "Your leader"} submits for the team`;
-  const text = (a: string) => (question.kind === "mc" ? question.options[a.charCodeAt(0) - 65] ?? a : m.label(q, a));
-  const short = (a: string) => (a.length > 12 ? "your answer" : question.kind === "number" ? m.label(q, a) : a);
+  const text = (a: string) => optionText(question, a) ?? m.label(q, a);
+  const short = (a: string) => (a.length > 12 ? "your answer" : question.kind === "mc" ? a : m.label(q, a));
+  /** What the Submit button names: the letter(s), where there are any. */
+  const named = (a: string) => (hasOptions(question) ? m.label(q, a) : "");
   const verdictOf = (a: string): boolean | null => {
     const t = tries.find((x) => x.answer === a);
     return t ? (t.correct ?? m.right(q, a)) : null;
@@ -401,6 +418,7 @@ export function TeamQuestion({
                 onClick={() => vote(a)}
               >
                 {question.kind === "mc" ? <span className="lq-choicel">{a}</span> : null}
+                {question.kind === "multi" ? <span className="lq-choicel multi">{a}</span> : null}
                 <span className="lq-choicet">{text(a)}</span>
                 <span className="lq-voters">
                   {voters.map((s) => (
@@ -413,7 +431,8 @@ export function TeamQuestion({
             );
           })}
         </div>
-        {question.kind !== "mc" && !done ? <Propose q={question} tried={tried} onPropose={vote} /> : null}
+        {question.kind === "multi" && !done ? <MultiPropose q={question} tried={tried} onPropose={vote} /> : null}
+        {question.kind !== "mc" && question.kind !== "multi" && !done ? <Propose q={question} tried={tried} onPropose={vote} /> : null}
         {done ? <Explanation body={m.explanation(q)} /> : null}
       </div>
 
@@ -440,14 +459,14 @@ export function TeamQuestion({
         ) : agreed ? (
           <>
             <span className="lq-footmsg">
-              <b>All on {question.kind === "mc" ? agreed : text(agreed)}</b>
+              <b>All on {hasOptions(question) ? m.label(q, agreed) : text(agreed)}</b>
               {leads ? null : <span className="fv-sub">{leaderLine}</span>}
             </span>
             {leads ? (
               <span className="lq-footbtns">
                 {moveOnButton}
                 <button type="button" className="fv-btn primary lq-teambtn" disabled={busy !== null} onClick={() => void submit()}>
-                  <Ic name="lock" size={15} /> {busy === "submit" ? "Submitting…" : `${submitLabel} ${question.kind === "mc" ? agreed : ""}`}
+                  <Ic name="lock" size={15} /> {busy === "submit" ? "Submitting…" : `${submitLabel} ${named(agreed)}`}
                 </button>
               </span>
             ) : null}
@@ -472,7 +491,7 @@ export function TeamQuestion({
               {moveOnButton}
               {rule === "any" && mine && leads ? (
                 <button type="button" className="fv-btn primary lq-teambtn" disabled={busy !== null} onClick={() => void submit()}>
-                  <Ic name="lock" size={15} /> {busy === "submit" ? "Submitting…" : `Submit ${question.kind === "mc" ? mine : ""}`}
+                  <Ic name="lock" size={15} /> {busy === "submit" ? "Submitting…" : `Submit ${named(mine)}`}
                 </button>
               ) : null}
             </span>
@@ -514,6 +533,47 @@ function Propose({ q, tried, onPropose }: { q: LiveQuestion; tried: Set<string>;
       {q.unit ? <span className="lq-numunit">{q.unit}</span> : null}
       <button type="submit" className="fv-btn outline sm" disabled={!parsed || old} title={old ? "Your team has tried that one" : undefined}>
         {old ? "Tried" : "Propose"}
+      </button>
+    </form>
+  );
+}
+
+/**
+ * Select multiple (0056): tick a set nobody has put on the table yet and
+ * propose it. A set the team has already tried can't be proposed again.
+ */
+function MultiPropose({ q, tried, onPropose }: { q: LiveQuestion; tried: Set<string>; onPropose: (v: string) => void }) {
+  const [picked, setPicked] = useState<string | null>(null);
+  const on = new Set(picked ? multiIndexes(picked) : []);
+  const old = picked !== null && tried.has(picked);
+  return (
+    <form
+      className="lq-propose multi"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!picked || old) return;
+        onPropose(picked);
+        setPicked(null);
+      }}
+    >
+      <span className="fv-eyebrow">Propose another combination</span>
+      <div className="lq-choices" role="group" aria-label="Propose another combination">
+        {q.options.map((text, i) => (
+          <button
+            key={i}
+            type="button"
+            role="checkbox"
+            aria-checked={on.has(i)}
+            className={`lq-choice multi${on.has(i) ? " on" : ""}`}
+            onClick={() => setPicked(toggleOption(picked, i))}
+          >
+            <span className="lq-choicel">{optionLetter(i)}</span>
+            <span className="lq-choicet">{text}</span>
+          </button>
+        ))}
+      </div>
+      <button type="submit" className="fv-btn outline sm" disabled={!picked || old} title={old ? "Your team has tried that one" : undefined}>
+        {old ? "Tried" : picked ? `Propose ${multiIndexes(picked).map(optionLetter).join(", ")}` : "Propose"}
       </button>
     </form>
   );

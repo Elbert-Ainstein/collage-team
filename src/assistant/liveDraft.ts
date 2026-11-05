@@ -9,7 +9,7 @@
 // is never done by AI anywhere in this app.
 
 /** What a question becomes in the activity. Free response stays free response. */
-export type LiveKind = "mc" | "number" | "expression";
+export type LiveKind = "mc" | "number" | "expression" | "multi";
 
 /**
  * What the question was in the PDF. Drawing an arrow and clicking on a figure
@@ -18,6 +18,7 @@ export type LiveKind = "mc" | "number" | "expression";
  */
 export type SourceKind =
   | "mc"
+  | "multi"
   | "numerical"
   | "expression"
   | "direction"
@@ -49,10 +50,12 @@ export interface DraftItem {
   source?: SourceKind;
   /** The question, in the PDF's own words. */
   stem: string;
-  /** mc only: 2–8 options, in the PDF's order. */
+  /** mc and multi: 2–8 options, in the PDF's order. */
   options?: string[];
   /** mc only: index into options of the suggested answer, or null when there is none. */
   correctOption?: number | null;
+  /** multi only: indexes into options of every suggested right answer; empty when there is none. */
+  correctOptions?: number[];
   /** number only: the suggested answer, as a plain decimal ("0.25", "-3", "1.2e3"). */
   answer?: string;
   /** number only: its unit ("N", "m/s"), when it has one. */

@@ -7,7 +7,7 @@
 // the instructor's team card and on a student's results can't disagree.
 
 import type { Student, TeamWithMembers } from "@/checkins/types";
-import { isRight, optionLetter, tryCredit } from "./answers";
+import { isRight, multiIndexes, multiLabel, optionLetter, tryCredit } from "./answers";
 import {
   absentIds,
   explanationFor,
@@ -75,7 +75,7 @@ export interface LiveModel {
   finishedAt(teamId: string): number | null;
   /** Seconds each locked question took, in the order they were locked. */
   durations(teamId: string): number[];
-  /** What a value looks like on screen: "B", "19.6 m/s", "F/2". */
+  /** What a value looks like on screen: "B", "A, C", "19.6 m/s", "F/2". */
   label(q: number, answer: string): string;
   /** Picking a leader, taking the roll, or playing (0051); always "play" without it. */
   stage(teamId: string): TeamStage;
@@ -241,6 +241,7 @@ export function buildLiveModel(input: LiveModelInput): LiveModel {
       const question = questions[q];
       if (!question) return answer;
       if (question.kind === "number" && question.unit) return `${answer} ${question.unit}`;
+      if (question.kind === "multi") return multiLabel(answer);
       return answer;
     },
     stage: (tid) => teamStage(snapshot, tid),
@@ -254,11 +255,21 @@ export function buildLiveModel(input: LiveModelInput): LiveModel {
   };
 }
 
-/** The option text behind a letter, for multiple choice. */
-export function optionText(question: LiveQuestion, letter: string): string | null {
-  const i = letter.charCodeAt(0) - 65;
-  return question.kind === "mc" ? question.options[i] ?? null : null;
+/**
+ * The option text behind a letter, for multiple choice — or the texts behind a
+ * set of them, for select multiple ("Up · Left"). Null for the typed kinds.
+ */
+export function optionText(question: LiveQuestion, answer: string): string | null {
+  if (question.kind === "mc") return question.options[answer.charCodeAt(0) - 65] ?? null;
+  if (question.kind === "multi") {
+    const texts = multiIndexes(answer).map((i) => question.options[i]).filter((t): t is string => t !== undefined);
+    return texts.length ? texts.join(" · ") : null;
+  }
+  return null;
 }
+
+/** Multiple choice or select multiple: the kinds with lettered options. */
+export const hasOptions = (q: Pick<LiveQuestion, "kind">): boolean => q.kind === "mc" || q.kind === "multi";
 
 export { optionLetter };
 

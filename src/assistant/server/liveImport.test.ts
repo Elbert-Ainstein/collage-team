@@ -30,6 +30,15 @@ const number = {
 
 const expression = { page: 4, kind: "expression", stem: "Write the normal force.", accept: ["2*m*g", "2mg", "2mg"] };
 
+const multi = {
+  page: 5,
+  kind: "multi",
+  source: "multi",
+  stem: "Which of these forces act on the book? Select all that apply.",
+  options: ["Gravity", "The normal force", "Friction", "Tension"],
+  correct_options: [2, 0, "1"],
+};
+
 const parse = (input: unknown) => {
   const out = parseDraftQuestions(input);
   if (!out.ok) throw new Error(out.error);
@@ -52,6 +61,23 @@ describe("DRAFT_QUESTIONS", () => {
 });
 
 describe("parseDraftQuestions", () => {
+  it("reads select all that apply with its key as a set, in order (0056)", () => {
+    const [item] = parse({ items: [multi] }).items;
+    expect(item).toMatchObject({ kind: "multi", source: "multi", options: multi.options, correctOptions: [0, 1, 2], needsPick: false });
+    expect(item).not.toHaveProperty("correctOption");
+    // An index past the options is a key that can't be trusted, not most of one.
+    const [bad] = parse({ items: [{ ...multi, correct_options: [0, 9] }] }).items;
+    expect(bad).toMatchObject({ correctOptions: [], needsPick: true });
+    const [none] = parse({ items: [{ ...multi, correct_options: [] }] }).items;
+    expect(none.needsPick).toBe(true);
+    const [flagged] = parse({ items: [{ ...multi, needs_pick: true }] }).items;
+    expect(flagged).toMatchObject({ correctOptions: [], needsPick: true });
+    // Too few options is no question at all.
+    const draft = parse({ items: [{ ...multi, options: ["Gravity"] }] });
+    expect(draft.items).toEqual([]);
+    expect(draft.leftOut[0].reason).toMatch(/1 option/);
+  });
+
   it("reads a well-formed draft of all three kinds", () => {
     const draft = parse({
       title: "  Readiness Assurance — Module 9 ",

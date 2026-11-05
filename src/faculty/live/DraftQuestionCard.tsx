@@ -1,6 +1,7 @@
 "use client";
 
-// One question in "Questions & grading": multiple choice, a number, or an
+// One question in "Questions & grading": multiple choice, select multiple
+// (every right option ticked, marked all or nothing — 0056), a number, or an
 // expression. The two free-response kinds carry a key that is checked without
 // AI — a number by arithmetic against a tolerance, an expression by algebra
 // against the accepted forms (src/live/answers.ts).
@@ -14,7 +15,7 @@ import { useRef, useState } from "react";
 import { normalizeNumber, optionLetter } from "@/live/answers";
 import { Figure, uploadFigure } from "@/live/figure";
 import { Ic } from "@/live/ui";
-import { keyLabel, MAX_OPTIONS, type DraftQuestion } from "./draft";
+import { hasOptions, keyLabel, MAX_OPTIONS, withKind, type DraftQuestion } from "./draft";
 import { ExplanationField } from "./ExplanationField";
 import type { LiveKind } from "@/live/types";
 
@@ -23,6 +24,7 @@ const tidy = (x: number): string => String(Number(x.toPrecision(6)));
 
 const KINDS: [LiveKind, string][] = [
   ["mc", "Multiple choice"],
+  ["multi", "Select multiple"],
   ["number", "Number"],
   ["expression", "Expression"],
 ];
@@ -56,7 +58,11 @@ export function DraftQuestionCard({ q, n, activityId, onlyOne, locked, explains,
       ...q,
       options: q.options.filter((_, j) => j !== i),
       correct: q.correct === null || q.correct === i ? null : q.correct > i ? q.correct - 1 : q.correct,
+      corrects: q.corrects.filter((c) => c !== i).map((c) => (c > i ? c - 1 : c)),
     });
+  /** Select multiple: tick or untick one option of the key. */
+  const toggleCorrect = (i: number) =>
+    settle({ corrects: q.corrects.includes(i) ? q.corrects.filter((c) => c !== i) : [...q.corrects, i] });
   const addAccepted = () => {
     const v = adding.trim();
     if (!v || q.accept.includes(v)) return;
@@ -89,7 +95,7 @@ export function DraftQuestionCard({ q, n, activityId, onlyOne, locked, explains,
         ) : (
           <div className="fv-seg lq-kindseg" role="group" aria-label={`Question ${n} type`}>
             {KINDS.map(([k, label]) => (
-              <button key={k} type="button" className={q.kind === k ? "on" : ""} onClick={() => onChange({ ...q, kind: k })}>
+              <button key={k} type="button" className={q.kind === k ? "on" : ""} onClick={() => onChange(withKind(q, k))}>
                 {label}
               </button>
             ))}
@@ -150,19 +156,23 @@ export function DraftQuestionCard({ q, n, activityId, onlyOne, locked, explains,
         onChange={(e) => void pickImage(e.target.files?.[0])}
       />
 
-      {q.kind === "mc" ? (
-        <div className="lq-bopts" role="radiogroup" aria-label={`Correct answer for question ${n}`}>
+      {hasOptions(q) ? (
+        <div
+          className="lq-bopts"
+          role={q.kind === "mc" ? "radiogroup" : "group"}
+          aria-label={`Correct answer${q.kind === "multi" ? "s" : ""} for question ${n}`}
+        >
           {q.options.map((o, i) => {
-            const right = q.correct === i;
+            const right = q.kind === "mc" ? q.correct === i : q.corrects.includes(i);
             return (
               <div key={i} className={`lq-bopt${right ? " right" : ""}`}>
                 <button
                   type="button"
-                  role="radio"
+                  role={q.kind === "mc" ? "radio" : "checkbox"}
                   aria-checked={right}
-                  className="lq-bcorrect"
-                  title="Mark as the correct answer"
-                  onClick={() => settle({ correct: i })}
+                  className={`lq-bcorrect${q.kind === "multi" ? " multi" : ""}`}
+                  title={q.kind === "mc" ? "Mark as the correct answer" : right ? "Not a correct answer" : "Mark as a correct answer"}
+                  onClick={() => (q.kind === "mc" ? settle({ correct: i }) : toggleCorrect(i))}
                 >
                   {right ? <Ic name="check" size={13} /> : optionLetter(i)}
                 </button>
@@ -253,11 +263,19 @@ export function DraftQuestionCard({ q, n, activityId, onlyOne, locked, explains,
         </div>
       )}
 
-      {q.kind === "mc" && q.options.length < MAX_OPTIONS && !locked ? (
+      {hasOptions(q) && (q.kind === "multi" || (q.options.length < MAX_OPTIONS && !locked)) ? (
         <div className="lq-bqfoot">
-          <button type="button" className="lq-linkish" onClick={() => onChange({ ...q, options: [...q.options, ""] })}>
-            + Option
-          </button>
+          {q.options.length < MAX_OPTIONS && !locked ? (
+            <button type="button" className="lq-linkish" onClick={() => onChange({ ...q, options: [...q.options, ""] })}>
+              + Option
+            </button>
+          ) : null}
+          {q.kind === "multi" ? (
+            <span className="lq-keyhint">
+              {key ? `Right answer: ${key} · ` : "Tick every option that's right · "}
+              students must pick exactly these to get it
+            </span>
+          ) : null}
         </div>
       ) : null}
 

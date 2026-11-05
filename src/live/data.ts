@@ -49,11 +49,15 @@ const before0049 = (m: string) => /live_attempts|prints|lock_team_answer|schema 
 const before0051 = (m: string) =>
   /live_leader_votes|live_team_setup|live_explanations|vote_live_leader|confirm_live_leader|set_live_absences|schema cache|does not exist/i.test(m);
 
+/** 0056 not run here: no correct_options column, and no select-multiple kind. */
+const before0056 = (m: string) => /correct_options|schema cache|does not exist/i.test(m);
+
 /** The longest explanation the database keeps (0051's check). */
 export const EXPLANATION_MAX = 8000;
 
 const QUESTION_COLS = "id, activity_id, position, kind, stem, options, unit, figure_path, created_at";
 const KEY_COLS = "question_id, activity_id, correct_option, answer, tolerance, accept";
+const KEY_COLS_0056 = `${KEY_COLS}, correct_options`;
 
 // numeric columns come back as strings from PostgREST on some setups.
 const num = (v: unknown): number | null => (v === null || v === undefined ? null : Number(v));
@@ -64,7 +68,27 @@ const asKey = (row: Record<string, unknown>): LiveKey => ({
   answer: num(row.answer),
   tolerance: num(row.tolerance),
   accept: Array.isArray(row.accept) ? (row.accept as string[]) : [],
+  ...(Array.isArray(row.correct_options) ? { correct_options: (row.correct_options as unknown[]).map(Number) } : {}),
 });
+
+/** The keys the caller may read, with 0056's column where the database has it. */
+function loadKeys(activityId: string): Promise<LiveKey[]> {
+  const read = (cols: string) =>
+    selectAll<Record<string, unknown>>(
+      (from, to) =>
+        // The column list is chosen at run time, so the client can't type the rows; asKey reads them field by field.
+        db().from("live_keys").select(cols).eq("activity_id", activityId).order("question_id").range(from, to) as unknown as PromiseLike<{
+          data: Record<string, unknown>[] | null;
+          error: { message: string } | null;
+        }>,
+    );
+  return read(KEY_COLS_0056)
+    .catch((e: unknown) => {
+      if (e instanceof Error && before0056(e.message)) return read(KEY_COLS);
+      throw e;
+    })
+    .then((rows) => rows.map(asKey));
+}
 const asQuestion = (row: Record<string, unknown>): LiveQuestion => ({
   ...(row as unknown as LiveQuestion),
   options: Array.isArray(row.options) ? (row.options as string[]) : [],
@@ -169,9 +193,7 @@ export async function loadLive(activityId: string): Promise<LiveSnapshot | null>
       db().from("live_questions").select(QUESTION_COLS).eq("activity_id", activityId)
         .order("position").order("id").range(from, to),
     ),
-    selectAll<Record<string, unknown>>((from, to) =>
-      db().from("live_keys").select(KEY_COLS).eq("activity_id", activityId).order("question_id").range(from, to),
-    ),
+    loadKeys(activityId),
     selectAll<LiveResponse>((from, to) =>
       db().from("live_responses").select("*").eq("activity_id", activityId)
         .order("question_id").order("student_id").range(from, to),
@@ -197,7 +219,7 @@ export async function loadLive(activityId: string): Promise<LiveSnapshot | null>
   return {
     state: stateRes.data as LiveState,
     questions: questions.map(asQuestion),
-    keys: keys.map(asKey),
+    keys,
     responses,
     votes,
     locks,
@@ -278,6 +300,8 @@ export interface QuestionDraft {
   unit: string | null;
   figure_path: string | null;
   correct_option: number | null;
+  /** Select multiple (0056): the right options' indexes. Empty for the other kinds. */
+  correct_options: number[];
   answer: number | null;
   tolerance: number | null;
   accept: string[];
@@ -287,6 +311,9 @@ export interface QuestionDraft {
    */
   explanation?: string;
 }
+
+/** The kinds that carry options to the database. */
+const withOptions = (d: Pick<QuestionDraft, "kind">): boolean => d.kind === "mc" || d.kind === "multi";
 
 /** Every accepted form's print: what a team's answer is held to as it submits (0049). */
 async function printsOf(accept: string[]): Promise<ExpressionPrint[]> {
@@ -300,6 +327,7 @@ const keyRows = (activityId: string, drafts: QuestionDraft[]) =>
       question_id: d.id,
       activity_id: activityId,
       correct_option: d.kind === "mc" ? d.correct_option : null,
+      correct_options: d.kind === "multi" ? d.correct_options : [],
       answer: d.kind === "number" ? d.answer : null,
       tolerance: d.kind === "number" ? d.tolerance : null,
       accept: d.kind === "expression" ? d.accept : [],
@@ -311,12 +339,34 @@ type KeyRow = Awaited<ReturnType<typeof keyRows>>[number];
 
 async function upsertKeys(rows: KeyRow[]): Promise<void> {
   const res = await db().from("live_keys").upsert(rows).select("question_id");
-  if (res.error && before0049(res.error.message)) {
-    // Before 0049: no prints column, and nothing that would read one.
-    unwrap(await db().from("live_keys").upsert(rows.map(({ prints: _, ...row }) => row)).select("question_id"));
+  if (res.error && before0056(res.error.message)) {
+    // Before 0056: no correct_options column — and no select-multiple
+    // question to need it (checkMultiFit refused those before anything was
+    // written). Before 0049: no prints column either.
+    const without = rows.map(({ correct_options: _c, ...row }) => row);
+    const again = await db().from("live_keys").upsert(without).select("question_id");
+    if (again.error && before0049(again.error.message)) {
+      unwrap(await db().from("live_keys").upsert(without.map(({ prints: _p, ...row }) => row)).select("question_id"));
+      return;
+    }
+    unwrap(again);
     return;
   }
   unwrap(res);
+}
+
+/**
+ * A select-multiple question needs 0056. Asked before anything is saved, so a
+ * database without it refuses the whole save rather than half of it.
+ */
+async function checkMultiFit(activityId: string, drafts: QuestionDraft[]): Promise<void> {
+  if (!drafts.some((d) => d.kind === "multi")) return;
+  const res = await db().from("live_keys").select("correct_options").eq("activity_id", activityId).limit(1);
+  if (!res.error) return;
+  if (before0056(res.error.message)) {
+    throw new Error("Select multiple needs 0056_live_select_multiple.sql run on the database first. Nothing was saved.");
+  }
+  throw dbError(res.error);
 }
 
 /** Refuse an explanation the database would, before anything is written. */
@@ -389,6 +439,7 @@ export async function saveLiveQuestions(
 ): Promise<void> {
   checkExplanations(drafts);
   await checkExplanationsFit(activityId, drafts);
+  await checkMultiFit(activityId, drafts);
   if (frozen) {
     for (const d of drafts) {
       const rows = unwrap(
@@ -416,7 +467,7 @@ export async function saveLiveQuestions(
             position: i,
             kind: d.kind,
             stem: d.stem,
-            options: d.kind === "mc" ? d.options : [],
+            options: withOptions(d) ? d.options : [],
             unit: d.kind === "number" ? d.unit : null,
             figure_path: d.figure_path,
           })),
@@ -685,6 +736,7 @@ export async function copyLive(fromId: string, toId: string): Promise<number> {
       unit: q.unit,
       figure_path: figureFor.get(q.id) ?? null,
       correct_option: k?.correct_option ?? null,
+      correct_options: k?.correct_options ?? [],
       answer: k?.answer ?? null,
       tolerance: k?.tolerance ?? null,
       accept: k?.accept ?? [],

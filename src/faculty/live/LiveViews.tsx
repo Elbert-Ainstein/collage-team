@@ -13,7 +13,7 @@
 import { useState } from "react";
 import type { Student, TeamWithMembers } from "@/checkins/types";
 import { optionLetter } from "@/live/answers";
-import { fmtPoints, mmss, outcomeOf, type LiveModel } from "@/live/model";
+import { fmtPoints, mmss, optionText, outcomeOf, type LiveModel } from "@/live/model";
 import { Av, Ic, LiveDot, Pick, Tries, voteSummary } from "@/live/ui";
 
 /** Seconds on one question before a card asks for a look. */
@@ -495,6 +495,8 @@ export function QuestionsView({ m, reveal }: { m: LiveModel; reveal: boolean }) 
             teamN++;
           }
         }
+        // Every option for multiple choice. For the rest — select multiple
+        // included, whose answers are sets — the answers most given.
         const rows =
           q.kind === "mc"
             ? q.options.map((_, i) => optionLetter(i))
@@ -526,13 +528,13 @@ export function QuestionsView({ m, reveal }: { m: LiveModel; reveal: boolean }) 
             </div>
             <div className="lq-opts">
               {rows.length === 0 ? <div className="fv-sub">No answers yet.</div> : null}
-              {rows.map((a, i) => {
+              {rows.map((a) => {
                 const right = reveal && m.right(qi, a) === true;
                 return (
                   <div key={a} className={`lq-opt${right ? " right" : ""}${q.kind === "mc" ? "" : " num"}`}>
-                    <span className="lq-optl">{q.kind === "mc" ? a : ""}</span>
+                    <span className={`lq-optl${q.kind === "multi" ? " multi" : ""}`}>{q.kind === "mc" || q.kind === "multi" ? a : ""}</span>
                     {right ? <span className="lq-sr">The right answer:</span> : null}
-                    <span className="lq-opttext">{q.kind === "mc" ? q.options[i] : m.label(qi, a)}</span>
+                    <span className="lq-opttext">{optionText(q, a) ?? m.label(qi, a)}</span>
                     <Bars own={own.get(a) ?? 0} ownN={ownN} team={team.get(a) ?? 0} teamN={teamN} showTeams={showTeams} />
                   </div>
                 );
@@ -790,7 +792,7 @@ export function StudentQuestion({
   const live = team ? m.current(team.id) : null;
   const voting = live?.q === q ? live : null;
   const name = firstName(s.name);
-  const text = (a: string) => (question.kind === "mc" ? question.options[a.charCodeAt(0) - 65] ?? a : m.label(q, a));
+  const text = (a: string) => optionText(question, a) ?? m.label(q, a);
   const o =
     m.state.phase === "individual"
       ? { label: "Not answered as a team", tone: "muted" as const }
@@ -893,11 +895,11 @@ export function StudentQuestion({
 
       <div className="fv-card lq-sqopts">
         <div className="lq-sqoptshead" aria-hidden="true">
-          <span>{question.kind === "mc" ? "Options" : "Answers given"}</span>
+          <span>{question.kind === "mc" ? "Options" : question.kind === "multi" ? "Combinations given" : "Answers given"}</span>
           <span>{team ? `${team.name} on their own` : ""}</span>
           <span className="lq-hide-sm">Class</span>
         </div>
-        {rows.map((a, i) => {
+        {rows.map((a) => {
           const pickers = (team?.members ?? []).filter((st) => m.own(st.id, q) === a);
           const right = reveal && m.right(q, a) === true;
           const isOwn = own === a;
@@ -907,10 +909,12 @@ export function StudentQuestion({
           const voters = voting ? (team?.members ?? []).filter((_, vi) => voting.votes[vi] === a) : [];
           return (
             <div key={a} className={`lq-sqopt${isOwn ? " own" : ""}${isTeam ? " team" : ""}`}>
-              <span className={`lq-optl${right ? " right" : ""}`}>{question.kind === "mc" ? a : ""}</span>
+              <span className={`lq-optl${right ? " right" : ""}${question.kind === "multi" ? " multi" : ""}`}>
+                {question.kind === "mc" || question.kind === "multi" ? a : ""}
+              </span>
               {right ? <span className="lq-sr">The right answer:</span> : null}
               <span className="lq-sqopttext">
-                {question.kind === "mc" ? question.options[i] : m.label(q, a)}
+                {text(a)}
                 <span className="lq-sqtags">
                   {isOwn ? <span className="lq-tag own">{name}’s answer</span> : null}
                   {isTeam ? (

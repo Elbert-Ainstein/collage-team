@@ -6,20 +6,26 @@
 // question import doesn't make her find the next problem by clicking Finish
 // forty times.
 
-import { normalizeNumber } from "@/live/answers";
+import { multiAnswer, multiLabel, normalizeNumber } from "@/live/answers";
 import type { QuestionDraft } from "@/live/data";
 import type { LiveExplanation, LiveKey, LiveKind, LiveQuestion } from "@/live/types";
 
 export const MAX_OPTIONS = 8;
+
+/** Multiple choice or select multiple: the kinds with lettered options. */
+export const hasOptions = (q: Pick<DraftQuestion, "kind">): boolean => q.kind === "mc" || q.kind === "multi";
 
 export interface DraftQuestion {
   /** The question's id: kept across saves, so answers stay attached to it. */
   id: string;
   kind: LiveKind;
   stem: string;
-  /** Multiple choice. */
+  /** Multiple choice and select multiple. */
   options: string[];
+  /** Multiple choice: the right option. */
   correct: number | null;
+  /** Select multiple: the right options, in no particular order. */
+  corrects: number[];
   /** Number: the key, its unit, and how far off still counts as right. */
   answer: string;
   unit: string;
@@ -56,6 +62,7 @@ export const blankQuestion = (): DraftQuestion => ({
   stem: "",
   options: ["", "", "", ""],
   correct: null,
+  corrects: [],
   answer: "",
   unit: "",
   tolerance: "",
@@ -80,8 +87,9 @@ export function draftsFrom(
         id: q.id,
         kind: q.kind,
         stem: q.stem,
-        options: q.kind === "mc" ? [...q.options] : ["", "", "", ""],
+        options: hasOptions(q) ? [...q.options] : ["", "", "", ""],
         correct: k?.correct_option ?? null,
+        corrects: [...(k?.correct_options ?? [])],
         answer: k?.answer === null || k?.answer === undefined ? "" : String(k.answer),
         unit: q.unit ?? "",
         tolerance: k?.tolerance === null || k?.tolerance === undefined ? "" : String(k.tolerance),
@@ -92,9 +100,31 @@ export function draftsFrom(
     });
 }
 
+/** The right options of a select-multiple question, as saved: within its options, each once, in order. */
+export const correctsOf = (q: Pick<DraftQuestion, "corrects" | "options">): number[] =>
+  [...new Set(q.corrects)].filter((i) => i >= 0 && i < q.options.length).sort((a, b) => a - b);
+
+/**
+ * The same question as another kind. Between multiple choice and select
+ * multiple the options come along, and so does the key where it still means
+ * something: one right option becomes the one ticked box, and one ticked box
+ * becomes the right option.
+ */
+export function withKind(q: DraftQuestion, kind: LiveKind): DraftQuestion {
+  if (kind === q.kind) return q;
+  const next = { ...q, kind };
+  if (kind === "multi" && q.kind === "mc" && q.corrects.length === 0 && q.correct !== null) next.corrects = [q.correct];
+  if (kind === "mc" && q.kind === "multi" && q.correct === null && correctsOf(q).length === 1) next.correct = correctsOf(q)[0];
+  return next;
+}
+
 /** What a question's key reads as, or null if it has none yet. */
 export function keyLabel(q: DraftQuestion): string | null {
   if (q.kind === "mc") return q.correct === null || q.correct >= q.options.length ? null : "ABCDEFGH"[q.correct];
+  if (q.kind === "multi") {
+    const set = multiAnswer(correctsOf(q));
+    return set === null ? null : multiLabel(set);
+  }
   if (q.kind === "number") {
     const n = normalizeNumber(q.answer);
     return n === null ? null : `${n}${q.unit.trim() ? ` ${q.unit.trim()}` : ""}`;
@@ -110,7 +140,7 @@ export type Problem =
 
 export function problemWith(q: DraftQuestion): Problem | null {
   if (!q.stem.trim()) return "needs a question";
-  if (q.kind === "mc" && q.options.some((o) => !o.trim())) return "has an empty option";
+  if (hasOptions(q) && q.options.some((o) => !o.trim())) return "has an empty option";
   if (q.kind === "number" && q.tolerance.trim()) {
     const t = normalizeNumber(q.tolerance);
     if (t === null || Number(t) < 0) return "has a tolerance that isn’t a number";
@@ -150,10 +180,11 @@ export function toQuestionDraft(q: DraftQuestion): QuestionDraft {
     id: q.id,
     kind: q.kind,
     stem: q.stem.trim(),
-    options: q.kind === "mc" ? q.options.map((o) => o.trim()) : [],
+    options: hasOptions(q) ? q.options.map((o) => o.trim()) : [],
     unit: q.kind === "number" && q.unit.trim() ? q.unit.trim() : null,
     figure_path: q.figure_path,
     correct_option: q.kind === "mc" ? q.correct : null,
+    correct_options: q.kind === "multi" ? correctsOf(q) : [],
     answer: q.kind === "number" && n !== null ? Number(n) : null,
     tolerance: q.kind === "number" ? (t === null ? 0 : Number(t)) : null,
     accept: q.kind === "expression" ? q.accept.map((a) => a.trim()).filter(Boolean) : [],
@@ -165,8 +196,10 @@ export function toQuestionDraft(q: DraftQuestion): QuestionDraft {
 /**
  * What saving these drafts would do to answers students have already given,
  * one sentence each — empty when nothing. A removed question takes its answers
- * with it; a question whose kind changes, or that loses an option (re-lettering
- * the rest), keeps answers that no longer mean what the student chose.
+ * with it; a question whose kind changes (multiple choice to select multiple
+ * included: "B" and "B alone" are different answers), or that loses an option
+ * (re-lettering the rest), keeps answers that no longer mean what the student
+ * chose.
  */
 export function answersAtRisk(
   saved: DraftQuestion[],
@@ -182,7 +215,7 @@ export function answersAtRisk(
     const now = drafts.find((d) => d.id === was.id);
     if (!now) out.push(`Q${i + 1} is removed, with its ${answers(n)}.`);
     else if (now.kind !== was.kind) out.push(`Q${i + 1} changes type; its ${answers(n)} were given as the old one.`);
-    else if (was.kind === "mc" && now.options.length < was.options.length)
+    else if (hasOptions(was) && now.options.length < was.options.length)
       out.push(`Q${i + 1} loses an option; its ${answers(n)} may now point at a different one.`);
   });
   return out;
