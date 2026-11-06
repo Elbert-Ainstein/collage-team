@@ -178,7 +178,8 @@ interface Pages {
  * the team is on, and then goes where its Back, Next and the numbers along
  * the top say (0057). A question the team is done with shows as it ended,
  * green or red; an open one takes votes, whichever one the team is "on"; past
- * the last is the overview. A teammate's try moves nobody else's screen.
+ * the last is the overview, and before the first is the roll. A teammate's
+ * try moves nobody else's screen.
  */
 export function TeamPlay({
   m,
@@ -221,7 +222,9 @@ export function TeamPlay({
       onTried={onTried}
       onNext={() => go(q + 1)}
       hasNext={q + 1 < N}
-      onBack={q > 0 ? () => go(q - 1) : undefined}
+      // Before the first question is the roll: Back opens it, where there is one.
+      onBack={q > 0 ? () => go(q - 1) : onRoll}
+      backLabel={q > 0 ? "Previous question" : "Who’s here"}
       onPick={go}
       onRoll={onRoll}
       onLeader={onLeader}
@@ -250,6 +253,7 @@ export function TeamQuestion({
   onNext,
   hasNext = true,
   onBack,
+  backLabel,
   onPick,
   onRoll,
   onLeader,
@@ -264,8 +268,10 @@ export function TeamQuestion({
   onNext?: () => void;
   /** A question is left after this one — what the Next button says. */
   hasNext?: boolean;
-  /** Step back to the question before. */
+  /** Step back to the question before — or, from the first question, to the roll. */
   onBack?: () => void;
+  /** What Back is, for a screen reader: where it goes. */
+  backLabel?: string;
   /** Go straight to a question, from the numbers along the top. */
   onPick?: (q: number) => void;
 }) {
@@ -506,7 +512,7 @@ export function TeamQuestion({
         {feedback ? `${feedback.title}. ${feedback.sub}` : ""}
       </span>
       <footer className={`lq-sfoot team${feedback ? ` fb ${feedback.tone}` : agreed ? " agreed" : ""}`}>
-        {onBack ? <BackButton onBack={onBack} /> : null}
+        {onBack ? <BackButton onBack={onBack} label={backLabel} /> : null}
         {feedback ? (
           <>
             <span className="lq-footmsg lq-fb">
