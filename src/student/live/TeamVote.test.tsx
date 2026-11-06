@@ -1,6 +1,7 @@
 // The team's question screen with tries (0049), Khan Academy style: a wrong
 // try turns red where it sits and the bar at the bottom says so; a question
-// the team has got stays on screen, green, until this phone presses Next.
+// the team has got stays on screen, green, until this phone presses Next —
+// which, like Back and the numbers along the top, is always there (0057).
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -267,5 +268,55 @@ describe("TeamPlay, going back", () => {
     expect(host.querySelector(".lq-sstem")?.textContent).toBe("How far?");
     await act(async () => button("See how you did")!.click());
     expect(host.querySelector(".lq-h2")?.textContent).toBe("Your team has submitted");
+  });
+});
+
+describe("TeamPlay, going anywhere (0057)", () => {
+  const next = () => host.querySelector<HTMLButtonElement>('footer [aria-label="Next question"], footer [aria-label="Overview"]')!;
+  const pips = () => [...host.querySelectorAll<HTMLButtonElement>("button.lq-spip")];
+
+  it("has Next on an open question, and a vote on the next question counts", async () => {
+    await show(<TeamPlay m={model([], "A")} team={team} meId="s1" onError={() => {}} onTried={() => {}} />);
+    expect(host.querySelector(".lq-sstem")?.textContent).toBe("Which?");
+    expect(next().className).toContain("outline");
+    await act(async () => next().click());
+    expect(host.querySelector(".lq-sstem")?.textContent).toBe("And then?");
+    // Nobody has voted here yet; a tap does.
+    expect(foot().textContent).toContain("2 undecided");
+    await act(async () => choice("no").click());
+    expect(castVote).toHaveBeenCalledWith("q2", "B");
+    expect(button("Submit B")).toBeDefined();
+    // And back again, where the vote on question 1 still shows.
+    await act(async () => host.querySelector<HTMLButtonElement>('footer [aria-label="Previous question"]')!.click());
+    expect(host.querySelector(".lq-sstem")?.textContent).toBe("Which?");
+    expect(choice("one").getAttribute("aria-checked")).toBe("true");
+  });
+
+  it("jumps from the numbers along the top, and the overview lists what's done", async () => {
+    await show(<TeamPlay m={model([], "A")} team={team} meId="s1" onError={() => {}} onTried={() => {}} />);
+    expect(pips()).toHaveLength(3);
+    await act(async () => pips()[2].click());
+    expect(host.querySelector(".lq-sstem")?.textContent).toBe("How far?");
+    expect(pips()[2].getAttribute("aria-current")).toBe("true");
+    // Past the last question: an overview, not "submitted".
+    expect(next().getAttribute("aria-label")).toBe("Overview");
+    await act(async () => next().click());
+    expect(host.querySelector(".lq-h2")?.textContent).toBe("0 of 3 done");
+    expect(host.textContent).not.toContain("Your team has submitted");
+    expect(host.querySelector(".lq-donescore")).toBeNull();
+    // A row opens its question.
+    await act(async () => host.querySelectorAll<HTMLButtonElement>("button.lq-reviewrow")[1].click());
+    expect(host.querySelector(".lq-sstem")?.textContent).toBe("And then?");
+  });
+
+  it("stays put when a teammate's try lands elsewhere", async () => {
+    await show(<TeamPlay m={model([], "A")} team={team} meId="s1" onError={() => {}} onTried={() => {}} />);
+    await act(async () => next().click());
+    expect(host.querySelector(".lq-sstem")?.textContent).toBe("And then?");
+    // Question 1 is got: this phone is still on question 2, and the pip says how 1 went.
+    const right = tryAt(1, "B", true);
+    await show(<TeamPlay m={model([right], "A", [lockOf(right)], "q2")} team={team} meId="s1" onError={() => {}} onTried={() => {}} />);
+    expect(host.querySelector(".lq-sstem")?.textContent).toBe("And then?");
+    expect(pips()[0].className).toContain("right");
   });
 });

@@ -12,6 +12,7 @@ import type { LiveExplanation, LiveKey, LiveLeaderVote, LiveLock, LiveResponse, 
 const voteLeader = vi.fn(async () => ({}));
 const confirmLeader = vi.fn(async () => ({}));
 const setAbsences = vi.fn(async () => ({}));
+const reopenLeader = vi.fn(async () => ({}));
 const castVote = vi.fn(async () => {});
 const lockTeamAnswer = vi.fn(async () => ({}));
 const moveTeamOn = vi.fn(async () => ({}));
@@ -19,6 +20,7 @@ vi.mock("@/live/data", () => ({
   voteLeader: (...a: unknown[]) => voteLeader(...(a as [])),
   confirmLeader: (...a: unknown[]) => confirmLeader(...(a as [])),
   setAbsences: (...a: unknown[]) => setAbsences(...(a as [])),
+  reopenLeader: (...a: unknown[]) => reopenLeader(...(a as [])),
   castVote: (...a: unknown[]) => castVote(...(a as [])),
   lockTeamAnswer: (...a: unknown[]) => lockTeamAnswer(...(a as [])),
   moveTeamOn: (...a: unknown[]) => moveTeamOn(...(a as [])),
@@ -109,7 +111,7 @@ beforeEach(() => {
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
-  for (const f of [voteLeader, confirmLeader, setAbsences, castVote, lockTeamAnswer, moveTeamOn]) f.mockClear();
+  for (const f of [voteLeader, confirmLeader, setAbsences, reopenLeader, castVote, lockTeamAnswer, moveTeamOn]) f.mockClear();
 });
 afterEach(() => {
   act(() => root.unmount());
@@ -247,7 +249,8 @@ describe("playing, with a leader", () => {
     expect(foot().textContent).toContain("Ana submits for the team");
     expect(button("Submit")).toBeUndefined();
     expect(button("Lock in")).toBeUndefined();
-    expect(host.querySelector(".lq-leadline")).toBeNull();
+    // The line above the question says who does, for them too (0057).
+    expect(host.querySelector(".lq-leadline")?.textContent).toContain("Ana submits for the team");
     await act(async () => row("three").click());
     expect(castVote).toHaveBeenCalledWith("q1", "C");
     expect(button("Submit")).toBeUndefined();
@@ -283,11 +286,66 @@ describe("playing, with a leader", () => {
     expect(host.querySelector(".lq-sstem")?.textContent).toBe("Which?");
   });
 
-  it("a teammate's done screen has no roll", async () => {
+  it("a teammate opens the roll too, to look, and comes back (0057)", async () => {
     const lockQ2: LiveLock = { ...lockQ1, question_id: "q2", answer: "A" };
     await session({ ...playing, me: "s2", locks: [lockQ1, lockQ2] });
     expect(host.textContent).toContain("Your team has submitted");
-    expect(button("Who’s here")).toBeUndefined();
+    await act(async () => button("Who’s here · 2/3")!.click());
+    expect(host.querySelector(".lq-setupq")?.textContent).toBe("Who’s here?");
+    expect(foot().textContent).toContain("Ana submits for the team");
+    // Nothing to tap, nothing to finish — just the way back.
+    await act(async () => row("Cy Park").click());
+    expect(setAbsences).not.toHaveBeenCalled();
+    expect(button("Done")).toBeUndefined();
+    await act(async () => host.querySelector<HTMLButtonElement>('footer [aria-label="Back to the questions"]')!.click());
+    expect(host.textContent).toContain("Your team has submitted");
+  });
+
+  it("a teammate opens the leader page, sees who submits, and goes back to the same question", async () => {
+    await session({ ...playing, me: "s2" });
+    await act(async () => host.querySelector<HTMLButtonElement>('footer [aria-label="Next question"]')!.click());
+    expect(host.querySelector(".lq-sstem")?.textContent).toBe("And then?");
+    await act(async () => button("Ana submits for the team")!.click());
+    expect(host.querySelector(".lq-setupq")?.textContent).toBe("Who submits for the team?");
+    // Who's there, with the leader marked; nobody marked absent.
+    const rows = [...host.querySelectorAll<HTMLElement>(".lq-choice")];
+    expect(rows.map((r) => r.querySelector(".lq-choicet")?.textContent)).toEqual(["You", "Ana Lee"]);
+    expect(rows[1].className).toContain("agreed");
+    expect(rows[1].querySelector(".lq-choicetag")?.textContent).toBe("Submits");
+    expect(foot().textContent).toContain("Ana submits for the team");
+    await act(async () => host.querySelector<HTMLButtonElement>('footer [aria-label="Back to the questions"]')!.click());
+    expect(host.querySelector(".lq-sstem")?.textContent).toBe("And then?");
+  });
+
+  it("anyone can change leader, once they've said they mean it (0057)", async () => {
+    const onChanged = vi.fn();
+    await session({ ...playing, me: "s2" }, onChanged);
+    await act(async () => button("Ana submits for the team")!.click());
+    await act(async () => button("Change leader")!.click());
+    expect(reopenLeader).not.toHaveBeenCalled();
+    const dialog = host.querySelector<HTMLElement>('[role="dialog"], .sv-dialog')!;
+    expect(dialog.textContent).toContain("Change leader?");
+    expect(dialog.textContent).toContain("nobody submits until you’ve agreed");
+    // Cancel changes nothing.
+    await act(async () => [...dialog.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Cancel")!.click());
+    expect(reopenLeader).not.toHaveBeenCalled();
+    expect(host.querySelector(".sv-dialog")).toBeNull();
+    await act(async () => button("Change leader")!.click());
+    const confirm = [...host.querySelectorAll<HTMLButtonElement>(".sv-dialog button")].find((b) => b.textContent === "Change leader")!;
+    await act(async () => confirm.click());
+    expect(reopenLeader).toHaveBeenCalledWith("a");
+    expect(onChanged).toHaveBeenCalled();
+    // Back on the questions, until the database says the team is picking again.
+    expect(host.querySelector(".lq-sstem")?.textContent).toBe("Which?");
+  });
+
+  it("the team picks again on every phone once the vote is reopened", async () => {
+    // reopen_live_leader cleared leader_id and kept leader_at.
+    const reopened: LiveTeamSetup = { ...setup(null, true), leader_at: iso(3) };
+    await session({ setups: [reopened], absent: ["s3"], me: "s2" });
+    expect(host.querySelector(".lq-setupq")?.textContent).toBe("Who submits for the team?");
+    expect(foot().textContent).toContain("0 of 2 voted");
+    expect(button("Back")).toBeUndefined();
   });
 });
 

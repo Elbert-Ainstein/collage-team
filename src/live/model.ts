@@ -71,12 +71,21 @@ export interface LiveModel {
   /** What team time earned this student: their team's score, or 0 if marked absent. Null with no team. */
   memberScore(studentId: string): number | null;
   current(teamId: string): TeamCurrent | null;
+  /**
+   * Each member's vote on question q, in member order — any question, not
+   * only the one the team is on (0057: a phone goes where it likes). A vote
+   * sitting on an answer the team has tried is no vote, and a locked question
+   * has none.
+   */
+  votes(teamId: string, q: number): (string | null)[];
   /** Seconds from team mode starting to the last lock, once every question is locked. */
   finishedAt(teamId: string): number | null;
   /** Seconds each locked question took, in the order they were locked. */
   durations(teamId: string): number[];
   /** What a value looks like on screen: "B", "A, C", "19.6 m/s", "F/2". */
   label(q: number, answer: string): string;
+  /** This database has leaders and the roll (0051). */
+  leaders: boolean;
   /** Picking a leader, taking the roll, or playing (0051); always "play" without it. */
   stage(teamId: string): TeamStage;
   /** Where the team's vote for leader stands, among its members who are there. */
@@ -161,6 +170,17 @@ export function buildLiveModel(input: LiveModelInput): LiveModel {
     return on === null ? null : on === 0 ? 0 : tryCredit(on);
   };
 
+  const votesOn = (teamId: string, q: number): (string | null)[] => {
+    const question = questions[q];
+    const members = teams.find((t) => t.id === teamId)?.members ?? [];
+    if (!question || snapshot.state.phase !== "team" || lockOf.has(`${teamId}:${question.id}`)) return members.map(() => null);
+    const tried = new Set(tries(teamId, q).map((t) => t.answer));
+    return members.map((m) => {
+      const v = voteOf.get(`${m.id}:${question.id}`) ?? null;
+      return v !== null && tried.has(v) ? null : v;
+    });
+  };
+
   const sortedLockTimes = (teamId: string) =>
     locks(teamId)
       .filter((l): l is LiveLock => l !== null)
@@ -214,19 +234,11 @@ export function buildLiveModel(input: LiveModelInput): LiveModel {
       const ls = locks(tid);
       const q = ls.findIndex((l) => l === null);
       if (q === -1) return null;
-      const team = teams.find((t) => t.id === tid);
       const times = sortedLockTimes(tid);
       const from = times.length ? Math.max(started, times[times.length - 1]) : started;
-      const tried = new Set(tries(tid, q).map((t) => t.answer));
-      return {
-        q,
-        since: seconds(now - from),
-        votes: (team?.members ?? []).map((m) => {
-          const v = voteOf.get(`${m.id}:${questions[q].id}`) ?? null;
-          return v !== null && tried.has(v) ? null : v;
-        }),
-      };
+      return { q, since: seconds(now - from), votes: votesOn(tid, q) };
     },
+    votes: votesOn,
     finishedAt: (tid) => {
       if (started === null || questions.length === 0) return null;
       const times = sortedLockTimes(tid);
@@ -244,6 +256,7 @@ export function buildLiveModel(input: LiveModelInput): LiveModel {
       if (question.kind === "multi") return multiLabel(answer);
       return answer;
     },
+    leaders: snapshot.teamSetup,
     stage: (tid) => teamStage(snapshot, tid),
     leaderTally: (tid) =>
       leaderTally(snapshot, tid, (teams.find((t) => t.id === tid)?.members ?? []).map((m) => m.id)),

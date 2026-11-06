@@ -158,6 +158,24 @@ describe("teams", () => {
     expect(cur.since).toBe(30);
   });
 
+  it("has every member's vote on any open question, not only the one it's on (0057)", () => {
+    const m = model({
+      votes: [
+        { question_id: "q2", activity_id: "a", team_id: "t1", student_id: "s1", answer: "19.6", updated_at: "" },
+        { question_id: "q3", activity_id: "a", team_id: "t1", student_id: "s2", answer: "F/2", updated_at: "" },
+        // Still sitting on q2's tried answer: no vote.
+        { question_id: "q2", activity_id: "a", team_id: "t1", student_id: "s2", answer: "20", updated_at: "" },
+      ],
+      attempts: [attempt("q2", 1, "20", false, 80)],
+    });
+    expect(m.votes("t1", 1)).toEqual(["19.6", null]);
+    expect(m.votes("t1", 2)).toEqual([null, "F/2"]);
+    // Locked: nothing to vote on.
+    expect(m.votes("t1", 0)).toEqual([null, null]);
+    expect(m.votes("t1", 9)).toEqual([null, null]);
+    expect(m.current("t1")?.votes).toEqual(m.votes("t1", 1));
+  });
+
   it("has no current question once every one is locked, and knows when it finished", () => {
     const m = model({
       locks: [

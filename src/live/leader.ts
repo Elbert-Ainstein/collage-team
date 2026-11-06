@@ -83,12 +83,15 @@ export function leaderTally(snapshot: LiveSnapshot, teamId: string, memberIds: r
 
 /**
  * May this student act for the team — submit a try, move it on (live_leads)?
- * Anyone there, until the team has had a leader; then only its leader, and
- * nobody while the one it had is marked absent and it hasn't picked again.
+ * Anyone there, until the team has ever had a leader (leader_at, which stays
+ * set when the vote is reopened, 0057); then only its leader, and nobody
+ * while it has none — the one it had marked absent, or its vote reopened —
+ * and it hasn't picked again.
  */
 export function mayLead(snapshot: LiveSnapshot, teamId: string, studentId: string): boolean {
   if (isAbsent(snapshot, studentId)) return false;
-  if (!setupOf(snapshot, teamId)?.leader_id) return true;
+  const setup = setupOf(snapshot, teamId);
+  if (!setup?.leader_at && !setup?.leader_id) return true;
   return leaderOf(snapshot, teamId) === studentId;
 }
 

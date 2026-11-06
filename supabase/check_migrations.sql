@@ -327,6 +327,11 @@ select '0056 live select multiple',
                             and column_name = 'correct_options')
             then 'applied'
             else 'NOT APPLIED — run 0056_live_select_multiple.sql' end
+union all
+select '0057 live change leader',
+       case when to_regprocedure('public.reopen_live_leader(uuid)') is not null
+            then 'applied'
+            else 'NOT APPLIED — run 0057_live_change_leader.sql' end
 order by 1;
 
 -- ------------------------------------------------------- and the buckets

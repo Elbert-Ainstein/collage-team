@@ -1,13 +1,13 @@
 // Select all that apply (0056) on the student's three screens: ticking boxes
-// before class, the team proposing a combination in class, and the review
-// after, option by option.
+// before class, the team ticking the same boxes in class — each tick the
+// vote (0057) — and the review after, option by option.
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Student, TeamWithMembers } from "@/checkins/types";
 import { buildLiveModel } from "@/live/model";
-import type { LiveAttempt, LiveSnapshot } from "@/live/types";
+import type { LiveAttempt, LiveLock, LiveSnapshot } from "@/live/types";
 import type { AnswerSaver } from "./useAnswerSaver";
 
 const castVote = vi.fn(async () => {});
@@ -120,46 +120,89 @@ describe("before class", () => {
     expect(box("Normal").getAttribute("aria-checked")).toBe("true");
     await tick("Normal");
     expect(save).not.toHaveBeenCalled();
-    expect(host.textContent).toContain("Pick at least one");
+    expect(box("Normal").getAttribute("aria-checked")).toBe("false");
+    // The tag above the boxes is the whole instruction: no line under them (0057).
+    expect(host.querySelector(".lq-numhint")).toBeNull();
   });
 });
 
 describe("in class", () => {
-  it("puts each member's set on the table, by its letters and its options", async () => {
-    await show(<TeamQuestion m={model()} team={team} q={0} onError={() => {}} onTried={() => {}} />);
-    const choices = [...host.querySelectorAll<HTMLButtonElement>(".lq-choices[role=radiogroup] .lq-choice")];
-    expect(choices.map((c) => c.querySelector(".lq-choicel")?.textContent)).toEqual(["AC", "AB"]);
-    expect(choices.map((c) => c.querySelector(".lq-choicet")?.textContent)).toEqual(["Gravity · Friction", "Gravity · Normal"]);
-    await act(async () => choices[1].click());
-    expect(castVote).toHaveBeenCalledWith("q1", "AB");
-    expect(host.querySelector("footer")?.textContent).toContain("Submit A, B");
+  const tried: LiveAttempt = {
+    question_id: "q1",
+    activity_id: "a",
+    team_id: "t1",
+    attempt: 1,
+    answer: "AC",
+    correct: false,
+    locked_by: "s1",
+    locked_at: iso(10),
+  };
+  const voterIds = (b: HTMLElement) => [...b.querySelectorAll<HTMLElement>(".lq-voterpop .lq-av")].length;
+  const foot = () => host.querySelector("footer")!;
+
+  it("has the same boxes as before class, and each tick is the team vote", async () => {
+    const bo = { question_id: "q1", activity_id: "a", team_id: "t1", student_id: "s2", answer: "AB", updated_at: "" };
+    await show(<TeamQuestion m={model({ votes: [bo] })} team={team} q={0} onError={() => {}} onTried={() => {}} />);
+    // No combinations to propose, no table of sets: the options, as checkboxes.
+    expect(host.querySelector(".lq-propose")).toBeNull();
+    expect(host.querySelector(".lq-choices[role=radiogroup]")).toBeNull();
+    expect(boxes()).toHaveLength(4);
+    expect(host.querySelector(".lq-multitag")?.textContent).toContain("Select all that apply");
+    // Bo's set shows on the options it has.
+    expect(voterIds(box("Gravity"))).toBe(1);
+    expect(voterIds(box("Normal"))).toBe(1);
+    expect(voterIds(box("Friction"))).toBe(0);
+    expect(foot().textContent).toContain("Bo on A, B · 1 undecided");
+    expect(foot().textContent).toContain("Tick all that apply");
+
+    await tick("Friction");
+    expect(castVote).toHaveBeenLastCalledWith("q1", "C");
+    await tick("Gravity");
+    expect(castVote).toHaveBeenLastCalledWith("q1", "AC");
+    expect(box("Gravity").getAttribute("aria-checked")).toBe("true");
+    expect(box("Normal").getAttribute("aria-checked")).toBe("false");
+    expect(host.querySelector(".lq-multicount")?.textContent).toBe("2 selected");
+    // Mine is on Gravity now too, and the bar names my set.
+    expect(voterIds(box("Gravity"))).toBe(2);
+    expect(foot().textContent).toContain("Submit A, C");
   });
 
-  it("proposes a combination nobody has put forward, and not one the team has tried", async () => {
-    const tried: LiveAttempt = {
-      question_id: "q1",
-      activity_id: "a",
-      team_id: "t1",
-      attempt: 1,
-      answer: "AC",
-      correct: false,
-      locked_by: "s1",
-      locked_at: iso(10),
-    };
+  it("lists what the team has tried, and won't vote a tried set again", async () => {
     await show(<TeamQuestion m={model({ attempts: [tried] })} team={team} q={0} onError={() => {}} onTried={() => {}} />);
-    const form = host.querySelector(".lq-propose.multi")!;
-    const propose = () => form.querySelector<HTMLButtonElement>("button[type=submit]")!;
-    expect(propose().disabled).toBe(true);
-    await tick("Gravity", form);
-    await tick("Friction", form);
-    expect(propose().textContent).toBe("Tried");
-    expect(propose().disabled).toBe(true);
-    await tick("Tension", form);
-    expect(propose().textContent).toBe("Propose A, C, D");
-    await act(async () => propose().click());
-    expect(castVote).toHaveBeenCalledWith("q1", "ACD");
-    // Proposed: the boxes clear for the next one.
-    expect(boxes(form).every((b) => b.getAttribute("aria-checked") === "false")).toBe(true);
+    const triedRows = [...host.querySelectorAll<HTMLElement>(".lq-tried .lq-choice")];
+    expect(triedRows.map((r) => r.querySelector(".lq-choicel")?.textContent)).toEqual(["AC"]);
+    expect(triedRows[0].className).toContain("wrong");
+    expect(triedRows[0].textContent).toContain("Gravity · Friction");
+
+    await tick("Gravity");
+    expect(castVote).toHaveBeenLastCalledWith("q1", "A");
+    await tick("Friction");
+    // A, C has been tried: the boxes show it, the line says so, and A still stands as my vote.
+    expect(castVote).toHaveBeenCalledTimes(1);
+    expect(box("Friction").getAttribute("aria-checked")).toBe("true");
+    expect(host.querySelector('[role="status"].lq-numhint')?.textContent).toContain("Your team already tried A, C");
+    expect(foot().textContent).toContain("Submit A");
+    await tick("Tension");
+    expect(castVote).toHaveBeenLastCalledWith("q1", "ACD");
+    expect(host.querySelector('[role="status"].lq-numhint')?.textContent).toBe("");
+    expect(foot().textContent).toContain("Submit A, C, D");
+  });
+
+  it("shows the team's answer in the boxes once it's done", async () => {
+    const got: LiveAttempt = { ...tried, attempt: 2, answer: "AB", correct: true, locked_at: iso(20) };
+    const lock: LiveLock = { question_id: "q1", activity_id: "a", team_id: "t1", answer: "AB", correct: true, locked_by: "s1", locked_at: iso(20) };
+    await show(<TeamQuestion m={model({ attempts: [tried, got], locks: [lock] })} team={team} q={0} onError={() => {}} onTried={() => {}} onNext={() => {}} />);
+    expect(boxes()).toHaveLength(0);
+    const row = (text: string) => [...host.querySelectorAll<HTMLElement>(".lq-choices.multi .lq-choice")].find((c) => c.textContent?.includes(text))!;
+    expect(row("Gravity").className).toContain("right");
+    expect(row("Gravity").querySelector(".lq-checkbox")?.className).toContain("on");
+    expect(row("Gravity").textContent).toContain("Team");
+    expect(row("Tension").className).not.toMatch(/right|wrong/);
+    expect(row("Tension").querySelector(".lq-checkbox")?.className).not.toContain("on");
+    const triedRows = [...host.querySelectorAll<HTMLElement>(".lq-tried .lq-choice")];
+    expect(triedRows.map((r) => r.className.includes("right"))).toEqual([false, true]);
+    expect(foot().textContent).toContain("Correct!");
+    expect(foot().textContent).toContain("You submitted A, B · +0.5 points");
   });
 });
 

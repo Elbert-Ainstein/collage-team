@@ -570,6 +570,15 @@ export async function confirmLeader(activityId: string): Promise<LiveTeamSetup> 
 }
 
 /**
+ * Change leader (0057): the team has no leader and no votes again, and picks
+ * one as at the start. By anyone on the team who is there. Nobody submits
+ * until it has picked.
+ */
+export async function reopenLeader(activityId: string): Promise<LiveTeamSetup> {
+  return unwrap(await db().rpc("reopen_live_leader", { aid: activityId })) as LiveTeamSetup;
+}
+
+/**
  * The leader's roll (0051): exactly these teammates are absent, the rest of
  * the team is here. Taking it again replaces it. Each tap is saved with
  * `done` false (0052), so the team watches the roll being taken; the team
