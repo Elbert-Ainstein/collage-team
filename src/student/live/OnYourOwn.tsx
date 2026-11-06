@@ -303,7 +303,8 @@ function Submitted({ answered, of, onReview, onBack }: { answered: number; of: n
  * Select multiple (0056): every option, ticked or not. Each tick gives the
  * whole set as one answer ("AC"). Unticking the last box is nothing to save —
  * an answer is at least one option — so the boxes show empty while the last
- * set given stays saved, until they tick again.
+ * set given stays saved, until they tick again. The tag above the boxes is
+ * the whole instruction; there is no line under them (0057).
  */
 export function MultiEntry({
   q,
@@ -342,10 +343,6 @@ export function MultiEntry({
           </button>
         ))}
       </div>
-      {/* Always there, so a screen reader hears it the moment the last box is unticked. */}
-      <span className="lq-numhint bad" role="status">
-        {value && !picked ? "Pick at least one — your last answer still stands" : ""}
-      </span>
     </div>
   );
 }

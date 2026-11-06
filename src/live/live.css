@@ -3780,6 +3780,38 @@ span.lq-spip {
     display: none;
   }
 }
+/* Next, beside it, the same way (0057): always there, whether or not the
+   team is done with the question. */
+.lq-sfoot .fv-btn.lq-nextbtn {
+  flex: none;
+  padding: 0 12px;
+}
+@media (max-width: 420px) {
+  .lq-nextlabel {
+    display: none;
+  }
+}
+/* Select multiple in team mode (0057): the sets the team has tried, listed
+   under the boxes in the colour they were told. */
+.lq-triedlabel {
+  display: block;
+  margin: 14px 0 6px;
+  font-size: 10px;
+  letter-spacing: var(--fv-wide);
+  text-transform: uppercase;
+  color: var(--fv-muted);
+}
+.lq-choice.static.multi .lq-checkbox {
+  margin-left: 6px;
+}
+.lq-choice.static.right .lq-checkbox.on {
+  background: var(--lq-right-ink);
+  border-color: var(--lq-right-ink);
+}
+.lq-choice.static.wrong .lq-checkbox.on {
+  background: var(--lq-wrong);
+  border-color: var(--lq-wrong);
+}
 .lq-donescore b {
   font-size: 22px;
   color: var(--lq-team);
@@ -3908,7 +3940,13 @@ span.lq-spip {
 .lq-wait .fv-sub {
   margin: 0;
 }
-/* The leader's line above the question: they submit, and can take the roll again. */
+/* The line above the question (0057): who submits — a tap opens the leader
+   page — and who's here — a tap opens the roll. For everyone on the team. */
+.lq-leadline .fv-btn.ghost.lq-leadbtn {
+  padding-left: 0;
+  color: var(--lq-team);
+  font-weight: 600;
+}
 .lq-leadline {
   display: flex;
   align-items: center;

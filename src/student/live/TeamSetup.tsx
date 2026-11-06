@@ -4,15 +4,19 @@
 // takes the roll. Every phone votes for itself and watches the same tally come
 // back over realtime; the roll shows on every phone too, as the leader takes
 // it. Where the team is comes from the database, so a refresh lands on the
-// same step, and a student marked absent sees only that.
+// same step, and a student marked absent sees only that. During play anyone
+// on the team can open either page again (0057): the roll, to see or — as the
+// leader — fix who's here, and the leader page, to see who submits and, if
+// the team really wants to, change it by voting again.
 
 import { useRef, useState } from "react";
 import type { Student, TeamWithMembers } from "@/checkins/types";
-import { confirmLeader, setAbsences, voteLeader } from "@/live/data";
+import { confirmLeader, reopenLeader, setAbsences, voteLeader } from "@/live/data";
 import type { LiveModel } from "@/live/model";
 import { Av, Ic } from "@/live/ui";
+import { ConfirmDialog } from "../ConfirmDialog";
 import { forStudent } from "./forStudent";
-import { firstName, TeamPlay } from "./TeamVote";
+import { BackButton, firstName, TeamPlay } from "./TeamVote";
 
 interface SetupProps {
   m: LiveModel;
@@ -33,20 +37,28 @@ const callName = (team: TeamWithMembers, meId: string, id: string | null): strin
   return who ? firstName(who.name) : "Your leader";
 };
 
-/** Team mode, after Start: leader, then the roll, then play — the step the database says. */
+/**
+ * Team mode, after Start: leader, then the roll, then play — the step the
+ * database says. From play, this phone can open the leader page or the roll
+ * again on its own (0057); the database's step still comes first, so a vote
+ * reopened on any phone brings every phone to it.
+ */
 export function TeamSession(props: SetupProps) {
   const { m, team, meId, onError, onChanged } = props;
-  // The leader reopened the roll from play: someone turned up late.
-  const [reroll, setReroll] = useState(false);
+  const [view, setView] = useState<"play" | "leader" | "roll">("play");
+  // The question this phone was on, so coming back from either page lands there.
+  const [at, setAt] = useState<number | null>(null);
+  const back = () => setView("play");
   if (m.isAbsent(meId)) return <MarkedAbsent team={team} leaderId={m.leaderOf(team.id)} />;
   const stage = m.stage(team.id);
   if (stage === "leader") return <LeaderVote {...props} />;
+  if (view === "leader") return <CurrentLeader {...props} onBack={back} />;
   const leader = m.leaderOf(team.id);
   const leads = leader === meId;
   // A team of one has nobody to call.
   const alone = team.members.length < 2;
-  if (!alone && (stage === "roll" || (reroll && leads))) {
-    return <RollCall {...props} leaderId={leader} leads={leads} again={stage === "play"} onDone={() => setReroll(false)} />;
+  if (!alone && (stage === "roll" || view === "roll")) {
+    return <RollCall {...props} leaderId={leader} leads={leads} again={stage === "play"} onDone={back} />;
   }
   return (
     <TeamPlay
@@ -55,7 +67,10 @@ export function TeamSession(props: SetupProps) {
       meId={meId}
       onError={onError}
       onTried={onChanged}
-      onRoll={leads && !alone ? () => setReroll(true) : undefined}
+      onRoll={m.leaders && !alone ? () => setView("roll") : undefined}
+      onLeader={m.leaders ? () => setView("leader") : undefined}
+      cursor={at}
+      onCursor={setAt}
     />
   );
 }
@@ -162,13 +177,82 @@ function LeaderVote({ m, team, meId, onError, onChanged }: SetupProps) {
   );
 }
 
+/**
+ * The leader page during play (0057): who submits for the team, and Change
+ * leader. Changing it reopens the vote for everyone — a leader is still
+ * something the whole team agrees on — and nobody submits until it's done,
+ * so it asks first.
+ */
+function CurrentLeader({ m, team, meId, onError, onChanged, onBack }: SetupProps & { onBack: () => void }) {
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const leaderId = m.leaderOf(team.id);
+  const away = new Set(m.absentIds(team.id));
+  const here = team.members.filter((s) => !away.has(s.id));
+  const who = callName(team, meId, leaderId);
+  const reopen = async () => {
+    setBusy(true);
+    try {
+      await reopenLeader(m.state.activity_id);
+      // The database's step is "leader" now, for every phone; back to play for when the vote is done.
+      onBack();
+      await onChanged();
+    } catch (e) {
+      onError(forStudent(e, "Couldn’t change leader. Try again."));
+    } finally {
+      setBusy(false);
+      setAsking(false);
+    }
+  };
+  return (
+    <>
+      <div className="lq-sscroll">
+        <span className="fv-eyebrow lq-sq">{team.name} · Leader</span>
+        <h2 className="lq-setupq">Who submits for the team?</h2>
+        <div className="lq-choices" role="list" aria-label="Team leader">
+          {here.map((s) => (
+            <div key={s.id} role="listitem" className={`lq-choice team lq-leadpick lq-readonly${s.id === leaderId ? " agreed" : ""}`}>
+              <Av p={s} size={30} />
+              <span className="lq-choicet">{s.id === meId ? "You" : s.name}</span>
+              {s.id === leaderId ? <span className="lq-choicetag">Submits</span> : null}
+            </div>
+          ))}
+        </div>
+      </div>
+      <footer className="lq-sfoot team">
+        <BackButton onBack={onBack} label="Back to the questions" />
+        <span className="lq-footmsg">
+          <b>{who === "You" ? "You submit for the team" : `${who} submits for the team`}</b>
+          <span className="fv-sub">Changing it means voting again</span>
+        </span>
+        <span className="lq-footbtns">
+          <button type="button" className="fv-btn outline lq-teambtn" disabled={busy} onClick={() => setAsking(true)}>
+            Change leader
+          </button>
+        </span>
+      </footer>
+      {asking ? (
+        <ConfirmDialog
+          title="Change leader?"
+          body={`${team.name} votes again for who submits, and nobody submits until you’ve agreed on someone.`}
+          confirmLabel="Change leader"
+          busyLabel="Changing…"
+          busy={busy}
+          onConfirm={() => void reopen()}
+          onCancel={() => setAsking(false)}
+        />
+      ) : null}
+    </>
+  );
+}
+
 // -------------------------------------------------------------- the roll
 
 interface RollProps extends SetupProps {
   leaderId: string | null;
   /** This phone's student is the leader: they tap, and finish it. */
   leads: boolean;
-  /** Taken again during play, for someone who turned up late. */
+  /** Opened again during play (0057): by the leader, for someone who turned up late, or by anyone to look. Back goes to the questions. */
   again: boolean;
   onDone: () => void;
 }
@@ -246,6 +330,7 @@ function RollCall({ m, team, meId, onError, onChanged, leaderId, leads, again, o
         </div>
       </div>
       <footer className="lq-sfoot team">
+        {again ? <BackButton onBack={onDone} label="Back to the questions" /> : null}
         <span className="lq-footmsg">
           <b>
             {here} of {team.members.length} here

@@ -111,6 +111,19 @@ describe("the leader", () => {
     expect(mayLead(gone, "t1", "s1")).toBe(false);
     expect(teamStage(gone, "t1")).toBe("leader");
   });
+
+  it("voted again (0057), leaves nobody to submit until the team has picked", () => {
+    // reopen_live_leader clears leader_id and keeps leader_at: the team has had a leader.
+    const reopened = snap({ setups: [setup({ leader_id: null, leader_at: "x", roll_at: "y" })] });
+    expect(mayLead(reopened, "t1", "s1")).toBe(false);
+    expect(mayLead(reopened, "t1", "s2")).toBe(false);
+    expect(leaderOf(reopened, "t1")).toBeNull();
+    expect(teamStage(reopened, "t1")).toBe("leader");
+    // Picked again: the roll stands, so straight back to play.
+    const picked = snap({ setups: [setup({ leader_id: "s3", leader_at: "z", roll_at: "y" })] });
+    expect(mayLead(picked, "t1", "s3")).toBe(true);
+    expect(teamStage(picked, "t1")).toBe("play");
+  });
 });
 
 describe("teamStage", () => {

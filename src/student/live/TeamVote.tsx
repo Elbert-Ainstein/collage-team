@@ -8,15 +8,19 @@
 // over realtime, so every phone on the team shows the same thing. Once the
 // team has a leader (0051), everyone still votes, but only the leader submits
 // and moves the team on; whoever the roll marked absent drops out of the count.
+// Each phone goes where it likes (0057): Back, Next and the numbers along the
+// top are always there, nobody waits for the leader to finish a question
+// before looking at the next, and a vote on any open question counts.
 
 import { useRef, useState } from "react";
-import type { TeamWithMembers } from "@/checkins/types";
+import type { Student, TeamWithMembers } from "@/checkins/types";
 import {
   canMoveOn,
   canonicalAnswer,
   maxTries,
   multiAnswer,
   multiIndexes,
+  multiLabel,
   normalizeNumber,
   optionLetter,
   toggleOption,
@@ -93,7 +97,8 @@ export function TeamIntro({
   );
 }
 
-function TeamPips({ m, team, current }: { m: LiveModel; team: TeamWithMembers; current: number }) {
+/** The numbers along the top: how each question went, and a tap goes to it. */
+function TeamPips({ m, team, current, onPick }: { m: LiveModel; team: TeamWithMembers; current: number; onPick?: (q: number) => void }) {
   return (
     <div className="lq-spips">
       {m.locks(team.id).map((l, i) => {
@@ -102,17 +107,20 @@ function TeamPips({ m, team, current }: { m: LiveModel; team: TeamWithMembers; c
         const r = on === null ? null : on > 0;
         // A long answer doesn't fit the box: the number, in the colour.
         const short = l && l.answer.length <= 6;
-        return (
-          <span
-            key={i}
-            className={`lq-spip team${l ? " filled" : ""}${i === current ? " now" : ""}${r === true ? " right" : r === false ? " wrong" : ""}`}
-          >
-            <span aria-hidden="true">{short ? l.answer : i + 1}</span>
-            <span className="lq-sr">
-              Question {i + 1}
-              {l ? (r === true ? `, right on try ${on}` : r === false ? ", not got" : ", done") : ""}
+        const className = `lq-spip team${l ? " filled" : ""}${i === current ? " now" : ""}${r === true ? " right" : r === false ? " wrong" : ""}`;
+        const said = `Question ${i + 1}${l ? (r === true ? `, right on try ${on}` : r === false ? ", not got" : ", done") : ""}`;
+        if (!onPick) {
+          return (
+            <span key={i} className={className}>
+              <span aria-hidden="true">{short ? l.answer : i + 1}</span>
+              <span className="lq-sr">{said}</span>
             </span>
-          </span>
+          );
+        }
+        return (
+          <button key={i} type="button" className={className} aria-label={said} aria-current={i === current} onClick={() => onPick(i)}>
+            {short ? l.answer : i + 1}
+          </button>
         );
       })}
     </div>
@@ -134,6 +142,13 @@ function byWhom(team: TeamWithMembers, id: string | null): string {
   return !who ? "Your team" : who.id === team.members[0].id ? "You" : firstName(who.name);
 }
 
+/** Who submits for the team, as the line above the question says it. */
+function leadText(m: LiveModel, team: TeamWithMembers): string {
+  const id = m.leaderOf(team.id);
+  if (id === null) return "No leader yet";
+  return id === team.members[0]?.id ? "You submit for the team" : `${byWhom(team, id)} submits for the team`;
+}
+
 /** The right answer in words, when this student may see the key; null otherwise. */
 function keyText(m: LiveModel, q: number): string | null {
   const question = m.questions[q];
@@ -150,13 +165,20 @@ function keyText(m: LiveModel, q: number): string | null {
   return key.accept[0] ?? null;
 }
 
+/** Going to the leader page and the roll (0057): for everyone on the team, from any question. */
+interface Pages {
+  /** Open the roll — who's here. Not on a team of one. */
+  onRoll?: () => void;
+  /** Open the leader page — who submits, and Change leader. */
+  onLeader?: () => void;
+}
+
 /**
- * Team mode on one phone. The question the team is on; then, once the team
- * has it or is out of tries, that question held in its answered state with a
- * Next button, the way Khan Academy does it; then the summary once every
- * question is done. The hold is this phone's own: a teammate pressing Next
- * moves nobody else's screen. Back steps to the questions before, as they
- * ended, for anyone on the team; Next steps forward again.
+ * Team mode on one phone. Where it is is its own: it starts on the question
+ * the team is on, and then goes where its Back, Next and the numbers along
+ * the top say (0057). A question the team is done with shows as it ended,
+ * green or red; an open one takes votes, whichever one the team is "on"; past
+ * the last is the overview. A teammate's try moves nobody else's screen.
  */
 export function TeamPlay({
   m,
@@ -165,33 +187,30 @@ export function TeamPlay({
   onError,
   onTried,
   onRoll,
-}: {
+  onLeader,
+  cursor = null,
+  onCursor,
+}: Pages & {
   m: LiveModel;
   team: TeamWithMembers;
   meId: string;
   onError: (message: string) => void;
   onTried: () => Promise<void> | void;
-  /** This phone's student leads the team: take the roll again. */
-  onRoll?: () => void;
+  /** Where this phone was, kept by the caller so a trip to the roll or the leader page comes back to it; null to start where the team is. */
+  cursor?: number | null;
+  onCursor?: (q: number) => void;
 }) {
-  const now = m.current(team.id)?.q ?? null;
-  const [seen, setSeen] = useState(now);
-  const [held, setHeld] = useState<number | null>(null);
-  // Decided while rendering, so the next question never flashes up before
-  // the answered one. Already holding one: keep it; the rest show in the boxes.
-  if (now !== seen) {
-    setSeen(now);
-    if (seen !== null && held === null && m.locks(team.id)[seen]) setHeld(seen);
-  }
-  // An earlier question this phone stepped back to: always one the team is done with.
-  const [back, setBack] = useState<number | null>(null);
   const N = m.questions.length;
-  const front = held ?? now ?? N;
-  const q = back ?? front;
-  const goBack = q > 0 ? () => setBack(q - 1) : undefined;
-  if (q >= N) return <TeamDone m={m} team={team} meId={meId} onRoll={onRoll} onBack={goBack} />;
-  const onNext =
-    back !== null ? () => setBack(back + 1 < front ? back + 1 : null) : held !== null ? () => setHeld(null) : undefined;
+  const [own, setOwn] = useState(() => m.current(team.id)?.q ?? N);
+  const q = cursor ?? own;
+  const go = (i: number) => {
+    const at = Math.max(0, Math.min(N, i));
+    setOwn(at);
+    onCursor?.(at);
+  };
+  if (q >= N) {
+    return <TeamDone m={m} team={team} meId={meId} onRoll={onRoll} onLeader={onLeader} onBack={N > 0 ? () => go(N - 1) : undefined} onPick={go} />;
+  }
   return (
     <TeamQuestion
       key={q}
@@ -200,18 +219,20 @@ export function TeamPlay({
       q={q}
       onError={onError}
       onTried={onTried}
-      onNext={onNext}
-      hasNext={back !== null ? back + 1 < N : now !== null}
-      onBack={goBack}
-      onRoll={back === null ? onRoll : undefined}
+      onNext={() => go(q + 1)}
+      hasNext={q + 1 < N}
+      onBack={q > 0 ? () => go(q - 1) : undefined}
+      onPick={go}
+      onRoll={onRoll}
+      onLeader={onLeader}
     />
   );
 }
 
-/** Back a question: on every team screen but the first question's. */
-function BackButton({ onBack }: { onBack: () => void }) {
+/** Back a question: on every team screen but the first question's. From the roll or the leader page, back to the questions. */
+export function BackButton({ onBack, label = "Previous question" }: { onBack: () => void; label?: string }) {
   return (
-    <button type="button" className="fv-btn outline lq-teambtn lq-backbtn" aria-label="Previous question" onClick={onBack}>
+    <button type="button" className="fv-btn outline lq-teambtn lq-backbtn" aria-label={label} onClick={onBack}>
       <Ic name="chevronLeft" size={15} />
       <span className="lq-backlabel">Back</span>
     </button>
@@ -229,22 +250,24 @@ export function TeamQuestion({
   onNext,
   hasNext = true,
   onBack,
+  onPick,
   onRoll,
-}: {
+  onLeader,
+}: Pages & {
   m: LiveModel;
   team: TeamWithMembers;
   q: number;
   onError: (message: string) => void;
   /** A try went in: read the session now rather than wait for realtime, so the verdict shows at once. */
   onTried: () => Promise<void> | void;
-  /** The team is done with this question and it's held on screen: move this phone on. */
+  /** Move this phone on: always there, whether or not the team is done with this question (0057). */
   onNext?: () => void;
   /** A question is left after this one — what the Next button says. */
   hasNext?: boolean;
   /** Step back to the question before. */
   onBack?: () => void;
-  /** This phone's student leads the team: take the roll again. */
-  onRoll?: () => void;
+  /** Go straight to a question, from the numbers along the top. */
+  onPick?: (q: number) => void;
 }) {
   const [pending, setPending] = useState<string | null>(null);
   // Which button is waiting on the server, so only that one says so.
@@ -256,26 +279,23 @@ export function TeamQuestion({
   if (!question) return null;
   const lock = m.locks(team.id)[q];
   const done = lock !== null;
+  const finished = m.locks(team.id).every((l) => l !== null);
   const tries = m.tries(team.id, q);
   const tried = new Set(tries.map((t) => t.answer));
   const last = tries[tries.length - 1];
   const tryNo = tries.length + 1;
   const max = maxTries(question);
   const movable = !done && canMoveOn(question, tries.length);
-  const cur = m.current(team.id);
-  const live = !done && cur?.q === q ? cur : null;
   // My vote: the one I just cast, until the server's copy catches up — unless
   // the team has just tried it, which takes it off the table.
-  const votes = (live?.votes ?? team.members.map(() => null)).map((v, i) =>
-    i === 0 && pending !== null && !tried.has(pending) ? pending : v,
-  );
+  const votes = m.votes(team.id, q).map((v, i) => (i === 0 && pending !== null && !tried.has(pending) ? pending : v));
   // Whoever the roll marked absent (0051) is out of the count, as lock_team_answer has it.
   const away = new Set(m.absentIds(team.id));
   const seats = team.members
     .map((s, i) => ({ s, v: votes[i] ?? null, name: i === 0 ? "You" : firstName(s.name) }))
     .filter(({ s }) => !away.has(s.id));
   const hereVotes = seats.map((x) => x.v);
-  const mine = done ? null : votes[0];
+  const mine = done ? null : votes[0] ?? null;
   const agreed = !done && hereVotes.length > 0 && hereVotes[0] && hereVotes.every((v) => v === hereVotes[0]) ? hereVotes[0] : null;
   const rule = m.state.lock_rule;
   const others = hereVotes.slice(1).filter((v) => v && v !== mine).length;
@@ -355,23 +375,43 @@ export function TeamQuestion({
     };
   }
 
+  // Multiple choice: every option. Typed: what's on the table, then what's
+  // been tried. Select multiple has boxes of its own (MultiVote), and lists
+  // its tries under them.
   const choices =
     question.kind === "mc"
       ? question.options.map((_, i) => optionLetter(i))
-      : done
-        ? tries.map((t) => t.answer)
-        : [...typedChoices(m, team, q, votes).filter((a) => !tried.has(a)), ...tries.map((t) => t.answer)];
+      : question.kind === "multi"
+        ? []
+        : done
+          ? tries.map((t) => t.answer)
+          : [...typedChoices(m, team, q, votes).filter((a) => !tried.has(a)), ...tries.map((t) => t.answer)];
   const submitLabel = rule === "any" ? "Submit" : "Lock in";
   const moveOnButton = movable && leads ? (
     <button type="button" className="fv-btn outline lq-teambtn" disabled={busy !== null} onClick={() => void moveOn()}>
       {busy === "move" ? "Moving on…" : <>Move on <Ic name="arrowRight" size={15} /></>}
     </button>
   ) : null;
+  // Always there (0057). Says more once the team is done with this one,
+  // when moving on is the thing to do; otherwise it's the arrow beside Back.
+  const nextName = hasNext ? "Next question" : finished ? "See how you did" : "Overview";
+  const nextButton = onNext ? (
+    done ? (
+      <button type="button" className="fv-btn primary lq-teambtn" onClick={onNext}>
+        {nextName} <Ic name="arrowRight" size={15} />
+      </button>
+    ) : (
+      <button type="button" className="fv-btn outline lq-teambtn lq-nextbtn" aria-label={nextName} onClick={onNext}>
+        <span className="lq-nextlabel">Next</span>
+        <Ic name="chevronRight" size={15} />
+      </button>
+    )
+  ) : null;
 
   return (
     <>
       <div className="lq-sscroll">
-        <TeamPips m={m} team={team} current={q} />
+        <TeamPips m={m} team={team} current={q} onPick={onPick} />
         <div className="lq-sqrow">
           <span className="fv-eyebrow lq-sq">
             {team.name} · Question {q + 1} of {m.questions.length}
@@ -383,7 +423,7 @@ export function TeamQuestion({
             </span>
           )}
         </div>
-        {onRoll ? <LeadLine here={seats.length} of={team.members.length} onRoll={onRoll} /> : null}
+        {m.leaders ? <LeadLine lead={leadText(m, team)} here={seats.length} of={team.members.length} onLeader={onLeader} onRoll={onRoll} /> : null}
         <p className="lq-sstem">{question.stem}</p>
         <Figure path={question.figure_path} alt={`Figure for question ${q + 1}`} className="lq-sfig" />
 
@@ -401,38 +441,62 @@ export function TeamQuestion({
           })}
         </div>
 
-        <div className="lq-choices" role="radiogroup" aria-label="Team vote">
-          {choices.map((a) => {
-            // A tried answer is green or red by the verdict the team was given, and can't be picked again.
-            const v = verdictOf(a);
-            const voters = v !== null || done ? [] : team.members.filter((s, i) => votes[i] === a && !away.has(s.id));
-            const isMine = mine === a;
-            return (
-              <button
-                key={a}
-                type="button"
-                role="radio"
-                aria-checked={isMine}
-                aria-label={v === null ? undefined : `${text(a)}, ${v ? "right" : "not right"}`}
-                disabled={done || v !== null}
-                className={`lq-choice team${isMine ? " on" : ""}${agreed === a ? " agreed" : ""}${v === true ? " right" : v === false ? " wrong" : ""}`}
-                onClick={() => vote(a)}
-              >
-                {question.kind === "mc" ? <span className="lq-choicel">{a}</span> : null}
-                {question.kind === "multi" ? <span className="lq-choicel multi">{a}</span> : null}
-                <span className="lq-choicet">{text(a)}</span>
-                <span className="lq-voters">
-                  {voters.map((s) => (
-                    <span key={s.id} className="lq-voterpop">
-                      <Av p={s} size={24} ring={s.id === team.members[0].id} />
-                    </span>
-                  ))}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-        {question.kind === "multi" && !done ? <MultiPropose q={question} tried={tried} onPropose={vote} /> : null}
+        {question.kind === "multi" ? (
+          done ? (
+            <MultiDone q={question} answer={lock.answer} right={on === null ? null : on > 0} keySet={m.key(q)?.correct_options ?? null} />
+          ) : (
+            // Keyed on the tries: a try that lands clears every box, as it clears every vote.
+            <MultiVote key={tries.length} q={question} mine={mine} tried={tried} seats={seats} meId={team.members[0]?.id ?? ""} onVote={vote} />
+          )
+        ) : (
+          <div className="lq-choices" role="radiogroup" aria-label="Team vote">
+            {choices.map((a) => {
+              // A tried answer is green or red by the verdict the team was given, and can't be picked again.
+              const v = verdictOf(a);
+              const voters = v !== null || done ? [] : team.members.filter((s, i) => votes[i] === a && !away.has(s.id));
+              const isMine = mine === a;
+              return (
+                <button
+                  key={a}
+                  type="button"
+                  role="radio"
+                  aria-checked={isMine}
+                  aria-label={v === null ? undefined : `${text(a)}, ${v ? "right" : "not right"}`}
+                  disabled={done || v !== null}
+                  className={`lq-choice team${isMine ? " on" : ""}${agreed === a ? " agreed" : ""}${v === true ? " right" : v === false ? " wrong" : ""}`}
+                  onClick={() => vote(a)}
+                >
+                  {question.kind === "mc" ? <span className="lq-choicel">{a}</span> : null}
+                  <span className="lq-choicet">{text(a)}</span>
+                  <span className="lq-voters">
+                    {voters.map((s) => (
+                      <span key={s.id} className="lq-voterpop">
+                        <Av p={s} size={24} ring={s.id === team.members[0].id} />
+                      </span>
+                    ))}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {question.kind === "multi" && tries.length ? (
+          <>
+            <span className="lq-triedlabel">Tried</span>
+            <div className="lq-choices lq-tried" role="list" aria-label="Combinations your team has tried">
+              {tries.map((t) => {
+                const v = verdictOf(t.answer);
+                return (
+                  <div key={t.attempt} role="listitem" className={`lq-choice static multi${v === true ? " right" : v === false ? " wrong" : ""}`}>
+                    <span className="lq-choicel multi">{t.answer}</span>
+                    <span className="lq-choicet">{text(t.answer)}</span>
+                    {v === null ? null : <span className="lq-sr">, {v ? "right" : "not right"}</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </>
+        ) : null}
         {question.kind !== "mc" && question.kind !== "multi" && !done ? <Propose q={question} tried={tried} onPropose={vote} /> : null}
         {done ? <Explanation body={m.explanation(q)} /> : null}
       </div>
@@ -449,13 +513,10 @@ export function TeamQuestion({
               <b>{feedback.title}</b>
               <span>{feedback.sub}</span>
             </span>
-            {done && onNext ? (
-              <button type="button" className="fv-btn primary lq-teambtn" onClick={onNext}>
-                {hasNext ? "Next question" : "See how you did"} <Ic name="arrowRight" size={15} />
-              </button>
-            ) : (
-              moveOnButton
-            )}
+            <span className="lq-footbtns">
+              {moveOnButton}
+              {nextButton}
+            </span>
           </>
         ) : agreed ? (
           <>
@@ -463,22 +524,28 @@ export function TeamQuestion({
               <b>All on {hasOptions(question) ? m.label(q, agreed) : text(agreed)}</b>
               {leads ? null : <span className="fv-sub">{leaderLine}</span>}
             </span>
-            {leads ? (
-              <span className="lq-footbtns">
-                {moveOnButton}
-                <button type="button" className="fv-btn primary lq-teambtn" disabled={busy !== null} onClick={() => void submit()}>
-                  <Ic name="lock" size={15} /> {busy === "submit" ? "Submitting…" : `${submitLabel} ${named(agreed)}`}
-                </button>
-              </span>
-            ) : null}
+            <span className="lq-footbtns">
+              {leads ? (
+                <>
+                  {moveOnButton}
+                  <button type="button" className="fv-btn primary lq-teambtn" disabled={busy !== null} onClick={() => void submit()}>
+                    <Ic name="lock" size={15} /> {busy === "submit" ? "Submitting…" : `${submitLabel} ${named(agreed)}`}
+                  </button>
+                </>
+              ) : null}
+              {nextButton}
+            </span>
           </>
         ) : (
           <>
             <span className="lq-footmsg">
-              <b>{voteSummary(hereVotes, seats.map((x) => x.name))}</b>
+              {/* A set of letters is read out as "A, C", the way the Submit button names it. */}
+              <b>{voteSummary(hereVotes.map((v) => (v !== null && question.kind === "multi" ? m.label(q, v) : v)), seats.map((x) => x.name))}</b>
               <span className="fv-sub">
                 {!mine
-                  ? "Pick one"
+                  ? question.kind === "multi"
+                    ? "Tick all that apply"
+                    : "Pick one"
                   : rule === "any"
                     ? leads
                       ? "Submit counts for the team"
@@ -495,6 +562,7 @@ export function TeamQuestion({
                   <Ic name="lock" size={15} /> {busy === "submit" ? "Submitting…" : `Submit ${named(mine)}`}
                 </button>
               ) : null}
+              {nextButton}
             </span>
           </>
         )}
@@ -540,101 +608,180 @@ function Propose({ q, tried, onPropose }: { q: LiveQuestion; tried: Set<string>;
 }
 
 /**
- * Select multiple (0056): tick a set nobody has put on the table yet and
- * propose it. A set the team has already tried can't be proposed again.
+ * Select multiple in team mode (0056, 0057): the same boxes as before class.
+ * Each tick makes a set, and the set is this phone's vote — "AC" — cast as
+ * the boxes change, the way a tap on a multiple-choice option is. Beside each
+ * option, who on the team has it ticked. A set the team has already tried
+ * can't be voted: the boxes show it, the line under them says so, and the
+ * vote before it stands until the boxes make a new set. So does unticking
+ * the last box: an answer is at least one option.
  */
-function MultiPropose({ q, tried, onPropose }: { q: LiveQuestion; tried: Set<string>; onPropose: (v: string) => void }) {
-  const [picked, setPicked] = useState<string | null>(null);
-  const on = new Set(picked ? multiIndexes(picked) : []);
-  const old = picked !== null && tried.has(picked);
+function MultiVote({
+  q,
+  mine,
+  tried,
+  seats,
+  meId,
+  onVote,
+}: {
+  q: LiveQuestion;
+  mine: string | null;
+  tried: Set<string>;
+  seats: { s: Student; v: string | null }[];
+  meId: string;
+  onVote: (v: string) => void;
+}) {
+  // The boxes follow my vote, until a tap makes a set that can't be one.
+  const [shownInstead, setShownInstead] = useState<string | null | undefined>(undefined);
+  const shown = shownInstead === undefined ? mine : shownInstead;
+  const on = new Set(shown ? multiIndexes(shown) : []);
+  const old = shown !== null && tried.has(shown);
+  const toggle = (i: number) => {
+    const next = toggleOption(shown, i);
+    if (next && !tried.has(next)) {
+      setShownInstead(undefined);
+      onVote(next);
+    } else {
+      setShownInstead(next);
+    }
+  };
   return (
-    <form
-      className="lq-propose multi"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!picked || old) return;
-        onPropose(picked);
-        setPicked(null);
-      }}
-    >
-      <MultiHead count={on.size} label="Propose another combination" />
-      <div className="lq-choices" role="group" aria-label="Propose another combination">
-        {q.options.map((text, i) => (
-          <button
-            key={i}
-            type="button"
-            role="checkbox"
-            aria-checked={on.has(i)}
-            className={`lq-choice multi${on.has(i) ? " on" : ""}`}
-            onClick={() => setPicked(toggleOption(picked, i))}
-          >
-            <span className="lq-choicel">{optionLetter(i)}</span>
-            <span className="lq-choicet">{text}</span>
-            <Checkbox on={on.has(i)} />
-          </button>
-        ))}
+    <div className="lq-numentry">
+      <MultiHead count={on.size} />
+      <div className="lq-choices" role="group" aria-label="Team vote, select all that apply">
+        {q.options.map((text, i) => {
+          const voters = seats.filter(({ v }) => v !== null && multiIndexes(v).includes(i));
+          return (
+            <button
+              key={i}
+              type="button"
+              role="checkbox"
+              aria-checked={on.has(i)}
+              className={`lq-choice team multi${on.has(i) ? " on" : ""}`}
+              onClick={() => toggle(i)}
+            >
+              <span className="lq-choicel">{optionLetter(i)}</span>
+              <span className="lq-choicet">{text}</span>
+              <span className="lq-voters">
+                {voters.map(({ s }) => (
+                  <span key={s.id} className="lq-voterpop">
+                    <Av p={s} size={24} ring={s.id === meId} />
+                  </span>
+                ))}
+              </span>
+              <Checkbox on={on.has(i)} />
+            </button>
+          );
+        })}
       </div>
-      <button type="submit" className="fv-btn outline sm" disabled={!picked || old} title={old ? "Your team has tried that one" : undefined}>
-        {old ? "Tried" : picked ? `Propose ${multiIndexes(picked).map(optionLetter).join(", ")}` : "Propose"}
-      </button>
-    </form>
-  );
-}
-
-/** The leader's line: they submit, and the roll is a tap away. */
-function LeadLine({ here, of, onRoll }: { here: number; of: number; onRoll: () => void }) {
-  return (
-    <div className="lq-leadline">
-      <span>You submit for the team</span>
-      <button type="button" className="fv-btn ghost sm" onClick={onRoll}>
-        Who’s here · {here}/{of}
-      </button>
+      {/* Always there, so a screen reader hears it the moment the boxes make a tried set. */}
+      <span className="lq-numhint bad" role="status">
+        {old && shown ? `Your team already tried ${multiLabel(shown)} — change one` : ""}
+      </span>
     </div>
   );
 }
 
-interface TeamDoneProps {
+/**
+ * Select multiple once the team is done with it: the boxes as the team left
+ * them. Green when the set was right; red where it wasn't, with the right
+ * options named when this student may see the key.
+ */
+function MultiDone({ q, answer, right, keySet }: { q: LiveQuestion; answer: string; right: boolean | null; keySet: number[] | null }) {
+  const ticked = new Set(multiIndexes(answer));
+  const key = new Set(right === false ? keySet ?? [] : []);
+  return (
+    <div className="lq-numentry">
+      <MultiHead count={ticked.size} />
+      <div className="lq-choices multi" role="list" aria-label="Your team's answer">
+        {q.options.map((text, i) => {
+          const isTicked = ticked.has(i);
+          const tone = key.has(i) ? " right" : isTicked ? (right === true ? " right" : right === false ? " wrong" : "") : "";
+          return (
+            <div key={i} role="listitem" className={`lq-choice static multi${tone}`}>
+              <span className="lq-choicel">{optionLetter(i)}</span>
+              <span className="lq-choicet">{text}</span>
+              {isTicked ? <span className="lq-choicetag">Team</span> : key.has(i) ? <span className="lq-choicetag">Answer</span> : null}
+              {key.has(i) ? <span className="lq-sr">, the right answer</span> : null}
+              <Checkbox on={isTicked} />
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** The line above the question: who submits (a tap opens the leader page), and who's here (a tap opens the roll). */
+function LeadLine({ lead, here, of, onLeader, onRoll }: Pages & { lead: string; here: number; of: number }) {
+  return (
+    <div className="lq-leadline">
+      {onLeader ? (
+        <button type="button" className="fv-btn ghost sm lq-leadbtn" onClick={onLeader}>
+          {lead} <Ic name="chevronRight" size={13} />
+        </button>
+      ) : (
+        <span>{lead}</span>
+      )}
+      {onRoll ? (
+        <button type="button" className="fv-btn ghost sm" onClick={onRoll}>
+          Who’s here · {here}/{of}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+interface TeamDoneProps extends Pages {
   m: LiveModel;
   team: TeamWithMembers;
   meId: string;
-  /** The leader, until the session closes: someone late still gets the team's points. */
-  onRoll?: () => void;
   /** Step back to the last question. */
   onBack?: () => void;
+  /** Go to a question, from its row or the numbers along the top. */
+  onPick?: (q: number) => void;
 }
 
-/** Every question done: the team has submitted, what it scored, and each answer. */
-export function TeamDone({ m, team, meId, onRoll, onBack }: TeamDoneProps) {
-  const together = m.score(team.id);
+/**
+ * Past the last question: every question in a list, with how the team did on
+ * each — and, once the team has submitted them all, what it scored. Before
+ * that it's an overview this phone stepped to (0057), and a row opens its question.
+ */
+export function TeamDone({ m, team, meId, onRoll, onLeader, onBack, onPick }: TeamDoneProps) {
+  const N = m.questions.length;
+  const finished = N > 0 && m.locks(team.id).every((l) => l !== null);
+  const together = finished ? m.score(team.id) : null;
   const away = new Set(m.absentIds(team.id));
   const here = team.members.filter((s) => !away.has(s.id)).length;
   return (
     <>
       <div className="lq-sscroll">
-        <TeamPips m={m} team={team} current={-1} />
-        {onRoll ? <LeadLine here={here} of={team.members.length} onRoll={onRoll} /> : null}
+        <TeamPips m={m} team={team} current={-1} onPick={onPick} />
+        {m.leaders ? <LeadLine lead={leadText(m, team)} here={here} of={team.members.length} onLeader={onLeader} onRoll={onRoll} /> : null}
         <div className="lq-scard lq-intro lq-donecard wide">
-          <span className="lq-introicon lq-doneicon">
-            <Ic name="check" size={26} />
+          <span className={`lq-introicon${finished ? " lq-doneicon" : ""}`}>
+            <Ic name={finished ? "check" : "groups"} size={26} />
           </span>
-          <h2 className="lq-h2">Your team has submitted</h2>
+          <h2 className="lq-h2">{finished ? "Your team has submitted" : `${m.done(team.id)} of ${N} done`}</h2>
           {together !== null ? (
             <p className="lq-donescore">
               <span className="fv-num">
-                <b>{fmtPoints(together)}</b> of {m.questions.length}
+                <b>{fmtPoints(together)}</b> of {N}
               </span>{" "}
               together
             </p>
           ) : null}
-          <p className="fv-sub">How you did on your own shows here when your instructor closes the session.</p>
+          <p className="fv-sub">
+            {finished ? "How you did on your own shows here when your instructor closes the session." : "Tap a question to go to it."}
+          </p>
         </div>
         <div className="lq-scard">
           <div className="lq-reviewlist">
             {m.questions.map((q, i) => {
               const own = m.own(meId, i);
               const credit = m.credit(team.id, i);
-              return (
-                <div key={q.id} className="lq-reviewrow">
+              const inside = (
+                <>
                   <span className="lq-qn">Q{i + 1}</span>
                   <span className="lq-qshort">{q.stem}</span>
                   <span className="lq-youteam">
@@ -645,6 +792,15 @@ export function TeamDone({ m, team, meId, onRoll, onBack }: TeamDoneProps) {
                     <Tries m={m} teamId={team.id} q={i} />
                     {credit !== null ? <span className="lq-credit fv-num">{fmtPoints(credit)}</span> : null}
                   </span>
+                </>
+              );
+              return onPick ? (
+                <button key={q.id} type="button" className="lq-reviewrow" onClick={() => onPick(i)}>
+                  {inside}
+                </button>
+              ) : (
+                <div key={q.id} className="lq-reviewrow">
+                  {inside}
                 </div>
               );
             })}
