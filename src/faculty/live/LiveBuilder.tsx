@@ -18,6 +18,7 @@ import { fmtPoints } from "@/live/model";
 import type { LiveGrading, LiveSnapshot, LockRule, ShowAnswers } from "@/live/types";
 import { Ic } from "@/live/ui";
 import { fromLocalInput, toLocalInput } from "../ActivityDetail";
+import { DescriptionEditor } from "../DescriptionEditor";
 import type { FacultyData } from "../FacultyApp";
 import { NEW_ACTIVITY_STEPS, Steps } from "../Steps";
 import { DraftQuestionCard } from "./DraftQuestionCard";
@@ -234,14 +235,11 @@ export function LiveBuilder({ data, activity, snapshot, startStep, onLeave, onDo
               autoFocus
               onChange={(e) => setTitle(e.target.value)}
             />
-            <textarea
-              className="lq-descin"
-              rows={3}
-              value={desc}
-              placeholder="Add a description"
-              aria-label="Description"
-              onChange={(e) => setDesc(e.target.value)}
-            />
+            {/* The same box every other activity writes its description in:
+                links and file links, read by students through the same
+                renderer. Live activities carry no attachments, so the
+                paperclip stays off. */}
+            <DescriptionEditor initial={desc} files={[]} onChange={setDesc} placeholder="Add a description" />
             <div className="fv-fields">
               <label className="fv-field">
                 <span className="fv-eyebrow">Week</span>
