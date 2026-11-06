@@ -286,6 +286,17 @@ describe("playing, with a leader", () => {
     expect(host.querySelector(".lq-sstem")?.textContent).toBe("Which?");
   });
 
+  it("Back on the first question opens the roll, and Back from there returns to it", async () => {
+    await session({ ...playing, me: "s2" });
+    expect(host.querySelector(".lq-sstem")?.textContent).toBe("Which?");
+    const back = host.querySelector<HTMLButtonElement>('footer [aria-label="Who’s here"]')!;
+    expect(back.textContent).toContain("Back");
+    await act(async () => back.click());
+    expect(host.querySelector(".lq-setupq")?.textContent).toBe("Who’s here?");
+    await act(async () => host.querySelector<HTMLButtonElement>('footer [aria-label="Back to the questions"]')!.click());
+    expect(host.querySelector(".lq-sstem")?.textContent).toBe("Which?");
+  });
+
   it("a teammate opens the roll too, to look, and comes back (0057)", async () => {
     const lockQ2: LiveLock = { ...lockQ1, question_id: "q2", answer: "A" };
     await session({ ...playing, me: "s2", locks: [lockQ1, lockQ2] });
