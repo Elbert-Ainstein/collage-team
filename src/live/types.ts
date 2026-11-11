@@ -13,6 +13,20 @@ export type LiveGrading = "both" | "team";
 /** Multiple choice, a number, an expression, or select all that apply (0056). */
 export type LiveKind = "mc" | "number" | "expression" | "multi";
 
+// Every kind this build can show. A Record, so a kind added to LiveKind
+// doesn't compile until it's listed here too.
+const KNOWN_KINDS: Record<LiveKind, true> = { mc: true, number: true, expression: true, multi: true };
+
+/**
+ * Can this copy of the page show a question of this kind? A tab left open
+ * across a deploy can meet a kind that shipped after it loaded — before 0056
+ * the page gave anything that wasn't multiple choice a text box, so a
+ * select-multiple question got one and every answer was refused.
+ */
+export function isKnownKind(kind: string): boolean {
+  return Object.prototype.hasOwnProperty.call(KNOWN_KINDS, kind);
+}
+
 export interface LiveState {
   activity_id: string;
   phase: LivePhase;

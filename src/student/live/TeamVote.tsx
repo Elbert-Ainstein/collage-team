@@ -30,10 +30,11 @@ import {
 import { castVote, lockTeamAnswer, moveTeamOn } from "@/live/data";
 import { Figure } from "@/live/figure";
 import { fmtPoints, hasOptions, optionText, type LiveModel } from "@/live/model";
-import type { LiveQuestion } from "@/live/types";
+import { isKnownKind, type LiveQuestion } from "@/live/types";
 import { Av, Ic, Pick, Tries, voteSummary } from "@/live/ui";
 import { Explanation } from "./Explanation";
 import { forStudent } from "./forStudent";
+import { NeedsReload } from "./NeedsReload";
 import { Checkbox, MultiHead } from "./OnYourOwn";
 
 const MAX_TYPED_CHOICES = 8;
@@ -447,7 +448,9 @@ export function TeamQuestion({
           })}
         </div>
 
-        {question.kind === "multi" ? (
+        {!isKnownKind(question.kind) ? (
+          <NeedsReload />
+        ) : question.kind === "multi" ? (
           done ? (
             <MultiDone q={question} answer={lock.answer} right={on === null ? null : on > 0} keySet={m.key(q)?.correct_options ?? null} />
           ) : (
@@ -503,7 +506,7 @@ export function TeamQuestion({
             </div>
           </>
         ) : null}
-        {question.kind !== "mc" && question.kind !== "multi" && !done ? <Propose q={question} tried={tried} onPropose={vote} /> : null}
+        {question.kind !== "mc" && question.kind !== "multi" && isKnownKind(question.kind) && !done ? <Propose q={question} tried={tried} onPropose={vote} /> : null}
         {done ? <Explanation body={m.explanation(q)} /> : null}
       </div>
 
