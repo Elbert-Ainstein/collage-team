@@ -10,8 +10,10 @@ import { useEffect, useRef, useState } from "react";
 import { optionLetter } from "@/live/answers";
 import { Figure } from "@/live/figure";
 import { hasOptions, type LiveModel } from "@/live/model";
+import { isKnownKind } from "@/live/types";
 import { Ic } from "@/live/ui";
 import { Explanation } from "./Explanation";
+import { NeedsReload } from "./NeedsReload";
 import { MultiEntry, TypedEntry } from "./OnYourOwn";
 import { practiceRight } from "./practiceCheck";
 import { Choices, Typed } from "./ReviewQuestion";
@@ -126,6 +128,8 @@ export function Practice({ m, onDone }: Props) {
           ) : (
             <Typed m={m} q={at} mine={pick} right={verdict === true} />
           )
+        ) : !isKnownKind(question.kind) ? (
+          <NeedsReload />
         ) : question.kind === "multi" ? (
           <MultiEntry key={`${question.id}:${tries[question.id] ?? 0}`} q={question} n={at + 1} value={pick} onChange={choose} />
         ) : question.kind === "mc" ? (

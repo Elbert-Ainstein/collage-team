@@ -9,8 +9,9 @@ import type { TeamWithMembers } from "@/checkins/types";
 import { canonicalAnswer, multiIndexes, normalizeNumber, optionLetter, toggleOption } from "@/live/answers";
 import { Figure } from "@/live/figure";
 import type { LiveModel } from "@/live/model";
-import type { LiveQuestion } from "@/live/types";
+import { isKnownKind, type LiveQuestion } from "@/live/types";
 import { Av, Ic, Pick } from "@/live/ui";
+import { NeedsReload } from "./NeedsReload";
 import type { AnswerSaver } from "./useAnswerSaver";
 
 export function Brief({
@@ -230,7 +231,9 @@ export function OnYourOwn({
         </div>
         <p className="lq-sstem">{question.stem}</p>
         <Figure path={question.figure_path} alt={`Figure for question ${cursor + 1}`} className="lq-sfig" />
-        {question.kind === "mc" ? (
+        {!isKnownKind(question.kind) ? (
+          <NeedsReload />
+        ) : question.kind === "mc" ? (
           <div className="lq-choices" role="radiogroup" aria-label={`Question ${cursor + 1}`}>
             {question.options.map((text, i) => {
               const l = optionLetter(i);

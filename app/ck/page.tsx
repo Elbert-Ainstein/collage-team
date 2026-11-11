@@ -8,6 +8,7 @@ import { getEnrolment, getRole } from "@/checkins/studentData";
 import { myTFCourses } from "@/faculty/facultyData";
 import { listCourses } from "@/checkins/data";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
+import { UpdateBar } from "@/lib/UpdateBar";
 import type { Role } from "@/checkins/types";
 
 /**
@@ -21,6 +22,16 @@ type Kind = "faculty" | "tf" | "student" | "choose";
 // Collage-Team, behind a sign-in wall. The account's role decides which app
 // it is: faculty run the sessions, students see their own work.
 export default function Page() {
+  return (
+    <>
+      <App />
+      {/* A tab left open across a deploy is told so, whichever app it is. */}
+      <UpdateBar />
+    </>
+  );
+}
+
+function App() {
   // Without a database there is nothing to sign in to; FacultyApp renders the
   // "connect your database" card for exactly this case.
   if (!isSupabaseConfigured) return <FacultyApp />;

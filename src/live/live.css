@@ -3974,3 +3974,14 @@ span.lq-spip {
   white-space: pre-line;
   color: var(--fv-navy);
 }
+
+/* A question this tab can't show: it was opened before that kind shipped (NeedsReload). */
+.lq-needsreload {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.lq-needsreload p {
+  margin: 0;
+}
