@@ -63,6 +63,7 @@ import {
   listTeamSets,
   moveStudents,
   renameTeam,
+  setCurrentTeamSet,
 } from "./data";
 import type { ParsedStudent } from "./rosterImport";
 import type { Student, TeamWithMembers } from "./types";
@@ -415,6 +416,17 @@ export function planTeamImport(input: {
  *
  * The assistant's seating writes into the same set for the same reason, so
  * this is exported; `size` only sizes a set created from nothing.
+ *
+ * A set it CREATES is recorded as the course's set. The screens find a set on
+ * their own when none is chosen (currentSetOf); the database does not —
+ * start_live_team reads courses.current_team_set_id and nothing else. A course
+ * whose first teams came from this path used to show them on every screen and
+ * then refuse team mode with "Form teams on the Teams page first".
+ *
+ * A set it merely falls back on is NOT recorded: currentSetIdOf answers null
+ * both when nothing is chosen and when the read failed, and writing the
+ * fallback after a failed read would move the whole class off the set the
+ * instructor chose. Courses already caught are filled in by 0058 instead.
  */
 export async function targetSet(courseId: string, size: number): Promise<string> {
   // The set the class is using now — the one every screen shows. This used to
@@ -429,7 +441,23 @@ export async function targetSet(courseId: string, size: number): Promise<string>
     name: `Whole session · teams of ${size}`,
     teamSize: size,
   });
+  await recordAsCurrent(courseId, made.id);
   return made.id;
+}
+
+/**
+ * Make a brand-new set the class's set. A database without 0045 has no column
+ * to say it in — and every screen there falls back on its own, as it always
+ * has — so that one refusal is not a reason to fail the import it belongs to.
+ * Anything else is.
+ */
+async function recordAsCurrent(courseId: string, setId: string): Promise<void> {
+  try {
+    await setCurrentTeamSet(courseId, setId);
+  } catch (e: unknown) {
+    if (e instanceof Error && /0045_activity_rosters/.test(e.message)) return;
+    throw e;
+  }
 }
 
 /**

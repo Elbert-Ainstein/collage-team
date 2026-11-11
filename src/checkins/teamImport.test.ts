@@ -38,6 +38,8 @@ const createTeamSet = vi.fn(
   }),
 );
 const listTeamSets = vi.fn(async (): Promise<TeamSet[]> => []);
+const currentSetIdOf = vi.fn(async (): Promise<string | null> => null);
+const setCurrentTeamSet = vi.fn(async () => undefined);
 const moveStudents = vi.fn(async () => undefined);
 const renameTeam = vi.fn(async () => undefined);
 
@@ -46,11 +48,12 @@ vi.mock("./data", async (importOriginal) => {
   return {
     createTeam,
     createTeamSet,
-    currentSetIdOf: vi.fn(async () => null),
+    currentSetIdOf,
     currentSetOf,
     listTeamSets,
     moveStudents,
     renameTeam,
+    setCurrentTeamSet,
   };
 });
 
@@ -101,6 +104,9 @@ beforeEach(() => {
   moveStudents.mockClear();
   listTeamSets.mockClear();
   listTeamSets.mockImplementation(async () => []);
+  currentSetIdOf.mockClear();
+  currentSetIdOf.mockImplementation(async () => null);
+  setCurrentTeamSet.mockClear();
 });
 
 describe("which student a row is about", () => {
@@ -328,20 +334,69 @@ describe("writing it", () => {
     expect(createTeam).toHaveBeenCalledWith("set:made", "Team 1", 0);
   });
 
+  // The screens fall back on a set by themselves (currentSetOf); the database
+  // does not. start_live_team reads courses.current_team_set_id and nothing
+  // else, so a course whose only set was made here had teams on every screen
+  // and "Form teams on the Teams page first" when team mode started.
+  it("makes the set it creates the one the class uses", async () => {
+    await applyTeamPlan("c1", plan([row("Ada Lovelace", "ada@x.edu", 1)]));
+
+    expect(setCurrentTeamSet).toHaveBeenCalledWith("c1", "set:made");
+  });
+
+  const set = (id: string, activityId: string | null): TeamSet => ({
+    id,
+    course_id: "c1",
+    activity_id: activityId,
+    name: null,
+    team_size: null,
+    locked: false,
+    created_at: "",
+  });
+
   it("writes into the course-wide set the roster screen reads teams from", async () => {
-    const set = (id: string, activityId: string | null): TeamSet => ({
-      id,
-      course_id: "c1",
-      activity_id: activityId,
-      name: null,
-      team_size: null,
-      locked: false,
-      created_at: "",
-    });
     listTeamSets.mockImplementation(async () => [set("week-3", "a1"), set("whole", null)]);
 
     const out = await applyTeamPlan("c1", plan([row("Ada Lovelace", "ada@x.edu", 1)]));
     expect(out.setId).toBe("whole");
+  });
+
+  // currentSetIdOf answers null for "nothing chosen" AND for "the read failed".
+  // Recording the fallback after a failed read would move the whole class off
+  // the set the instructor chose, so a set it only falls back on is left alone
+  // (0058 fills in the courses the bug already caught).
+  it("does not record a set it only fell back on", async () => {
+    listTeamSets.mockImplementation(async () => [set("week-3", "a1"), set("whole", null)]);
+
+    await applyTeamPlan("c1", plan([row("Ada Lovelace", "ada@x.edu", 1)]));
+    expect(setCurrentTeamSet).not.toHaveBeenCalled();
+  });
+
+  it("still imports on a database without 0045, where there is nowhere to record it", async () => {
+    setCurrentTeamSet.mockImplementationOnce(async () => {
+      throw new Error("Choosing which team set is in use needs supabase/migrations/0045_activity_rosters.sql — run it.");
+    });
+
+    const out = await applyTeamPlan("c1", plan([row("Ada Lovelace", "ada@x.edu", 1)]));
+    expect(out).toMatchObject({ setId: "set:made", moved: 1 });
+  });
+
+  it("stops before moving anyone when recording the new set fails for any other reason", async () => {
+    setCurrentTeamSet.mockImplementationOnce(async () => {
+      throw new Error("permission denied for table courses");
+    });
+
+    await expect(applyTeamPlan("c1", plan([row("Ada Lovelace", "ada@x.edu", 1)]))).rejects.toThrow(/permission denied/);
+    expect(moveStudents).not.toHaveBeenCalled();
+  });
+
+  it("leaves the set the course chose alone", async () => {
+    listTeamSets.mockImplementation(async () => [set("whole", null), set("week-3", "a1")]);
+    currentSetIdOf.mockImplementation(async () => "week-3");
+
+    const out = await applyTeamPlan("c1", plan([row("Ada Lovelace", "ada@x.edu", 1)]));
+    expect(out.setId).toBe("week-3");
+    expect(setCurrentTeamSet).not.toHaveBeenCalled();
   });
 
   it("writes nothing at all when the file matched nobody", async () => {
