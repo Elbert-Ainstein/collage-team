@@ -20,6 +20,7 @@ import type { CSSProperties, ReactNode } from "react";
 import { BriefText } from "@/checkins/BriefText";
 import { briefFiles } from "@/checkins/briefLinks";
 import { handInClosed, indivDueAt, pastDeadline } from "@/checkins/handIn";
+import { liveOnlyActive } from "@/checkins/liveOnlyDay";
 import { ensureTeamResult } from "@/checkins/studentData";
 import { getMyMarks, SCALE_LABEL, type StudentMark } from "@/checkins/tutorial";
 import {
@@ -451,7 +452,12 @@ function AssignmentsList({
       <div className="sv-head">
         <div style={{ display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap", marginBottom: 6 }}>
           <h1 className="sv-h1">Assignments</h1>
-          <span className="sv-sub">Everything you owe, and everything your team owes together.</span>
+          <span className="sv-sub">
+            {/* Same rule as liveOnly: only while it's on and a live activity is listed. */}
+            {liveOnlyActive(new Date()) && assignments.some((a) => a.activity.type === "live")
+              ? "Only live activities are showing today. Everything else is back tomorrow."
+              : "Everything you owe, and everything your team owes together."}
+          </span>
         </div>
 
         {assignments
