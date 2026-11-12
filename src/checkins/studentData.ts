@@ -9,6 +9,7 @@
 
 import { requireSupabase } from "@/lib/supabaseClient";
 import { currentSetOf, dbError } from "./data";
+import { liveOnly } from "./liveOnlyDay";
 import { listMyRosters } from "./rosters";
 import { INDIV_ELSEWHERE, SCOPE_OF } from "./types";
 import type {
@@ -315,7 +316,8 @@ export async function listAssignments(enrolment: Enrolment): Promise<Assignment[
   // governs. One `now` for the whole list keeps a long fetch from opening an
   // activity partway down it.
   const now = new Date();
-  const activities = all.filter((a) => isOpenToStudents(a, now));
+  // liveOnly: for one class day, only live activities (see liveOnlyDay.ts).
+  const activities = liveOnly(all.filter((a) => isOpenToStudents(a, now)), now);
   if (!activities.length) return [];
 
   const [checkIns, reopened, rosters] = await Promise.all([
