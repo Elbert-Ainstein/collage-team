@@ -22,6 +22,7 @@ import {
   type CategoryDraft,
   type QuestionDraft,
 } from "@/teameval/defaults";
+import { fmtPoints } from "@/teameval/model";
 import type { QuestionAudience, TeamEvalSnapshot } from "@/teameval/types";
 import { Ic } from "@/live/ui";
 import { fromLocalInput, toLocalInput } from "../ActivityDetail";
@@ -46,7 +47,7 @@ interface Props {
   onError: (e: unknown) => void;
 }
 
-function Switch({ on, label, note, disabled, title, onChange }: { on: boolean; label: string; note: string; disabled?: boolean; title?: string; onChange: (on: boolean) => void }) {
+function Switch({ on, label, disabled, title, onChange }: { on: boolean; label: string; disabled?: boolean; title?: string; onChange: (on: boolean) => void }) {
   return (
     <div className="te-switchrow" title={title}>
       <button
@@ -58,10 +59,7 @@ function Switch({ on, label, note, disabled, title, onChange }: { on: boolean; l
         disabled={disabled}
         onClick={() => onChange(!on)}
       />
-      <span>
-        <b>{label}</b>
-        <span className="fv-sub">{note}</span>
-      </span>
+      <span>{label}</span>
     </div>
   );
 }
@@ -99,8 +97,8 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
   const pen = Number(penalty);
   const problem =
     problemWith(categories, questions) ??
-    (!points.trim() || !Number.isFinite(pts) || pts <= 0 ? "Points must be more than 0." : null) ??
-    (!penalty.trim() || !Number.isFinite(pen) || pen < 0 || pen > 100 ? "The late penalty is a percent, 0 to 100." : null);
+    (!points.trim() || !Number.isFinite(pts) || pts <= 0 ? "Points must be above 0" : null) ??
+    (!penalty.trim() || !Number.isFinite(pen) || pen < 0 || pen > 100 ? "Late penalty: 0–100%" : null);
   // Turning anonymity off after students wrote under it is refused (0058).
   const anonLocked = fixed && snapshot.settings.anonymize;
 
@@ -156,22 +154,21 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
     }
   };
 
-  const questionColumn = (audience: QuestionAudience, heading: string, note: string, off: boolean) => {
+  const questionColumn = (audience: QuestionAudience, heading: string, off: boolean) => {
     const list = questions.filter((q) => q.audience === audience);
     return (
       <div className={`te-qcol${off ? " off" : ""}`}>
         <div className="te-qcolhead">
           <span className="fv-eyebrow">{heading}</span>
-          <span className="fv-sub">{off ? "Off — turn on “Evaluate peer to peer” to ask these." : note}</span>
+          {off ? <span className="fv-sub">Off</span> : null}
         </div>
         {list.map((q, i) => (
           <div key={q.id} className="te-qrow">
-            <span className="te-qnum">{i + 1}</span>
             <textarea
               className="fv-in te-qin"
               rows={2}
               value={q.prompt}
-              placeholder={audience === "peer" ? "Ask something about each teammate" : "Ask them something about themselves"}
+              placeholder="Question"
               aria-label={`${heading} question ${i + 1}`}
               disabled={off}
               onChange={(e) => setQ(q.id, e.target.value)}
@@ -180,7 +177,7 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
               <button
                 type="button"
                 className="fv-iconbtn"
-                aria-label="Remove this question"
+                aria-label="Remove question"
                 onClick={() => setQuestions((qs) => qs.filter((x) => x.id !== q.id))}
               >
                 <Ic name="close" size={14} />
@@ -188,10 +185,9 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
             )}
           </div>
         ))}
-        {list.length === 0 ? <p className="fv-sub te-none">No questions.</p> : null}
         {fixed || off ? null : (
           <button type="button" className="te-addq" onClick={() => setQuestions((qs) => [...qs, blankQuestion(audience)])}>
-            <Ic name="add" size={15} /> Add a question
+            <Ic name="add" size={15} /> Add question
           </button>
         )}
       </div>
@@ -210,19 +206,15 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
           <Ic name="chevronLeft" size={16} />
         </button>
         <span className="fv-sub">
-          {step === 0 && firstTime ? "New team evaluation" : title || "Untitled"} · {weekName(week)}
+          {title || "Untitled"} · {weekName(week)}
         </span>
         {step === 1 ? (
-          <button
-            type="button"
-            className="fv-btn primary sm"
-            style={{ marginLeft: "auto" }}
-            disabled={!!problem || busy}
-            title={problem ?? undefined}
-            onClick={() => void finish()}
-          >
-            {firstTime ? "Finish" : "Save"}
-          </button>
+          <>
+            <span className="te-problem">{problem}</span>
+            <button type="button" className="fv-btn primary sm" disabled={!!problem || busy} onClick={() => void finish()}>
+              {busy ? "Saving…" : firstTime ? "Finish" : "Save"}
+            </button>
+          </>
         ) : null}
       </div>
       <Steps steps={STEPS} current={step} onGo={() => setStep(0)} />
@@ -233,12 +225,12 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
             <input
               className="fv-display fv-titlein lq-titlein"
               value={title}
-              placeholder="What are they evaluating?"
+              placeholder="Title"
               aria-label="Activity title"
               autoFocus
               onChange={(e) => setTitle(e.target.value)}
             />
-            <DescriptionEditor initial={desc} files={[]} onChange={setDesc} placeholder="Add instructions for students" />
+            <DescriptionEditor initial={desc} files={[]} onChange={setDesc} placeholder="Instructions" />
             <div className="fv-fields">
               <label className="fv-field">
                 <span className="fv-eyebrow">Week</span>
@@ -256,16 +248,13 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
                 <input className="fv-in quiet" type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} />
               </label>
             </div>
-            <p className="fv-sub" style={{ marginTop: 10 }}>
-              Submitted after the due date counts as late. Students can change theirs until then.
-            </p>
 
             <div className="fv-editbar">
               <button type="button" className="fv-btn primary sm" disabled={!title.trim() || busy} onClick={() => void saveBasics()}>
-                {basicsOnly ? "Save" : "Save and continue"}
+                {basicsOnly ? "Save" : "Continue"}
               </button>
               <button type="button" className="fv-btn ghost sm" onClick={onLeave}>
-                Not now
+                Cancel
               </button>
             </div>
           </div>
@@ -273,20 +262,10 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
           <>
             <div className="lq-builder">
               <section className="lq-bmain">
-                <h1 className="fv-display" style={{ fontSize: 24 }}>
-                  Categories & questions
-                </h1>
-                <p className="fv-sub te-lede">
-                  Students rate themselves and each teammate from 1 to 5 in every category. Say what each point looks like, so a
-                  4 means the same thing to everyone.
-                </p>
                 {fixed ? (
                   <div className="te-note" role="status">
                     <Ic name="lock" size={14} />
-                    <span>
-                      {snapshot.submissions.length} student{snapshot.submissions.length === 1 ? " has" : "s have"} submitted, so
-                      categories and questions can’t be added or removed. You can still change their wording.
-                    </span>
+                    <span>{snapshot.submissions.length} submitted — wording edits only</span>
                   </div>
                 ) : null}
 
@@ -294,7 +273,13 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
                   {categories.map((c, i) => (
                     <div key={c.id} className="fv-card te-catcard">
                       <div className="te-cathead">
-                        <span className="fv-eyebrow">Category {i + 1}</span>
+                        <input
+                          className="fv-in te-catname"
+                          value={c.name}
+                          placeholder="Category"
+                          aria-label={`Category ${i + 1} name`}
+                          onChange={(e) => setCat(c.id, { name: e.target.value })}
+                        />
                         {fixed ? null : (
                           <button
                             type="button"
@@ -306,13 +291,6 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
                           </button>
                         )}
                       </div>
-                      <input
-                        className="fv-in te-catname"
-                        value={c.name}
-                        placeholder="e.g. Communication"
-                        aria-label={`Category ${i + 1} name`}
-                        onChange={(e) => setCat(c.id, { name: e.target.value })}
-                      />
                       <div className="te-levels">
                         {[5, 4, 3, 2, 1].map((score) => (
                           <label key={score} className="te-level">
@@ -321,7 +299,6 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
                               className="fv-in te-levelin"
                               rows={2}
                               value={c.levels[score - 1] ?? ""}
-                              placeholder={score === 5 ? "What does a 5 look like?" : score === 1 ? "And a 1?" : ""}
                               aria-label={`${c.name || `Category ${i + 1}`}: what ${score} means`}
                               onChange={(e) => setLevel(c.id, score, e.target.value)}
                             />
@@ -340,42 +317,26 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
                   )}
                 </div>
 
-                <h2 className="te-h2">Open-ended questions</h2>
+                <h2 className="te-h2">Questions</h2>
                 <div className="te-qcols">
-                  {questionColumn("peer", "About each teammate", "Answered once for every teammate.", !peer)}
-                  {questionColumn("self", "About themselves", "Answered once — their personal reflection.", false)}
+                  {questionColumn("peer", "Each teammate", !peer)}
+                  {questionColumn("self", "Self reflection", false)}
                 </div>
               </section>
 
               <aside className="lq-bside">
                 <div className="fv-card lq-bcard">
                   <span className="lq-bcardtitle">Peer feedback</span>
-                  <Switch
-                    on={peer}
-                    label="Evaluate peer to peer"
-                    note="Students answer the questions about each teammate."
-                    onChange={setPeer}
-                  />
-                  <Switch
-                    on={release}
-                    label="Release peer feedback"
-                    note="When you release results, students see what teammates wrote about them. Off: only you see it."
-                    onChange={setRelease}
-                  />
+                  <Switch on={peer} label="Evaluate peer to peer" onChange={setPeer} />
+                  <Switch on={release} label="Release to students" onChange={setRelease} />
                   <Switch
                     on={anon}
-                    label="Anonymize peer feedback"
-                    note="Students never see who wrote what. You always do."
+                    label="Anonymize"
                     disabled={anonLocked}
-                    title={anonLocked ? "Students wrote expecting to stay anonymous, so this stays on." : undefined}
+                    title={anonLocked ? "Locked: students submitted anonymously" : undefined}
                     onChange={setAnon}
                   />
-                  <Switch
-                    on={explain}
-                    label="Explain every rating"
-                    note="Each score comes with a sentence saying why."
-                    onChange={setExplain}
-                  />
+                  <Switch on={explain} label="Require a reason per rating" onChange={setExplain} />
                 </div>
                 <div className="fv-card lq-bcard">
                   <span className="lq-bcardtitle">Grade</span>
@@ -392,24 +353,13 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
                       </span>
                     </label>
                   </div>
-                  <p className="lq-bnote">
-                    Full points for submitting on time
-                    {Number.isFinite(pts) && Number.isFinite(pen) && pts > 0
-                      ? `, ${Math.round(pts * (1 - pen / 100) * 100) / 100} for a late one`
-                      : ""}
-                    , 0 for none. The ratings themselves don’t change the grade.
-                  </p>
+                  {Number.isFinite(pts) && Number.isFinite(pen) && pts > 0 ? (
+                    <p className="lq-bnote">
+                      On time {fmtPoints(pts)} · Late {fmtPoints(pts * (1 - pen / 100))} · None 0
+                    </p>
+                  ) : null}
                 </div>
               </aside>
-            </div>
-            <div className="fv-editbar lq-step2bar">
-              <button type="button" className="fv-btn outline sm" onClick={firstTime ? () => setStep(0) : onLeave}>
-                <Ic name="chevronLeft" size={14} /> Back
-              </button>
-              <button type="button" className="fv-btn primary sm" disabled={!!problem || busy} title={problem ?? undefined} onClick={() => void finish()}>
-                {busy ? "Saving…" : firstTime ? "Finish" : "Save"}
-              </button>
-              {problem ? <span className="fv-sub">{problem}</span> : firstTime ? <span className="fv-sub te-muted">Finish puts it in front of the class.</span> : null}
             </div>
           </>
         )}

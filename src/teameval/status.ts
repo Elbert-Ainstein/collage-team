@@ -22,10 +22,7 @@ export function teamEvalStatus(
   return !Number.isNaN(due) && due < now.getTime() ? "Late" : "Not started";
 }
 
-/** The row's words, where the plain status would undersell it. */
-export function teamEvalStatusLabel(status: AssignmentStatus, progress: TeamEvalProgress | undefined): string | null {
-  if (!progress) return null;
-  if (progress.released) return "Results are out";
-  if (status === "Late") return "Late — still open";
-  return null;
+/** The row's words once results are out; the plain status otherwise. */
+export function teamEvalStatusLabel(progress: TeamEvalProgress | undefined): string | null {
+  return progress?.released ? "Results" : null;
 }

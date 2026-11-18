@@ -104,7 +104,7 @@ function elsewhereName(a: Assignment): string | null {
 function statusLabel(a: Assignment): string {
   const live = liveStatusLabel(a.status, a.live);
   if (live) return live;
-  const evalLabel = teamEvalStatusLabel(a.status, a.teamEval);
+  const evalLabel = teamEvalStatusLabel(a.teamEval);
   if (evalLabel) return evalLabel;
   if (a.status !== "Answered elsewhere") return a.status;
   const place = elsewhereName(a);

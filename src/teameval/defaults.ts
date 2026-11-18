@@ -21,21 +21,21 @@ const DEFAULT_CATEGORIES: Omit<CategoryDraft, "id">[] = [
   {
     name: "Contribution",
     levels: [
-      "Rarely does their share; others have to cover for them.",
-      "Does some of the work, but it's often late or unfinished.",
-      "Does their share of the work, on time.",
-      "Does their share well and picks up extra when the team needs it.",
-      "Goes well beyond their share and makes the team's work better.",
+      "Rarely does their share; others cover.",
+      "Does some work, often late or unfinished.",
+      "Does their share, on time.",
+      "Does their share well; picks up extra.",
+      "Goes well beyond their share; lifts the team's work.",
     ],
   },
   {
     name: "Communication",
     levels: [
-      "Hard to reach; doesn't share ideas or updates.",
-      "Responds sometimes, but shares little unless asked.",
-      "Keeps the team informed and replies in reasonable time.",
-      "Shares ideas clearly and listens to everyone else's.",
-      "Keeps everyone on the same page and draws quieter members in.",
+      "Hard to reach; shares no ideas or updates.",
+      "Replies sometimes; shares little unless asked.",
+      "Keeps the team informed; replies promptly.",
+      "Shares ideas clearly; listens to others.",
+      "Keeps everyone aligned; draws quieter members in.",
     ],
   },
   {
@@ -43,37 +43,37 @@ const DEFAULT_CATEGORIES: Omit<CategoryDraft, "id">[] = [
     levels: [
       "Misses meetings and deadlines without warning.",
       "Sometimes misses meetings or deadlines.",
-      "Usually shows up prepared and meets deadlines.",
-      "Always follows through on what they said they'd do.",
-      "Helps the whole team plan ahead and stay on schedule.",
+      "Usually prepared; meets deadlines.",
+      "Always follows through.",
+      "Helps the team plan ahead and stay on schedule.",
     ],
   },
   {
     name: "Quality of work",
     levels: [
-      "Their work often has to be redone.",
-      "Their work is sometimes careless or incomplete.",
-      "Their work meets what was asked.",
-      "Their work is careful and accurate.",
-      "Their work is excellent and raises the team's standard.",
+      "Work often needs redoing.",
+      "Work is sometimes careless or incomplete.",
+      "Work meets requirements.",
+      "Work is careful and accurate.",
+      "Work is excellent; raises the team's standard.",
     ],
   },
   {
     name: "Respect",
     levels: [
-      "Dismisses others' ideas or creates conflict.",
+      "Dismisses others' ideas; creates conflict.",
       "Sometimes talks over or ignores others.",
-      "Is respectful and cooperative.",
-      "Encourages others and works through disagreements well.",
-      "Builds trust; everyone feels their contribution matters.",
+      "Respectful and cooperative.",
+      "Encourages others; handles disagreement well.",
+      "Builds trust; everyone feels valued.",
     ],
   },
 ];
 
 const DEFAULT_QUESTIONS: Omit<QuestionDraft, "id">[] = [
-  { audience: "peer", prompt: "What is one thing this teammate does well?" },
-  { audience: "peer", prompt: "What is one thing this teammate could work on?" },
-  { audience: "self", prompt: "Personal reflection: how did you contribute to your team, and what would you do differently next time?" },
+  { audience: "peer", prompt: "One thing they do well" },
+  { audience: "peer", prompt: "One thing to work on" },
+  { audience: "self", prompt: "How did you contribute, and what would you change?" },
 ];
 
 export const defaultCategories = (): CategoryDraft[] =>
@@ -87,10 +87,9 @@ export const blankQuestion = (audience: QuestionAudience): QuestionDraft => ({ i
 
 /** The first thing wrong with these, in words, or null. */
 export function problemWith(categories: CategoryDraft[], questions: QuestionDraft[]): string | null {
-  if (categories.length === 0) return "Add at least one category.";
+  if (categories.length === 0) return "Add a category";
   const unnamed = categories.findIndex((c) => !c.name.trim());
-  if (unnamed >= 0) return `Category ${unnamed + 1} needs a name.`;
-  const blank = questions.findIndex((q) => !q.prompt.trim());
-  if (blank >= 0) return "A question is empty — write it or remove it.";
+  if (unnamed >= 0) return `Category ${unnamed + 1} needs a name`;
+  if (questions.some((q) => !q.prompt.trim())) return "Fill in or remove empty questions";
   return null;
 }

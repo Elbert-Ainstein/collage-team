@@ -44,19 +44,16 @@ function fmtWhen(iso: string | null): string | null {
   if (!iso) return null;
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
-  return d.toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
 
-/** What becomes of what they write here, said plainly. */
-function privacyNote(ev: StudentTeamEval, isMe: boolean): string {
-  if (isMe) return "Only you and your instructor see this.";
+/** Who reads what they write about teammates, in one line. */
+function privacyNote(ev: StudentTeamEval): string {
   const s = ev.settings;
-  if (!s.release_comments) return "Only your instructor sees this.";
-  return s.anonymize
-    ? "Your teammate may see this, but never that it was you."
-    : "Your teammate may see this, with your name on it.";
+  if (!s.release_comments) return "Only your instructor sees your comments";
+  return s.anonymize ? "Anonymous to teammates" : "Teammates see your name";
 }
 
 export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
@@ -195,7 +192,7 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
       return (
         <div className="lq-sscroll">
           <div className="lq-scard">
-            <p className="fv-sub">{loaded.kind === "failed" ? "Couldn’t load this — check your connection." : "This isn’t ready yet. Check back soon."}</p>
+            <p className="fv-sub">{loaded.kind === "failed" ? "Couldn’t load." : "Not ready yet."}</p>
             {loaded.kind === "failed" ? (
               <button type="button" className="fv-btn outline sm" onClick={() => void load()}>
                 Retry
@@ -209,8 +206,8 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
       return (
         <div className="lq-sscroll">
           <div className="lq-scard">
-            <h2 className="lq-h2">You’re not on a team for this one</h2>
-            <p className="fv-sub">Ask your instructor to add you to a team.</p>
+            <h2 className="lq-h2">Not on a team</h2>
+            <p className="fv-sub">Ask your instructor to add you.</p>
           </div>
         </div>
       );
@@ -229,7 +226,6 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
       return (
         <div className="lq-sscroll" ref={scrollRef}>
           <div className="lq-scard te-intro">
-            <span className="te-kicker">Team evaluation</span>
             <h2 className="lq-h2">{activity.title}</h2>
             {due ? <p className="fv-sub">Due {due}</p> : null}
             {brief ? (
@@ -241,21 +237,12 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
               <div className="te-donebox" role="status">
                 <Ic name="check" size={16} />
                 <span>
-                  <b>Submitted {fmtWhen(ev.submission?.submitted_at ?? null)}.</b>{" "}
-                  {editable
-                    ? `You can still change it until ${due ?? "results are released"}.`
-                    : "Your results will be here once your instructor releases them."}
+                  <b>Submitted {fmtWhen(ev.submission?.submitted_at ?? null)}</b>
+                  {editable && due ? ` · editable until ${due}` : ""}
                 </span>
               </div>
             ) : (
-              <p className="te-howto">
-                You’ll rate yourself and each teammate from 1 to 5 in {ev.categories.length} categor
-                {ev.categories.length === 1 ? "y" : "ies"}
-                {ev.settings.explain_ratings ? ", saying why for each" : ""}
-                {ev.settings.peer_comments ? ", answer a few questions about each teammate" : ""}, and write a short personal
-                reflection.{" "}
-                {ev.settings.anonymize ? "Teammates never see who wrote what." : "Teammates may see what you wrote about them, with your name."}
-              </p>
+              <p className="te-howto">{privacyNote(ev)}</p>
             )}
             <ul className="te-people">
               {team.map((p, i) => {
@@ -263,18 +250,9 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
                 return (
                   <li key={p.student_id}>
                     <button type="button" className="te-personbtn" onClick={() => go(i)}>
-                      <span className="te-av" aria-hidden="true">
-                        {p.name.slice(0, 1)}
-                      </span>
-                      <span className="te-pname">{p.is_me ? `${p.name} (you)` : p.name}</span>
+                      <span className="te-pname">{p.is_me ? "You" : p.name}</span>
                       <span className={`te-pstate${n === 0 ? " done" : ""}`}>
-                        {n === 0 ? (
-                          <>
-                            <Ic name="check" size={13} /> Done
-                          </>
-                        ) : (
-                          `${n} to do`
-                        )}
+                        {n === 0 ? <Ic name="check" size={14} /> : `${n} left`}
                       </span>
                     </button>
                   </li>
@@ -283,15 +261,14 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
             </ul>
             {editable ? (
               <button type="button" className="fv-btn primary te-start" onClick={() => go(0)}>
-                {screen === "done" ? "Change my evaluation" : totalLeft === 0 ? "Review and submit" : "Start"}
+                {screen === "done" ? "Edit" : totalLeft === 0 ? "Review" : "Start"}
                 <Ic name="arrowRight" size={15} />
               </button>
             ) : (
               <button type="button" className="fv-btn outline te-start" onClick={() => go(0)}>
-                See what I submitted
+                View
               </button>
             )}
-            {pastDue && !submitted ? <p className="te-latewarn">It’s past the due date. You can still submit, but it’ll be marked late.</p> : null}
           </div>
         </div>
       );
@@ -301,39 +278,27 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
       return (
         <div className="lq-sscroll" ref={scrollRef}>
           <div className="lq-scard">
-            <h2 className="lq-h2">{submitted ? "Save your changes" : "Ready to submit?"}</h2>
-            <p className="fv-sub" style={{ marginTop: 6 }}>
-              {totalLeft === 0
-                ? submitted
-                  ? "Everything’s filled in."
-                  : "Everything’s filled in. Once you submit, you can change it until the due date."
-                : "A few things are still empty — fill them in to submit."}
-            </p>
+            <h2 className="lq-h2">Review</h2>
+            {totalLeft > 0 ? (
+              <p className="fv-sub" style={{ marginTop: 6 }}>
+                Fill in everything to submit
+              </p>
+            ) : null}
             <ul className="te-people">
               {team.map((p, i) => {
                 const n = left(p);
                 return (
                   <li key={p.student_id}>
                     <button type="button" className="te-personbtn" onClick={() => go(i)}>
-                      <span className="te-av" aria-hidden="true">
-                        {p.name.slice(0, 1)}
-                      </span>
-                      <span className="te-pname">{p.is_me ? `${p.name} (you)` : p.name}</span>
+                      <span className="te-pname">{p.is_me ? "You" : p.name}</span>
                       <span className={`te-pstate${n === 0 ? " done" : ""}`}>
-                        {n === 0 ? (
-                          <>
-                            <Ic name="check" size={13} /> Done
-                          </>
-                        ) : (
-                          `${n} to do`
-                        )}
+                        {n === 0 ? <Ic name="check" size={14} /> : `${n} left`}
                       </span>
                     </button>
                   </li>
                 );
               })}
             </ul>
-            {pastDue && !submitted ? <p className="te-latewarn">It’s past the due date, so this will be marked late.</p> : null}
           </div>
         </div>
       );
@@ -361,9 +326,7 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
           ))}
         </nav>
         <div className="te-who">
-          <span className="te-kicker">{isMe ? "Rating yourself" : "Rating your teammate"}</span>
-          <h2 className="lq-h2">{isMe ? `${person.name} (you)` : person.name}</h2>
-          <p className="fv-sub">{privacyNote(ev, isMe)}</p>
+          <h2 className="lq-h2">{isMe ? "You" : person.name}</h2>
         </div>
 
         {ev.categories.map((c) => (
@@ -381,7 +344,7 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
 
         {qs.length ? (
           <section className="lq-scard te-qbox">
-            <h3 className="te-boxtitle">{isMe ? "Personal reflection" : `Peer comments for ${firstName(person.name)}`}</h3>
+            <h3 className="te-boxtitle">{isMe ? "Reflection" : "Comments"}</h3>
             {qs.map((q) => (
               <label key={q.id} className="te-qfield">
                 <span>{q.prompt}</span>
@@ -414,12 +377,12 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
             <Ic name="chevronLeft" size={14} /> {page === 0 ? "Overview" : firstName(team[page - 1].is_me ? "You" : team[page - 1].name)}
           </button>
           <span className="te-savestate fv-sub" aria-live="polite">
-            {!editable ? "Submitted — read only" : submitted ? "Changes aren’t saved until you press Save" : save === "saving" ? "Saving…" : save === "saved" ? "Saved" : save === "failed" ? "Couldn’t save" : ""}
+            {!editable ? "Read only" : submitted ? "" : save === "saving" ? "Saving…" : save === "saved" ? "Saved" : save === "failed" ? "Not saved" : ""}
           </span>
           {last ? (
             editable ? (
               <button type="button" className="fv-btn primary sm" onClick={() => go("review")}>
-                {submitted ? "Review changes" : "Review and submit"} <Ic name="arrowRight" size={14} />
+                Review <Ic name="arrowRight" size={14} />
               </button>
             ) : (
               <button type="button" className="fv-btn primary sm" onClick={() => setScreen(home)}>
@@ -442,7 +405,7 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
           </button>
           <span />
           <button type="button" className="fv-btn primary sm" disabled={totalLeft > 0 || submitting} onClick={() => void submit()}>
-            {submitting ? "Saving…" : submitted ? "Save changes" : "Submit"}
+            {submitting ? "Saving…" : submitted ? "Save" : "Submit"}
           </button>
         </div>
       );
@@ -452,7 +415,7 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
         <div className="lq-sfoot te-sfoot">
           <span />
           <button type="button" className="fv-btn ghost sm" onClick={() => go(0)}>
-            See what I submitted
+            My answers
           </button>
         </div>
       );
@@ -460,7 +423,7 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
     return null;
   };
 
-  const pill = released ? "Results" : submitted ? "Submitted" : pastDue ? "Late" : "Open";
+  const pill = released ? "Results" : submitted ? "Submitted" : pastDue ? "Late" : null;
 
   return (
     <div className="lq-stu lq-shost te-stu">
@@ -473,7 +436,7 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
             </button>
             {screen === "form" || screen === "review" ? <span className="lq-sname">{activity.title}</span> : null}
           </div>
-          <span className={`te-pill ${pill.toLowerCase()}`}>{pill}</span>
+          {pill ? <span className={`te-pill ${pill.toLowerCase()}`}>{pill}</span> : null}
         </header>
         {error ? (
           <div className="lq-serror" role="alert">
@@ -533,17 +496,15 @@ function RateBox({
         })}
       </div>
       {explain ? (
-        <label className="te-why">
-          <span>Why?</span>
-          <textarea
-            className="fv-in te-ta"
-            rows={2}
-            value={reason}
-            readOnly={readOnly}
-            placeholder={value === null ? "Pick a score, then say why" : `Why a ${value}?`}
-            onChange={(e) => onReason(e.target.value)}
-          />
-        </label>
+        <textarea
+          className="fv-in te-ta te-why"
+          rows={2}
+          value={reason}
+          readOnly={readOnly}
+          aria-label={`${category.name}: why`}
+          placeholder={value === null ? "Why?" : `Why ${value}?`}
+          onChange={(e) => onReason(e.target.value)}
+        />
       ) : null}
     </section>
   );
@@ -562,14 +523,14 @@ function Results({ ev, results, title }: { ev: StudentTeamEval; results: TeamEva
   }, [comments]);
   const reflection = results.reflection ?? [];
   const teammates = ev.team.filter((p) => !p.is_me).length;
+  const raters = Math.max(0, ...(results.categories ?? []).map((c) => c.raters));
 
   return (
     <>
       <div className="te-who">
-        <span className="te-kicker">Your results</span>
         <h2 className="lq-h2">{title}</h2>
         <p className="fv-sub">
-          Beside what you gave yourself, the average of what your teammates gave you. Only teammates who submitted count.
+          Rated by {raters} of {teammates} teammate{teammates === 1 ? "" : "s"}
         </p>
       </div>
 
@@ -580,12 +541,7 @@ function Results({ ev, results, title }: { ev: StudentTeamEval; results: TeamEva
         const avgRow = avg === null ? null : Math.min(5, Math.max(1, Math.round(avg)));
         return (
           <section key={c.id} className="lq-scard te-sbox">
-            <div className="te-rhead">
-              <h3 className="te-boxtitle">{c.name}</h3>
-              <span className="fv-sub">
-                {r && r.raters ? `${r.raters} of ${teammates} teammate${teammates === 1 ? "" : "s"} rated you` : "No teammate has rated you yet"}
-              </span>
-            </div>
+            <h3 className="te-boxtitle">{c.name}</h3>
             <div className="te-rgrid" role="table" aria-label={c.name}>
               <div className="te-rcolhead" role="row">
                 <span role="columnheader">You</span>
@@ -595,11 +551,11 @@ function Results({ ev, results, title }: { ev: StudentTeamEval; results: TeamEva
               {SCALE.map((score) => (
                 <div key={score} className={`te-rrow${self === score || avgRow === score ? " hit" : ""}`} role="row">
                   <span className="te-rcell" role="cell">
-                    {self === score ? <span className="te-dot self" title="What you gave yourself" /> : null}
+                    {self === score ? <span className="te-dot self" aria-label="You" /> : null}
                   </span>
                   <span className="te-rcell" role="cell">
                     {avgRow === score ? (
-                      <span className="te-avgtag" title={`Average of what your teammates gave you: ${fmtAvg(avg)}`}>
+                      <span className="te-avgtag">
                         {fmtAvg(avg)}
                       </span>
                     ) : null}
@@ -613,7 +569,7 @@ function Results({ ev, results, title }: { ev: StudentTeamEval; results: TeamEva
             </div>
             {r?.reasons.length ? (
               <div className="te-reasons">
-                <span className="fv-eyebrow">Why teammates gave this</span>
+                <span className="fv-eyebrow">Why</span>
                 <ul>
                   {r.reasons.map((x, i) => (
                     <li key={i}>
@@ -633,9 +589,8 @@ function Results({ ev, results, title }: { ev: StudentTeamEval; results: TeamEva
 
       {results.comments_shown && ev.settings.peer_comments ? (
         <section className="lq-scard te-qbox">
-          <h3 className="te-boxtitle">Peer comments</h3>
-          {results.anonymous ? <p className="fv-sub">Anonymous — in no particular order.</p> : null}
-          {comments.length === 0 ? <p className="fv-sub">No comments from teammates yet.</p> : null}
+          <h3 className="te-boxtitle">Comments</h3>
+          {comments.length === 0 ? <p className="fv-sub">None yet</p> : null}
           {[...byQuestion.entries()].map(([qid, list]) => (
             <div key={qid} className="te-cq">
               <span className="te-prompt">{prompts.get(qid) ?? "Question"}</span>
@@ -654,10 +609,10 @@ function Results({ ev, results, title }: { ev: StudentTeamEval; results: TeamEva
 
       {reflection.length ? (
         <section className="lq-scard te-qbox te-mine">
-          <h3 className="te-boxtitle">Your personal reflection</h3>
+          <h3 className="te-boxtitle">Your reflection</h3>
           {reflection.map((r) => (
             <div key={r.question_id} className="te-cq">
-              <span className="te-prompt">{prompts.get(r.question_id) ?? "Reflection"}</span>
+              {reflection.length > 1 ? <span className="te-prompt">{prompts.get(r.question_id)}</span> : null}
               <p>{r.body}</p>
             </div>
           ))}

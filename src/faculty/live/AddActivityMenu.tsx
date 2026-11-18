@@ -80,7 +80,7 @@ export function AddActivityMenu({ disabled, title, onPick }: Props) {
             </span>
             <span>
               <b>Team evaluation</b>
-              <span className="fv-sub">Students rate themselves and each teammate</span>
+              <span className="fv-sub">Rate self and teammates</span>
             </span>
           </button>
         </div>
