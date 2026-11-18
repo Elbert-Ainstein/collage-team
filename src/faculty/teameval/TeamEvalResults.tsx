@@ -356,7 +356,7 @@ function StudentPage({
                         {first(m.name)}
                       </th>
                     ))}
-                    <th className="te-num">Teammates’ avg</th>
+                    <th className="te-num te-avgcol">Teammates’ avg</th>
                     <th className="te-num te-selfcol">Self</th>
                   </tr>
                 </thead>
@@ -370,17 +370,15 @@ function StudentPage({
                           const r = scoreOf(m.id, c.id);
                           return (
                             <td key={m.id} className="te-num">
-                              {r ? <b className={`te-chip s${r.score}`}>{r.score}</b> : <span className="fv-sub">—</span>}
+                              {r ? r.score : <span className="fv-sub">—</span>}
                             </td>
                           );
                         })}
-                        <td className={`te-num${low(cat.avg) ? " low" : ""}`}>
+                        <td className="te-num te-avgcol">
                           <span className="te-avg">{fmtAvg(cat.avg)}</span>
                         </td>
                         {/* Apart from the average, which never counts it. */}
-                        <td className="te-num te-selfcol">
-                          {cat.self !== null ? <b className={`te-chip s${cat.self}`}>{cat.self}</b> : <span className="fv-sub">—</span>}
-                        </td>
+                        <td className="te-num te-selfcol">{cat.self ?? "—"}</td>
                       </tr>
                     );
                   })}
@@ -388,7 +386,7 @@ function StudentPage({
                 <tfoot>
                   <tr className="te-totalrow">
                     <td colSpan={mates.length + 1}>Total</td>
-                    <td className="te-num">
+                    <td className="te-num te-avgcol">
                       <b className="fv-num">{row.points === null ? "—" : fmtPoints(row.points)}</b>
                       <span className="fv-sub"> / {fmtPoints(pointsTotal)}</span>
                     </td>
@@ -543,7 +541,7 @@ function GroupRows({
             </button>
           </td>
           {r.categories.map((c, i) => (
-            <td key={cats[i].id} className={`te-num${low(c.avg) ? " low" : ""}`} title={c.n ? `${c.n} rater${c.n === 1 ? "" : "s"}` : undefined}>
+            <td key={cats[i].id} className="te-num" title={c.n ? `${c.n} rater${c.n === 1 ? "" : "s"}` : undefined}>
               <span className="te-avg">{fmtAvg(c.avg)}</span>
             </td>
           ))}
