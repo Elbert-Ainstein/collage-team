@@ -3,10 +3,11 @@
 // A team evaluation's results, on a page of their own.
 //
 // Every team as a card, each member on a 1–5 line: their teammates' average
-// and what they gave themselves. Clicking anyone opens everything about them
-// in a side panel — each teammate's scores and reasons, every comment about
-// them, their reflection. The full table is one toggle away. Releasing and
-// sending to the gradebook live here, beside the scores they decide.
+// and what they gave themselves. Clicking anyone opens their own page — each
+// teammate's scores and reasons in a table, every comment about them, their
+// reflection — with previous and next to walk the class. The full table is
+// one toggle away. Releasing and sending to the gradebook live here, beside
+// the scores they decide.
 //
 // Staff always see names; anonymity is a promise to students about each
 // other, kept by team_eval_results (0058).
@@ -121,6 +122,23 @@ export function TeamEvalResults({ data, activity, snap, onBack, reload, onChange
     return next ?? null;
   };
 
+  if (openRow) {
+    return (
+      <StudentPage
+        row={openRow}
+        snap={snap}
+        pointsTotal={activity.points_total}
+        canFlag={data.can.grade}
+        busy={busy}
+        onFlag={() => void flag(openRow)}
+        onBack={() => setOpenId(null)}
+        prev={step(-1)}
+        next={step(1)}
+        onGo={setOpenId}
+      />
+    );
+  }
+
   return (
     <div className="fv-panel lq-panel te-fac">
       <div className="fv-topbar te-rtop">
@@ -186,20 +204,6 @@ export function TeamEvalResults({ data, activity, snap, onBack, reload, onChange
         )}
       </div>
 
-      {openRow ? (
-        <StudentPanel
-          row={openRow}
-          snap={snap}
-          pointsTotal={activity.points_total}
-          canFlag={data.can.grade}
-          busy={busy}
-          onFlag={() => void flag(openRow)}
-          onClose={() => setOpenId(null)}
-          prev={step(-1)}
-          next={step(1)}
-          onGo={setOpenId}
-        />
-      ) : null}
     </div>
   );
 }
@@ -243,16 +247,16 @@ function TeamCards({ groups, onOpen }: { groups: TeamGroup[]; onOpen: (id: strin
   );
 }
 
-// --------------------------------------------------------- student panel
+// ---------------------------------------------------------- student page
 
-function StudentPanel({
+function StudentPage({
   row,
   snap,
   pointsTotal,
   canFlag,
   busy,
   onFlag,
-  onClose,
+  onBack,
   prev,
   next,
   onGo,
@@ -263,7 +267,7 @@ function StudentPanel({
   canFlag: boolean;
   busy: string | null;
   onFlag: () => void;
-  onClose: () => void;
+  onBack: () => void;
   prev: string | null;
   next: string | null;
   onGo: (id: string) => void;
@@ -273,6 +277,10 @@ function StudentPanel({
   const mates = (row.team?.members ?? []).filter((m) => m.id !== id);
   const nameOf = (sid: string) => row.team?.members.find((m) => m.id === sid)?.name ?? "A teammate";
   const first = (name: string) => name.split(/\s+/)[0];
+  const scoreOf = (raterId: string, categoryId: string) =>
+    submitted.has(raterId)
+      ? snap.ratings.find((x) => x.category_id === categoryId && x.rater_id === raterId && x.ratee_id === id) ?? null
+      : null;
   const peerQs = snap.questions.filter((q) => q.audience === "peer");
   const reflection = submitted.has(id)
     ? snap.questions
@@ -282,143 +290,173 @@ function StudentPanel({
           return c ? [{ q, body: c.body }] : [];
         })
     : [];
+  // Reasons, a category at a time, for the ones that have any.
+  const reasons = snap.categories.flatMap((c) => {
+    const list = mates.flatMap((m) => {
+      const r = scoreOf(m.id, c.id);
+      return r?.reason ? [{ who: first(m.name), score: r.score, text: r.reason }] : [];
+    });
+    return list.length ? [{ category: c, list }] : [];
+  });
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.target instanceof HTMLElement && /input|textarea|select/i.test(e.target.tagName)) return;
+      if (e.key === "Escape") onBack();
       if (e.key === "ArrowRight" && next) onGo(next);
       if (e.key === "ArrowLeft" && prev) onGo(prev);
     };
     document.addEventListener("keydown", key);
     return () => document.removeEventListener("keydown", key);
-  }, [onClose, onGo, next, prev]);
+  }, [onBack, onGo, next, prev]);
 
   return (
-    <div className="te-sheetwrap" role="dialog" aria-modal="true" aria-label={row.student.name}>
-      <button type="button" className="te-sheetback" aria-label="Close" onClick={onClose} />
-      <aside className="te-sheet">
-        <header className="te-sheethead">
-          <span className="te-person">
-            <FAvatar name={row.student.name} tint={row.student.avatar_tint} size={32} />
-            <span>
-              <b className="te-sheetname">{row.student.name}</b>
-              <span className="fv-sub te-sheetsub">{row.team?.name ?? "No team"}</span>
-            </span>
+    <div className="fv-panel lq-panel te-fac">
+      <div className="fv-topbar te-rtop">
+        <button type="button" className="fv-back" aria-label="Back to results" onClick={onBack}>
+          <Ic name="chevronLeft" size={16} />
+        </button>
+        <div className="te-rtitle">
+          <h1 className="fv-display">{row.student.name}</h1>
+          <span className="fv-sub">
+            {row.team?.name ?? "No team"} · {row.submission ? `Submitted ${fmtWhen(row.submission.submitted_at)}` : "Not submitted"}
           </span>
-          <span className="te-sheetnav">
-            <button type="button" className="fv-iconbtn" aria-label="Previous student" disabled={!prev} onClick={() => prev && onGo(prev)}>
-              <Ic name="chevronLeft" size={16} />
+        </div>
+        <div className="te-ractions">
+          {row.submission ? (
+            <button
+              type="button"
+              className={`te-flag${row.late ? " on" : ""}`}
+              disabled={!canFlag || busy !== null}
+              aria-pressed={row.late}
+              onClick={onFlag}
+            >
+              <Ic name="flag" size={13} /> {row.late ? "Late" : "Flag late"}
             </button>
-            <button type="button" className="fv-iconbtn" aria-label="Next student" disabled={!next} onClick={() => next && onGo(next)}>
-              <Ic name="chevronRight" size={16} />
-            </button>
-            <button type="button" className="fv-iconbtn" aria-label="Close" onClick={onClose}>
-              <Ic name="close" size={16} />
-            </button>
+          ) : null}
+          <span className="te-grade">
+            <b className="fv-num">{fmtPoints(row.grade)}</b>
+            <span className="fv-sub"> / {fmtPoints(pointsTotal)}</span>
           </span>
-        </header>
+          <button type="button" className="fv-iconbtn" aria-label="Previous student" disabled={!prev} onClick={() => prev && onGo(prev)}>
+            <Ic name="chevronLeft" size={16} />
+          </button>
+          <button type="button" className="fv-iconbtn" aria-label="Next student" disabled={!next} onClick={() => next && onGo(next)}>
+            <Ic name="chevronRight" size={16} />
+          </button>
+        </div>
+      </div>
 
-        <div className="te-sheetbody">
-          <div className="te-sheetstatus">
-            <span>{row.submission ? `Submitted ${fmtWhen(row.submission.submitted_at)}` : "Not submitted"}</span>
-            {row.submission ? (
-              <button
-                type="button"
-                className={`te-flag${row.late ? " on" : ""}`}
-                disabled={!canFlag || busy !== null}
-                aria-pressed={row.late}
-                onClick={onFlag}
-              >
-                <Ic name="flag" size={13} /> {row.late ? "Late" : "Flag late"}
-              </button>
-            ) : null}
-            <span className="te-sheetgrade">
-              <b className="fv-num">{fmtPoints(row.grade)}</b>
-              <span className="fv-sub"> / {fmtPoints(pointsTotal)}</span>
-            </span>
-          </div>
-
-          <section className="te-sheetsec">
-            <h3 className="te-h3">Scores</h3>
-            <div className="te-scorerows">
-              {snap.categories.map((c, i) => {
-                const cat = row.categories[i];
-                const given = mates.flatMap((m) => {
-                  const r = snap.ratings.find((x) => x.category_id === c.id && x.rater_id === m.id && x.ratee_id === id);
-                  return r && submitted.has(m.id) ? [{ who: first(m.name), score: r.score, reason: r.reason }] : [];
-                });
-                return (
-                  <div key={c.id} className="te-scorerow">
-                    <div className="te-scorehead">
-                      <span className="te-scorename">{c.name}</span>
-                      <span className={`te-memberavg${low(cat.avg) ? " low" : ""}`}>{fmtAvg(cat.avg)}</span>
-                    </div>
-                    <div className="te-givers">
-                      {given.map((g) => (
-                        <span key={g.who} className="te-giver">
-                          {g.who} <b className={`te-chip s${g.score}`}>{g.score}</b>
-                        </span>
-                      ))}
-                      {cat.self !== null ? (
-                        <span className="te-giver self">
-                          Self <b className={`te-chip s${cat.self}`}>{cat.self}</b>
-                        </span>
-                      ) : null}
-                    </div>
-                    {given
-                      .filter((g) => g.reason)
-                      .map((g) => (
-                        <p key={g.who} className="te-why-line">
-                          <b>{g.who}:</b> {g.reason}
-                        </p>
-                      ))}
-                  </div>
-                );
-              })}
+      <div className="fv-scroll lq-scroll">
+        <div className="te-sgrid">
+          <section>
+            <h2 className="te-h2 te-first">Scores</h2>
+            <div className="te-tblwrap">
+              <table className="fv-tbl te-tbl te-stable">
+                <thead>
+                  <tr>
+                    <th>Category</th>
+                    {mates.map((m) => (
+                      <th key={m.id} className={`te-num${submitted.has(m.id) ? "" : " te-muted"}`} title={submitted.has(m.id) ? undefined : "Hasn’t submitted"}>
+                        {first(m.name)}
+                      </th>
+                    ))}
+                    <th className="te-num">Self</th>
+                    <th className="te-num">Average</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {snap.categories.map((c, i) => {
+                    const cat = row.categories[i];
+                    return (
+                      <tr key={c.id}>
+                        <td>{c.name}</td>
+                        {mates.map((m) => {
+                          const r = scoreOf(m.id, c.id);
+                          return (
+                            <td key={m.id} className="te-num">
+                              {r ? <b className={`te-chip s${r.score}`}>{r.score}</b> : <span className="fv-sub">—</span>}
+                            </td>
+                          );
+                        })}
+                        <td className="te-num">
+                          {cat.self !== null ? <b className={`te-chip s${cat.self}`}>{cat.self}</b> : <span className="fv-sub">—</span>}
+                        </td>
+                        <td className={`te-num${low(cat.avg) ? " low" : ""}`}>
+                          <span className="te-avg">{fmtAvg(cat.avg)}</span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
+
+            {reasons.length ? (
+              <div className="te-sreasons">
+                <h3 className="te-h3">Reasons</h3>
+                {reasons.map(({ category, list }) => (
+                  <div key={category.id} className="te-cq">
+                    <span className="te-prompt">{category.name}</span>
+                    <ul>
+                      {list.map((x) => (
+                        <li key={x.who}>
+                          <span className="te-by-name">
+                            {x.who} · {x.score}
+                          </span>
+                          <p>{x.text}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </section>
 
-          {peerQs.length ? (
-            <section className="te-sheetsec">
-              <h3 className="te-h3">What teammates said</h3>
-              {peerQs.map((q) => {
-                const said = snap.comments.filter(
-                  (x) => x.question_id === q.id && x.subject_id === id && x.author_id !== id && submitted.has(x.author_id),
-                );
-                return (
-                  <div key={q.id} className="te-cq">
-                    <span className="te-prompt">{q.prompt}</span>
-                    {said.length ? (
-                      <ul>
-                        {said.map((x) => (
-                          <li key={x.author_id}>
-                            <span className="te-by-name">{nameOf(x.author_id)}</span>
-                            <p>{x.body}</p>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="fv-sub">Nothing yet</p>
-                    )}
-                  </div>
-                );
-              })}
-            </section>
-          ) : null}
+          <section>
+            {peerQs.length ? (
+              <>
+                <h2 className="te-h2 te-first">What teammates said</h2>
+                {peerQs.map((q) => {
+                  const said = snap.comments.filter(
+                    (x) => x.question_id === q.id && x.subject_id === id && x.author_id !== id && submitted.has(x.author_id),
+                  );
+                  return (
+                    <div key={q.id} className="te-cq">
+                      <span className="te-prompt">{q.prompt}</span>
+                      {said.length ? (
+                        <ul>
+                          {said.map((x) => (
+                            <li key={x.author_id}>
+                              <span className="te-by-name">{nameOf(x.author_id)}</span>
+                              <p>{x.body}</p>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="fv-sub">Nothing yet</p>
+                      )}
+                    </div>
+                  );
+                })}
+              </>
+            ) : null}
 
-          {reflection.length ? (
-            <section className="te-sheetsec te-mine">
-              <h3 className="te-h3">Their reflection</h3>
-              {reflection.map((r) => (
-                <div key={r.q.id} className="te-cq">
-                  {reflection.length > 1 ? <span className="te-prompt">{r.q.prompt}</span> : null}
-                  <p>{r.body}</p>
-                </div>
-              ))}
-            </section>
-          ) : null}
+            {reflection.length ? (
+              <>
+                <h2 className="te-h2">Their reflection</h2>
+                {reflection.map((r) => (
+                  <div key={r.q.id} className="te-cq te-mine">
+                    {reflection.length > 1 ? <span className="te-prompt">{r.q.prompt}</span> : null}
+                    <p>{r.body}</p>
+                  </div>
+                ))}
+              </>
+            ) : null}
+          </section>
         </div>
-      </aside>
+      </div>
     </div>
   );
 }

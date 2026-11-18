@@ -884,118 +884,7 @@ td.te-num.low .te-avg {
 }
 
 /* ------------------------------------------------------- student panel */
-.te-sheetwrap {
-  position: fixed;
-  inset: 0;
-  z-index: 60;
-  display: flex;
-  justify-content: flex-end;
-}
-.te-sheetback {
-  position: absolute;
-  inset: 0;
-  border: 0;
-  background: rgba(0, 35, 65, 0.25);
-  cursor: default;
-}
-.te-sheet {
-  position: relative;
-  width: min(560px, 100%);
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: var(--fv-cream-200);
-  box-shadow: -8px 0 30px rgba(0, 0, 0, 0.12);
-}
-.te-sheethead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 16px 18px;
-  border-bottom: 1px solid var(--fv-neutral-200);
-  background: var(--fv-cream-100);
-}
-.te-sheethead .te-person {
-  gap: 10px;
-}
-.te-sheetname {
-  display: block;
-  font-family: var(--fv-serif);
-  font-size: 22px;
-}
-.te-sheetsub {
-  display: block;
-}
-.te-sheetnav {
-  display: flex;
-  gap: 4px;
-}
-.te-sheetbody {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px 18px 28px;
-}
-.te-sheetstatus {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-  font-size: var(--fv-sm);
-}
-.te-sheetgrade {
-  margin-left: auto;
-  font-size: var(--fv-base);
-}
 
-.te-sheetsec {
-  margin-top: 22px;
-}
-.te-sheetsec > .te-h3 {
-  margin-bottom: 10px;
-}
-.te-scorerows {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-.te-scorehead {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-  font-size: var(--fv-sm);
-}
-.te-scorename {
-  font-weight: 600;
-}
-.te-givers {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 12px;
-  margin-top: 6px;
-  font-size: var(--fv-xs);
-  color: var(--fv-muted);
-}
-.te-giver {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-}
-.te-giver .te-chip {
-  width: 24px;
-  height: 22px;
-  font-size: var(--fv-xs);
-}
-.te-giver.self {
-  color: var(--fv-navy-700);
-}
-.te-why-line {
-  margin: 6px 0 0;
-  font-size: var(--fv-xs);
-  color: var(--fv-muted);
-  overflow-wrap: anywhere;
-}
 .te-by-name {
   display: block;
   margin-bottom: 2px;
@@ -1144,7 +1033,6 @@ td.te-num.low .te-avg {
   font-variant-numeric: tabular-nums;
 }
 
-
 /* Reasons under a category on the student's results. */
 .te-sumrow ul.te-reasons {
   list-style: none;
@@ -1154,4 +1042,38 @@ td.te-num.low .te-avg {
   flex-direction: column;
   gap: 6px;
   font-size: var(--fv-sm);
+}
+
+/* ------------------------------------------------------- a student's page */
+.te-sgrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 32px;
+  align-items: start;
+}
+.te-h2.te-first {
+  margin-top: 0;
+}
+.te-stable td,
+.te-stable th {
+  white-space: nowrap;
+}
+.te-stable td .te-chip {
+  width: 28px;
+  height: 26px;
+}
+.te-stable th.te-muted {
+  opacity: 0.55;
+}
+.te-sreasons {
+  margin-top: 22px;
+}
+.te-grade {
+  font-size: var(--fv-base);
+  margin: 0 6px;
+}
+@container lqf (max-width: 900px) {
+  .te-sgrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
