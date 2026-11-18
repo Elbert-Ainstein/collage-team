@@ -100,8 +100,9 @@ create table if not exists te_settings (
   -- Show those comments without who wrote them. Can't be turned off once
   -- anyone has submitted (guard below).
   anonymize        boolean not null default true,
-  -- Every rating comes with a sentence saying why.
-  explain_ratings  boolean not null default true,
+  -- Which ratings need a sentence saying why: every one, only the low ones
+  -- (1 or 2, where fairness matters most), or none.
+  reasons          text not null default 'low' check (reasons in ('all', 'low', 'none')),
   -- Percent of the points taken off a late submission.
   late_penalty     numeric not null default 10 check (late_penalty between 0 and 100),
   -- When the instructor let students see their results. Null: not yet.
@@ -166,6 +167,14 @@ create table if not exists te_comments (
     references te_questions (id, activity_id) on delete cascade
 );
 create index if not exists te_comments_activity_idx on te_comments (activity_id, subject_id);
+
+-- A database that ran an earlier copy of this file had an on/off
+-- explain_ratings in place of reasons.
+alter table te_settings add column if not exists reasons text not null default 'low';
+alter table te_settings drop constraint if exists te_settings_reasons_check;
+alter table te_settings add constraint te_settings_reasons_check
+  check (reasons in ('all', 'low', 'none'));
+alter table te_settings drop column if exists explain_ratings;
 
 -- Room for real paragraphs: a reflection or a comment can run long. Stated
 -- again here so a database that ran an earlier copy of this file, with
@@ -417,7 +426,7 @@ revoke all on te_settings, te_categories, te_questions, te_ratings, te_comments,
 
 grant select on te_settings, te_categories, te_questions, te_ratings, te_comments, te_submissions
   to authenticated;
-grant update (peer_comments, release_comments, anonymize, explain_ratings, late_penalty, released_at)
+grant update (peer_comments, release_comments, anonymize, reasons, late_penalty, released_at)
   on te_settings to authenticated;
 grant insert, update, delete on te_categories, te_questions to authenticated;
 -- te_ratings, te_comments, te_submissions: no writes from a client at all.
@@ -627,9 +636,12 @@ begin
      and not exists (
        select 1 from te_ratings x
         where x.category_id = c.id and x.rater_id = sid and x.ratee_id = m.id
-          and (not st.explain_ratings or x.reason is not null));
+          and (st.reasons = 'none'
+               or (st.reasons = 'low' and x.score > 2)
+               or x.reason is not null));
   if missing > 0 then
-    raise exception 'Rate everyone in every category%', case when st.explain_ratings then ', and say why,' else '' end
+    raise exception 'Rate everyone in every category%',
+      case st.reasons when 'all' then ', and say why,' when 'low' then ', and say why for any 1 or 2,' else '' end
       || ' before you submit';
   end if;
 

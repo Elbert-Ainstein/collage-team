@@ -13,6 +13,7 @@
 
 import type { Student, TeamWithMembers } from "@/checkins/types";
 import type {
+  ReasonsMode,
   TeamEvalCategory,
   TeamEvalComment,
   TeamEvalQuestion,
@@ -21,8 +22,6 @@ import type {
   TeamEvalSnapshot,
   TeamEvalSubmission,
 } from "./types";
-
-export const SCALE = [5, 4, 3, 2, 1] as const;
 
 /** Was this submission late? */
 export function isLate(sub: Pick<TeamEvalSubmission, "submitted_at" | "late_override"> | null | undefined, dueAt: string | null): boolean {
@@ -105,6 +104,8 @@ export interface ResultRow {
   categories: (Average & { self: number | null })[];
   /** The mean of the category averages that have one. */
   overall: number | null;
+  /** The mean of what they gave themselves; null until they've submitted. */
+  selfOverall: number | null;
   grade: number;
 }
 
@@ -135,6 +136,7 @@ export function buildResults(args: {
       self: selfScore(snapshot.ratings, submitted, student.id, c.id),
     }));
     const avgs = categories.flatMap((c) => (c.avg === null ? [] : [c.avg]));
+    const selfs = categories.flatMap((c) => (c.self === null ? [] : [c.self]));
     return {
       student,
       team,
@@ -143,6 +145,7 @@ export function buildResults(args: {
       clockLate: lateByClock(submission, dueAt),
       categories,
       overall: avgs.length ? avgs.reduce((a, b) => a + b, 0) / avgs.length : null,
+      selfOverall: selfs.length ? selfs.reduce((a, b) => a + b, 0) / selfs.length : null,
       grade: gradeFor(submission, dueAt, pointsTotal, snapshot.settings.late_penalty),
     };
   };
@@ -253,26 +256,144 @@ export function questionsFor(
   return questions.filter((q) => (isMe ? q.audience === "self" : q.audience === "peer" && settings.peer_comments));
 }
 
-/**
- * How many things on one person's page are still to do: the same rule
- * save_team_eval holds a submission to.
- */
-export function leftOn(
+/** Does a rating of this score need a reason? The rule save_team_eval holds a submission to. */
+export function reasonNeeded(mode: ReasonsMode, score: number | null): boolean {
+  if (score === null || mode === "none") return false;
+  return mode === "all" || score <= 2;
+}
+
+/** 0 when this rating is done, 1 when it still needs a score or a reason. */
+function ratingLeft(r: DraftRating | undefined, mode: ReasonsMode): number {
+  if (!r || r.score === null) return 1;
+  return reasonNeeded(mode, r.score) && !r.reason.trim() ? 1 : 0;
+}
+
+// ------------------------------------------------- the form, by category
+
+/** One screen of the student's form: a category, everyone side by side; their comments; their reflection. */
+export type Step =
+  | { kind: "category"; category: TeamEvalCategory }
+  | { kind: "comments"; questions: TeamEvalQuestion[] }
+  | { kind: "reflection"; questions: TeamEvalQuestion[] };
+
+export function stepsFor(ev: {
+  categories: TeamEvalCategory[];
+  questions: TeamEvalQuestion[];
+  settings: Pick<TeamEvalSettings, "peer_comments">;
+}): Step[] {
+  const steps: Step[] = ev.categories.map((category) => ({ kind: "category" as const, category }));
+  const peer = questionsFor(ev.questions, ev.settings, false);
+  const self = questionsFor(ev.questions, ev.settings, true);
+  if (peer.length) steps.push({ kind: "comments", questions: peer });
+  if (self.length) steps.push({ kind: "reflection", questions: self });
+  return steps;
+}
+
+/** What's left on one step, for the people listed (the student first, then teammates). */
+export function leftInStep(
+  step: Step,
   draft: EvalDraft,
-  personId: string,
-  isMe: boolean,
-  categories: TeamEvalCategory[],
-  questions: TeamEvalQuestion[],
-  settings: Pick<TeamEvalSettings, "peer_comments" | "explain_ratings">,
+  people: { student_id: string; is_me: boolean }[],
+  settings: Pick<TeamEvalSettings, "reasons">,
 ): number {
-  let n = 0;
-  for (const c of categories) {
-    const r = draft.ratings[personId]?.[c.id];
-    if (!r || r.score === null) n += 1;
-    else if (settings.explain_ratings && !r.reason.trim()) n += 1;
+  if (step.kind === "category") {
+    return people.reduce((n, p) => n + ratingLeft(draft.ratings[p.student_id]?.[step.category.id], settings.reasons), 0);
   }
-  for (const q of questionsFor(questions, settings, isMe)) {
-    if (!draft.comments[personId]?.[q.id]?.trim()) n += 1;
+  const who = people.filter((p) => (step.kind === "reflection" ? p.is_me : !p.is_me));
+  return who.reduce(
+    (n, p) => n + step.questions.filter((q) => !draft.comments[p.student_id]?.[q.id]?.trim()).length,
+    0,
+  );
+}
+
+// ---------------------------------------------------- needs attention
+
+export type FlagKind = "low" | "split" | "selfHigh" | "selfLow" | "late" | "missing";
+
+export interface Flag {
+  kind: FlagKind;
+  /** One line, for the instructor. */
+  text: string;
+}
+
+/** How far below the rest of the team, or from their own view, before it's worth a look. */
+export const LOW_UNDER = 3;
+export const GAP = 1;
+export const SPLIT = 2;
+
+/** What each teammate who submitted gave this student, on average across categories. */
+export function raterMeans(
+  ratings: TeamEvalRating[],
+  submitted: ReadonlySet<string>,
+  rateeId: string,
+): Map<string, number> {
+  const sums = new Map<string, { t: number; n: number }>();
+  for (const r of ratings) {
+    if (r.ratee_id !== rateeId || r.rater_id === rateeId || !submitted.has(r.rater_id)) continue;
+    const s = sums.get(r.rater_id) ?? { t: 0, n: 0 };
+    s.t += r.score;
+    s.n += 1;
+    sums.set(r.rater_id, s);
   }
-  return n;
+  return new Map([...sums].map(([id, s]) => [id, s.t / s.n]));
+}
+
+/**
+ * The things worth an instructor's look, per student: rated low by their
+ * team (under 3, or a point below the rest of it), seeing themselves a
+ * point above or below how their team sees them, teammates two points apart
+ * about them, late, or not submitted. Most serious first.
+ */
+export function flagsFor(groups: TeamGroup[], snapshot: Pick<TeamEvalSnapshot, "ratings" | "submissions">): Map<string, Flag[]> {
+  const submitted = new Set(snapshot.submissions.map((s) => s.student_id));
+  const out = new Map<string, Flag[]>();
+  for (const g of groups) {
+    if (!g.team) continue;
+    for (const row of g.rows) {
+      const flags: Flag[] = [];
+      const others = g.rows.filter((r) => r !== row && r.overall !== null).map((r) => r.overall as number);
+      const teamAvg = others.length ? others.reduce((a, b) => a + b, 0) / others.length : null;
+      if (row.overall !== null && (row.overall < LOW_UNDER || (teamAvg !== null && teamAvg - row.overall >= GAP))) {
+        flags.push({
+          kind: "low",
+          text: `Rated ${fmtAvg(row.overall)} by teammates${teamAvg !== null ? ` (rest of team ${fmtAvg(teamAvg)})` : ""}`,
+        });
+      }
+      const means = [...raterMeans(snapshot.ratings, submitted, row.student.id).values()];
+      if (means.length >= 2 && Math.max(...means) - Math.min(...means) >= SPLIT) {
+        flags.push({
+          kind: "split",
+          text: `Teammates disagree: ${fmtAvg(Math.min(...means))} to ${fmtAvg(Math.max(...means))}`,
+        });
+      }
+      if (row.selfOverall !== null && row.overall !== null) {
+        const gap = row.selfOverall - row.overall;
+        if (gap >= GAP) flags.push({ kind: "selfHigh", text: `Rates themselves ${fmtAvg(gap)} above teammates` });
+        if (-gap >= GAP) flags.push({ kind: "selfLow", text: `Rates themselves ${fmtAvg(-gap)} below teammates` });
+      }
+      if (row.late) flags.push({ kind: "late", text: "Submitted late" });
+      if (!row.submission) flags.push({ kind: "missing", text: "Not submitted" });
+      if (flags.length) out.set(row.student.id, flags);
+    }
+  }
+  return out;
+}
+
+// ----------------------------------------------------- the student's results
+
+/**
+ * The one thing most worth saying about a student's results: where they and
+ * their teammates see them most differently, or that they broadly agree.
+ */
+export function biggestGap(
+  rows: { name: string; self: number | null; average: number | null }[],
+): { name: string; self: number; average: number } | null {
+  let best: { name: string; self: number; average: number } | null = null;
+  for (const r of rows) {
+    if (r.self === null || r.average === null) continue;
+    if (!best || Math.abs(r.average - r.self) > Math.abs(best.average - best.self)) {
+      best = { name: r.name, self: r.self, average: r.average };
+    }
+  }
+  return best && Math.abs(best.average - best.self) >= 0.5 ? best : null;
 }

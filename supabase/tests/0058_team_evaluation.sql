@@ -227,6 +227,11 @@ begin
     jsonb_build_array(jsonb_build_object('category_id', c1, 'ratee_id', sA2, 'score', 4, 'reason', 'talks'))),
     'A1 saves a draft');
   perform pg_temp.sees(O, 'select 1 from activity_rosters where activity_id = ' || E, 5, 'the first save froze the teams');
+  -- Reasons default to low scores only.
+  perform pg_temp.sees(O, 'select 1 from te_settings where activity_id = ' || E || ' and reasons = ''low''', 1,
+    'reasons are asked for low scores by default');
+  perform pg_temp.refused(O, 'update te_settings set reasons = ''some'' where activity_id = ' || E, 'reasons is all, low or none');
+  perform pg_temp.ok(O, 'update te_settings set reasons = ''all'' where activity_id = ' || E, 'the owner asks for a reason with every rating');
   perform pg_temp.refused(A1, format('select save_team_eval(%s, %L, ''[]'', true)', E,
     jsonb_build_array(jsonb_build_object('category_id', c1, 'ratee_id', sA2, 'score', 4, 'reason', 'talks'))),
     'an incomplete evaluation can''t be submitted', 'Rate everyone');
@@ -294,6 +299,25 @@ begin
     'A2 can''t change theirs after the due date', 'past the due date');
   perform pg_temp.ok(A3, format(full_a, E, sA3, 1, c1, c2, sA1, sA2, sA3, qp, qs, 'true'), 'A3 submits late');
   perform pg_temp.ok(O, 'update te_settings set released_at = now() where activity_id = ' || E, 'released again');
+  perform pg_temp.ok(O, 'update te_settings set reasons = ''low'' where activity_id = ' || E, 'back to reasons for low scores');
+  perform pg_temp.ok(O, 'update te_settings set released_at = null where activity_id = ' || E, 'results hidden again for B1''s turn');
+  perform pg_temp.refused(B1, format('select save_team_eval(%s, %L, %L, true)', E,
+    (select jsonb_agg(jsonb_build_object('category_id', c, 'ratee_id', p, 'score', 2))
+       from unnest(array[c1, c2]::uuid[]) c,
+            unnest(array['10000000-0000-4000-8000-000000000021', '10000000-0000-4000-8000-000000000022']::uuid[]) p),
+    jsonb_build_array(
+      jsonb_build_object('question_id', qp, 'subject_id', '10000000-0000-4000-8000-000000000022', 'body', 'x'),
+      jsonb_build_object('question_id', qs, 'subject_id', '10000000-0000-4000-8000-000000000021', 'body', 'y'))),
+    'a 2 without a reason is refused', 'say why for any 1 or 2');
+  perform pg_temp.ok(B1, format('select save_team_eval(%s, %L, %L, true)', E,
+    (select jsonb_agg(jsonb_build_object('category_id', c, 'ratee_id', p, 'score', 4))
+       from unnest(array[c1, c2]::uuid[]) c,
+            unnest(array['10000000-0000-4000-8000-000000000021', '10000000-0000-4000-8000-000000000022']::uuid[]) p),
+    jsonb_build_array(
+      jsonb_build_object('question_id', qp, 'subject_id', '10000000-0000-4000-8000-000000000022', 'body', 'x'),
+      jsonb_build_object('question_id', qs, 'subject_id', '10000000-0000-4000-8000-000000000021', 'body', 'y'))),
+    'a 4 without one is fine (late, past the due date)');
+  perform pg_temp.ok(O, 'update te_settings set released_at = now() where activity_id = ' || E, 'released once more');
   perform pg_temp.eq(pg_temp.val(A1, 'select team_eval_results(' || E || ')->''categories''->0->>''average'''), '2.00',
     'A3''s late submission now counts in A1''s average: (3 + 1) / 2');
 
@@ -308,7 +332,7 @@ begin
     select string_agg(s.name || '=' || r.score::text, ' ' order by s.name)
       from check_in_results r join check_ins ci on ci.id = r.check_in_id join students s on s.id = r.student_id
      where ci.activity_id = %s$q$, E)),
-    'A1=10 A2=10 A3=8.00 B1=0 B2=0', 'on time 10, late 20% off, none 0');
+    'A1=10 A2=10 A3=8.00 B1=8.00 B2=0', 'on time 10, late 20% off, none 0');
   perform pg_temp.ok(T, format('select set_team_eval_late(%s, %L, false)', E, sA3), 'the TF excuses A3''s lateness');
   perform pg_temp.ok(O, format('select score_team_eval(%s)', E), 'the owner scores it again');
   perform pg_temp.eq(pg_temp.val(O, format($q$

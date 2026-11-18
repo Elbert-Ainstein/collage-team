@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
 import type { Student, TeamWithMembers } from "@/checkins/types";
 import {
+  biggestGap,
   buildResults,
+  flagsFor,
+  leftInStep,
+  reasonNeeded,
+  stepsFor,
   commentCell,
   draftFrom,
   draftPayload,
   fmtAvg,
   gradeFor,
   isLate,
-  leftOn,
   peerAverage,
 } from "./model";
 import type { TeamEvalCategory, TeamEvalQuestion, TeamEvalRating, TeamEvalSnapshot, TeamEvalSubmission } from "./types";
@@ -87,7 +91,7 @@ describe("buildResults", () => {
       peer_comments: true,
       release_comments: true,
       anonymize: true,
-      explain_ratings: false,
+      reasons: "none",
       late_penalty: 20,
       released_at: null,
       scored_at: null,
@@ -157,20 +161,6 @@ describe("commentCell", () => {
 });
 
 describe("the student form", () => {
-  const categories = [cat("c1", 0), cat("c2", 1)];
-  const questions = [q("qp", "peer"), q("qs", "self")];
-  const settings = { peer_comments: true, explain_ratings: true };
-
-  it("counts what's left on a page the way submitting does", () => {
-    const draft = draftFrom([rate("a", "b", "c1", 4, "why"), rate("a", "b", "c2", 3)], []);
-    // c2 has no why, and the peer question is unanswered.
-    expect(leftOn(draft, "b", false, categories, questions, settings)).toBe(2);
-    expect(leftOn(draft, "b", false, categories, questions, { ...settings, explain_ratings: false })).toBe(1);
-    expect(leftOn(draft, "b", false, categories, questions, { peer_comments: false, explain_ratings: false })).toBe(0);
-    // Their own page asks the self question, not the peer one.
-    expect(leftOn(draft, "a", true, categories, questions, settings)).toBe(3);
-  });
-
   it("sends only what's been filled in", () => {
     const draft = draftFrom([rate("a", "b", "c1", 4, " why ")], []);
     draft.ratings.b.c2 = { score: null, reason: "" };
@@ -179,5 +169,110 @@ describe("the student form", () => {
       ratings: [{ category_id: "c1", ratee_id: "b", score: 4, reason: "why" }],
       comments: [{ question_id: "qs", subject_id: "b", body: "x" }],
     });
+  });
+});
+
+describe("reasons", () => {
+  it("asks for one with every score, only 1s and 2s, or never", () => {
+    expect([1, 2, 3, 5].map((n) => reasonNeeded("all", n))).toEqual([true, true, true, true]);
+    expect([1, 2, 3, 5].map((n) => reasonNeeded("low", n))).toEqual([true, true, false, false]);
+    expect([1, 5].map((n) => reasonNeeded("none", n))).toEqual([false, false]);
+    expect(reasonNeeded("all", null)).toBe(false);
+  });
+});
+
+describe("the form by category", () => {
+  const categories = [cat("c1", 0), cat("c2", 1)];
+  const questions = [q("qp", "peer"), q("qs", "self")];
+  const people = [
+    { student_id: "a", is_me: true },
+    { student_id: "b", is_me: false },
+  ];
+
+  it("is one step per category, then comments, then reflection", () => {
+    const steps = stepsFor({ categories, questions, settings: { peer_comments: true } });
+    expect(steps.map((s) => (s.kind === "category" ? s.category.id : s.kind))).toEqual(["c1", "c2", "comments", "reflection"]);
+    const noPeer = stepsFor({ categories, questions, settings: { peer_comments: false } });
+    expect(noPeer.map((s) => s.kind)).toEqual(["category", "category", "reflection"]);
+  });
+
+  it("counts what's left on a step for everyone on it", () => {
+    const steps = stepsFor({ categories, questions, settings: { peer_comments: true } });
+    // a rated themselves 4 with no reason, b a 2 with no reason.
+    const draft = draftFrom([rate("a", "a", "c1", 4), rate("a", "b", "c1", 2)], []);
+    expect(leftInStep(steps[0], draft, people, { reasons: "low" })).toBe(1); // b's 2 needs a reason
+    expect(leftInStep(steps[0], draft, people, { reasons: "all" })).toBe(2);
+    expect(leftInStep(steps[0], draft, people, { reasons: "none" })).toBe(0);
+    expect(leftInStep(steps[1], draft, people, { reasons: "low" })).toBe(2); // nobody rated in c2
+    expect(leftInStep(steps[2], draft, people, { reasons: "low" })).toBe(1); // b's comment
+    expect(leftInStep(steps[3], draft, people, { reasons: "low" })).toBe(1); // a's reflection
+  });
+});
+
+describe("needs attention", () => {
+  const four = { id: "t1", name: "Team 1", members: [ana, bo, cy, di] } as unknown as TeamWithMembers;
+  const cats = [cat("c1", 0)];
+  const everyone = ["a", "b", "c", "d"];
+  // Everyone submits. Di is rated 2 by all; Ana gives herself 5 but gets 3;
+  // Bo is given 5 by Ana and 1 by Cy; Cy is late.
+  const ratings: TeamEvalRating[] = [
+    rate("a", "a", "c1", 5), rate("b", "a", "c1", 3), rate("c", "a", "c1", 3), rate("d", "a", "c1", 3),
+    rate("a", "b", "c1", 5), rate("c", "b", "c1", 1), rate("d", "b", "c1", 4),
+    rate("a", "c", "c1", 4), rate("b", "c", "c1", 4), rate("d", "c", "c1", 4),
+    rate("a", "d", "c1", 2), rate("b", "d", "c1", 2), rate("c", "d", "c1", 2),
+  ];
+  const snapshot: TeamEvalSnapshot = {
+    settings: {
+      activity_id: "e", peer_comments: true, release_comments: true, anonymize: true, reasons: "low",
+      late_penalty: 10, released_at: null, scored_at: null, updated_at: "",
+    },
+    categories: cats,
+    questions: [],
+    ratings,
+    comments: [],
+    submissions: everyone.map((id) => sub(id, id === "c" ? "2026-11-12T10:00:00.000Z" : "2026-11-10T10:00:00.000Z")),
+  };
+  const groups = buildResults({ snapshot, teams: [four], roster: [ana, bo, cy, di], dueAt: DUE, pointsTotal: 10 });
+  const flags = flagsFor(groups, snapshot);
+  const kinds = (id: string) => (flags.get(id) ?? []).map((f) => f.kind);
+
+  it("flags someone the team rates low", () => {
+    expect(kinds("d")).toContain("low");
+    expect(flags.get("d")![0].text).toMatch(/Rated 2\.0/);
+  });
+
+  it("flags someone who sees themselves a point above their team", () => {
+    expect(kinds("a")).toEqual(["selfHigh"]);
+  });
+
+  it("flags teammates two points apart about someone", () => {
+    expect(kinds("b")).toContain("split");
+  });
+
+  it("flags a late submission, and leaves a fine one alone", () => {
+    expect(kinds("c")).toEqual(["late"]);
+  });
+
+  it("flags someone who hasn't submitted", () => {
+    const missing = flagsFor(
+      buildResults({ snapshot: { ...snapshot, submissions: snapshot.submissions.filter((s) => s.student_id !== "c") }, teams: [four], roster: [ana, bo, cy, di], dueAt: DUE, pointsTotal: 10 }),
+      { ...snapshot, submissions: snapshot.submissions.filter((s) => s.student_id !== "c") },
+    );
+    expect(missing.get("c")!.map((f) => f.kind)).toContain("missing");
+  });
+});
+
+describe("biggestGap", () => {
+  it("names where the student and their team differ most", () => {
+    expect(
+      biggestGap([
+        { name: "Contribution", self: 4, average: 3.8 },
+        { name: "Communication", self: 3, average: 4.3 },
+      ]),
+    ).toEqual({ name: "Communication", self: 3, average: 4.3 });
+  });
+
+  it("says nothing when they broadly agree", () => {
+    expect(biggestGap([{ name: "Contribution", self: 4, average: 3.7 }])).toBeNull();
   });
 });

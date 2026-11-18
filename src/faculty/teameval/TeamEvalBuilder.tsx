@@ -23,7 +23,7 @@ import {
   type QuestionDraft,
 } from "@/teameval/defaults";
 import { fmtPoints } from "@/teameval/model";
-import type { QuestionAudience, TeamEvalSnapshot } from "@/teameval/types";
+import type { QuestionAudience, ReasonsMode, TeamEvalSnapshot } from "@/teameval/types";
 import { Ic } from "@/live/ui";
 import { fromLocalInput, toLocalInput } from "../ActivityDetail";
 import { DescriptionEditor } from "../DescriptionEditor";
@@ -85,7 +85,7 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
   const [peer, setPeer] = useState(snapshot.settings.peer_comments);
   const [release, setRelease] = useState(snapshot.settings.release_comments);
   const [anon, setAnon] = useState(snapshot.settings.anonymize);
-  const [explain, setExplain] = useState(snapshot.settings.explain_ratings);
+  const [reasons, setReasons] = useState<ReasonsMode>(snapshot.settings.reasons);
   const [points, setPoints] = useState(String(activity.points_total || 10));
   const [penalty, setPenalty] = useState(String(snapshot.settings.late_penalty));
   const [busy, setBusy] = useState(false);
@@ -139,7 +139,7 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
         peer_comments: peer,
         release_comments: release,
         anonymize: anon,
-        explain_ratings: explain,
+        reasons,
         late_penalty: pen,
       });
       await updateActivity(activity.id, {
@@ -336,7 +336,22 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
                     title={anonLocked ? "Locked: students submitted anonymously" : undefined}
                     onChange={setAnon}
                   />
-                  <Switch on={explain} label="Require a reason per rating" onChange={setExplain} />
+                  <div className="te-reasonfield">
+                    <span className="fv-eyebrow">Ask why for</span>
+                    <div className="fv-seg te-seg3">
+                      {(
+                        [
+                          ["all", "All"],
+                          ["low", "1s and 2s"],
+                          ["none", "Off"],
+                        ] as [ReasonsMode, string][]
+                      ).map(([v, label]) => (
+                        <button key={v} type="button" className={reasons === v ? "on" : ""} aria-pressed={reasons === v} onClick={() => setReasons(v)}>
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
                 <div className="fv-card lq-bcard">
                   <span className="lq-bcardtitle">Grade</span>

@@ -9,6 +9,9 @@
 
 export type QuestionAudience = "peer" | "self";
 
+/** Which ratings need a reason: every one, only 1s and 2s, or none. */
+export type ReasonsMode = "all" | "low" | "none";
+
 /** The longest answer to a question the database keeps (0058). */
 export const COMMENT_MAX = 10000;
 /** The longest reason for a rating (0058). */
@@ -22,8 +25,8 @@ export interface TeamEvalSettings {
   release_comments: boolean;
   /** Show those comments without who wrote them. */
   anonymize: boolean;
-  /** Every rating comes with a sentence saying why. */
-  explain_ratings: boolean;
+  /** Which ratings need a sentence saying why. */
+  reasons: ReasonsMode;
   /** Percent of the points taken off a late submission. */
   late_penalty: number;
   released_at: string | null;
