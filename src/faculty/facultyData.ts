@@ -37,6 +37,7 @@ import { deductionForAward, pointsTotal, type PointedQuestion } from "./model";
 import { COMBO_TEMPLATE, type RubricTemplate } from "./comboRubric";
 import { shareInFlight } from "./inFlight";
 import { copyLive } from "@/live/data";
+import { copyTeamEval } from "@/teameval/data";
 
 const db = () => requireSupabase();
 
@@ -825,10 +826,11 @@ export async function duplicateActivity(
 
   // Live questions keep theirs in their own tables (0047).
   const liveQuestions = source.type === "live" ? await copyLive(source.id, created.id) : 0;
+  const evalItems = source.type === "teameval" ? await copyTeamEval(source.id, created.id) : 0;
 
   return {
     activity: { ...created, ...patch },
-    questions: questionRows.length + liveQuestions,
+    questions: questionRows.length + liveQuestions + evalItems,
     criteria: rubricRows.length,
   };
 }

@@ -293,6 +293,23 @@ export function ActivitiesScreen(props: {
         return true;
       }
 
+      if (kind === "teameval") {
+        // Its builder asks for the title, categories and questions; scoring
+        // makes its gradebook column (score_team_eval, 0058). Setting the type
+        // is what creates its te_settings row. Out of 10 to start: points for
+        // submitting, which the builder lets her change.
+        const created = await createActivity({
+          courseId: data.course.id,
+          week,
+          title: "Untitled",
+          opensAt: HIDDEN_INSTANT,
+        });
+        await updateActivity(created.id, { type: "teameval", question_count: 0, points_total: 10 });
+        await onChanged();
+        onOpen(created.id, { fresh: true });
+        return true;
+      }
+
       const type: ActivityType = "combo";
       const created = await createActivity({
         courseId: data.course.id,

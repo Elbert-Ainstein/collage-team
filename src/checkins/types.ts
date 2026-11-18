@@ -52,7 +52,12 @@ export interface Profile {
  * a team in class. Its two halves are scored from the answers by score_live,
  * not graded against a rubric.
  */
-export type ActivityType = "challenge" | "combo" | "skills" | "amplify" | "live";
+/**
+ * "teameval" is a team evaluation (0058): each student rates themselves and
+ * each teammate on the instructor's categories. Its one individual half is
+ * scored by score_team_eval — points for submitting, less a late penalty.
+ */
+export type ActivityType = "challenge" | "combo" | "skills" | "amplify" | "live" | "teameval";
 export type Scope = "indiv" | "team" | "both";
 
 export const SCOPE_OF: Record<ActivityType, Scope> = {
@@ -66,6 +71,7 @@ export const SCOPE_OF: Record<ActivityType, Scope> = {
   // Individual tab has nothing to hand in to.
   amplify: "both",
   live: "both",
+  teameval: "indiv",
 };
 
 /**
@@ -93,6 +99,7 @@ export const INDIV_ELSEWHERE: Record<ActivityType, string | null> = {
   amplify: "Amplify",
   // Answered in the app, on its own screen — not a hand-in, and not elsewhere.
   live: null,
+  teameval: null,
 };
 
 export const TYPE_LABEL: Record<ActivityType, string> = {
@@ -101,6 +108,7 @@ export const TYPE_LABEL: Record<ActivityType, string> = {
   skills: "Skills",
   amplify: "Amplify",
   live: "Live questions",
+  teameval: "Team evaluation",
 };
 
 export const SCOPE_LABEL: Record<Scope, string> = {
@@ -403,6 +411,7 @@ export const IS_COMPLETION: Record<ActivityType, boolean> = {
   amplify: true,
   skills: false,
   live: false,
+  teameval: false,
 };
 
 export const TYPE_ACCENT: Record<ActivityType, string> = {
@@ -411,6 +420,7 @@ export const TYPE_ACCENT: Record<ActivityType, string> = {
   amplify: "var(--fv-lavender)",
   skills: "var(--fv-sky)",
   live: "#7c3aed",
+  teameval: "#0f766e",
 };
 
 /**

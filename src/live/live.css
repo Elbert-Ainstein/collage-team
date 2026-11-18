@@ -2148,6 +2148,10 @@ button.lq-reviewrow {
   background: var(--lq-team-100);
   color: var(--lq-team);
 }
+.lq-newicon.eval {
+  background: #ccfbf1;
+  color: #0f766e;
+}
 
 .lq-titlein {
   font-size: 30px;

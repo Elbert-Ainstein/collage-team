@@ -50,6 +50,7 @@ import { activityFileUrls } from "@/faculty/facultyData";
 import { SIcon } from "./icons";
 import { Recorder } from "./Recorder";
 import { liveStatusLabel } from "@/live/status";
+import { teamEvalStatusLabel } from "@/teameval/status";
 import { Ic, LiveDot } from "@/live/ui";
 
 // ------------------------------------------------------------------ tokens
@@ -61,6 +62,7 @@ const ACCENT: Record<ActivityType, string> = {
   skills: "var(--sky-700)",
   amplify: "var(--lavender-600)",
   live: "#7c3aed",
+  teameval: "#0f766e",
 };
 
 const TYPE_BADGE: Record<ActivityType, string> = {
@@ -69,6 +71,7 @@ const TYPE_BADGE: Record<ActivityType, string> = {
   skills: "sky",
   amplify: "lavender",
   live: "lavender",
+  teameval: "sky",
 };
 
 const STATUS_BADGE: Record<AssignmentStatus, string> = {
@@ -101,6 +104,8 @@ function elsewhereName(a: Assignment): string | null {
 function statusLabel(a: Assignment): string {
   const live = liveStatusLabel(a.status, a.live);
   if (live) return live;
+  const evalLabel = teamEvalStatusLabel(a.status, a.teamEval);
+  if (evalLabel) return evalLabel;
   if (a.status !== "Answered elsewhere") return a.status;
   const place = elsewhereName(a);
   return place ? `Answered in ${place}` : a.status;
