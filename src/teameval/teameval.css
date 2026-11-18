@@ -796,73 +796,11 @@ td.te-num.low .te-avg {
   letter-spacing: 0.02em;
   white-space: nowrap;
 }
-.te-chip-flag.low { background: var(--te-s1-bg); color: var(--te-s1); }
-.te-chip-flag.split { background: #f3e8ff; color: #7c3aed; }
-.te-chip-flag.selfHigh,
-.te-chip-flag.selfLow { background: #e3f6fd; color: #0e7490; }
 .te-chip-flag.late { background: var(--fv-cream-400); color: var(--fv-amber); }
 .te-chip-flag.missing { background: var(--fv-neutral-100); color: var(--fv-muted); }
 
 /* ------------------------------------------------------- needs attention */
-.te-attn {
-  margin-bottom: 22px;
-}
-.te-attn .te-h2 {
-  margin-top: 4px;
-}
-.te-attn.calm {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 14px;
-  border-radius: var(--fv-r-lg);
-  background: var(--te-accent-50);
-  color: var(--te-accent);
-  font-size: var(--fv-sm);
-}
-.te-attnlist {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  border: 1px solid var(--fv-neutral-200);
-  border-radius: var(--fv-r-lg);
-  background: #fff;
-  overflow: hidden;
-}
-.te-attnlist > li + li {
-  border-top: 1px solid var(--fv-neutral-200);
-}
-.te-attnrow {
-  width: 100%;
-  display: grid;
-  grid-template-columns: 140px minmax(150px, 0.8fr) minmax(0, 1.4fr) auto;
-  gap: 12px;
-  align-items: center;
-  padding: 11px 14px;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  font-size: var(--fv-sm);
-  text-align: left;
-  color: inherit;
-}
-button.te-attnrow {
-  cursor: pointer;
-}
-button.te-attnrow:hover {
-  background: var(--fv-cream-100);
-}
-.te-attnchips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-.te-attnname {
-  min-width: 0;
-}
-.te-attntext {
-  color: var(--fv-muted);
-}
+
 .te-linkname {
   padding: 0;
   border: 0;
@@ -878,19 +816,7 @@ button.te-attnrow:hover {
 }
 
 /* ------------------------------------------------------- team cards */
-.te-viewbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-.te-viewbar .te-h2 {
-  margin: 0;
-}
-.te-viewbar .te-viewseg {
-  margin: 0;
-}
+
 .te-cards {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(460px, 1fr));
@@ -1021,20 +947,11 @@ button.te-attnrow:hover {
   margin-left: auto;
   font-size: var(--fv-base);
 }
-.te-sheetflags {
-  list-style: none;
-  margin: 12px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: var(--fv-sm);
-}
+
 .te-sheetsec {
   margin-top: 22px;
 }
-.te-sheetsec > .te-h3,
-.te-wrote summary .te-h3 {
+.te-sheetsec > .te-h3 {
   margin-bottom: 10px;
 }
 .te-scorerows {
@@ -1044,7 +961,7 @@ button.te-attnrow:hover {
 }
 .te-scorehead {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 120px 36px;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
   font-size: var(--fv-sm);
@@ -1086,25 +1003,6 @@ button.te-attnrow:hover {
   font-weight: 700;
   color: var(--fv-navy);
 }
-.te-wrote summary {
-  cursor: pointer;
-  list-style: none;
-}
-.te-wrote summary::-webkit-details-marker {
-  display: none;
-}
-.te-wrote summary .te-h3::after {
-  content: " ›";
-  color: var(--fv-muted);
-}
-.te-wrote[open] summary .te-h3::after {
-  content: " ⌄";
-}
-.te-wrotefor {
-  padding: 12px 0;
-  border-top: 1px solid var(--fv-neutral-200);
-  font-size: var(--fv-sm);
-}
 
 /* ------------------------------------------------------- builder */
 .te-reasonfield {
@@ -1121,23 +1019,7 @@ button.te-attnrow:hover {
 }
 
 /* ------------------------------------------------------- student form */
-.te-rating {
-  margin-top: 16px;
-}
-.te-namechips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 6px;
-}
-.te-namechip {
-  padding: 5px 12px;
-  border-radius: 999px;
-  background: var(--te-accent-50);
-  color: var(--te-accent);
-  font-size: var(--fv-sm);
-  font-weight: 600;
-}
+
 .te-progressline,
 .te-stephead {
   display: flex;
@@ -1231,36 +1113,9 @@ button.te-attnrow:hover {
 .te-scorebtn.on.s3 { background: var(--te-s3-bg); color: var(--te-s3); border-color: var(--te-s3); }
 .te-scorebtn.on.s4 { background: var(--te-s4-bg); color: var(--te-s4); border-color: var(--te-s4); }
 .te-scorebtn.on.s5 { background: var(--te-s5-bg); color: var(--te-s5); border-color: var(--te-s5); }
-.te-echo {
-  margin: 8px 0 0;
-  font-size: var(--fv-sm);
-  color: var(--fv-muted);
-}
-.te-addwhy {
-  margin-top: 6px;
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  font-size: var(--fv-xs);
-  font-weight: 600;
-  color: var(--fv-navy-700);
-  cursor: pointer;
-}
 
 /* ------------------------------------------------------- student results */
-.te-insight {
-  margin-bottom: 12px;
-  padding: 12px 14px;
-  border-radius: var(--fv-r-lg);
-  background: #e3f6fd;
-  color: var(--fv-navy);
-  font-size: var(--fv-base);
-  line-height: 1.45;
-}
-.te-insight.calm {
-  background: var(--te-accent-50);
-}
+
 .te-summary {
   padding: 8px 6px;
 }
@@ -1271,19 +1126,12 @@ button.te-attnrow:hover {
   border-top: 1px solid var(--fv-neutral-200);
 }
 .te-sumhead {
-  width: 100%;
   display: grid;
-  grid-template-columns: minmax(110px, 1fr) 180px 110px 16px;
+  grid-template-columns: minmax(110px, 1fr) 180px 110px;
   gap: 12px;
   align-items: center;
   padding: 12px 10px;
-  border: 0;
-  background: transparent;
-  font: inherit;
   font-size: var(--fv-base);
-  text-align: left;
-  color: inherit;
-  cursor: pointer;
 }
 .te-sumhead .te-track {
   width: 180px;
@@ -1295,23 +1143,15 @@ button.te-attnrow:hover {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.te-sumbody {
-  padding: 0 12px 14px;
-  font-size: var(--fv-sm);
-}
-.te-sumbody p {
-  margin: 0 0 6px;
-}
-.te-sumbody .te-key-dot {
-  margin-left: 0;
-}
-.te-sumbody .te-reasons {
-  margin-top: 8px;
-}
-.te-sumbody ul.te-reasons {
+
+
+/* Reasons under a category on the student's results. */
+.te-sumrow ul.te-reasons {
   list-style: none;
+  margin: -4px 10px 12px;
   padding: 0;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  font-size: var(--fv-sm);
 }

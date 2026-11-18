@@ -1,13 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { Student, TeamWithMembers } from "@/checkins/types";
 import {
-  biggestGap,
   buildResults,
-  flagsFor,
   leftInStep,
   reasonNeeded,
   stepsFor,
-  commentCell,
   draftFrom,
   draftPayload,
   fmtAvg,
@@ -133,33 +130,6 @@ describe("buildResults", () => {
   });
 });
 
-describe("commentCell", () => {
-  const snapshot = {
-    categories: [cat("c1", 0)],
-    questions: [q("qp", "peer"), q("qs", "self")],
-    ratings: [rate("a", "b", "c1", 4, "steady"), rate("b", "b", "c1", 5)],
-    comments: [
-      { activity_id: "e", question_id: "qp", author_id: "a", subject_id: "b", body: "great notes", updated_at: "" },
-      { activity_id: "e", question_id: "qs", author_id: "b", subject_id: "b", body: "I led", updated_at: "" },
-    ],
-    submissions: [sub("a", DUE)],
-  };
-
-  it("shows what one teammate wrote about another, with their scores", () => {
-    const c = commentCell(snapshot, "a", "b");
-    expect(c.submitted).toBe(true);
-    expect(c.answers.map((x) => x.body)).toEqual(["great notes"]);
-    expect(c.scores.map((x) => [x.score, x.reason])).toEqual([[4, "steady"]]);
-  });
-
-  it("shows the reflection on the diagonal", () => {
-    const c = commentCell(snapshot, "b", "b");
-    expect(c.self).toBe(true);
-    expect(c.submitted).toBe(false);
-    expect(c.answers.map((x) => x.body)).toEqual(["I led"]);
-  });
-});
-
 describe("the student form", () => {
   it("sends only what's been filled in", () => {
     const draft = draftFrom([rate("a", "b", "c1", 4, " why ")], []);
@@ -209,70 +179,3 @@ describe("the form by category", () => {
   });
 });
 
-describe("needs attention", () => {
-  const four = { id: "t1", name: "Team 1", members: [ana, bo, cy, di] } as unknown as TeamWithMembers;
-  const cats = [cat("c1", 0)];
-  const everyone = ["a", "b", "c", "d"];
-  // Everyone submits. Di is rated 2 by all; Ana gives herself 5 but gets 3;
-  // Bo is given 5 by Ana and 1 by Cy; Cy is late.
-  const ratings: TeamEvalRating[] = [
-    rate("a", "a", "c1", 5), rate("b", "a", "c1", 3), rate("c", "a", "c1", 3), rate("d", "a", "c1", 3),
-    rate("a", "b", "c1", 5), rate("c", "b", "c1", 1), rate("d", "b", "c1", 4),
-    rate("a", "c", "c1", 4), rate("b", "c", "c1", 4), rate("d", "c", "c1", 4),
-    rate("a", "d", "c1", 2), rate("b", "d", "c1", 2), rate("c", "d", "c1", 2),
-  ];
-  const snapshot: TeamEvalSnapshot = {
-    settings: {
-      activity_id: "e", peer_comments: true, release_comments: true, anonymize: true, reasons: "low",
-      late_penalty: 10, released_at: null, scored_at: null, updated_at: "",
-    },
-    categories: cats,
-    questions: [],
-    ratings,
-    comments: [],
-    submissions: everyone.map((id) => sub(id, id === "c" ? "2026-11-12T10:00:00.000Z" : "2026-11-10T10:00:00.000Z")),
-  };
-  const groups = buildResults({ snapshot, teams: [four], roster: [ana, bo, cy, di], dueAt: DUE, pointsTotal: 10 });
-  const flags = flagsFor(groups, snapshot);
-  const kinds = (id: string) => (flags.get(id) ?? []).map((f) => f.kind);
-
-  it("flags someone the team rates low", () => {
-    expect(kinds("d")).toContain("low");
-    expect(flags.get("d")![0].text).toMatch(/Rated 2\.0/);
-  });
-
-  it("flags someone who sees themselves a point above their team", () => {
-    expect(kinds("a")).toEqual(["selfHigh"]);
-  });
-
-  it("flags teammates two points apart about someone", () => {
-    expect(kinds("b")).toContain("split");
-  });
-
-  it("flags a late submission, and leaves a fine one alone", () => {
-    expect(kinds("c")).toEqual(["late"]);
-  });
-
-  it("flags someone who hasn't submitted", () => {
-    const missing = flagsFor(
-      buildResults({ snapshot: { ...snapshot, submissions: snapshot.submissions.filter((s) => s.student_id !== "c") }, teams: [four], roster: [ana, bo, cy, di], dueAt: DUE, pointsTotal: 10 }),
-      { ...snapshot, submissions: snapshot.submissions.filter((s) => s.student_id !== "c") },
-    );
-    expect(missing.get("c")!.map((f) => f.kind)).toContain("missing");
-  });
-});
-
-describe("biggestGap", () => {
-  it("names where the student and their team differ most", () => {
-    expect(
-      biggestGap([
-        { name: "Contribution", self: 4, average: 3.8 },
-        { name: "Communication", self: 3, average: 4.3 },
-      ]),
-    ).toEqual({ name: "Communication", self: 3, average: 4.3 });
-  });
-
-  it("says nothing when they broadly agree", () => {
-    expect(biggestGap([{ name: "Contribution", self: 4, average: 3.7 }])).toBeNull();
-  });
-});

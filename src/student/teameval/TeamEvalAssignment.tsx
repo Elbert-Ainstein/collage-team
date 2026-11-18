@@ -20,7 +20,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Assignment, Enrolment } from "@/checkins/studentData";
 import { BriefText } from "@/checkins/BriefText";
 import { loadMyTeamEvalResults, loadStudentTeamEval, saveMyTeamEval } from "@/teameval/data";
-import { biggestGap, draftFrom, draftPayload, fmtAvg, leftInStep, reasonNeeded, stepsFor, type EvalDraft, type Step } from "@/teameval/model";
+import { draftFrom, draftPayload, fmtAvg, leftInStep, reasonNeeded, stepsFor, type EvalDraft, type Step } from "@/teameval/model";
 import { AutoTextarea } from "@/teameval/AutoTextarea";
 import { ScoreTrack } from "@/teameval/ScoreTrack";
 import {
@@ -264,16 +264,6 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
               </div>
             ) : (
               <>
-                <div className="te-rating">
-                  <span className="fv-eyebrow">You’ll rate</span>
-                  <div className="te-namechips">
-                    {team.map((p) => (
-                      <span key={p.student_id} className="te-namechip">
-                        {p.is_me ? "You" : p.name}
-                      </span>
-                    ))}
-                  </div>
-                </div>
                 <div className="te-progressline">
                   <div className="te-progress" aria-hidden="true">
                     <span style={{ width: `${steps.length ? (100 * doneSteps) / steps.length : 0}%` }} />
@@ -537,8 +527,6 @@ function RateRow({
   onReason: (r: string) => void;
 }) {
   const needed = reasonNeeded(mode, value);
-  const [wantWhy, setWantWhy] = useState(false);
-  const showWhy = needed || wantWhy || reason.trim() !== "";
   return (
     <div className="lq-scard te-raterow">
       <div className="te-raterhead">
@@ -560,8 +548,7 @@ function RateRow({
           ))}
         </div>
       </div>
-      {value !== null ? <p className="te-echo">{levels[value - 1] || "—"}</p> : null}
-      {showWhy ? (
+      {needed || reason.trim() ? (
         <AutoTextarea
           className="fv-in te-ta te-why"
           rows={2}
@@ -569,13 +556,9 @@ function RateRow({
           value={reason}
           readOnly={readOnly}
           aria-label={`${name}: why`}
-          placeholder={needed ? `Why a ${value}?` : "Why? (optional)"}
+          placeholder={`Why a ${value}?`}
           onChange={onReason}
         />
-      ) : value !== null && mode !== "none" && !readOnly ? (
-        <button type="button" className="te-addwhy" onClick={() => setWantWhy(true)}>
-          + Why
-        </button>
       ) : null}
     </div>
   );
@@ -584,22 +567,14 @@ function RateRow({
 // ---------------------------------------------------------------- results
 
 function Results({ ev, results, title }: { ev: StudentTeamEval; results: TeamEvalResults; title: string }) {
-  const [open, setOpen] = useState<string | null>(null);
   const byCat = new Map((results.categories ?? []).map((c) => [c.category_id, c]));
   const prompts = new Map(ev.questions.map((q) => [q.id, q.prompt]));
   const comments = results.comments ?? [];
-  const byQuestion = useMemo(() => {
-    const out = new Map<string, { author: string | null; body: string }[]>();
-    for (const c of comments) out.set(c.question_id, [...(out.get(c.question_id) ?? []), c]);
-    return out;
-  }, [comments]);
+  const byQuestion = new Map<string, { author: string | null; body: string }[]>();
+  for (const c of comments) byQuestion.set(c.question_id, [...(byQuestion.get(c.question_id) ?? []), c]);
   const reflection = results.reflection ?? [];
   const teammates = ev.team.filter((p) => !p.is_me).length;
   const raters = Math.max(0, ...(results.categories ?? []).map((c) => c.raters));
-  const gap = biggestGap(
-    ev.categories.map((c) => ({ name: c.name, self: byCat.get(c.id)?.self ?? null, average: byCat.get(c.id)?.average ?? null })),
-  );
-  const anyRated = raters > 0;
 
   return (
     <>
@@ -610,19 +585,6 @@ function Results({ ev, results, title }: { ev: StudentTeamEval; results: TeamEva
         </p>
       </div>
 
-      {anyRated ? (
-        <div className={`te-insight${gap ? "" : " calm"}`}>
-          {gap ? (
-            <>
-              Teammates rated your <b>{gap.name}</b> {gap.average > gap.self ? "higher" : "lower"} than you did —{" "}
-              {fmtAvg(gap.average)} vs {gap.self}.
-            </>
-          ) : (
-            "You and your teammates see you about the same."
-          )}
-        </div>
-      ) : null}
-
       <section className="lq-scard te-summary">
         <p className="fv-sub te-legend">
           <span className="te-key-dot team" /> Teammates <span className="te-key-dot self" /> You
@@ -631,59 +593,28 @@ function Results({ ev, results, title }: { ev: StudentTeamEval; results: TeamEva
           const r = byCat.get(c.id);
           const self = r?.self ?? null;
           const avg = r?.average ?? null;
-          const isOpen = open === c.id;
           return (
-            <div key={c.id} className={`te-sumrow${isOpen ? " open" : ""}`}>
-              <button type="button" className="te-sumhead" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : c.id)}>
+            <div key={c.id} className="te-sumrow">
+              <div className="te-sumhead">
                 <span className="te-sumname">{c.name}</span>
                 <ScoreTrack team={avg} self={self} label={`${c.name}: teammates ${fmtAvg(avg)}, you ${self ?? "—"}`} />
                 <span className="te-sumnums">
                   <b>{fmtAvg(avg)}</b>
                   <span className="fv-sub"> · you {self ?? "—"}</span>
                 </span>
-                <Ic name={isOpen ? "maximize" : "minimize"} size={14} />
-              </button>
-              {isOpen ? (
-                <div className="te-sumbody">
-                  {(() => {
-                    const teamAt = avg === null ? null : Math.min(5, Math.max(1, Math.round(avg)));
-                    if (teamAt !== null && teamAt === self) {
-                      return (
-                        <p>
-                          <span className="te-key-dot team" />
-                          <span className="te-key-dot self" /> {c.levels[self - 1] || "—"}
-                        </p>
-                      );
-                    }
-                    return (
-                      <>
-                        {teamAt !== null ? (
-                          <p>
-                            <span className="te-key-dot team" /> {c.levels[teamAt - 1] || "—"}
-                          </p>
-                        ) : null}
-                        {self !== null ? (
-                          <p>
-                            <span className="te-key-dot self" /> {c.levels[self - 1] || "—"}
-                          </p>
-                        ) : null}
-                      </>
-                    );
-                  })()}
-                  {r?.reasons.length ? (
-                    <ul className="te-reasons">
-                      {r.reasons.map((x, i) => (
-                        <li key={i}>
-                          <b className={`te-chip s${x.score}`}>{x.score}</b>
-                          <span>
-                            {x.text}
-                            {x.author ? <span className="te-by"> — {x.author}</span> : null}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </div>
+              </div>
+              {r?.reasons.length ? (
+                <ul className="te-reasons">
+                  {r.reasons.map((x, i) => (
+                    <li key={i}>
+                      <b className={`te-chip s${x.score}`}>{x.score}</b>
+                      <span>
+                        {x.text}
+                        {x.author ? <span className="te-by"> — {x.author}</span> : null}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               ) : null}
             </div>
           );

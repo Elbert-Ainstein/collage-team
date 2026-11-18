@@ -2,22 +2,20 @@
 
 // A team evaluation's results, on a page of their own.
 //
-// Built for the instructor's actual job: find who needs a look, read why,
-// then release. So it opens on what needs attention — rated low by their
-// team, seeing themselves differently from it, teammates split about them,
-// late, missing — then every team as a card, each member on a 1–5 line.
-// Clicking anyone opens everything about them in a side panel: scores from
-// each teammate, every comment about them, their reflection, what they wrote
-// about others. The full table is one toggle away.
+// Every team as a card, each member on a 1–5 line: their teammates' average
+// and what they gave themselves. Clicking anyone opens everything about them
+// in a side panel — each teammate's scores and reasons, every comment about
+// them, their reflection. The full table is one toggle away. Releasing and
+// sending to the gradebook live here, beside the scores they decide.
 //
 // Staff always see names; anonymity is a promise to students about each
 // other, kept by team_eval_results (0058).
 
 import { useEffect, useMemo, useState } from "react";
-import type { Activity, Student } from "@/checkins/types";
+import type { Activity } from "@/checkins/types";
 import { teamsOf } from "@/checkins/rosters";
 import { releaseTeamEval, scoreTeamEval, setTeamEvalLate } from "@/teameval/data";
-import { buildResults, commentCell, flagsFor, fmtAvg, fmtPoints, type Flag, type FlagKind, type ResultRow, type TeamGroup } from "@/teameval/model";
+import { buildResults, fmtAvg, fmtPoints, type ResultRow, type TeamGroup } from "@/teameval/model";
 import { ScoreTrack } from "@/teameval/ScoreTrack";
 import type { TeamEvalSnapshot } from "@/teameval/types";
 import { Ic } from "@/live/ui";
@@ -25,7 +23,7 @@ import type { FacultyData } from "../FacultyApp";
 import { FAvatar } from "../icons";
 import { fmtDay, fmtWhen } from "./format";
 
-type View = "teams" | "table";
+type View = "cards" | "table";
 
 interface Props {
   data: FacultyData;
@@ -41,24 +39,13 @@ interface Props {
 /** Low marks stand out: under 3 is below "meets expectations" on every default scale. */
 const low = (avg: number | null) => avg !== null && avg < 3;
 
-/** Most serious first; the short label is for chips, the flag's text for sentences. */
-const FLAG_ORDER: FlagKind[] = ["low", "split", "selfHigh", "selfLow", "late", "missing"];
-const FLAG_CHIP: Record<FlagKind, string> = {
-  low: "Low",
-  split: "Split",
-  selfHigh: "Self ↑",
-  selfLow: "Self ↓",
-  late: "Late",
-  missing: "Missing",
-};
-
 // The view last used on this evaluation, so coming back lands where she was.
 const viewKey = (activityId: string) => `te-view-${activityId}`;
 function lastView(activityId: string): View {
   try {
-    return window.localStorage.getItem(viewKey(activityId)) === "table" ? "table" : "teams";
+    return window.localStorage.getItem(viewKey(activityId)) === "table" ? "table" : "cards";
   } catch {
-    return "teams";
+    return "cards";
   }
 }
 
@@ -73,7 +60,7 @@ export function TeamEvalResults({ data, activity, snap, onBack, reload, onChange
     try {
       window.localStorage.setItem(viewKey(activity.id), v);
     } catch {
-      // Private mode: it opens on Teams next time, which is harmless.
+      // Private mode: it opens on Cards next time, which is harmless.
     }
   };
 
@@ -84,7 +71,6 @@ export function TeamEvalResults({ data, activity, snap, onBack, reload, onChange
     () => buildResults({ snapshot: snap, teams, roster: data.roster, dueAt, pointsTotal: activity.points_total }),
     [snap, teams, data.roster, dueAt, activity.points_total],
   );
-  const flags = useMemo(() => flagsFor(groups, snap), [groups, snap]);
   const rows = groups.flatMap((g) => g.rows);
   const onTeams = groups.filter((g) => g.team).flatMap((g) => g.rows);
   const submitted = onTeams.filter((r) => r.submission).length;
@@ -130,6 +116,10 @@ export function TeamEvalResults({ data, activity, snap, onBack, reload, onChange
   // The panel's ‹ › walk everyone on a team, in the order the cards show them.
   const order = onTeams.map((r) => r.student.id);
   const openRow = rows.find((r) => r.student.id === openId) ?? null;
+  const step = (d: 1 | -1) => {
+    const next = openRow ? order[order.indexOf(openRow.student.id) + d] : undefined;
+    return next ?? null;
+  };
 
   return (
     <div className="fv-panel lq-panel te-fac">
@@ -171,22 +161,16 @@ export function TeamEvalResults({ data, activity, snap, onBack, reload, onChange
           <p className="fv-sub">No students yet.</p>
         ) : (
           <>
-            <NeedsAttention groups={groups} flags={flags} onOpen={setOpenId} />
-
-            <div className="te-viewbar">
-              <h2 className="te-h2">Teams</h2>
-              <div className="fv-seg te-viewseg" role="tablist">
-                <button type="button" role="tab" aria-selected={view === "teams"} className={view === "teams" ? "on" : ""} onClick={() => setView("teams")}>
-                  Cards
-                </button>
-                <button type="button" role="tab" aria-selected={view === "table"} className={view === "table" ? "on" : ""} onClick={() => setView("table")}>
-                  Table
-                </button>
-              </div>
+            <div className="fv-seg te-viewseg" role="tablist">
+              <button type="button" role="tab" aria-selected={view === "cards"} className={view === "cards" ? "on" : ""} onClick={() => setView("cards")}>
+                Cards
+              </button>
+              <button type="button" role="tab" aria-selected={view === "table"} className={view === "table" ? "on" : ""} onClick={() => setView("table")}>
+                Table
+              </button>
             </div>
-
-            {view === "teams" ? (
-              <TeamCards groups={groups} flags={flags} onOpen={setOpenId} />
+            {view === "cards" ? (
+              <TeamCards groups={groups} onOpen={setOpenId} />
             ) : (
               <ResultsTable
                 groups={groups}
@@ -206,151 +190,52 @@ export function TeamEvalResults({ data, activity, snap, onBack, reload, onChange
         <StudentPanel
           row={openRow}
           snap={snap}
-          flags={flags.get(openRow.student.id) ?? []}
           pointsTotal={activity.points_total}
           canFlag={data.can.grade}
           busy={busy}
           onFlag={() => void flag(openRow)}
           onClose={() => setOpenId(null)}
-          onStep={(d) => {
-            const i = order.indexOf(openRow.student.id);
-            const next = order[i + d];
-            if (next) setOpenId(next);
-          }}
-          canStep={(d) => {
-            const i = order.indexOf(openRow.student.id);
-            return i >= 0 && order[i + d] !== undefined;
-          }}
+          prev={step(-1)}
+          next={step(1)}
+          onGo={setOpenId}
         />
       ) : null}
     </div>
   );
 }
 
-// ------------------------------------------------------- needs attention
-
-function NeedsAttention({ groups, flags, onOpen }: { groups: TeamGroup[]; flags: Map<string, Flag[]>; onOpen: (id: string) => void }) {
-  const [copied, setCopied] = useState(false);
-  const rows = groups.filter((g) => g.team).flatMap((g) => g.rows);
-  // One row per student, everything but "missing" on it; the most serious first.
-  const rank = (fs: Flag[]) => Math.min(...fs.map((f) => FLAG_ORDER.indexOf(f.kind)));
-  const items = rows
-    .flatMap((r) => {
-      const fs = (flags.get(r.student.id) ?? []).filter((f) => f.kind !== "missing");
-      return fs.length ? [{ r, fs }] : [];
-    })
-    .sort((a, b) => rank(a.fs) - rank(b.fs));
-  const missing: Student[] = rows.filter((r) => !r.submission).map((r) => r.student);
-  const emails = missing.flatMap((s) => (s.email ? [s.email] : []));
-
-  if (!items.length && !missing.length) {
-    return (
-      <section className="te-attn calm">
-        <Ic name="check" size={16} /> Nothing stands out — everyone has submitted, on time, and no one is rated low.
-      </section>
-    );
-  }
-  return (
-    <section className="te-attn" aria-label="Needs attention">
-      <h2 className="te-h2">Needs attention</h2>
-      <ul className="te-attnlist">
-        {items.map(({ r, fs }) => (
-          <li key={r.student.id}>
-            <button type="button" className="te-attnrow" onClick={() => onOpen(r.student.id)}>
-              <span className="te-attnchips">
-                {fs.map((f) => (
-                  <span key={f.kind} className={`te-chip-flag ${f.kind}`}>
-                    {FLAG_CHIP[f.kind]}
-                  </span>
-                ))}
-              </span>
-              <span className="te-attnname">
-                <b>{r.student.name}</b>
-                <span className="fv-sub"> · {r.team?.name}</span>
-              </span>
-              <span className="te-attntext">{fs.map((f) => f.text).join(" · ")}</span>
-              <Ic name="chevronRight" size={15} />
-            </button>
-          </li>
-        ))}
-        {missing.length ? (
-          <li className="te-attnrow missing">
-            <span className="te-attnchips">
-              <span className="te-chip-flag missing">{FLAG_CHIP.missing}</span>
-            </span>
-            <span className="te-attnname">
-              {missing.map((s, i) => (
-                <span key={s.id}>
-                  {i ? ", " : ""}
-                  <button type="button" className="te-linkname" onClick={() => onOpen(s.id)}>
-                    {s.name}
-                  </button>
-                </span>
-              ))}
-            </span>
-            <span className="te-attntext">Not submitted</span>
-            {emails.length ? (
-              <button
-                type="button"
-                className="fv-btn outline sm"
-                onClick={() =>
-                  void navigator.clipboard?.writeText(emails.join(", ")).then(() => {
-                    setCopied(true);
-                    window.setTimeout(() => setCopied(false), 1600);
-                  })
-                }
-              >
-                <Ic name="copy" size={14} /> {copied ? "Copied" : "Copy emails"}
-              </button>
-            ) : null}
-          </li>
-        ) : null}
-      </ul>
-    </section>
-  );
-}
-
 // ------------------------------------------------------------ team cards
 
-function TeamCards({ groups, flags, onOpen }: { groups: TeamGroup[]; flags: Map<string, Flag[]>; onOpen: (id: string) => void }) {
+function TeamCards({ groups, onOpen }: { groups: TeamGroup[]; onOpen: (id: string) => void }) {
   return (
     <div className="te-cards">
-      {groups.map((g) => {
-        const scored = g.rows.filter((r) => r.overall !== null).map((r) => r.overall as number);
-        const avg = scored.length ? scored.reduce((a, b) => a + b, 0) / scored.length : null;
-        return (
-          <section key={g.team?.id ?? "none"} className="fv-card te-teamcard">
-            <header className="te-teamhead">
-              <h3 className="te-h3">{g.team?.name ?? "No team"}</h3>
-              <span className="fv-sub">
-                {g.rows.filter((r) => r.submission).length}/{g.rows.length} submitted
-                {avg !== null ? ` · avg ${fmtAvg(avg)}` : ""}
-              </span>
-            </header>
-            <ul className="te-members">
-              {g.rows.map((r) => (
-                <li key={r.student.id}>
-                  <button type="button" className="te-member" onClick={() => onOpen(r.student.id)}>
-                    <span className="te-person">
-                      <FAvatar name={r.student.name} tint={r.student.avatar_tint} size={24} />
-                      <span className="te-membername">{r.student.name}</span>
-                    </span>
-                    <ScoreTrack team={r.overall} self={r.selfOverall} label={`${r.student.name}: teammates ${fmtAvg(r.overall)}, self ${fmtAvg(r.selfOverall)}`} />
-                    <span className={`te-memberavg${low(r.overall) ? " low" : ""}`}>{fmtAvg(r.overall)}</span>
-                    <span className="te-memberflags">
-                      {(flags.get(r.student.id) ?? []).map((f) => (
-                        <span key={f.kind} className={`te-chip-flag ${f.kind}`} title={f.text}>
-                          {FLAG_CHIP[f.kind]}
-                        </span>
-                      ))}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          </section>
-        );
-      })}
+      {groups.map((g) => (
+        <section key={g.team?.id ?? "none"} className="fv-card te-teamcard">
+          <header className="te-teamhead">
+            <h3 className="te-h3">{g.team?.name ?? "No team"}</h3>
+            <span className="fv-sub">
+              {g.rows.filter((r) => r.submission).length}/{g.rows.length} submitted
+            </span>
+          </header>
+          <ul className="te-members">
+            {g.rows.map((r) => (
+              <li key={r.student.id}>
+                <button type="button" className="te-member" onClick={() => onOpen(r.student.id)}>
+                  <span className="te-person">
+                    <FAvatar name={r.student.name} tint={r.student.avatar_tint} size={24} />
+                    <span className="te-membername">{r.student.name}</span>
+                  </span>
+                  <ScoreTrack team={r.overall} self={r.selfOverall} label={`${r.student.name}: teammates ${fmtAvg(r.overall)}, self ${fmtAvg(r.selfOverall)}`} />
+                  <span className={`te-memberavg${low(r.overall) ? " low" : ""}`}>{fmtAvg(r.overall)}</span>
+                  <span className="te-memberflags">
+                    {!r.submission && g.team ? <span className="te-chip-flag missing">Missing</span> : r.late ? <span className="te-chip-flag late">Late</span> : null}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
       <p className="fv-sub te-legend">
         <span className="te-key-dot team" /> teammates’ average <span className="te-key-dot self" /> self
       </p>
@@ -363,46 +248,50 @@ function TeamCards({ groups, flags, onOpen }: { groups: TeamGroup[]; flags: Map<
 function StudentPanel({
   row,
   snap,
-  flags,
   pointsTotal,
   canFlag,
   busy,
   onFlag,
   onClose,
-  onStep,
-  canStep,
+  prev,
+  next,
+  onGo,
 }: {
   row: ResultRow;
   snap: TeamEvalSnapshot;
-  flags: Flag[];
   pointsTotal: number;
   canFlag: boolean;
   busy: string | null;
   onFlag: () => void;
   onClose: () => void;
-  onStep: (d: 1 | -1) => void;
-  canStep: (d: 1 | -1) => boolean;
+  prev: string | null;
+  next: string | null;
+  onGo: (id: string) => void;
 }) {
   const id = row.student.id;
   const submitted = new Set(snap.submissions.map((s) => s.student_id));
   const mates = (row.team?.members ?? []).filter((m) => m.id !== id);
   const nameOf = (sid: string) => row.team?.members.find((m) => m.id === sid)?.name ?? "A teammate";
+  const first = (name: string) => name.split(/\s+/)[0];
   const peerQs = snap.questions.filter((q) => q.audience === "peer");
-  const selfQs = snap.questions.filter((q) => q.audience === "self");
-  const reflection = submitted.has(id) ? selfQs.flatMap((q) => {
-    const c = snap.comments.find((x) => x.question_id === q.id && x.author_id === id && x.subject_id === id);
-    return c ? [{ q, body: c.body }] : [];
-  }) : [];
+  const reflection = submitted.has(id)
+    ? snap.questions
+        .filter((q) => q.audience === "self")
+        .flatMap((q) => {
+          const c = snap.comments.find((x) => x.question_id === q.id && x.author_id === id && x.subject_id === id);
+          return c ? [{ q, body: c.body }] : [];
+        })
+    : [];
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
-      if (e.key === "ArrowRight" && canStep(1)) onStep(1);
-      if (e.key === "ArrowLeft" && canStep(-1)) onStep(-1);
+      if (e.key === "ArrowRight" && next) onGo(next);
+      if (e.key === "ArrowLeft" && prev) onGo(prev);
     };
     document.addEventListener("keydown", key);
     return () => document.removeEventListener("keydown", key);
-  }, [onClose, onStep, canStep]);
+  }, [onClose, onGo, next, prev]);
 
   return (
     <div className="te-sheetwrap" role="dialog" aria-modal="true" aria-label={row.student.name}>
@@ -417,10 +306,10 @@ function StudentPanel({
             </span>
           </span>
           <span className="te-sheetnav">
-            <button type="button" className="fv-iconbtn" aria-label="Previous student" disabled={!canStep(-1)} onClick={() => onStep(-1)}>
+            <button type="button" className="fv-iconbtn" aria-label="Previous student" disabled={!prev} onClick={() => prev && onGo(prev)}>
               <Ic name="chevronLeft" size={16} />
             </button>
-            <button type="button" className="fv-iconbtn" aria-label="Next student" disabled={!canStep(1)} onClick={() => onStep(1)}>
+            <button type="button" className="fv-iconbtn" aria-label="Next student" disabled={!next} onClick={() => next && onGo(next)}>
               <Ic name="chevronRight" size={16} />
             </button>
             <button type="button" className="fv-iconbtn" aria-label="Close" onClick={onClose}>
@@ -431,9 +320,7 @@ function StudentPanel({
 
         <div className="te-sheetbody">
           <div className="te-sheetstatus">
-            <span>
-              {row.submission ? `Submitted ${fmtWhen(row.submission.submitted_at)}` : "Not submitted"}
-            </span>
+            <span>{row.submission ? `Submitted ${fmtWhen(row.submission.submitted_at)}` : "Not submitted"}</span>
             {row.submission ? (
               <button
                 type="button"
@@ -450,17 +337,6 @@ function StudentPanel({
               <span className="fv-sub"> / {fmtPoints(pointsTotal)}</span>
             </span>
           </div>
-          {flags.filter((f) => f.kind !== "missing" && f.kind !== "late").length ? (
-            <ul className="te-sheetflags">
-              {flags
-                .filter((f) => f.kind !== "missing" && f.kind !== "late")
-                .map((f) => (
-                  <li key={f.kind}>
-                    <span className={`te-chip-flag ${f.kind}`}>{FLAG_CHIP[f.kind]}</span> {f.text}
-                  </li>
-                ))}
-            </ul>
-          ) : null}
 
           <section className="te-sheetsec">
             <h3 className="te-h3">Scores</h3>
@@ -469,19 +345,18 @@ function StudentPanel({
                 const cat = row.categories[i];
                 const given = mates.flatMap((m) => {
                   const r = snap.ratings.find((x) => x.category_id === c.id && x.rater_id === m.id && x.ratee_id === id);
-                  return r && submitted.has(m.id) ? [{ who: m.name, score: r.score, reason: r.reason }] : [];
+                  return r && submitted.has(m.id) ? [{ who: first(m.name), score: r.score, reason: r.reason }] : [];
                 });
                 return (
                   <div key={c.id} className="te-scorerow">
                     <div className="te-scorehead">
                       <span className="te-scorename">{c.name}</span>
-                      <ScoreTrack team={cat.avg} self={cat.self} size="sm" />
                       <span className={`te-memberavg${low(cat.avg) ? " low" : ""}`}>{fmtAvg(cat.avg)}</span>
                     </div>
                     <div className="te-givers">
                       {given.map((g) => (
                         <span key={g.who} className="te-giver">
-                          {g.who.split(/\s+/)[0]} <b className={`te-chip s${g.score}`}>{g.score}</b>
+                          {g.who} <b className={`te-chip s${g.score}`}>{g.score}</b>
                         </span>
                       ))}
                       {cat.self !== null ? (
@@ -490,11 +365,13 @@ function StudentPanel({
                         </span>
                       ) : null}
                     </div>
-                    {given.filter((g) => g.reason).map((g) => (
-                      <p key={g.who} className="te-why-line">
-                        <b>{g.who.split(/\s+/)[0]}:</b> {g.reason}
-                      </p>
-                    ))}
+                    {given
+                      .filter((g) => g.reason)
+                      .map((g) => (
+                        <p key={g.who} className="te-why-line">
+                          <b>{g.who}:</b> {g.reason}
+                        </p>
+                      ))}
                   </div>
                 );
               })}
@@ -539,35 +416,6 @@ function StudentPanel({
                 </div>
               ))}
             </section>
-          ) : null}
-
-          {row.submission && mates.length ? (
-            <details className="te-sheetsec te-wrote">
-              <summary>
-                <h3 className="te-h3">What {row.student.name.split(/\s+/)[0]} wrote about teammates</h3>
-              </summary>
-              {mates.map((m) => {
-                const cell = commentCell(snap, id, m.id);
-                return (
-                  <div key={m.id} className="te-wrotefor">
-                    <b>{m.name}</b>
-                    <div className="te-givers">
-                      {cell.scores.map((s) => (
-                        <span key={s.category.id} className="te-giver">
-                          {s.category.name} <b className={`te-chip s${s.score}`}>{s.score}</b>
-                        </span>
-                      ))}
-                    </div>
-                    {cell.answers.map((a) => (
-                      <div key={a.question.id} className="te-cq">
-                        <span className="te-prompt">{a.question.prompt}</span>
-                        <p>{a.body}</p>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })}
-            </details>
           ) : null}
         </div>
       </aside>
