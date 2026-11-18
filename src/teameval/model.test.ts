@@ -2,17 +2,24 @@ import { describe, expect, it } from "vitest";
 import type { Student, TeamWithMembers } from "@/checkins/types";
 import {
   buildResults,
-  leftInStep,
-  reasonNeeded,
-  stepsFor,
   draftFrom,
   draftPayload,
   fmtAvg,
   gradeFor,
   isLate,
+  leftFor,
+  outOf,
+  pagesFor,
   peerAverage,
 } from "./model";
-import type { TeamEvalCategory, TeamEvalQuestion, TeamEvalRating, TeamEvalSnapshot, TeamEvalSubmission } from "./types";
+import type {
+  TeamEvalCategory,
+  TeamEvalMember,
+  TeamEvalQuestion,
+  TeamEvalRating,
+  TeamEvalSnapshot,
+  TeamEvalSubmission,
+} from "./types";
 
 const DUE = "2026-11-10T17:00:00.000Z";
 const student = (id: string, name: string) => ({ id, name, avatar_tint: null }) as unknown as Student;
@@ -28,13 +35,12 @@ const cat = (id: string, position: number): TeamEvalCategory => ({
   created_at: "",
 });
 const q = (id: string, audience: "peer" | "self"): TeamEvalQuestion => ({ id, activity_id: "e", position: 0, audience, prompt: id, created_at: "" });
-const rate = (rater: string, ratee: string, category: string, score: number, reason: string | null = null): TeamEvalRating => ({
+const rate = (rater: string, ratee: string, category: string, score: number): TeamEvalRating => ({
   activity_id: "e",
   category_id: category,
   rater_id: rater,
   ratee_id: ratee,
   score,
-  reason,
   updated_at: "",
 });
 const sub = (id: string, at: string, late_override: boolean | null = null): TeamEvalSubmission => ({
@@ -74,10 +80,18 @@ describe("lateness and the grade", () => {
     expect(isLate(sub("a", "2026-11-10T18:00:00.000Z"), null)).toBe(false);
   });
 
-  it("gives the points on time, less the penalty late, and nothing for none", () => {
-    expect(gradeFor(sub("a", "2026-11-10T16:00:00.000Z"), DUE, 10, 15)).toBe(10);
+  it("is their points on time, less the penalty late, and 0 if they never submitted", () => {
+    expect(gradeFor(sub("a", "2026-11-10T16:00:00.000Z"), DUE, 12.5, 15)).toBe(12.5);
     expect(gradeFor(sub("a", "2026-11-11T16:00:00.000Z"), DUE, 10, 15)).toBe(8.5);
-    expect(gradeFor(null, DUE, 10, 15)).toBe(0);
+    expect(gradeFor(null, DUE, 20, 15)).toBe(0);
+  });
+
+  it("waits when nobody has rated them yet", () => {
+    expect(gradeFor(sub("a", "2026-11-10T16:00:00.000Z"), DUE, null, 15)).toBeNull();
+  });
+
+  it("is out of 5 per category", () => {
+    expect(outOf([1, 2, 3, 4, 5])).toBe(25);
   });
 });
 
@@ -88,7 +102,6 @@ describe("buildResults", () => {
       peer_comments: true,
       release_comments: true,
       anonymize: true,
-      reasons: "none",
       late_penalty: 20,
       released_at: null,
       scored_at: null,
@@ -102,11 +115,15 @@ describe("buildResults", () => {
       rate("c", "b", "c1", 2),
       rate("c", "b", "c2", 4),
       rate("b", "b", "c1", 5),
+      rate("a", "c", "c1", 5),
+      rate("a", "c", "c2", 4),
+      rate("b", "a", "c1", 3),
+      rate("b", "a", "c2", 3),
     ],
     comments: [],
     submissions: [sub("a", "2026-11-10T10:00:00.000Z"), sub("b", "2026-11-10T10:00:00.000Z"), sub("c", "2026-11-12T10:00:00.000Z")],
   };
-  const groups = buildResults({ snapshot, teams: [TEAM], roster: [ana, bo, cy, di], dueAt: DUE, pointsTotal: 10 });
+  const groups = buildResults({ snapshot, teams: [TEAM], roster: [ana, bo, cy, di], dueAt: DUE });
   const rowOf = (id: string) => groups.flatMap((g) => g.rows).find((r) => r.student.id === id)!;
 
   it("averages each category over submitted teammates", () => {
@@ -114,68 +131,57 @@ describe("buildResults", () => {
     expect(b.categories.map((c) => c.avg)).toEqual([3, 3]);
     expect(b.categories[0].n).toBe(2);
     expect(b.categories[0].self).toBe(5);
-    expect(b.overall).toBe(3);
   });
 
-  it("flags the late submitter and takes their points", () => {
+  it("grades each student on the sum of their category averages", () => {
+    expect(rowOf("b").points).toBe(6); // 3 + 3, their own 5 left out
+    expect(rowOf("b").grade).toBe(6);
+    expect(rowOf("a").grade).toBe(6); // 3 + 3 from Bo
+  });
+
+  it("flags the late submitter and takes the penalty off their own grade", () => {
     expect(rowOf("c").late).toBe(true);
-    expect(rowOf("c").grade).toBe(8);
-    expect(rowOf("a").grade).toBe(10);
+    expect(rowOf("c").points).toBe(9); // 5 + 4 from Ana
+    expect(rowOf("c").grade).toBe(7.2); // 20% off
   });
 
-  it("puts someone on no team in a group of their own", () => {
+  it("puts someone on no team in a group of their own, with 0 for not submitting", () => {
     expect(groups.map((g) => g.team?.id ?? null)).toEqual(["t1", null]);
     expect(rowOf("d").grade).toBe(0);
-    expect(rowOf("d").overall).toBeNull();
+    expect(rowOf("d").points).toBeNull();
   });
 });
 
 describe("the student form", () => {
-  it("sends only what's been filled in", () => {
-    const draft = draftFrom([rate("a", "b", "c1", 4, " why ")], []);
-    draft.ratings.b.c2 = { score: null, reason: "" };
-    draft.comments.b = { qp: "  ", qs: "x" };
+  it("sends what's been filled in, without blank answers", () => {
+    const draft = draftFrom([rate("a", "b", "c1", 4)], []);
+    draft.comments.b = { qp: "  ", qs: " x " };
     expect(draftPayload(draft)).toEqual({
-      ratings: [{ category_id: "c1", ratee_id: "b", score: 4, reason: "why" }],
+      ratings: [{ category_id: "c1", ratee_id: "b", score: 4 }],
       comments: [{ question_id: "qs", subject_id: "b", body: "x" }],
     });
   });
 });
 
-describe("reasons", () => {
-  it("asks for one with every score, only 1s and 2s, or never", () => {
-    expect([1, 2, 3, 5].map((n) => reasonNeeded("all", n))).toEqual([true, true, true, true]);
-    expect([1, 2, 3, 5].map((n) => reasonNeeded("low", n))).toEqual([true, true, false, false]);
-    expect([1, 5].map((n) => reasonNeeded("none", n))).toEqual([false, false]);
-    expect(reasonNeeded("all", null)).toBe(false);
-  });
-});
-
-describe("the form by category", () => {
+describe("the form, one page per person", () => {
   const categories = [cat("c1", 0), cat("c2", 1)];
   const questions = [q("qp", "peer"), q("qs", "self")];
-  const people = [
-    { student_id: "a", is_me: true },
-    { student_id: "b", is_me: false },
-  ];
+  const member = (id: string, is_me = false): TeamEvalMember => ({ student_id: id, name: id, avatar_tint: null, is_me });
+  const team = [member("a", true), member("b"), member("c")];
 
-  it("is one step per category, then comments, then reflection", () => {
-    const steps = stepsFor({ categories, questions, settings: { peer_comments: true } });
-    expect(steps.map((s) => (s.kind === "category" ? s.category.id : s.kind))).toEqual(["c1", "c2", "comments", "reflection"]);
-    const noPeer = stepsFor({ categories, questions, settings: { peer_comments: false } });
-    expect(noPeer.map((s) => s.kind)).toEqual(["category", "category", "reflection"]);
+  it("goes teammate by teammate, then the student last", () => {
+    expect(pagesFor(team).map((m) => m.student_id)).toEqual(["b", "c", "a"]);
   });
 
-  it("counts what's left on a step for everyone on it", () => {
-    const steps = stepsFor({ categories, questions, settings: { peer_comments: true } });
-    // a rated themselves 4 with no reason, b a 2 with no reason.
-    const draft = draftFrom([rate("a", "a", "c1", 4), rate("a", "b", "c1", 2)], []);
-    expect(leftInStep(steps[0], draft, people, { reasons: "low" })).toBe(1); // b's 2 needs a reason
-    expect(leftInStep(steps[0], draft, people, { reasons: "all" })).toBe(2);
-    expect(leftInStep(steps[0], draft, people, { reasons: "none" })).toBe(0);
-    expect(leftInStep(steps[1], draft, people, { reasons: "low" })).toBe(2); // nobody rated in c2
-    expect(leftInStep(steps[2], draft, people, { reasons: "low" })).toBe(1); // b's comment
-    expect(leftInStep(steps[3], draft, people, { reasons: "low" })).toBe(1); // a's reflection
+  it("counts what's left on a page: categories to rate and questions to answer", () => {
+    const ev = { categories, questions, settings: { peer_comments: true } };
+    const draft = draftFrom([rate("a", "b", "c1", 2), rate("a", "a", "c1", 4), rate("a", "a", "c2", 4)], []);
+    expect(leftFor(team[1], ev, draft)).toBe(2); // c2 and the peer question
+    expect(leftFor(team[2], ev, draft)).toBe(3); // everything
+    expect(leftFor(team[0], ev, draft)).toBe(1); // the reflection
+    draft.comments.a = { qs: "done" };
+    expect(leftFor(team[0], ev, draft)).toBe(0);
+    // No questions about teammates: rating them is all there is.
+    expect(leftFor(team[1], { ...ev, settings: { peer_comments: false } }, draft)).toBe(1);
   });
 });
-

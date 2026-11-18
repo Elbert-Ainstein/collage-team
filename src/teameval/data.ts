@@ -34,7 +34,6 @@ const missing = (m: string) => /te_(settings|categories|questions|ratings|commen
 const asSettings = (row: Record<string, unknown>): TeamEvalSettings => ({
   ...(row as unknown as TeamEvalSettings),
   late_penalty: Number(row.late_penalty ?? 0),
-  reasons: row.reasons === "all" || row.reasons === "none" ? row.reasons : "low",
 });
 const asCategory = (row: Record<string, unknown>): TeamEvalCategory => {
   const levels = Array.isArray(row.levels) ? (row.levels as unknown[]).map((l) => String(l ?? "")) : [];
@@ -130,7 +129,7 @@ export async function saveTeamEvalShape(activityId: string, categories: Category
 }
 
 export type SettingsPatch = Partial<
-  Pick<TeamEvalSettings, "peer_comments" | "release_comments" | "anonymize" | "reasons" | "late_penalty">
+  Pick<TeamEvalSettings, "peer_comments" | "release_comments" | "anonymize" | "late_penalty">
 >;
 
 export async function setTeamEvalSettings(activityId: string, patch: SettingsPatch): Promise<void> {
@@ -154,10 +153,10 @@ export async function setTeamEvalLate(activityId: string, studentId: string, lat
 }
 
 /** Write it into the gradebook (score_team_eval). */
-export async function scoreTeamEval(activityId: string): Promise<{ students: number; status: string }> {
+export async function scoreTeamEval(activityId: string): Promise<{ students: number; status: string; unrated: number }> {
   const { data, error } = await db().rpc("score_team_eval", { aid: activityId });
   if (error) throw dbError(error);
-  return data as { students: number; status: string };
+  return data as { students: number; status: string; unrated: number };
 }
 
 /** A duplicate gets the same categories, questions and settings — never anyone's answers. */
@@ -169,8 +168,8 @@ export async function copyTeamEval(fromId: string, toId: string): Promise<number
     source.categories.map((c) => ({ id: crypto.randomUUID(), name: c.name, levels: c.levels })),
     source.questions.map((q) => ({ id: crypto.randomUUID(), audience: q.audience, prompt: q.prompt })),
   );
-  const { peer_comments, release_comments, anonymize, reasons, late_penalty } = source.settings;
-  await setTeamEvalSettings(toId, { peer_comments, release_comments, anonymize, reasons, late_penalty });
+  const { peer_comments, release_comments, anonymize, late_penalty } = source.settings;
+  await setTeamEvalSettings(toId, { peer_comments, release_comments, anonymize, late_penalty });
   return source.categories.length + source.questions.length;
 }
 

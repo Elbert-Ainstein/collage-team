@@ -4,7 +4,7 @@
 //
 // Every team as a card, each member on a 1–5 line: their teammates' average
 // and what they gave themselves. Clicking anyone opens their own page — each
-// teammate's scores and reasons in a table, every comment about them, their
+// teammate's scores in a table, every comment about them, their
 // reflection — with previous and next to walk the class. The full table is
 // one toggle away. Releasing and sending to the gradebook live here, beside
 // the scores they decide.
@@ -16,7 +16,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Activity } from "@/checkins/types";
 import { teamsOf } from "@/checkins/rosters";
 import { releaseTeamEval, scoreTeamEval, setTeamEvalLate } from "@/teameval/data";
-import { buildResults, fmtAvg, fmtPoints, type ResultRow, type TeamGroup } from "@/teameval/model";
+import { buildResults, fmtAvg, fmtPoints, outOf, type ResultRow, type TeamGroup } from "@/teameval/model";
 import { ScoreTrack } from "@/teameval/ScoreTrack";
 import type { TeamEvalSnapshot } from "@/teameval/types";
 import { Ic } from "@/live/ui";
@@ -69,9 +69,10 @@ export function TeamEvalResults({ data, activity, snap, onBack, reload, onChange
   const released = Boolean(snap.settings.released_at);
   const teams = useMemo(() => teamsOf(data, activity.id), [data, activity.id]);
   const groups = useMemo(
-    () => buildResults({ snapshot: snap, teams, roster: data.roster, dueAt, pointsTotal: activity.points_total }),
-    [snap, teams, data.roster, dueAt, activity.points_total],
+    () => buildResults({ snapshot: snap, teams, roster: data.roster, dueAt }),
+    [snap, teams, data.roster, dueAt],
   );
+  const total = outOf(snap.categories);
   const rows = groups.flatMap((g) => g.rows);
   const onTeams = groups.filter((g) => g.team).flatMap((g) => g.rows);
   const submitted = onTeams.filter((r) => r.submission).length;
@@ -97,7 +98,9 @@ export function TeamEvalResults({ data, activity, snap, onBack, reload, onChange
     run("score", async () => {
       const r = await scoreTeamEval(activity.id);
       await Promise.all([reload(), onChanged()]);
-      setScored(r.status === "scored" ? "Sent" : "Sent for review");
+      const sent = r.status === "scored" ? "Sent" : "Sent for review";
+      // Submitted, but no teammate did: nothing to grade them on yet.
+      setScored(r.unrated ? `${sent} · ${r.unrated} not rated yet` : sent);
     });
 
   const flag = (row: ResultRow) =>
@@ -127,7 +130,7 @@ export function TeamEvalResults({ data, activity, snap, onBack, reload, onChange
       <StudentPage
         row={openRow}
         snap={snap}
-        pointsTotal={activity.points_total}
+        pointsTotal={total}
         canFlag={data.can.grade}
         busy={busy}
         onFlag={() => void flag(openRow)}
@@ -193,7 +196,7 @@ export function TeamEvalResults({ data, activity, snap, onBack, reload, onChange
               <ResultsTable
                 groups={groups}
                 snap={snap}
-                pointsTotal={activity.points_total}
+                pointsTotal={total}
                 canFlag={data.can.grade}
                 busy={busy}
                 onFlag={(r) => void flag(r)}
@@ -229,7 +232,7 @@ function TeamCards({ groups, onOpen }: { groups: TeamGroup[]; onOpen: (id: strin
                     <FAvatar name={r.student.name} tint={r.student.avatar_tint} size={24} />
                     <span className="te-membername">{r.student.name}</span>
                   </span>
-                  <ScoreTrack team={r.overall} self={r.selfOverall} label={`${r.student.name}: teammates ${fmtAvg(r.overall)}, self ${fmtAvg(r.selfOverall)}`} />
+                  <ScoreTrack team={r.overall} label={`${r.student.name}: teammates’ average ${fmtAvg(r.overall)}`} />
                   <span className={`te-memberavg${low(r.overall) ? " low" : ""}`}>{fmtAvg(r.overall)}</span>
                   <span className="te-memberflags">
                     {!r.submission && g.team ? <span className="te-chip-flag missing">Missing</span> : r.late ? <span className="te-chip-flag late">Late</span> : null}
@@ -241,7 +244,7 @@ function TeamCards({ groups, onOpen }: { groups: TeamGroup[]; onOpen: (id: strin
         </section>
       ))}
       <p className="fv-sub te-legend">
-        <span className="te-key-dot team" /> teammates’ average <span className="te-key-dot self" /> self
+        <span className="te-key-dot team" /> teammates’ average across categories, out of 5
       </p>
     </div>
   );
@@ -290,14 +293,6 @@ function StudentPage({
           return c ? [{ q, body: c.body }] : [];
         })
     : [];
-  // Reasons, a category at a time, for the ones that have any.
-  const reasons = snap.categories.flatMap((c) => {
-    const list = mates.flatMap((m) => {
-      const r = scoreOf(m.id, c.id);
-      return r?.reason ? [{ who: first(m.name), score: r.score, text: r.reason }] : [];
-    });
-    return list.length ? [{ category: c, list }] : [];
-  });
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -334,8 +329,8 @@ function StudentPage({
               <Ic name="flag" size={13} /> {row.late ? "Late" : "Flag late"}
             </button>
           ) : null}
-          <span className="te-grade">
-            <b className="fv-num">{fmtPoints(row.grade)}</b>
+          <span className="te-grade" title={gradeNote(row, snap.settings.late_penalty)}>
+            <b className="fv-num">{row.grade === null ? "—" : fmtPoints(row.grade)}</b>
             <span className="fv-sub"> / {fmtPoints(pointsTotal)}</span>
           </span>
           <button type="button" className="fv-iconbtn" aria-label="Previous student" disabled={!prev} onClick={() => prev && onGo(prev)}>
@@ -361,8 +356,8 @@ function StudentPage({
                         {first(m.name)}
                       </th>
                     ))}
-                    <th className="te-num">Self</th>
-                    <th className="te-num">Average</th>
+                    <th className="te-num">Teammates’ avg</th>
+                    <th className="te-num te-selfcol">Self</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -379,38 +374,33 @@ function StudentPage({
                             </td>
                           );
                         })}
-                        <td className="te-num">
-                          {cat.self !== null ? <b className={`te-chip s${cat.self}`}>{cat.self}</b> : <span className="fv-sub">—</span>}
-                        </td>
                         <td className={`te-num${low(cat.avg) ? " low" : ""}`}>
                           <span className="te-avg">{fmtAvg(cat.avg)}</span>
+                        </td>
+                        {/* Apart from the average, which never counts it. */}
+                        <td className="te-num te-selfcol">
+                          {cat.self !== null ? <b className={`te-chip s${cat.self}`}>{cat.self}</b> : <span className="fv-sub">—</span>}
                         </td>
                       </tr>
                     );
                   })}
                 </tbody>
+                <tfoot>
+                  <tr className="te-totalrow">
+                    <td colSpan={mates.length + 1}>Total</td>
+                    <td className="te-num">
+                      <b className="fv-num">{row.points === null ? "—" : fmtPoints(row.points)}</b>
+                      <span className="fv-sub"> / {fmtPoints(pointsTotal)}</span>
+                    </td>
+                    <td className="te-selfcol" />
+                  </tr>
+                </tfoot>
               </table>
             </div>
-
-            {reasons.length ? (
-              <div className="te-sreasons">
-                <h3 className="te-h3">Reasons</h3>
-                {reasons.map(({ category, list }) => (
-                  <div key={category.id} className="te-cq">
-                    <span className="te-prompt">{category.name}</span>
-                    <ul>
-                      {list.map((x) => (
-                        <li key={x.who}>
-                          <span className="te-by-name">
-                            {x.who} · {x.score}
-                          </span>
-                          <p>{x.text}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ))}
-              </div>
+            {row.late && row.points !== null && row.grade !== null ? (
+              <p className="fv-sub te-gradenote">
+                Late: −{fmtPoints(snap.settings.late_penalty)}% → {fmtPoints(row.grade)}
+              </p>
             ) : null}
           </section>
 
@@ -486,16 +476,24 @@ function ResultsTable({
       <table className="fv-tbl te-tbl" role="table">
         <thead>
           <tr>
-            <th className="te-namecol">Student</th>
+            <th className="te-namecol" rowSpan={2}>
+              Student
+            </th>
+            <th className="te-groupth" colSpan={cats.length}>
+              Teammates’ average <span className="te-groupsub">out of 5</span>
+            </th>
+            <th rowSpan={2}>Submitted</th>
+            <th rowSpan={2}>Late</th>
+            <th className="te-num" rowSpan={2}>
+              Grade /{fmtPoints(pointsTotal)}
+            </th>
+          </tr>
+          <tr>
             {cats.map((c) => (
-              <th key={c.id} className="te-num" title="Teammates’ average · self below">
+              <th key={c.id} className="te-num">
                 {c.name}
               </th>
             ))}
-            <th className="te-num">Overall</th>
-            <th>Submitted</th>
-            <th>Flag</th>
-            <th className="te-num">Grade /{fmtPoints(pointsTotal)}</th>
           </tr>
         </thead>
         <tbody>
@@ -528,7 +526,7 @@ function GroupRows({
   return (
     <>
       <tr className="fv-trteam te-teamrow">
-        <td colSpan={cats.length + 5}>
+        <td colSpan={cats.length + 4}>
           <b>{g.team?.name ?? "No team"}</b>
           <span className="fv-sub">
             {" "}
@@ -547,12 +545,8 @@ function GroupRows({
           {r.categories.map((c, i) => (
             <td key={cats[i].id} className={`te-num${low(c.avg) ? " low" : ""}`} title={c.n ? `${c.n} rater${c.n === 1 ? "" : "s"}` : undefined}>
               <span className="te-avg">{fmtAvg(c.avg)}</span>
-              {c.self !== null ? <span className="te-self">self {c.self}</span> : null}
             </td>
           ))}
-          <td className={`te-num${low(r.overall) ? " low" : ""}`}>
-            <span className="te-avg">{fmtAvg(r.overall)}</span>
-          </td>
           <td className="fv-sub te-when">{r.submission ? fmtWhen(r.submission.submitted_at) : "—"}</td>
           <td>
             {r.submission ? (
@@ -570,8 +564,8 @@ function GroupRows({
               </button>
             ) : null}
           </td>
-          <td className="te-num">
-            <span className="fv-num">{fmtPoints(r.grade)}</span>
+          <td className="te-num" title={gradeNote(r, penalty)}>
+            <span className="fv-num">{r.grade === null ? "—" : fmtPoints(r.grade)}</span>
           </td>
         </tr>
       ))}
@@ -579,3 +573,11 @@ function GroupRows({
   );
 }
 
+
+/** How a grade came to be, for a tooltip. */
+function gradeNote(r: ResultRow, penalty: number): string {
+  if (!r.submission) return "Didn’t submit: 0";
+  if (r.points === null) return "No teammate has rated them yet";
+  const sum = `Sum of averages ${fmtPoints(r.points)}`;
+  return r.late ? `${sum}, less ${fmtPoints(penalty)}% late` : sum;
+}

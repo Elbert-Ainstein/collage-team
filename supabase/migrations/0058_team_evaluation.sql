@@ -32,8 +32,9 @@
 --     after it or once results are out. One that was never submitted can be
 --     submitted late, and is flagged late.
 --   - The gradebook score is written by score_team_eval, not by
---     recompute_result_score: points for submitting, less the late penalty
---     for a late one, and nothing for none.
+--     recompute_result_score: the sum of a student's category averages (out
+--     of 5 per category), less the late penalty if their own evaluation was
+--     late, and 0 if they never submitted one.
 --
 -- Teams: an evaluation keeps the teams it was run with (0045). The first save
 -- freezes the course's current team set onto the activity if nothing has
@@ -100,10 +101,7 @@ create table if not exists te_settings (
   -- Show those comments without who wrote them. Can't be turned off once
   -- anyone has submitted (guard below).
   anonymize        boolean not null default true,
-  -- Which ratings need a sentence saying why: every one, only the low ones
-  -- (1 or 2, where fairness matters most), or none.
-  reasons          text not null default 'low' check (reasons in ('all', 'low', 'none')),
-  -- Percent of the points taken off a late submission.
+  -- Percent of the grade taken off a student whose own evaluation was late.
   late_penalty     numeric not null default 10 check (late_penalty between 0 and 100),
   -- When the instructor let students see their results. Null: not yet.
   released_at      timestamptz,
@@ -145,7 +143,6 @@ create table if not exists te_ratings (
   rater_id    uuid not null references students(id) on delete cascade,
   ratee_id    uuid not null references students(id) on delete cascade,
   score       int  not null check (score between 1 and 5),
-  reason      text check (reason is null or length(reason) <= 4000),
   updated_at  timestamptz not null default now(),
   primary key (category_id, rater_id, ratee_id),
   foreign key (category_id, activity_id)
@@ -168,13 +165,11 @@ create table if not exists te_comments (
 );
 create index if not exists te_comments_activity_idx on te_comments (activity_id, subject_id);
 
--- A database that ran an earlier copy of this file had an on/off
--- explain_ratings in place of reasons.
-alter table te_settings add column if not exists reasons text not null default 'low';
-alter table te_settings drop constraint if exists te_settings_reasons_check;
-alter table te_settings add constraint te_settings_reasons_check
-  check (reasons in ('all', 'low', 'none'));
+-- A database that ran an earlier copy of this file asked for a reason with
+-- some ratings. Ratings are just the score now.
 alter table te_settings drop column if exists explain_ratings;
+alter table te_settings drop column if exists reasons;
+alter table te_ratings drop column if exists reason;
 
 -- Room for real paragraphs: a reflection or a comment can run long. Stated
 -- again here so a database that ran an earlier copy of this file, with
@@ -183,9 +178,6 @@ alter table te_settings drop column if exists explain_ratings;
 alter table te_comments drop constraint if exists te_comments_body_check;
 alter table te_comments add constraint te_comments_body_check
   check (length(btrim(body)) between 1 and 10000);
-alter table te_ratings drop constraint if exists te_ratings_reason_check;
-alter table te_ratings add constraint te_ratings_reason_check
-  check (reason is null or length(reason) <= 4000);
 
 -- Handed in. Its ratings and comments are the rows above with this rater; a
 -- student without one here has a draft at most, and counts for nobody.
@@ -371,6 +363,30 @@ create trigger trg_guard_te_questions
   before insert or update or delete on te_questions
   for each row execute function guard_te_shape();
 
+-- An evaluation is out of 5 per category: kept on the activity, so every
+-- place that shows what it's out of agrees with the gradebook. Only the owner
+-- writes categories (policy below), and the owner may edit the activity.
+create or replace function te_sync_points() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  aid uuid := coalesce(new.activity_id, old.activity_id);
+  pts int;
+begin
+  -- A cascade from deleting the activity: nothing left to keep in step.
+  if tg_op = 'DELETE' and pg_trigger_depth() > 1 then
+    return null;
+  end if;
+  select 5 * count(*) into pts from te_categories where activity_id = aid;
+  update activities set points_total = pts
+   where id = aid and points_total is distinct from pts;
+  return null;
+end $$;
+
+drop trigger if exists trg_te_sync_points on te_categories;
+create trigger trg_te_sync_points
+  after insert or delete on te_categories
+  for each row execute function te_sync_points();
+
 -- ------------------------------------------- evaluation scores stay put
 -- recompute_result_score as 0047 left it, with team evaluations alongside
 -- live questions in the early return: score_team_eval writes these results,
@@ -426,7 +442,7 @@ revoke all on te_settings, te_categories, te_questions, te_ratings, te_comments,
 
 grant select on te_settings, te_categories, te_questions, te_ratings, te_comments, te_submissions
   to authenticated;
-grant update (peer_comments, release_comments, anonymize, reasons, late_penalty, released_at)
+grant update (peer_comments, release_comments, anonymize, late_penalty, released_at)
   on te_settings to authenticated;
 grant insert, update, delete on te_categories, te_questions to authenticated;
 -- te_ratings, te_comments, te_submissions: no writes from a client at all.
@@ -514,7 +530,7 @@ end $$;
  * it's handed in. Once handed in, every later save must be complete too, and
  * none is accepted after the due date or once results are out.
  *
- *   ratings:  [{"category_id": "...", "ratee_id": "...", "score": 1-5, "reason": "..."}]
+ *   ratings:  [{"category_id": "...", "ratee_id": "...", "score": 1-5}]
  *   comments: [{"question_id": "...", "subject_id": "...", "body": "..."}]
  */
 create or replace function save_team_eval(aid uuid, ratings jsonb, comments jsonb, submit boolean default false)
@@ -576,7 +592,7 @@ begin
 
   for r in
     select * from jsonb_to_recordset(coalesce(ratings, '[]'::jsonb))
-      as x(category_id uuid, ratee_id uuid, score int, reason text)
+      as x(category_id uuid, ratee_id uuid, score int)
   loop
     if not exists (select 1 from te_categories c where c.id = r.category_id and c.activity_id = aid) then
       raise exception 'That category isn''t on this evaluation';
@@ -587,10 +603,10 @@ begin
     if r.score is null or r.score not between 1 and 5 then
       raise exception 'Ratings go from 1 to 5';
     end if;
-    insert into te_ratings (activity_id, category_id, rater_id, ratee_id, score, reason)
-    values (aid, r.category_id, sid, r.ratee_id, r.score, nullif(btrim(coalesce(r.reason, '')), ''))
+    insert into te_ratings (activity_id, category_id, rater_id, ratee_id, score)
+    values (aid, r.category_id, sid, r.ratee_id, r.score)
     on conflict (category_id, rater_id, ratee_id)
-    do update set score = excluded.score, reason = excluded.reason, updated_at = now();
+    do update set score = excluded.score, updated_at = now();
   end loop;
 
   for r in
@@ -626,23 +642,18 @@ begin
     return null;
   end if;
 
-  -- Complete: every person on the team rated in every category (with a why,
-  -- when asked for), every question about themselves answered, and — when
-  -- the evaluation asks about teammates — every one about each teammate.
+  -- Complete: every person on the team rated in every category, every
+  -- question about themselves answered, and — when the evaluation asks about
+  -- teammates — every one about each teammate.
   select count(*) into missing
     from te_categories c
     cross join (select te_team_members(aid, tid) as id) m
    where c.activity_id = aid
      and not exists (
        select 1 from te_ratings x
-        where x.category_id = c.id and x.rater_id = sid and x.ratee_id = m.id
-          and (st.reasons = 'none'
-               or (st.reasons = 'low' and x.score > 2)
-               or x.reason is not null));
+        where x.category_id = c.id and x.rater_id = sid and x.ratee_id = m.id);
   if missing > 0 then
-    raise exception 'Rate everyone in every category%',
-      case st.reasons when 'all' then ', and say why,' when 'low' then ', and say why for any 1 or 2,' else '' end
-      || ' before you submit';
+    raise exception 'Rate everyone in every category before you submit';
   end if;
 
   select count(*) into missing
@@ -699,8 +710,6 @@ begin
                'category_id', c.id,
                'self', (select x.score from te_ratings x
                          where x.category_id = c.id and x.rater_id = sid and x.ratee_id = sid),
-               'self_reason', (select x.reason from te_ratings x
-                                where x.category_id = c.id and x.rater_id = sid and x.ratee_id = sid),
                'average', (select round(avg(x.score)::numeric, 2) from te_ratings x
                             where x.category_id = c.id and x.ratee_id = sid and x.rater_id <> sid
                               and exists (select 1 from te_submissions s
@@ -708,19 +717,7 @@ begin
                'raters', (select count(*) from te_ratings x
                            where x.category_id = c.id and x.ratee_id = sid and x.rater_id <> sid
                              and exists (select 1 from te_submissions s
-                                          where s.activity_id = aid and s.student_id = x.rater_id)),
-               'reasons', case when not shown then '[]'::jsonb else coalesce((
-                  select jsonb_agg(jsonb_build_object(
-                           'author', case when st.anonymize then null else w.name end,
-                           'score', x.score,
-                           'text', x.reason)
-                         order by md5(x.rater_id::text || aid::text))
-                    from te_ratings x join students w on w.id = x.rater_id
-                   where x.category_id = c.id and x.ratee_id = sid and x.rater_id <> sid
-                     and x.reason is not null
-                     and exists (select 1 from te_submissions s
-                                  where s.activity_id = aid and s.student_id = x.rater_id)
-                 ), '[]'::jsonb) end)
+                                          where s.activity_id = aid and s.student_id = x.rater_id)))
              order by c.position, c.id)
         from te_categories c where c.activity_id = aid), '[]'::jsonb),
     'comments', case when not (shown and st.peer_comments) then '[]'::jsonb else coalesce((
@@ -763,10 +760,17 @@ end $$;
 
 /**
  * Write the evaluation into the gradebook: one result per student on its
- * teams. Points for submitting, less the late penalty for a late one, and
- * none for no submission. Released if the caller may release (0055), sent for
- * review otherwise; excused rows are never touched, and someone who can't
- * release never rewrites a released grade. Safe to run again.
+ * teams, out of 5 for each category.
+ *
+ * A student's grade is the sum of their category averages — what teammates
+ * who submitted gave them, themselves left out — less the late penalty if
+ * their own evaluation was late. Someone who never submitted gets 0. Someone
+ * who submitted but whom no teammate has rated yet (nobody else on the team
+ * submitted) is left alone: there's nothing to grade them on.
+ *
+ * Released if the caller may release (0055), sent for review otherwise;
+ * excused rows are never touched, and someone who can't release never
+ * rewrites a released grade. Safe to run again.
  */
 create or replace function score_team_eval(aid uuid) returns jsonb
 language plpgsql security definer set search_path = public as $$
@@ -778,6 +782,7 @@ declare
   new_status text;
   set_id     uuid;
   n          int;
+  unrated    int;
 begin
   if not can_grade_course(activity_course(aid)) then
     raise exception 'Only someone who can grade this course can score it';
@@ -786,7 +791,10 @@ begin
   if st.activity_id is null then
     raise exception 'That isn''t a team evaluation';
   end if;
-  select points_total into total from activities where id = aid;
+  select 5 * count(*) into total from te_categories where activity_id = aid;
+  if total = 0 then
+    raise exception 'Add a category before you score it';
+  end if;
 
   select id into indiv_id from check_ins where activity_id = aid and kind = 'individual' limit 1;
   if indiv_id is null then
@@ -806,36 +814,56 @@ begin
   -- Whoever it was run with; before anyone has saved, the class's teams now.
   select c.current_team_set_id into set_id from courses c where c.id = activity_course(aid);
 
-  insert into check_in_results (check_in_id, subject_type, student_id, status, score, is_ci, ci_met, submitted_at)
-  select indiv_id, 'student', who.id, new_status,
-         case when s.student_id is null then 0
-              when te_is_late(aid, who.id) then round(total * (1 - st.late_penalty / 100.0), 2)
-              else total end,
-         false, true, s.submitted_at
-    from (
-      select r.student_id as id from activity_rosters r where r.activity_id = aid
-      union
-      select tm.student_id from team_members tm join teams t on t.id = tm.team_id
-       where t.team_set_id = set_id
-         and not exists (select 1 from activity_rosters x where x.activity_id = aid)
-    ) who
-    left join te_submissions s on s.activity_id = aid and s.student_id = who.id
-  on conflict (check_in_id, student_id) where subject_type = 'student'
-  do update set
-    score = excluded.score,
-    is_ci = false,
-    submitted_at = excluded.submitted_at,
-    status = case when check_in_results.status = 'scored' then 'scored' else excluded.status end,
-    updated_at = now()
-  where check_in_results.status <> 'excused'
-    and (check_in_results.status <> 'scored' or releases);
-  get diagnostics n = row_count;
+  with grades as (
+    select who.id as student_id, s.submitted_at,
+           case when s.student_id is null then 0
+                when g.points is null then null
+                when te_is_late(aid, who.id) then round(g.points * (1 - st.late_penalty / 100.0), 2)
+                else round(g.points, 2) end as score
+      from (
+        select r.student_id as id from activity_rosters r where r.activity_id = aid
+        union
+        select tm.student_id from team_members tm join teams t on t.id = tm.team_id
+         where t.team_set_id = set_id
+           and not exists (select 1 from activity_rosters x where x.activity_id = aid)
+      ) who
+      left join te_submissions s on s.activity_id = aid and s.student_id = who.id
+      -- The sum of their category averages, from teammates who submitted.
+      left join lateral (
+        select sum(a.avg) as points
+          from (
+            select avg(x.score)::numeric as avg
+              from te_ratings x
+             where x.activity_id = aid and x.ratee_id = who.id and x.rater_id <> who.id
+               and exists (select 1 from te_submissions y
+                            where y.activity_id = aid and y.student_id = x.rater_id)
+             group by x.category_id
+          ) a
+      ) g on true
+  ), written as (
+    insert into check_in_results (check_in_id, subject_type, student_id, status, score, is_ci, ci_met, submitted_at)
+    select indiv_id, 'student', g.student_id, new_status, g.score, false, true, g.submitted_at
+      from grades g
+     where g.score is not null
+    on conflict (check_in_id, student_id) where subject_type = 'student'
+    do update set
+      score = excluded.score,
+      is_ci = false,
+      submitted_at = excluded.submitted_at,
+      status = case when check_in_results.status = 'scored' then 'scored' else excluded.status end,
+      updated_at = now()
+    where check_in_results.status <> 'excused'
+      and (check_in_results.status <> 'scored' or releases)
+    returning 1
+  )
+  select (select count(*) from written), (select count(*) from grades where score is null)
+    into n, unrated;
 
   perform set_config('te.scoring', 'on', true);
   update te_settings set scored_at = now() where activity_id = aid;
   perform set_config('te.scoring', 'off', true);
 
-  return jsonb_build_object('students', n, 'status', new_status);
+  return jsonb_build_object('students', n, 'status', new_status, 'unrated', unrated, 'out_of', total);
 end $$;
 
 -- Who may call what. Revoked from all three (Supabase grants new functions to
@@ -845,7 +873,7 @@ end $$;
 revoke all on function
   te_my_student(uuid), te_student_reads(uuid), te_team_of(uuid, uuid),
   te_team_members(uuid, uuid), te_due(uuid), te_is_late(uuid, uuid),
-  ensure_te_settings(), guard_te_type(), guard_te_settings(), guard_te_shape(),
+  ensure_te_settings(), guard_te_type(), guard_te_settings(), guard_te_shape(), te_sync_points(),
   team_eval_team(uuid), save_team_eval(uuid, jsonb, jsonb, boolean),
   team_eval_results(uuid), set_team_eval_late(uuid, uuid, boolean), score_team_eval(uuid)
   from public, anon, authenticated;

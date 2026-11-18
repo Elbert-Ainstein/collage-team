@@ -220,11 +220,6 @@
   opacity: 0.55;
   cursor: not-allowed;
 }
-.te-numrow {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
 .te-problem {
   margin-left: auto;
   font-size: var(--fv-xs);
@@ -446,11 +441,7 @@ td.te-num.low .te-avg {
   margin: 12px 0 0;
   line-height: 1.5;
 }
-.te-howto {
-  margin: 10px 0 0;
-  font-size: var(--fv-xs);
-  color: var(--fv-muted);
-}
+
 .te-donebox {
   display: flex;
   gap: 8px;
@@ -528,9 +519,6 @@ td.te-num.low .te-avg {
   font-weight: 700;
 }
 
-.te-ta.te-why {
-  margin-top: 8px;
-}
 .te-qfield {
   display: flex;
   flex-direction: column;
@@ -560,10 +548,6 @@ td.te-num.low .te-avg {
 
 /* results */
 
-.te-reasons {
-  margin-top: 12px;
-}
-.te-reasons ul,
 .te-cq ul {
   list-style: none;
   margin: 6px 0 0;
@@ -572,18 +556,7 @@ td.te-num.low .te-avg {
   flex-direction: column;
   gap: 6px;
 }
-.te-reasons li {
-  display: grid;
-  grid-template-columns: 26px minmax(0, 1fr);
-  gap: 8px;
-  align-items: start;
-  font-size: var(--fv-sm);
-  line-height: 1.4;
-}
-.te-reasons .te-chip {
-  width: 26px;
-  height: 24px;
-}
+
 .te-by {
   color: var(--fv-muted);
   font-size: var(--fv-xs);
@@ -663,7 +636,6 @@ td.te-num.low .te-avg {
    the column wider. */
 
 .te-cq p,
-.te-reasons li span,
 .te-ta {
   overflow-wrap: anywhere;
 }
@@ -835,6 +807,7 @@ td.te-num.low .te-avg {
 .te-teamhead .te-h3 {
   margin: 0;
 }
+
 .te-members {
   list-style: none;
   margin: 0;
@@ -894,17 +867,21 @@ td.te-num.low .te-avg {
 }
 
 /* ------------------------------------------------------- builder */
-.te-reasonfield {
+.te-outof {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: baseline;
+  gap: 8px;
 }
-.te-seg3 {
-  display: flex;
+.te-outof b {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--fv-navy);
+  font-variant-numeric: tabular-nums;
 }
-.te-seg3 button {
-  flex: 1;
-  padding: 0 6px;
+.te-outof span {
+  font-size: var(--fv-sm);
+  color: var(--fv-neutral-500);
 }
 
 /* ------------------------------------------------------- student form */
@@ -936,72 +913,62 @@ td.te-num.low .te-avg {
 .te-steptitle {
   margin-bottom: 12px !important;
 }
-.te-key {
-  list-style: none;
-  margin: 0 0 16px;
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  border-radius: var(--fv-r-lg);
-  background: var(--fv-cream-300);
-  font-size: var(--fv-sm);
+
+/* One category on a person's page: what each score means, best first. */
+.te-catcard {
+  margin-bottom: 12px;
 }
-.te-key li {
-  display: grid;
-  grid-template-columns: 28px minmax(0, 1fr);
-  gap: 10px;
-  align-items: center;
-}
-.te-key .te-score {
-  margin-top: 0;
-}
-.te-raterows {
-  display: flex;
-  flex-direction: column;
-}
-.te-raterow {
-  margin-bottom: 10px;
-}
-.te-raterhead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.te-ratername {
-  font-weight: 700;
+.te-catname {
+  margin: 0 0 10px;
   font-size: var(--fv-base);
+  font-weight: 700;
+  color: var(--fv-navy);
 }
-.te-scorebtns {
+.te-opts {
   display: flex;
+  flex-direction: column;
   gap: 6px;
 }
-.te-scorebtn {
-  width: 44px;
-  height: 40px;
+.te-opt {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px 8px 8px;
   border: 1px solid var(--fv-neutral-200);
   border-radius: var(--fv-r-md);
   background: #fff;
   font: inherit;
-  font-weight: 700;
-  font-size: var(--fv-base);
-  color: var(--fv-muted);
+  font-size: var(--fv-sm);
+  text-align: left;
+  color: var(--fv-ink, inherit);
   cursor: pointer;
 }
-.te-scorebtn:hover:not(:disabled) {
+.te-opt .te-score {
+  margin-top: 0;
+}
+.te-opt:hover:not(:disabled) {
   border-color: var(--te-accent);
 }
-.te-scorebtn:disabled {
-  opacity: 0.5;
+.te-opt:disabled {
+  opacity: 0.45;
   cursor: default;
 }
-.te-scorebtn.on.s1 { background: var(--te-s1-bg); color: var(--te-s1); border-color: var(--te-s1); }
-.te-scorebtn.on.s2 { background: var(--te-s2-bg); color: var(--te-s2); border-color: var(--te-s2); }
-.te-scorebtn.on.s3 { background: var(--te-s3-bg); color: var(--te-s3); border-color: var(--te-s3); }
-.te-scorebtn.on.s4 { background: var(--te-s4-bg); color: var(--te-s4); border-color: var(--te-s4); }
-.te-scorebtn.on.s5 { background: var(--te-s5-bg); color: var(--te-s5); border-color: var(--te-s5); }
+.te-opt.on {
+  font-weight: 600;
+}
+.te-opt.on.s1 { background: var(--te-s1-bg); border-color: var(--te-s1); }
+.te-opt.on.s2 { background: var(--te-s2-bg); border-color: var(--te-s2); }
+.te-opt.on.s3 { background: var(--te-s3-bg); border-color: var(--te-s3); }
+.te-opt.on.s4 { background: var(--te-s4-bg); border-color: var(--te-s4); }
+.te-opt.on.s5 { background: var(--te-s5-bg); border-color: var(--te-s5); }
+.te-opt.on .te-score {
+  background: #fff;
+}
+.te-privacy {
+  margin: 4px 0 0;
+}
 
 /* ------------------------------------------------------- student results */
 
@@ -1034,15 +1001,6 @@ td.te-num.low .te-avg {
 }
 
 /* Reasons under a category on the student's results. */
-.te-sumrow ul.te-reasons {
-  list-style: none;
-  margin: -4px 10px 12px;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  font-size: var(--fv-sm);
-}
 
 /* ------------------------------------------------------- a student's page */
 .te-sgrid {
@@ -1065,9 +1023,7 @@ td.te-num.low .te-avg {
 .te-stable th.te-muted {
   opacity: 0.55;
 }
-.te-sreasons {
-  margin-top: 22px;
-}
+
 .te-grade {
   font-size: var(--fv-base);
   margin: 0 6px;
@@ -1076,4 +1032,33 @@ td.te-num.low .te-avg {
   .te-sgrid {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* A student's page: the total of their averages, and what lateness took. */
+.fv-tbl.te-tbl tfoot .te-totalrow td {
+  border-top: 2px solid var(--fv-neutral-200);
+  font-weight: 600;
+  color: var(--fv-navy);
+}
+.te-gradenote {
+  margin: 8px 2px 0;
+}
+
+/* The results table's heading over the averages. */
+.fv-tbl.te-tbl thead th.te-groupth {
+  text-align: center;
+  color: var(--fv-navy);
+  font-weight: 600;
+  border-bottom: 1px solid var(--fv-neutral-200);
+}
+.te-groupsub {
+  font-weight: 400;
+  color: var(--fv-muted);
+  margin-left: 4px;
+}
+
+/* A student's own score, set apart from the average it isn't part of. */
+.fv-tbl.te-tbl .te-selfcol {
+  border-left: 2px solid var(--fv-neutral-200);
+  color: var(--fv-muted);
 }

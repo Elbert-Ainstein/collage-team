@@ -22,8 +22,8 @@ import {
   type CategoryDraft,
   type QuestionDraft,
 } from "@/teameval/defaults";
-import { fmtPoints } from "@/teameval/model";
-import type { QuestionAudience, ReasonsMode, TeamEvalSnapshot } from "@/teameval/types";
+import { outOf } from "@/teameval/model";
+import type { QuestionAudience, TeamEvalSnapshot } from "@/teameval/types";
 import { Ic } from "@/live/ui";
 import { fromLocalInput, toLocalInput } from "../ActivityDetail";
 import { DescriptionEditor } from "../DescriptionEditor";
@@ -85,19 +85,16 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
   const [peer, setPeer] = useState(snapshot.settings.peer_comments);
   const [release, setRelease] = useState(snapshot.settings.release_comments);
   const [anon, setAnon] = useState(snapshot.settings.anonymize);
-  const [reasons, setReasons] = useState<ReasonsMode>(snapshot.settings.reasons);
-  const [points, setPoints] = useState(String(activity.points_total || 10));
   const [penalty, setPenalty] = useState(String(snapshot.settings.late_penalty));
   const [busy, setBusy] = useState(false);
 
   const weeks = useMemo(() => [...data.weeks].sort((a, b) => a.week - b.week), [data.weeks]);
   const weekName = (w: number | null) => weeks.find((x) => x.week === w)?.title || (w === null ? "No week" : `Week ${w}`);
 
-  const pts = Number(points);
   const pen = Number(penalty);
+  const total = outOf(categories);
   const problem =
     problemWith(categories, questions) ??
-    (!points.trim() || !Number.isFinite(pts) || pts <= 0 ? "Points must be above 0" : null) ??
     (!penalty.trim() || !Number.isFinite(pen) || pen < 0 || pen > 100 ? "Late penalty: 0–100%" : null);
   // Turning anonymity off after students wrote under it is refused (0058).
   const anonLocked = fixed && snapshot.settings.anonymize;
@@ -139,12 +136,11 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
         peer_comments: peer,
         release_comments: release,
         anonymize: anon,
-        reasons,
         late_penalty: pen,
       });
       await updateActivity(activity.id, {
         title: title.trim() || activity.title,
-        points_total: pts,
+        points_total: total,
         ...(firstTime ? { opens_at: null } : {}),
       });
       onDone(firstTime);
@@ -336,43 +332,22 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
                     title={anonLocked ? "Locked: students submitted anonymously" : undefined}
                     onChange={setAnon}
                   />
-                  <div className="te-reasonfield">
-                    <span className="fv-eyebrow">Ask why for</span>
-                    <div className="fv-seg te-seg3">
-                      {(
-                        [
-                          ["all", "All"],
-                          ["low", "1s and 2s"],
-                          ["none", "Off"],
-                        ] as [ReasonsMode, string][]
-                      ).map(([v, label]) => (
-                        <button key={v} type="button" className={reasons === v ? "on" : ""} aria-pressed={reasons === v} onClick={() => setReasons(v)}>
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
                 </div>
                 <div className="fv-card lq-bcard">
                   <span className="lq-bcardtitle">Grade</span>
-                  <div className="te-numrow">
-                    <label className="fv-field">
-                      <span className="fv-eyebrow">Points</span>
-                      <input className="fv-in" type="number" min={0} step="any" value={points} onChange={(e) => setPoints(e.target.value)} />
-                    </label>
-                    <label className="fv-field">
-                      <span className="fv-eyebrow">Late penalty</span>
-                      <span className="te-pct">
-                        <input className="fv-in" type="number" min={0} max={100} step="any" value={penalty} onChange={(e) => setPenalty(e.target.value)} />
-                        <span>%</span>
-                      </span>
-                    </label>
+                  <div className="te-outof">
+                    <b>{total}</b>
+                    <span>points · 5 per category</span>
                   </div>
-                  {Number.isFinite(pts) && Number.isFinite(pen) && pts > 0 ? (
-                    <p className="lq-bnote">
-                      On time {fmtPoints(pts)} · Late {fmtPoints(pts * (1 - pen / 100))} · None 0
-                    </p>
-                  ) : null}
+                  <p className="lq-bnote">Each student gets the sum of their teammates’ averages.</p>
+                  <label className="fv-field">
+                    <span className="fv-eyebrow">Late penalty</span>
+                    <span className="te-pct">
+                      <input className="fv-in" type="number" min={0} max={100} step="any" value={penalty} onChange={(e) => setPenalty(e.target.value)} />
+                      <span>%</span>
+                    </span>
+                  </label>
+                  <p className="lq-bnote">Not submitted: 0</p>
                 </div>
               </aside>
             </div>

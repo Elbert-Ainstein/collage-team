@@ -12,7 +12,7 @@ import { isOpenToStudents } from "@/checkins/studentData";
 import { HIDDEN_INSTANT, type Activity } from "@/checkins/types";
 import { teamsOf } from "@/checkins/rosters";
 import { BriefText } from "@/checkins/BriefText";
-import { buildResults, fmtPoints } from "@/teameval/model";
+import { buildResults, fmtPoints, outOf } from "@/teameval/model";
 import type { TeamEvalSnapshot } from "@/teameval/types";
 import { Ic } from "@/live/ui";
 import { ConfirmDialog } from "../ConfirmDialog";
@@ -44,10 +44,10 @@ export function TeamEvalPage(props: Props) {
   const teams = useMemo(() => teamsOf(data, activity.id), [data, activity.id]);
   const onTeams = useMemo(
     () =>
-      buildResults({ snapshot: snap, teams, roster: data.roster, dueAt, pointsTotal: activity.points_total })
+      buildResults({ snapshot: snap, teams, roster: data.roster, dueAt })
         .filter((g) => g.team)
         .flatMap((g) => g.rows),
-    [snap, teams, data.roster, dueAt, activity.points_total],
+    [snap, teams, data.roster, dueAt],
   );
   const submitted = onTeams.filter((r) => r.submission).length;
   const pct = onTeams.length ? (100 * submitted) / onTeams.length : 0;
@@ -133,7 +133,7 @@ export function TeamEvalPage(props: Props) {
               </button>
             ) : null}
             <div className="lq-badges">
-              <span className="fv-badge secondary">{fmtPoints(activity.points_total)} pts</span>
+              <span className="fv-badge secondary">{outOf(snap.categories)} pts</span>
               <span className="fv-badge secondary">−{fmtPoints(snap.settings.late_penalty)}% late</span>
               {snap.settings.anonymize ? <span className="fv-badge secondary">Anonymous</span> : null}
               {!snap.settings.peer_comments ? <span className="fv-badge secondary">No peer comments</span> : null}

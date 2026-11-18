@@ -2,36 +2,25 @@
 
 // A team evaluation, from the student's side.
 //
-// Filling it in goes a category at a time: the five descriptions once, then
-// everyone on the team — themselves first — side by side on the same 1–5
-// buttons. Reading the descriptions once and placing people next to each
-// other is quicker than a page per person, and it gives more honest, more
-// spread-out ratings than judging each teammate alone. Then their comments,
-// a card per teammate; then their reflection; then a review. It saves as they
-// go (save_team_eval, as a draft) and Submit checks it's complete.
+// Filling it in goes a person at a time: a page for each teammate — every
+// category, each with what a 5 down to a 1 means, then the questions about
+// them — and last a page for themselves, with their reflection. Then a
+// review. It saves as they go (save_team_eval, as a draft) and Submit checks
+// it's complete.
 //
 // Once the instructor releases results: every category on one 1–5 line —
 // what they gave themselves and the average of what their teammates gave
-// them (themselves and anyone who didn't submit left out) — the one place
-// they and their team see them most differently, and what teammates wrote,
-// without names when it's anonymous.
+// them (themselves and anyone who didn't submit left out) — and what
+// teammates wrote, without names when it's anonymous.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Assignment, Enrolment } from "@/checkins/studentData";
 import { BriefText } from "@/checkins/BriefText";
 import { loadMyTeamEvalResults, loadStudentTeamEval, saveMyTeamEval } from "@/teameval/data";
-import { draftFrom, draftPayload, fmtAvg, leftInStep, reasonNeeded, stepsFor, type EvalDraft, type Step } from "@/teameval/model";
+import { draftFrom, draftPayload, fmtAvg, leftFor, pagesFor, questionsFor, type EvalDraft } from "@/teameval/model";
 import { AutoTextarea } from "@/teameval/AutoTextarea";
 import { ScoreTrack } from "@/teameval/ScoreTrack";
-import {
-  COMMENT_MAX,
-  REASON_MAX,
-  type ReasonsMode,
-  type StudentTeamEval,
-  type TeamEvalCategory,
-  type TeamEvalMember,
-  type TeamEvalResults,
-} from "@/teameval/types";
+import { COMMENT_MAX, type StudentTeamEval, type TeamEvalCategory, type TeamEvalMember, type TeamEvalResults } from "@/teameval/types";
 import { Ic } from "@/live/ui";
 import "@/live/live.css";
 import "@/teameval/teameval.css";
@@ -48,11 +37,12 @@ type Loaded =
   | { kind: "missing" }
   | { kind: "ready"; ev: StudentTeamEval; results: TeamEvalResults | null };
 
-type Screen = "intro" | "step" | "review" | "done" | "results";
+type Screen = "intro" | "page" | "review" | "done" | "results";
 type SaveState = "idle" | "saving" | "saved" | "failed";
 
 const AUTOSAVE_MS = 1200;
-const SCORES = [1, 2, 3, 4, 5] as const;
+/** Best first: people read down from what a 5 looks like. */
+const SCORES = [5, 4, 3, 2, 1] as const;
 
 function fmtWhen(iso: string | null): string | null {
   if (!iso) return null;
@@ -68,7 +58,7 @@ function privacyNote(ev: StudentTeamEval): string {
   return s.anonymize ? "Anonymous to teammates" : "Teammates see your name";
 }
 
-const stepName = (step: Step) => (step.kind === "category" ? step.category.name : step.kind === "comments" ? "Comments" : "Reflection");
+const pageName = (p: TeamEvalMember) => (p.is_me ? "Yourself" : p.name);
 
 export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
   const { activity } = assignment;
@@ -114,10 +104,11 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
   /** A submitted one can still change until the due date, and not once results are out. */
   const editable = !submitted || (!released && !pastDue);
   const team = useMemo(() => ev?.team ?? [], [ev]);
-  const steps = useMemo(() => (ev ? stepsFor(ev) : []), [ev]);
-  const left = useMemo(() => (ev ? steps.map((s) => leftInStep(s, draft, team, ev.settings)) : []), [steps, draft, team, ev]);
+  /** A page per teammate, then themselves. */
+  const pages = useMemo(() => pagesFor(team), [team]);
+  const left = useMemo(() => (ev ? pages.map((p) => leftFor(p, ev, draft)) : []), [pages, draft, ev]);
   const totalLeft = left.reduce((a, b) => a + b, 0);
-  const doneSteps = left.filter((n) => n === 0).length;
+  const donePages = left.filter((n) => n === 0).length;
   /** Anything filled in yet — a score or an answer, not an emptied box. */
   const started = useMemo(() => {
     const { ratings, comments } = draftPayload(draft);
@@ -164,15 +155,7 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
   );
 
   const setScore = (ratee: string, category: string, score: number) =>
-    change((d) => ({
-      ...d,
-      ratings: { ...d.ratings, [ratee]: { ...d.ratings[ratee], [category]: { score, reason: d.ratings[ratee]?.[category]?.reason ?? "" } } },
-    }));
-  const setReason = (ratee: string, category: string, reason: string) =>
-    change((d) => ({
-      ...d,
-      ratings: { ...d.ratings, [ratee]: { ...d.ratings[ratee], [category]: { score: d.ratings[ratee]?.[category]?.score ?? null, reason } } },
-    }));
+    change((d) => ({ ...d, ratings: { ...d.ratings, [ratee]: { ...d.ratings[ratee], [category]: score } } }));
   const setAnswer = (subject: string, question: string, body: string) =>
     change((d) => ({ ...d, comments: { ...d.comments, [subject]: { ...d.comments[subject], [question]: body } } }));
 
@@ -180,11 +163,11 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
     if (next === "review") setScreen("review");
     else {
       setAt(next);
-      setScreen("step");
+      setScreen("page");
     }
     scrollRef.current?.scrollTo({ top: 0 });
   };
-  /** Where Continue picks up: the first step with something left. */
+  /** Where Continue picks up: the first person with something left. */
   const firstOpen = Math.max(0, left.findIndex((n) => n > 0));
 
   const submit = async () => {
@@ -266,13 +249,12 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
               <>
                 <div className="te-progressline">
                   <div className="te-progress" aria-hidden="true">
-                    <span style={{ width: `${steps.length ? (100 * doneSteps) / steps.length : 0}%` }} />
+                    <span style={{ width: `${pages.length ? (100 * donePages) / pages.length : 0}%` }} />
                   </div>
                   <span className="fv-sub">
-                    {doneSteps} of {steps.length} done
+                    {donePages} of {pages.length} done
                   </span>
                 </div>
-                <p className="te-howto">{privacyNote(ev)}</p>
               </>
             )}
             {editable ? (
@@ -301,10 +283,10 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
               </p>
             ) : null}
             <ul className="te-people">
-              {steps.map((s, i) => (
-                <li key={i}>
+              {pages.map((p, i) => (
+                <li key={p.student_id}>
                   <button type="button" className="te-personbtn" onClick={() => go(i)}>
-                    <span className="te-pname">{stepName(s)}</span>
+                    <span className="te-pname">{pageName(p)}</span>
                     <span className={`te-pstate${left[i] === 0 ? " done" : ""}`}>
                       {left[i] === 0 ? <Ic name="check" size={14} /> : `${left[i]} left`}
                     </span>
@@ -317,56 +299,54 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
       );
     }
 
-    // One step.
-    const step = steps[at];
-    if (!step) return null;
+    // One person.
+    const person = pages[at];
+    if (!person) return null;
     const ro = !editable;
+    const qs = questionsFor(ev.questions, ev.settings, person.is_me);
     return (
       <div className="lq-sscroll" ref={scrollRef}>
         <div className="te-stephead">
           <div className="te-progress" aria-hidden="true">
-            <span style={{ width: `${(100 * (at + 1)) / steps.length}%` }} />
+            <span style={{ width: `${(100 * (at + 1)) / pages.length}%` }} />
           </div>
           <span className="fv-sub">
-            {at + 1} of {steps.length}
+            {at + 1} of {pages.length}
           </span>
         </div>
 
-        {step.kind === "category" ? (
-          <CategoryStep
-            category={step.category}
-            team={team}
-            draft={draft}
-            mode={ev.settings.reasons}
+        <h2 className="lq-h2 te-steptitle">{person.is_me ? "Yourself" : person.name}</h2>
+
+        {ev.categories.map((c) => (
+          <CategoryCard
+            key={c.id}
+            category={c}
+            who={person.is_me ? "yourself" : person.name}
+            value={draft.ratings[person.student_id]?.[c.id] ?? null}
             readOnly={ro}
-            onScore={setScore}
-            onReason={setReason}
+            onScore={(n) => setScore(person.student_id, c.id, n)}
           />
-        ) : (
-          <>
-            <h2 className="lq-h2 te-steptitle">{step.kind === "comments" ? "Comments" : "Reflection"}</h2>
-            {team
-              .filter((p) => (step.kind === "reflection" ? p.is_me : !p.is_me))
-              .map((p) => (
-                <section key={p.student_id} className="lq-scard te-qbox">
-                  {step.kind === "comments" ? <h3 className="te-boxtitle">{p.name}</h3> : null}
-                  {step.questions.map((q) => (
-                    <label key={q.id} className="te-qfield">
-                      <span>{q.prompt}</span>
-                      <AutoTextarea
-                        className="fv-in te-ta"
-                        rows={step.kind === "reflection" ? 5 : 3}
-                        max={COMMENT_MAX}
-                        value={draft.comments[p.student_id]?.[q.id] ?? ""}
-                        readOnly={ro}
-                        onChange={(v) => setAnswer(p.student_id, q.id, v)}
-                      />
-                    </label>
-                  ))}
-                </section>
-              ))}
-          </>
-        )}
+        ))}
+
+        {qs.length ? (
+          <section className={`lq-scard te-qbox${person.is_me ? " te-mine" : ""}`}>
+            {person.is_me ? <h3 className="te-boxtitle">Reflection</h3> : null}
+            {qs.map((q) => (
+              <label key={q.id} className="te-qfield">
+                <span>{q.prompt}</span>
+                <AutoTextarea
+                  className="fv-in te-ta"
+                  rows={person.is_me ? 5 : 3}
+                  max={COMMENT_MAX}
+                  value={draft.comments[person.student_id]?.[q.id] ?? ""}
+                  readOnly={ro}
+                  onChange={(v) => setAnswer(person.student_id, q.id, v)}
+                />
+              </label>
+            ))}
+            {!person.is_me ? <p className="fv-sub te-privacy">{privacyNote(ev)}</p> : null}
+          </section>
+        ) : null}
       </div>
     );
   };
@@ -374,12 +354,12 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
   // ------------------------------------------------------------ the footer
   const footer = () => {
     if (!ev || team.length === 0) return null;
-    if (screen === "step") {
-      const last = at === steps.length - 1;
+    if (screen === "page") {
+      const last = at === pages.length - 1;
       return (
         <div className="lq-sfoot te-sfoot">
           <button type="button" className="fv-btn outline sm" onClick={() => (at === 0 ? setScreen(home) : go(at - 1))}>
-            <Ic name="chevronLeft" size={14} /> {at === 0 ? "Overview" : stepName(steps[at - 1])}
+            <Ic name="chevronLeft" size={14} /> {at === 0 ? "Overview" : pageName(pages[at - 1])}
           </button>
           <span className="te-savestate fv-sub" aria-live="polite">
             {!editable ? "Read only" : submitted ? "" : save === "saving" ? "Saving…" : save === "saved" ? "Saved" : save === "failed" ? "Not saved" : ""}
@@ -396,7 +376,7 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
             )
           ) : (
             <button type="button" className="fv-btn primary sm" onClick={() => go(at + 1)}>
-              {stepName(steps[at + 1])} <Ic name="chevronRight" size={14} />
+              {pageName(pages[at + 1])} <Ic name="chevronRight" size={14} />
             </button>
           )}
         </div>
@@ -405,7 +385,7 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
     if (screen === "review") {
       return (
         <div className="lq-sfoot te-sfoot">
-          <button type="button" className="fv-btn outline sm" onClick={() => go(steps.length - 1)}>
+          <button type="button" className="fv-btn outline sm" onClick={() => go(pages.length - 1)}>
             <Ic name="chevronLeft" size={14} /> Back
           </button>
           <span />
@@ -439,7 +419,7 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
               <Ic name="chevronLeft" size={14} />
               All assignments
             </button>
-            {screen === "step" || screen === "review" ? <span className="lq-sname">{activity.title}</span> : null}
+            {screen === "page" || screen === "review" ? <span className="lq-sname">{activity.title}</span> : null}
           </div>
           {pill ? <span className={`te-pill ${pill.toLowerCase()}`}>{pill}</span> : null}
         </header>
@@ -460,107 +440,40 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
 
 // ------------------------------------------------------- one category
 
-function CategoryStep({
+/** One category for one person: what each score means, and pick one. */
+function CategoryCard({
   category,
-  team,
-  draft,
-  mode,
+  who,
+  value,
   readOnly,
   onScore,
-  onReason,
 }: {
   category: TeamEvalCategory;
-  team: TeamEvalMember[];
-  draft: EvalDraft;
-  mode: ReasonsMode;
-  readOnly: boolean;
-  onScore: (ratee: string, category: string, score: number) => void;
-  onReason: (ratee: string, category: string, reason: string) => void;
-}) {
-  return (
-    <>
-      <h2 className="lq-h2 te-steptitle">{category.name}</h2>
-      <ol className="te-key">
-        {SCORES.map((n) => (
-          <li key={n}>
-            <span className={`te-score s${n}`}>{n}</span>
-            <span>{category.levels[n - 1] || "—"}</span>
-          </li>
-        ))}
-      </ol>
-      <div className="te-raterows">
-        {team.map((p) => (
-          <RateRow
-            key={p.student_id}
-            name={p.is_me ? "You" : p.name}
-            levels={category.levels}
-            value={draft.ratings[p.student_id]?.[category.id]?.score ?? null}
-            reason={draft.ratings[p.student_id]?.[category.id]?.reason ?? ""}
-            mode={mode}
-            readOnly={readOnly}
-            onScore={(n) => onScore(p.student_id, category.id, n)}
-            onReason={(r) => onReason(p.student_id, category.id, r)}
-          />
-        ))}
-      </div>
-    </>
-  );
-}
-
-function RateRow({
-  name,
-  levels,
-  value,
-  reason,
-  mode,
-  readOnly,
-  onScore,
-  onReason,
-}: {
-  name: string;
-  levels: string[];
+  who: string;
   value: number | null;
-  reason: string;
-  mode: ReasonsMode;
   readOnly: boolean;
   onScore: (n: number) => void;
-  onReason: (r: string) => void;
 }) {
-  const needed = reasonNeeded(mode, value);
   return (
-    <div className="lq-scard te-raterow">
-      <div className="te-raterhead">
-        <span className="te-ratername">{name}</span>
-        <div className="te-scorebtns" role="radiogroup" aria-label={name}>
-          {SCORES.map((n) => (
-            <button
-              key={n}
-              type="button"
-              role="radio"
-              aria-checked={value === n}
-              aria-label={`${n}: ${levels[n - 1] ?? ""}`}
-              className={`te-scorebtn s${n}${value === n ? " on" : ""}`}
-              disabled={readOnly && value !== n}
-              onClick={() => !readOnly && onScore(n)}
-            >
-              {n}
-            </button>
-          ))}
-        </div>
+    <section className="lq-scard te-catcard">
+      <h3 className="te-catname">{category.name}</h3>
+      <div className="te-opts" role="radiogroup" aria-label={`${category.name}: ${who}`}>
+        {SCORES.map((n) => (
+          <button
+            key={n}
+            type="button"
+            role="radio"
+            aria-checked={value === n}
+            className={`te-opt s${n}${value === n ? " on" : ""}`}
+            disabled={readOnly && value !== n}
+            onClick={() => !readOnly && onScore(n)}
+          >
+            <span className={`te-score s${n}`}>{n}</span>
+            <span className="te-optdesc">{category.levels[n - 1] || "—"}</span>
+          </button>
+        ))}
       </div>
-      {needed || reason.trim() ? (
-        <AutoTextarea
-          className="fv-in te-ta te-why"
-          rows={2}
-          max={REASON_MAX}
-          value={reason}
-          readOnly={readOnly}
-          aria-label={`${name}: why`}
-          placeholder={`Why a ${value}?`}
-          onChange={onReason}
-        />
-      ) : null}
-    </div>
+    </section>
   );
 }
 
@@ -603,19 +516,6 @@ function Results({ ev, results, title }: { ev: StudentTeamEval; results: TeamEva
                   <span className="fv-sub"> · you {self ?? "—"}</span>
                 </span>
               </div>
-              {r?.reasons.length ? (
-                <ul className="te-reasons">
-                  {r.reasons.map((x, i) => (
-                    <li key={i}>
-                      <b className={`te-chip s${x.score}`}>{x.score}</b>
-                      <span>
-                        {x.text}
-                        {x.author ? <span className="te-by"> — {x.author}</span> : null}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
             </div>
           );
         })}

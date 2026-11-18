@@ -9,13 +9,10 @@
 
 export type QuestionAudience = "peer" | "self";
 
-/** Which ratings need a reason: every one, only 1s and 2s, or none. */
-export type ReasonsMode = "all" | "low" | "none";
-
 /** The longest answer to a question the database keeps (0058). */
 export const COMMENT_MAX = 10000;
-/** The longest reason for a rating (0058). */
-export const REASON_MAX = 4000;
+/** Each category is out of this many points; an evaluation is out of 5 × categories. */
+export const POINTS_PER_CATEGORY = 5;
 
 export interface TeamEvalSettings {
   activity_id: string;
@@ -25,9 +22,7 @@ export interface TeamEvalSettings {
   release_comments: boolean;
   /** Show those comments without who wrote them. */
   anonymize: boolean;
-  /** Which ratings need a sentence saying why. */
-  reasons: ReasonsMode;
-  /** Percent of the points taken off a late submission. */
+  /** Percent of the grade taken off a student whose own evaluation was late. */
   late_penalty: number;
   released_at: string | null;
   scored_at: string | null;
@@ -59,7 +54,6 @@ export interface TeamEvalRating {
   rater_id: string;
   ratee_id: string;
   score: number;
-  reason: string | null;
   updated_at: string;
 }
 
@@ -118,11 +112,9 @@ export interface TeamEvalResults {
   categories?: {
     category_id: string;
     self: number | null;
-    self_reason: string | null;
     /** Teammates who submitted, themselves left out. Null when none did. */
     average: number | null;
     raters: number;
-    reasons: { author: string | null; score: number; text: string }[];
   }[];
   comments?: { question_id: string; author: string | null; body: string }[];
   reflection?: { question_id: string; body: string }[];
