@@ -74,6 +74,12 @@
   font-weight: 600;
   font-size: var(--fv-sm);
 }
+textarea.te-catname {
+  height: auto;
+  min-height: 36px;
+  padding: 7px 10px;
+  line-height: 1.3;
+}
 .te-levels {
   display: flex;
   flex-direction: column;
@@ -339,9 +345,21 @@
 .te-num {
   text-align: right;
 }
-/* Headers stay on one line; the table scrolls sideways when it runs out of room. */
 .te-tbl thead th.te-num {
   text-align: right;
+}
+/* A category's name can be a phrase ("Having Relevant Knowledge, Skills, and
+   Abilities"): it wraps, so the columns after it stay on screen. */
+.fv-tbl.te-tbl thead th.te-catth {
+  white-space: normal;
+  min-width: 84px;
+  max-width: 150px;
+  vertical-align: bottom;
+  line-height: 1.25;
+}
+.fv-tbl.te-stable td:first-child {
+  white-space: normal;
+  min-width: 150px;
 }
 .te-avg {
   display: block;
@@ -432,6 +450,8 @@
 .te-brief {
   margin: 12px 0 0;
   line-height: 1.5;
+  /* Instructions are often several paragraphs, or a list typed with dashes. */
+  white-space: pre-wrap;
 }
 
 .te-donebox {

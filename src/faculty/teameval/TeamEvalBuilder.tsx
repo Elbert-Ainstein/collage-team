@@ -22,6 +22,7 @@ import {
   type CategoryDraft,
   type QuestionDraft,
 } from "@/teameval/defaults";
+import { AutoTextarea } from "@/teameval/AutoTextarea";
 import { outOf } from "@/teameval/model";
 import type { QuestionAudience, TeamEvalSnapshot } from "@/teameval/types";
 import { Ic } from "@/live/ui";
@@ -29,6 +30,13 @@ import { fromLocalInput, toLocalInput } from "../ActivityDetail";
 import { DescriptionEditor } from "../DescriptionEditor";
 import type { FacultyData } from "../FacultyApp";
 import { Steps } from "../Steps";
+
+// What 0058 keeps: a category name up to 120 characters, a question up to
+// 1,000. A level's description has no limit there; this one keeps a slip of
+// the paste from filling the form.
+const NAME_MAX = 120;
+const PROMPT_MAX = 1000;
+const LEVEL_MAX = 2000;
 
 const STEPS = [
   { key: "activity", label: "Activity" },
@@ -160,14 +168,15 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
         </div>
         {list.map((q, i) => (
           <div key={q.id} className="te-qrow">
-            <textarea
+            <AutoTextarea
               className="fv-in te-qin"
               rows={2}
+              max={PROMPT_MAX}
               value={q.prompt}
               placeholder="Question"
               aria-label={`${heading} question ${i + 1}`}
               disabled={off}
-              onChange={(e) => setQ(q.id, e.target.value)}
+              onChange={(v) => setQ(q.id, v)}
             />
             {fixed ? null : (
               <button
@@ -269,12 +278,16 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
                   {categories.map((c, i) => (
                     <div key={c.id} className="fv-card te-catcard">
                       <div className="te-cathead">
-                        <input
+                        {/* Wraps, so a long name reads whole; one line of it, still. */}
+                        <AutoTextarea
                           className="fv-in te-catname"
+                          rows={1}
+                          max={NAME_MAX}
                           value={c.name}
                           placeholder="Category"
                           aria-label={`Category ${i + 1} name`}
-                          onChange={(e) => setCat(c.id, { name: e.target.value })}
+                          onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
+                          onChange={(v) => setCat(c.id, { name: v.replace(/\s*\n\s*/g, " ") })}
                         />
                         {fixed ? null : (
                           <button
@@ -291,12 +304,13 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
                         {[5, 4, 3, 2, 1].map((score) => (
                           <label key={score} className="te-level">
                             <span className={`te-score s${score}`}>{score}</span>
-                            <textarea
+                            <AutoTextarea
                               className="fv-in te-levelin"
                               rows={2}
+                              max={LEVEL_MAX}
                               value={c.levels[score - 1] ?? ""}
                               aria-label={`${c.name || `Category ${i + 1}`}: what ${score} means`}
-                              onChange={(e) => setLevel(c.id, score, e.target.value)}
+                              onChange={(v) => setLevel(c.id, score, v)}
                             />
                           </label>
                         ))}

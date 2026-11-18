@@ -488,7 +488,7 @@ function ResultsTable({
           </tr>
           <tr>
             {cats.map((c) => (
-              <th key={c.id} className="te-num">
+              <th key={c.id} className="te-num te-catth">
                 {c.name}
               </th>
             ))}
