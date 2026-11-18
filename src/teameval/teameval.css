@@ -6,6 +6,19 @@
    live.css). Everything this feature adds is prefixed te-. Teal is the
    feature's colour; the 1–5 scale runs red to green. */
 
+/* Type: one step up from the app's scale (10/12/14/16), on these screens
+   only. The fv-* parts inside — labels, inputs, buttons, badges — read these
+   tokens, so they grow with it. .lq-stu.te-stu outranks live.css's .lq-stu,
+   which sets the same tokens on the same element. */
+.te-fac,
+.lq-stu.te-stu {
+  --fv-2xs: 12px;
+  --fv-xs: 14px;
+  --fv-sm: 16px;
+  --fv-base: 17px;
+  --fv-lg: 19px;
+}
+
 .te-fac,
 .te-stu {
   --te-accent: #0f766e;
@@ -69,7 +82,7 @@
 }
 .te-level {
   display: grid;
-  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-columns: 28px minmax(0, 1fr);
   gap: 8px;
   align-items: start;
 }
@@ -86,11 +99,11 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
   font-weight: 700;
-  font-size: var(--fv-xs);
+  font-size: var(--fv-sm);
   font-variant-numeric: tabular-nums;
 }
 .te-score {
@@ -132,13 +145,13 @@
 }
 .te-h2 {
   font-family: var(--fv-serif);
-  font-size: 19px;
+  font-size: 22px;
   font-weight: 700;
   margin: 28px 0 10px;
 }
 .te-h3 {
   font-family: var(--fv-serif);
-  font-size: 16px;
+  font-size: 19px;
   font-weight: 700;
   margin: 0 0 8px;
 }
@@ -326,7 +339,7 @@ td.te-num.low .te-avg {
 }
 .te-self {
   display: block;
-  font-size: 11px;
+  font-size: var(--fv-xs);
   color: var(--fv-muted);
 }
 .fv-tbl.te-tbl .te-teamrow td {
@@ -346,7 +359,7 @@ td.te-num.low .te-avg {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 24px;
+  height: 28px;
   padding: 0 7px;
   border-radius: 999px;
   border: 1px solid transparent;
@@ -413,7 +426,7 @@ td.te-num.low .te-avg {
 .te-ctbl thead th {
   background: var(--fv-cream-300);
   font-weight: 600;
-  min-width: 220px;
+  min-width: 250px;
 }
 .te-ctbl thead th.te-corner {
   min-width: 150px;
@@ -428,7 +441,7 @@ td.te-num.low .te-avg {
   display: block;
   margin-top: 3px;
   font-weight: 400;
-  font-size: 11px;
+  font-size: var(--fv-xs);
   color: var(--fv-amber);
 }
 .te-selfcell {
@@ -438,11 +451,11 @@ td.te-num.low .te-avg {
 .te-selftag {
   display: table;
   margin-bottom: 6px;
-  padding: 1px 7px;
+  padding: 2px 9px;
   border-radius: 999px;
   background: var(--te-accent);
   color: #fff;
-  font-size: 10px;
+  font-size: var(--fv-xs);
   font-weight: 600;
   letter-spacing: 0.02em;
 }
@@ -451,7 +464,7 @@ td.te-num.low .te-avg {
 }
 .te-prompt {
   display: block;
-  font-size: 11px;
+  font-size: var(--fv-xs);
   font-weight: 600;
   color: var(--fv-muted);
 }
@@ -470,19 +483,19 @@ td.te-num.low .te-avg {
 }
 .te-scoreline {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 24px;
+  grid-template-columns: minmax(0, 1fr) 28px;
   gap: 2px 8px;
   align-items: center;
-  font-size: var(--fv-xs);
+  font-size: var(--fv-sm);
 }
 .te-scoreline .te-chip {
-  width: 22px;
-  height: 20px;
+  width: 26px;
+  height: 24px;
 }
 .te-reason {
   grid-column: 1 / -1;
   color: var(--fv-muted);
-  font-size: 11px;
+  font-size: var(--fv-xs);
   line-height: 1.35;
 }
 
@@ -495,7 +508,7 @@ td.te-num.low .te-avg {
   flex: none;
   padding: 5px 11px;
   border-radius: 999px;
-  font-size: 12px;
+  font-size: var(--fv-xs);
   font-weight: 600;
   background: #e9eef3;
   color: var(--fv-navy-700);
@@ -594,8 +607,8 @@ td.te-num.low .te-avg {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  height: 30px;
-  padding: 0 12px;
+  height: 36px;
+  padding: 0 16px;
   border-radius: 999px;
   border: 1px solid var(--fv-neutral-200);
   background: #fff;
@@ -620,9 +633,9 @@ td.te-num.low .te-avg {
   margin-top: 4px;
 }
 .te-boxtitle {
-  margin: 0 0 10px;
+  margin: 0 0 12px;
   font-family: var(--fv-serif);
-  font-size: 17px;
+  font-size: 20px;
   font-weight: 700;
 }
 .te-opts {
@@ -635,10 +648,10 @@ td.te-num.low .te-avg {
 }
 .te-opt {
   display: grid;
-  grid-template-columns: 18px 26px minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: 20px 28px minmax(0, 1fr);
+  gap: 12px;
   align-items: center;
-  padding: 9px 12px;
+  padding: 12px 14px;
   border: 0;
   border-bottom: 1px solid var(--fv-neutral-200);
   background: transparent;
@@ -666,15 +679,15 @@ td.te-num.low .te-avg {
   box-shadow: inset 3px 0 0 var(--te-accent);
 }
 .te-radio {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   border-radius: 999px;
   border: 1.5px solid var(--fv-neutral-400);
   background: #fff;
 }
 .te-opt.on .te-radio {
   border-color: var(--te-accent);
-  background: radial-gradient(circle, var(--te-accent) 0 4px, #fff 4.5px);
+  background: radial-gradient(circle, var(--te-accent) 0 5px, #fff 5.5px);
 }
 .te-desc {
   line-height: 1.35;
@@ -719,12 +732,12 @@ td.te-num.low .te-avg {
 .te-rcolhead,
 .te-rrow {
   display: grid;
-  grid-template-columns: 56px 82px minmax(0, 1fr);
+  grid-template-columns: 64px 104px minmax(0, 1fr);
   align-items: center;
 }
 .te-rcolhead {
   background: var(--fv-cream-300);
-  font-size: 11px;
+  font-size: var(--fv-xs);
   font-weight: 600;
   color: var(--fv-muted);
 }
@@ -748,16 +761,16 @@ td.te-num.low .te-avg {
   align-items: center;
   justify-content: center;
   align-self: stretch;
-  min-height: 40px;
+  min-height: 48px;
 }
 .te-dot.self {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   border-radius: 999px;
   background: var(--fv-navy-700);
 }
 .te-avgtag {
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 999px;
   background: var(--te-accent);
   color: #fff;
@@ -767,7 +780,7 @@ td.te-num.low .te-avg {
 }
 .te-rdesc {
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr);
+  grid-template-columns: 28px minmax(0, 1fr);
   gap: 10px;
   align-items: center;
   align-self: stretch;
@@ -791,15 +804,15 @@ td.te-num.low .te-avg {
 }
 .te-reasons li {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr);
+  grid-template-columns: 26px minmax(0, 1fr);
   gap: 8px;
   align-items: start;
   font-size: var(--fv-sm);
   line-height: 1.4;
 }
 .te-reasons .te-chip {
-  width: 22px;
-  height: 20px;
+  width: 26px;
+  height: 24px;
 }
 .te-by {
   color: var(--fv-muted);
@@ -821,4 +834,55 @@ td.te-num.low .te-avg {
 }
 .te-mine .te-cq p {
   margin-top: 4px;
+}
+
+/* ------------------------------------------- reused parts, at this scale */
+
+.te-fac .lq-bnote {
+  font-size: var(--fv-xs);
+  line-height: 1.45;
+}
+.te-fac .lq-bcardtitle {
+  font-size: 18px;
+}
+.te-fac .lq-pagetitle {
+  font-size: 34px;
+}
+.te-fac .lq-desc {
+  font-size: var(--fv-base);
+}
+.te-fac .lq-bigcount .fv-display {
+  font-size: 40px;
+}
+.te-fac .fv-steplabel {
+  font-size: var(--fv-sm);
+}
+.te-fac .fv-switch {
+  width: 42px;
+  height: 24px;
+}
+.te-fac .fv-switch::after {
+  width: 18px;
+  height: 18px;
+}
+.te-stu .lq-h2 {
+  font-size: 26px;
+}
+.te-stu .lq-sback {
+  font-size: var(--fv-sm);
+}
+.te-stu .lq-sname {
+  font-size: 19px;
+}
+.te-fac .fv-switch.on::after {
+  transform: translateX(18px);
+}
+.te-stu .fv-in.te-ta {
+  font-size: var(--fv-sm);
+}
+.te-fac .te-levelin {
+  font-size: 15px;
+}
+.te-fac .lq-linkish {
+  font-size: var(--fv-sm);
 }
