@@ -13,6 +13,7 @@ import { Ic } from "@/live/ui";
 import type { FacultyData } from "../FacultyApp";
 import { TeamEvalBuilder } from "./TeamEvalBuilder";
 import { TeamEvalPage } from "./TeamEvalPage";
+import { TeamEvalResults } from "./TeamEvalResults";
 import "@/live/live.css";
 import "@/teameval/teameval.css";
 
@@ -34,6 +35,8 @@ export function TeamEvalDetail({ data, activity, fresh, onBack, onChanged, onErr
   const [loaded, setLoaded] = useState<Loaded>({ kind: "loading" });
   const [building, setBuilding] = useState<0 | 1 | null>(null);
   const [justPublished, setJustPublished] = useState(false);
+  /** On the results page rather than the overview. */
+  const [viewing, setViewing] = useState(false);
   const errorRef = useRef(onError);
   errorRef.current = onError;
   const failing = useRef(false);
@@ -129,6 +132,16 @@ export function TeamEvalDetail({ data, activity, fresh, onBack, onChanged, onErr
           }}
           onError={onError}
         />
+      ) : viewing ? (
+        <TeamEvalResults
+          data={data}
+          activity={activity}
+          snap={snap}
+          onBack={() => setViewing(false)}
+          reload={reload}
+          onChanged={onChanged}
+          onError={onError}
+        />
       ) : (
         <TeamEvalPage
           data={data}
@@ -139,7 +152,7 @@ export function TeamEvalDetail({ data, activity, fresh, onBack, onChanged, onErr
           onBack={onBack}
           onEdit={() => setBuilding(1)}
           onEditDetails={() => setBuilding(0)}
-          reload={reload}
+          onResults={() => setViewing(true)}
           onChanged={onChanged}
           onError={onError}
         />
