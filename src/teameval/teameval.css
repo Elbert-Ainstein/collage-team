@@ -910,3 +910,51 @@ td.te-num.low .te-avg {
 .te-fac .lq-linkish {
   font-size: var(--fv-sm);
 }
+
+/* ------------------------------------------------------- long writing */
+
+/* Whatever they write wraps — a pasted link included — instead of pushing
+   the column wider. */
+.te-answer p,
+.te-reason,
+.te-reason p,
+.te-cq p,
+.te-reasons li span,
+.te-desc,
+.te-ta {
+  overflow-wrap: anywhere;
+}
+.te-reason p {
+  margin: 0;
+}
+.te-clamp:not(.open) {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.te-clamp {
+  white-space: pre-wrap;
+}
+.te-more {
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fv-navy-700);
+  font: inherit;
+  font-size: var(--fv-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+.te-auto {
+  overflow-y: hidden;
+  resize: none;
+}
+.te-count {
+  display: block;
+  text-align: right;
+  margin-top: 4px;
+  font-size: var(--fv-xs);
+  color: var(--fv-amber);
+  font-variant-numeric: tabular-nums;
+}

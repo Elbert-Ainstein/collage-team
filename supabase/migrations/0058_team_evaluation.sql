@@ -144,7 +144,7 @@ create table if not exists te_ratings (
   rater_id    uuid not null references students(id) on delete cascade,
   ratee_id    uuid not null references students(id) on delete cascade,
   score       int  not null check (score between 1 and 5),
-  reason      text check (reason is null or length(reason) <= 2000),
+  reason      text check (reason is null or length(reason) <= 4000),
   updated_at  timestamptz not null default now(),
   primary key (category_id, rater_id, ratee_id),
   foreign key (category_id, activity_id)
@@ -159,13 +159,24 @@ create table if not exists te_comments (
   question_id uuid not null,
   author_id   uuid not null references students(id) on delete cascade,
   subject_id  uuid not null references students(id) on delete cascade,
-  body        text not null check (length(btrim(body)) between 1 and 4000),
+  body        text not null check (length(btrim(body)) between 1 and 10000),
   updated_at  timestamptz not null default now(),
   primary key (question_id, author_id, subject_id),
   foreign key (question_id, activity_id)
     references te_questions (id, activity_id) on delete cascade
 );
 create index if not exists te_comments_activity_idx on te_comments (activity_id, subject_id);
+
+-- Room for real paragraphs: a reflection or a comment can run long. Stated
+-- again here so a database that ran an earlier copy of this file, with
+-- tighter limits, gets these on a re-run (create table if not exists leaves
+-- an existing table's checks alone).
+alter table te_comments drop constraint if exists te_comments_body_check;
+alter table te_comments add constraint te_comments_body_check
+  check (length(btrim(body)) between 1 and 10000);
+alter table te_ratings drop constraint if exists te_ratings_reason_check;
+alter table te_ratings add constraint te_ratings_reason_check
+  check (reason is null or length(reason) <= 4000);
 
 -- Handed in. Its ratings and comments are the rows above with this rater; a
 -- student without one here has a draft at most, and counts for nobody.

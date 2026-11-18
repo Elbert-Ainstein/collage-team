@@ -216,6 +216,13 @@ begin
   perform pg_temp.refused(A1, format('select save_team_eval(%s, ''[]'', %L)', E,
     jsonb_build_array(jsonb_build_object('question_id', qp, 'subject_id', sA1, 'body', 'hi'))),
     'a peer question isn''t answered about themselves', 'people on your team');
+  perform pg_temp.ok(A1, format('select save_team_eval(%s, %L, %L)', E,
+    jsonb_build_array(jsonb_build_object('category_id', c1, 'ratee_id', sA2, 'score', 4, 'reason', repeat('r', 4000))),
+    jsonb_build_array(jsonb_build_object('question_id', qs, 'subject_id', sA1, 'body', repeat('w', 10000)))),
+    'long writing fits: a 4,000-character reason, a 10,000-character reflection');
+  perform pg_temp.refused(A1, format('select save_team_eval(%s, ''[]'', %L)', E,
+    jsonb_build_array(jsonb_build_object('question_id', qs, 'subject_id', sA1, 'body', repeat('w', 10001)))),
+    'but not past the limit', 'te_comments_body_check');
   perform pg_temp.ok(A1, format('select save_team_eval(%s, %L, ''[]'')', E,
     jsonb_build_array(jsonb_build_object('category_id', c1, 'ratee_id', sA2, 'score', 4, 'reason', 'talks'))),
     'A1 saves a draft');

@@ -23,6 +23,7 @@ import type { TeamEvalSnapshot } from "@/teameval/types";
 import { Ic } from "@/live/ui";
 import type { FacultyData } from "../FacultyApp";
 import { FAvatar } from "../icons";
+import { Clamp } from "./Clamp";
 import { fmtDay, fmtWhen } from "./format";
 
 type Tab = "results" | "comments";
@@ -360,7 +361,7 @@ function CommentsView({ groups, snap }: { groups: ReturnType<typeof buildResults
                                 {cell.answers.map((a) => (
                                   <div key={a.question.id} className="te-answer" title={a.question.prompt}>
                                     {cell.self && oneSelf ? null : <span className="te-prompt">{qNum.get(a.question.id)}</span>}
-                                    <p>{a.body}</p>
+                                    <Clamp text={a.body} lines={6} />
                                   </div>
                                 ))}
                                 {cell.scores.length ? (
@@ -369,7 +370,11 @@ function CommentsView({ groups, snap }: { groups: ReturnType<typeof buildResults
                                       <div key={s.category.id} className="te-scoreline">
                                         <span>{s.category.name}</span>
                                         <b className={`te-chip s${s.score}`}>{s.score}</b>
-                                        {s.reason ? <span className="te-reason">{s.reason}</span> : null}
+                                        {s.reason ? (
+                                          <div className="te-reason">
+                                            <Clamp text={s.reason} lines={3} />
+                                          </div>
+                                        ) : null}
                                       </div>
                                     ))}
                                   </div>

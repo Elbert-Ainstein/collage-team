@@ -9,6 +9,11 @@
 
 export type QuestionAudience = "peer" | "self";
 
+/** The longest answer to a question the database keeps (0058). */
+export const COMMENT_MAX = 10000;
+/** The longest reason for a rating (0058). */
+export const REASON_MAX = 4000;
+
 export interface TeamEvalSettings {
   activity_id: string;
   /** Ask the open-ended questions about each teammate. */

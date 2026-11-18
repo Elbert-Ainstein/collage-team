@@ -18,7 +18,8 @@ import type { Assignment, Enrolment } from "@/checkins/studentData";
 import { BriefText } from "@/checkins/BriefText";
 import { loadMyTeamEvalResults, loadStudentTeamEval, saveMyTeamEval } from "@/teameval/data";
 import { SCALE, draftFrom, fmtAvg, leftOn, questionsFor, type EvalDraft } from "@/teameval/model";
-import type { StudentTeamEval, TeamEvalCategory, TeamEvalMember, TeamEvalResults } from "@/teameval/types";
+import { AutoTextarea } from "@/teameval/AutoTextarea";
+import { COMMENT_MAX, REASON_MAX, type StudentTeamEval, type TeamEvalCategory, type TeamEvalMember, type TeamEvalResults } from "@/teameval/types";
 import { Ic } from "@/live/ui";
 import "@/live/live.css";
 import "@/teameval/teameval.css";
@@ -348,12 +349,13 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
             {qs.map((q) => (
               <label key={q.id} className="te-qfield">
                 <span>{q.prompt}</span>
-                <textarea
+                <AutoTextarea
                   className="fv-in te-ta"
                   rows={isMe ? 5 : 3}
+                  max={COMMENT_MAX}
                   value={draft.comments[person.student_id]?.[q.id] ?? ""}
                   readOnly={ro}
-                  onChange={(e) => setAnswer(person.student_id, q.id, e.target.value)}
+                  onChange={(v) => setAnswer(person.student_id, q.id, v)}
                 />
               </label>
             ))}
@@ -496,14 +498,15 @@ function RateBox({
         })}
       </div>
       {explain ? (
-        <textarea
+        <AutoTextarea
           className="fv-in te-ta te-why"
           rows={2}
+          max={REASON_MAX}
           value={reason}
           readOnly={readOnly}
           aria-label={`${category.name}: why`}
           placeholder={value === null ? "Why?" : `Why ${value}?`}
-          onChange={(e) => onReason(e.target.value)}
+          onChange={onReason}
         />
       ) : null}
     </section>
