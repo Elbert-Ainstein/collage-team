@@ -17,7 +17,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Assignment, Enrolment } from "@/checkins/studentData";
 import { BriefText } from "@/checkins/BriefText";
 import { loadMyTeamEvalResults, loadStudentTeamEval, saveMyTeamEval } from "@/teameval/data";
-import { SCALE, draftFrom, fmtAvg, leftOn, questionsFor, type EvalDraft } from "@/teameval/model";
+import { SCALE, draftFrom, draftPayload, fmtAvg, leftOn, questionsFor, type EvalDraft } from "@/teameval/model";
 import { AutoTextarea } from "@/teameval/AutoTextarea";
 import { COMMENT_MAX, REASON_MAX, type StudentTeamEval, type TeamEvalCategory, type TeamEvalMember, type TeamEvalResults } from "@/teameval/types";
 import { Ic } from "@/live/ui";
@@ -108,6 +108,11 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
     [draft, ev],
   );
   const totalLeft = team.reduce((n, p) => n + left(p), 0);
+  /** Anything filled in yet — a score or an answer, not an emptied box. */
+  const started = useMemo(() => {
+    const { ratings, comments } = draftPayload(draft);
+    return ratings.length > 0 || comments.length > 0;
+  }, [draft]);
 
   // Drafts save as they go. A submitted evaluation saves only whole, on
   // "Save changes" — the database won't take an incomplete one (0058).
@@ -262,7 +267,7 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
             </ul>
             {editable ? (
               <button type="button" className="fv-btn primary te-start" onClick={() => go(0)}>
-                {screen === "done" ? "Edit" : totalLeft === 0 ? "Review" : "Start"}
+                {screen === "done" ? "Edit" : totalLeft === 0 ? "Review" : started ? "Continue" : "Start"}
                 <Ic name="arrowRight" size={15} />
               </button>
             ) : (
