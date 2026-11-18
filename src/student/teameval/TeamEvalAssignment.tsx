@@ -8,9 +8,10 @@
 // review. It saves as they go (save_team_eval, as a draft) and Submit checks
 // it's complete.
 //
-// Once the instructor releases results: every category on one 1–5 line —
-// what they gave themselves and the average of what their teammates gave
-// them (themselves and anyone who didn't submit left out) — and what
+// Once the instructor releases results: a card per category, laid out the
+// way CATME does it — what each score from 5 down to 1 means, with an arrow
+// beside the one they gave themselves and another where their teammates'
+// average falls (themselves and anyone who didn't submit left out). Then what
 // teammates wrote, without names when it's anonymous.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -19,7 +20,6 @@ import { BriefText } from "@/checkins/BriefText";
 import { loadMyTeamEvalResults, loadStudentTeamEval, saveMyTeamEval } from "@/teameval/data";
 import { draftFrom, draftPayload, fmtAvg, leftFor, pagesFor, questionsFor, type EvalDraft } from "@/teameval/model";
 import { AutoTextarea } from "@/teameval/AutoTextarea";
-import { ScoreTrack } from "@/teameval/ScoreTrack";
 import { COMMENT_MAX, type StudentTeamEval, type TeamEvalCategory, type TeamEvalMember, type TeamEvalResults } from "@/teameval/types";
 import { Ic } from "@/live/ui";
 import "@/live/live.css";
@@ -455,8 +455,8 @@ function CategoryCard({
   onScore: (n: number) => void;
 }) {
   return (
-    <section className="lq-scard te-catcard">
-      <h3 className="te-catname">{category.name}</h3>
+    <section className="lq-scard te-ratecard">
+      <h3 className="te-ratename">{category.name}</h3>
       <div className="te-opts" role="radiogroup" aria-label={`${category.name}: ${who}`}>
         {SCORES.map((n) => (
           <button
@@ -479,6 +479,60 @@ function CategoryCard({
 
 // ---------------------------------------------------------------- results
 
+/** A right-pointing arrow, CATME's mark for "here". */
+function Arrow() {
+  return (
+    <svg className="te-arrowsvg" width="12" height="14" viewBox="0 0 12 14" aria-hidden="true">
+      <path d="M1.5 1.2 L10.8 7 L1.5 12.8 Z" fill="currentColor" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/**
+ * One category of their results: the descriptions from 5 down to 1, and two
+ * narrow columns beside them — an arrow at the score they gave themselves,
+ * and one where their teammates' average falls. The average needn't be a
+ * whole number, so its arrow sits between rows in proportion: 3.7 is most of
+ * the way from the 3 up to the 4.
+ */
+function CategoryResult({ category, self, avg }: { category: TeamEvalCategory; self: number | null; avg: number | null }) {
+  const near = avg === null ? null : Math.min(5, Math.max(1, Math.round(avg)));
+  return (
+    <section className="te-rcat" aria-label={`${category.name}: you ${self ?? "—"}, teammates’ average ${fmtAvg(avg)}`}>
+      <div className="te-rgrid">
+        <div className="te-rrow te-rhead">
+          <span aria-hidden="true">You</span>
+          <span aria-hidden="true">Teammates’ avg</span>
+          <h3 className="te-ratename">{category.name}</h3>
+        </div>
+        {SCORES.map((n) => (
+          <div key={n} className="te-rrow">
+            <span className="te-rmark">
+              {self === n ? (
+                <span className="te-rarrow self">
+                  <Arrow />
+                </span>
+              ) : null}
+            </span>
+            <span className="te-rmark">
+              {near === n && avg !== null ? (
+                <span className={`te-rarrow team${avg < 3 ? " low" : ""}`} style={{ top: `${50 + (n - avg) * 100}%` }}>
+                  {fmtAvg(avg)}
+                  <Arrow />
+                </span>
+              ) : null}
+            </span>
+            <span className="te-rdesc">
+              <span className={`te-score s${n}`}>{n}</span>
+              <span>{category.levels[n - 1] || "—"}</span>
+            </span>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Results({ ev, results, title }: { ev: StudentTeamEval; results: TeamEvalResults; title: string }) {
   const byCat = new Map((results.categories ?? []).map((c) => [c.category_id, c]));
   const prompts = new Map(ev.questions.map((q) => [q.id, q.prompt]));
@@ -498,28 +552,10 @@ function Results({ ev, results, title }: { ev: StudentTeamEval; results: TeamEva
         </p>
       </div>
 
-      <section className="lq-scard te-summary">
-        <p className="fv-sub te-legend">
-          <span className="te-key-dot team" /> Teammates <span className="te-key-dot self" /> You
-        </p>
-        {ev.categories.map((c) => {
-          const r = byCat.get(c.id);
-          const self = r?.self ?? null;
-          const avg = r?.average ?? null;
-          return (
-            <div key={c.id} className="te-sumrow">
-              <div className="te-sumhead">
-                <span className="te-sumname">{c.name}</span>
-                <ScoreTrack team={avg} self={self} label={`${c.name}: teammates ${fmtAvg(avg)}, you ${self ?? "—"}`} />
-                <span className="te-sumnums">
-                  <b>{fmtAvg(avg)}</b>
-                  <span className="fv-sub"> · you {self ?? "—"}</span>
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </section>
+      {ev.categories.map((c) => {
+        const r = byCat.get(c.id);
+        return <CategoryResult key={c.id} category={c} self={r?.self ?? null} avg={r?.average ?? null} />;
+      })}
 
       {results.comments_shown && ev.settings.peer_comments ? (
         <section className="lq-scard te-qbox">

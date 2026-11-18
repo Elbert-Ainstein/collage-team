@@ -915,10 +915,10 @@ td.te-num.low .te-avg {
 }
 
 /* One category on a person's page: what each score means, best first. */
-.te-catcard {
+.te-ratecard {
   margin-bottom: 12px;
 }
-.te-catname {
+.te-ratename {
   margin: 0 0 10px;
   font-size: var(--fv-base);
   font-weight: 700;
@@ -972,35 +972,120 @@ td.te-num.low .te-avg {
 
 /* ------------------------------------------------------- student results */
 
-.te-summary {
-  padding: 8px 6px;
+/* A category, CATME's way: two narrow columns of arrows — what they gave
+   themselves, where their teammates' average falls — beside what each score
+   from 5 down to 1 means. */
+.te-rcat {
+  margin-bottom: 14px;
 }
-.te-summary .te-legend {
-  margin: 6px 10px 6px;
+.te-rgrid {
+  border: 1px solid var(--fv-neutral-200);
+  border-radius: var(--fv-r-lg);
+  background: #fff;
 }
-.te-sumrow + .te-sumrow {
+.te-rrow {
+  display: grid;
+  grid-template-columns: 60px 124px minmax(0, 1fr);
+}
+.te-rrow + .te-rrow:not(.te-rhead) > span {
   border-top: 1px solid var(--fv-neutral-200);
 }
-.te-sumhead {
+.te-rhead + .te-rrow > span {
+  border-top: 0 !important;
+}
+.te-rhead > * {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 6px;
+  border-bottom: 1px solid var(--fv-neutral-200);
+  font-size: var(--fv-xs);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--fv-muted);
+  white-space: nowrap;
+}
+.te-rhead > .te-ratename {
+  justify-content: flex-start;
+  margin: 0;
+  padding: 10px 14px 10px 12px;
+  font-size: var(--fv-base);
+  font-weight: 700;
+  color: var(--fv-navy);
+  white-space: normal;
+}
+.te-rhead > span:nth-child(-n + 2),
+.te-rmark {
+  background: var(--fv-cream-100);
+  border-right: 1px solid var(--fv-neutral-200);
+}
+.te-rhead > span:first-child {
+  border-top-left-radius: var(--fv-r-lg);
+}
+.te-rrow:last-child > .te-rmark:first-child {
+  border-bottom-left-radius: var(--fv-r-lg);
+}
+.te-rmark {
+  position: relative;
+}
+.te-rarrow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transform: translate(-50%, -50%);
+  font-size: var(--fv-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.te-rarrow.self {
+  color: var(--fv-navy-700);
+}
+.te-rarrow.team {
+  color: var(--te-accent);
+}
+.te-rarrow.team.low {
+  color: var(--te-s2);
+}
+.te-arrowsvg {
+  display: block;
+  flex: none;
+}
+.te-rdesc {
   display: grid;
-  grid-template-columns: minmax(110px, 1fr) 180px 110px;
+  grid-template-columns: 30px minmax(0, 1fr);
   gap: 12px;
   align-items: center;
-  padding: 12px 10px;
-  font-size: var(--fv-base);
+  padding: 10px 14px 10px 12px;
+  font-size: var(--fv-sm);
 }
-.te-sumhead .te-track {
-  width: 180px;
+.te-rdesc .te-score {
+  margin-top: 0;
 }
-.te-sumname {
-  font-weight: 600;
+/* A phone: narrower arrow columns, so the descriptions keep room to read. */
+@container lqs (max-width: 520px) {
+  .te-rrow {
+    grid-template-columns: 40px 64px minmax(0, 1fr);
+  }
+  .te-rhead > span {
+    white-space: normal;
+    text-align: center;
+    padding: 8px 2px;
+    font-size: 11px;
+  }
+  .te-rdesc {
+    grid-template-columns: 26px minmax(0, 1fr);
+    gap: 8px;
+    padding: 9px 10px 9px 8px;
+  }
+  .te-rarrow {
+    gap: 3px;
+  }
 }
-.te-sumnums {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-}
-
-/* Reasons under a category on the student's results. */
 
 /* ------------------------------------------------------- a student's page */
 .te-sgrid {
