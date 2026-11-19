@@ -468,49 +468,7 @@ textarea.te-catname {
 .te-donebox b {
   color: var(--fv-navy);
 }
-.te-people {
-  list-style: none;
-  margin: 16px 0 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.te-personbtn {
-  width: 100%;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-  padding: 11px 12px;
-  border: 1px solid var(--fv-neutral-200);
-  border-radius: var(--fv-r-md);
-  background: #fff;
-  font: inherit;
-  text-align: left;
-  color: inherit;
-  cursor: pointer;
-}
-.te-personbtn:hover {
-  border-color: var(--te-accent);
-}
-.te-pname {
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.te-pstate {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: var(--fv-xs);
-  color: var(--fv-muted);
-}
-.te-pstate.done {
-  color: var(--fv-emerald);
-  font-weight: 600;
-}
+
 .te-start {
   margin-top: 16px;
   width: 100%;
@@ -1163,4 +1121,12 @@ textarea.te-catname {
 .fv-tbl.te-tbl .te-selfcol {
   border-left: 2px solid var(--fv-neutral-200);
   color: var(--fv-muted);
+}
+
+/* Who's still to finish, in the dialog the last page's Submit opens. */
+.te-leftlist {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: var(--fv-sm, 14px);
+  line-height: 1.6;
 }

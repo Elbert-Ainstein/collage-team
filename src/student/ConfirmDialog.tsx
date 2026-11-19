@@ -27,6 +27,7 @@ export function ConfirmDialog({
   cancelLabel = "Cancel",
   busyLabel = "Working…",
   busy = false,
+  tone = "danger",
   onConfirm,
   onCancel,
 }: {
@@ -37,6 +38,8 @@ export function ConfirmDialog({
   cancelLabel?: string;
   busyLabel?: string;
   busy?: boolean;
+  /** "danger" for an answer that takes something away; "primary" for one that doesn't, like handing work in. */
+  tone?: "danger" | "primary";
   onConfirm: () => void;
   onCancel: () => void;
 }): JSX.Element {
@@ -107,7 +110,7 @@ export function ConfirmDialog({
           >
             {cancelLabel}
           </button>
-          <button type="button" className="sv-btn danger" disabled={busy} onClick={onConfirm}>
+          <button type="button" className={`sv-btn ${tone}`} disabled={busy} onClick={onConfirm}>
             {busy ? busyLabel : confirmLabel}
           </button>
         </div>

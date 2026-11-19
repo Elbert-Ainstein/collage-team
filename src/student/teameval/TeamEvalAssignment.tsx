@@ -4,9 +4,9 @@
 //
 // Filling it in goes a person at a time: a page for each teammate — every
 // category, each with what a 5 down to a 1 means, then the questions about
-// them — and last a page for themselves, with their reflection. Then a
-// review. It saves as they go (save_team_eval, as a draft) and Submit checks
-// it's complete.
+// them — and last a page for themselves, with their reflection, where they
+// submit. It saves as they go (save_team_eval, as a draft); Submit asks once
+// before handing it in, or says who's still to finish.
 //
 // Once the instructor releases results: a card per category, laid out the
 // way CATME does it — what each score from 5 down to 1 means, with an arrow
@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Assignment, Enrolment } from "@/checkins/studentData";
 import { BriefText } from "@/checkins/BriefText";
+import { ConfirmDialog } from "@/student/ConfirmDialog";
 import { loadMyTeamEvalResults, loadStudentTeamEval, saveMyTeamEval } from "@/teameval/data";
 import { draftFrom, draftPayload, fmtAvg, leftFor, pagesFor, questionsFor, type EvalDraft } from "@/teameval/model";
 import { AutoTextarea } from "@/teameval/AutoTextarea";
@@ -37,7 +38,7 @@ type Loaded =
   | { kind: "missing" }
   | { kind: "ready"; ev: StudentTeamEval; results: TeamEvalResults | null };
 
-type Screen = "intro" | "page" | "review" | "done" | "results";
+type Screen = "intro" | "page" | "done" | "results";
 type SaveState = "idle" | "saving" | "saved" | "failed";
 
 const AUTOSAVE_MS = 1200;
@@ -70,6 +71,8 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
   const [save, setSave] = useState<SaveState>("idle");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  /** The question open over the form: hand it in, or what's still to do. */
+  const [ask, setAsk] = useState<null | "submit" | "left">(null);
   const dirty = useRef(false);
   const timer = useRef<number | undefined>(undefined);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -159,12 +162,9 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
   const setAnswer = (subject: string, question: string, body: string) =>
     change((d) => ({ ...d, comments: { ...d.comments, [subject]: { ...d.comments[subject], [question]: body } } }));
 
-  const go = (next: number | "review") => {
-    if (next === "review") setScreen("review");
-    else {
-      setAt(next);
-      setScreen("page");
-    }
+  const go = (next: number) => {
+    setAt(next);
+    setScreen("page");
     scrollRef.current?.scrollTo({ top: 0 });
   };
   /** Where Continue picks up: the first person with something left. */
@@ -183,7 +183,14 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setSubmitting(false);
+      setAsk(null);
     }
+  };
+  /** The last page's button: hand it in (after asking), save a change to one already in, or say what's left. */
+  const finish = () => {
+    if (totalLeft > 0) setAsk("left");
+    else if (submitted) void submit();
+    else setAsk("submit");
   };
 
   /** Where Overview and Done go: the results once they're out. */
@@ -258,8 +265,13 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
               </>
             )}
             {editable ? (
-              <button type="button" className="fv-btn primary te-start" onClick={() => (screen !== "done" && totalLeft === 0 ? go("review") : go(screen === "done" ? 0 : firstOpen))}>
-                {screen === "done" ? "Edit" : totalLeft === 0 ? "Review" : started ? "Continue" : "Start"}
+              <button
+                type="button"
+                className="fv-btn primary te-start"
+                // All filled in but not handed in: the last page, where Submit is.
+                onClick={() => go(screen === "done" ? 0 : totalLeft === 0 ? pages.length - 1 : firstOpen)}
+              >
+                {screen === "done" ? "Edit" : started ? "Continue" : "Start"}
                 <Ic name="arrowRight" size={15} />
               </button>
             ) : (
@@ -267,33 +279,6 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
                 View
               </button>
             )}
-          </div>
-        </div>
-      );
-    }
-
-    if (screen === "review") {
-      return (
-        <div className="lq-sscroll" ref={scrollRef}>
-          <div className="lq-scard">
-            <h2 className="lq-h2">Review</h2>
-            {totalLeft > 0 ? (
-              <p className="fv-sub" style={{ marginTop: 6 }}>
-                Fill in everything to submit
-              </p>
-            ) : null}
-            <ul className="te-people">
-              {pages.map((p, i) => (
-                <li key={p.student_id}>
-                  <button type="button" className="te-personbtn" onClick={() => go(i)}>
-                    <span className="te-pname">{pageName(p)}</span>
-                    <span className={`te-pstate${left[i] === 0 ? " done" : ""}`}>
-                      {left[i] === 0 ? <Ic name="check" size={14} /> : `${left[i]} left`}
-                    </span>
-                  </button>
-                </li>
-              ))}
-            </ul>
           </div>
         </div>
       );
@@ -366,8 +351,8 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
           </span>
           {last ? (
             editable ? (
-              <button type="button" className="fv-btn primary sm" onClick={() => go("review")}>
-                Review <Ic name="arrowRight" size={14} />
+              <button type="button" className="fv-btn primary sm" disabled={submitting} onClick={finish}>
+                {submitting ? "Saving…" : submitted ? "Save" : "Submit"}
               </button>
             ) : (
               <button type="button" className="fv-btn primary sm" onClick={() => setScreen(home)}>
@@ -379,19 +364,6 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
               {pageName(pages[at + 1])} <Ic name="chevronRight" size={14} />
             </button>
           )}
-        </div>
-      );
-    }
-    if (screen === "review") {
-      return (
-        <div className="lq-sfoot te-sfoot">
-          <button type="button" className="fv-btn outline sm" onClick={() => go(pages.length - 1)}>
-            <Ic name="chevronLeft" size={14} /> Back
-          </button>
-          <span />
-          <button type="button" className="fv-btn primary sm" disabled={totalLeft > 0 || submitting} onClick={() => void submit()}>
-            {submitting ? "Saving…" : submitted ? "Save" : "Submit"}
-          </button>
         </div>
       );
     }
@@ -419,7 +391,7 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
               <Ic name="chevronLeft" size={14} />
               All assignments
             </button>
-            {screen === "page" || screen === "review" ? <span className="lq-sname">{activity.title}</span> : null}
+            {screen === "page" ? <span className="lq-sname">{activity.title}</span> : null}
           </div>
           {pill ? <span className={`te-pill ${pill.toLowerCase()}`}>{pill}</span> : null}
         </header>
@@ -434,6 +406,41 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
         {body()}
         {footer()}
       </div>
+      {ask === "submit" ? (
+        <ConfirmDialog
+          title="Submit your evaluation?"
+          body={editable && due ? `You can still change it until ${due}.` : null}
+          confirmLabel="Submit"
+          busyLabel="Submitting…"
+          busy={submitting}
+          tone="primary"
+          onConfirm={() => void submit()}
+          onCancel={() => setAsk(null)}
+        />
+      ) : null}
+      {ask === "left" ? (
+        <ConfirmDialog
+          title="Not finished yet"
+          body={
+            <ul className="te-leftlist">
+              {pages.map((p, i) =>
+                left[i] ? (
+                  <li key={p.student_id}>
+                    {pageName(p)} · {left[i]} left
+                  </li>
+                ) : null,
+              )}
+            </ul>
+          }
+          confirmLabel={`Go to ${pageName(pages[firstOpen])}`}
+          tone="primary"
+          onConfirm={() => {
+            setAsk(null);
+            go(firstOpen);
+          }}
+          onCancel={() => setAsk(null)}
+        />
+      ) : null}
     </div>
   );
 }
