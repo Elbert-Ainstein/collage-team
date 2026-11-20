@@ -27,6 +27,7 @@ import { GradedView } from "./GradedView";
 import { SubmitScreen } from "./SubmitScreen";
 import "./student.css";
 import { LiveAssignment } from "./live/LiveAssignment";
+import { TeamEvalAssignment } from "./teameval/TeamEvalAssignment";
 import { watchLive } from "@/live/data";
 import { spread } from "@/live/singleFlight";
 
@@ -1097,6 +1098,23 @@ export function StudentApp({
   if (screen === "detail" && selected?.activity.type === "live") {
     return shell(
       <LiveAssignment
+        key={selected.activity.id}
+        assignment={selected}
+        enrolment={enrolment}
+        onBack={() => {
+          setSelId(null);
+          setScreen("list");
+          void load().catch(() => undefined);
+        }}
+      />,
+    );
+  }
+
+  // A team evaluation opens on its own screen too: a page per teammate to
+  // fill in, then — once released — their results.
+  if (screen === "detail" && selected?.activity.type === "teameval") {
+    return shell(
+      <TeamEvalAssignment
         key={selected.activity.id}
         assignment={selected}
         enrolment={enrolment}

@@ -27,6 +27,8 @@ import type {
 } from "./types";
 import { listLiveProgress } from "@/live/data";
 import { liveStatus, type LiveProgress } from "@/live/status";
+import { listTeamEvalProgress, type TeamEvalProgress } from "@/teameval/data";
+import { teamEvalStatus } from "@/teameval/status";
 
 const db = () => requireSupabase();
 function unwrap<T>(res: { data: T | null; error: { message: string } | null }): T {
@@ -199,6 +201,8 @@ export interface Assignment {
   reopened: boolean;
   /** Live questions only: where its session stands for this student (0047). */
   live?: LiveProgress;
+  /** Team evaluations only: whether they've submitted, and if results are out (0058). */
+  teamEval?: TeamEvalProgress;
 }
 
 export function statusOf(r: CheckInResult | null, stage: number): AssignmentStatus {
@@ -351,6 +355,13 @@ export async function listAssignments(enrolment: Enrolment): Promise<Assignment[
         listMyLiveAbsences(enrolment.student.id, liveIds).catch(() => new Set<string>()),
       ])
     : [null, new Set<string>()];
+  // A team evaluation's submission is in its own table until it's scored. A
+  // failed read leaves those rows on their gradebook status.
+  const evalIds = activities.filter((a) => a.type === "teameval").map((a) => a.id);
+  const evals = evalIds.length
+    ? await listTeamEvalProgress(evalIds, enrolment.student.id).catch(() => new Map<string, TeamEvalProgress>())
+    : new Map<string, TeamEvalProgress>();
+
   const liveOf = (activityId: string): LiveProgress | undefined => {
     const state = live?.states.find((st) => st.activity_id === activityId);
     if (!live || !state) return undefined;
@@ -391,6 +402,7 @@ export async function listAssignments(enrolment: Enrolment): Promise<Assignment[
     const elsewhere = !teamOnly && INDIV_ELSEWHERE[activity.type] !== null;
 
     const progress = activity.type === "live" ? liveOf(activity.id) : undefined;
+    const evalProgress = activity.type === "teameval" ? evals.get(activity.id) : undefined;
     // Live only. A tutorial sheet's absence is already in the student's own
     // marks (studentMarks, 0031), and no other activity takes the roll.
     const teamAbsent = activity.type === "live" && absentFrom.has(activity.id);
@@ -406,9 +418,12 @@ export async function listAssignments(enrolment: Enrolment): Promise<Assignment[
       teamResult,
       teamId,
       ...(progress ? { live: progress } : {}),
+      ...(evalProgress ? { teamEval: evalProgress } : {}),
       status: activity.type === "live"
         ? liveStatus(progress, plain, activity.due_at ?? activity.individual_due_at)
-        : plain,
+        : activity.type === "teameval"
+          ? teamEvalStatus(evalProgress, plain, activity.due_at ?? activity.individual_due_at)
+          : plain,
       grade: gradeOf(lead, leadCheckIn),
       teamGrade: teamAbsent ? absentGradeOf(teamResult, teamCheckIn) : gradeOf(teamResult, teamCheckIn),
       ...(teamAbsent ? { teamAbsent } : {}),

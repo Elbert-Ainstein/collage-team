@@ -1,12 +1,13 @@
 "use client";
 
-// "+ Activity" on the Activities screen: an ordinary activity, or live
-// questions. Closes on a pick, a click elsewhere, or Escape.
+// "+ Activity" on the Activities screen: an ordinary activity, live
+// questions, or a team evaluation. Closes on a pick, a click elsewhere, or
+// Escape.
 
 import { useEffect, useRef, useState } from "react";
 import { Ic } from "@/live/ui";
 
-export type NewKind = "activity" | "live";
+export type NewKind = "activity" | "live" | "teameval";
 
 interface Props {
   disabled: boolean;
@@ -71,6 +72,15 @@ export function AddActivityMenu({ disabled, title, onPick }: Props) {
             <span>
               <b>Live questions</b>
               <span className="fv-sub">On their own before class, then as teams in class</span>
+            </span>
+          </button>
+          <button type="button" role="menuitem" className="lq-newitem" onClick={() => pick("teameval")}>
+            <span className="lq-newicon eval">
+              <Ic name="star" size={18} />
+            </span>
+            <span>
+              <b>Team evaluation</b>
+              <span className="fv-sub">Rate self and teammates</span>
             </span>
           </button>
         </div>

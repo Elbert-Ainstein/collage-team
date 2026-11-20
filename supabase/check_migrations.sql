@@ -332,6 +332,13 @@ select '0057 live change leader',
        case when to_regprocedure('public.reopen_live_leader(uuid)') is not null
             then 'applied'
             else 'NOT APPLIED — run 0057_live_change_leader.sql' end
+union all
+select '0058 team evaluation',
+       case when to_regprocedure('public.save_team_eval(uuid, jsonb, jsonb, boolean)') is not null
+             and to_regprocedure('public.team_eval_results(uuid)') is not null
+             and to_regclass('public.te_ratings') is not null
+            then 'applied'
+            else 'NOT APPLIED — run 0058_team_evaluation.sql' end
 order by 1;
 
 -- ------------------------------------------------------- and the buckets

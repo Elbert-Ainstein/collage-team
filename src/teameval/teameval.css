@@ -1,0 +1,1132 @@
+/* Team evaluation (0058), both sides.
+
+   The instructor's screens sit inside the faculty app's .fv and the live
+   questions shell (.lq-fac, .lq-panel), so they use fv-* parts directly. The
+   student's sit inside .lq-stu, which carries a copy of the fv tokens (see
+   live.css). Everything this feature adds is prefixed te-. Teal is the
+   feature's colour; the 1–5 scale runs red to green. */
+
+/* Type: one step up from the app's scale (10/12/14/16), on these screens
+   only. The fv-* parts inside — labels, inputs, buttons, badges — read these
+   tokens, so they grow with it. .lq-stu.te-stu outranks live.css's .lq-stu,
+   which sets the same tokens on the same element. */
+.te-fac,
+.lq-stu.te-stu {
+  --fv-2xs: 12px;
+  --fv-xs: 14px;
+  --fv-sm: 16px;
+  --fv-base: 17px;
+  --fv-lg: 19px;
+}
+
+.te-fac,
+.te-stu {
+  --te-accent: #0f766e;
+  --te-accent-100: #ccfbf1;
+  --te-accent-50: #f0fdfa;
+  --te-s1: #b91c1c;
+  --te-s1-bg: #fdecec;
+  --te-s2: #b45309;
+  --te-s2-bg: #fff4e5;
+  --te-s3: #4b5563;
+  --te-s3-bg: #f1f2f4;
+  --te-s4: #0f766e;
+  --te-s4-bg: #e3f7f3;
+  --te-s5: #047857;
+  --te-s5-bg: #dcf5e8;
+}
+
+/* ------------------------------------------------------------- builder */
+
+.te-note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  border-radius: var(--fv-r-md);
+  background: var(--fv-cream-300);
+  border: 1px solid var(--fv-neutral-200);
+  font-size: var(--fv-xs);
+  color: var(--fv-muted);
+}
+.te-catgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+}
+.te-catcard {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+.te-cathead {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.te-cathead .te-catname {
+  flex: 1;
+  min-width: 0;
+}
+.te-catname {
+  font-weight: 600;
+  font-size: var(--fv-sm);
+}
+textarea.te-catname {
+  height: auto;
+  min-height: 36px;
+  padding: 7px 10px;
+  line-height: 1.3;
+}
+.te-levels {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.te-level {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+.te-levelin {
+  resize: vertical;
+  min-height: 34px;
+  font-size: var(--fv-xs);
+  line-height: 1.35;
+  padding: 6px 8px;
+  height: auto;
+}
+.te-score {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  font-weight: 700;
+  font-size: var(--fv-sm);
+  font-variant-numeric: tabular-nums;
+}
+.te-score {
+  margin-top: 5px;
+}
+.s1.te-score { color: var(--te-s1); background: var(--te-s1-bg); }
+.s2.te-score { color: var(--te-s2); background: var(--te-s2-bg); }
+.s3.te-score { color: var(--te-s3); background: var(--te-s3-bg); }
+.s4.te-score { color: var(--te-s4); background: var(--te-s4-bg); }
+.s5.te-score { color: var(--te-s5); background: var(--te-s5-bg); }
+.te-addcat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 160px;
+  border: 1.5px dashed var(--fv-neutral-300);
+  border-radius: var(--fv-r-lg);
+  background: transparent;
+  color: var(--fv-muted);
+  font: inherit;
+  font-size: var(--fv-sm);
+  cursor: pointer;
+}
+.te-addcat:hover {
+  border-color: var(--te-accent);
+  color: var(--te-accent);
+  background: var(--te-accent-50);
+}
+.te-addcircle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  border: 1.5px solid currentColor;
+}
+.te-h2 {
+  font-family: var(--fv-serif);
+  font-size: 22px;
+  font-weight: 700;
+  margin: 28px 0 10px;
+}
+.te-h3 {
+  font-family: var(--fv-serif);
+  font-size: 19px;
+  font-weight: 700;
+  margin: 0 0 8px;
+}
+.te-qcols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0;
+  border: 1px solid var(--fv-neutral-200);
+  border-radius: var(--fv-r-lg);
+  background: var(--fv-cream-100);
+}
+.te-qcol {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  min-width: 0;
+}
+.te-qcol + .te-qcol {
+  border-left: 1px solid var(--fv-neutral-200);
+}
+.te-qcol.off .te-qrow {
+  opacity: 0.45;
+}
+.te-qcolhead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 2px;
+}
+.te-qrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 28px;
+  gap: 6px;
+  align-items: start;
+}
+.te-qin {
+  resize: vertical;
+  height: auto;
+  min-height: 40px;
+  line-height: 1.35;
+  padding: 7px 9px;
+  font-size: var(--fv-sm);
+}
+.te-addq {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  background: none;
+  padding: 4px 0;
+  color: var(--te-accent);
+  font: inherit;
+  font-size: var(--fv-sm);
+  cursor: pointer;
+}
+.te-switchrow {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  font-size: var(--fv-sm);
+}
+.te-switchrow .fv-switch:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.te-problem {
+  margin-left: auto;
+  font-size: var(--fv-xs);
+  color: var(--fv-amber);
+}
+.te-pct {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+@container lqf (max-width: 620px) {
+  .te-qcols {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .te-qcol + .te-qcol {
+    border-left: 0;
+    border-top: 1px solid var(--fv-neutral-200);
+  }
+}
+
+/* ---------------------------------------------------------------- page */
+
+.te-pagehead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 24px;
+  align-items: start;
+  margin-bottom: 18px;
+}
+.te-pagemain {
+  min-width: 0;
+}
+.te-statcard {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+}
+.te-viewresults {
+  margin-top: 16px;
+  width: 100%;
+  height: 42px;
+  justify-content: center;
+}
+
+/* The results page's header: back, title and count, then the actions. */
+.fv-topbar.te-rtop {
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+.te-rtitle {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+.te-rtitle h1 {
+  margin: 0;
+  font-size: 26px;
+  line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.te-ractions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.te-viewseg {
+  align-self: flex-start;
+  display: inline-flex;
+  width: max-content;
+  margin-bottom: 12px;
+}
+.te-viewseg button {
+  flex: none;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+@container lqf (max-width: 760px) {
+  .te-pagehead {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* -------------------------------------------------------------- results */
+
+.te-tblwrap {
+  overflow-x: auto;
+  border: 1px solid var(--fv-neutral-200);
+  border-radius: var(--fv-r-lg);
+  background: var(--fv-cream-100);
+}
+.te-tbl {
+  font-size: var(--fv-sm);
+}
+/* Doubled up: .fv-tbl zeroes cell padding so each screen sets its own. */
+.fv-tbl.te-tbl th,
+.fv-tbl.te-tbl td {
+  padding: 8px 10px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.te-tbl thead th {
+  font-size: var(--fv-xs);
+  color: var(--fv-muted);
+}
+.te-tbl tbody tr:last-child td {
+  border-bottom: 0;
+}
+.te-namecol {
+  min-width: 170px;
+}
+.te-num {
+  text-align: right;
+}
+.te-tbl thead th.te-num {
+  text-align: right;
+}
+/* A category's name can be a phrase ("Having Relevant Knowledge, Skills, and
+   Abilities"): it wraps, so the columns after it stay on screen. */
+.fv-tbl.te-tbl thead th.te-catth {
+  white-space: normal;
+  min-width: 84px;
+  max-width: 150px;
+  vertical-align: bottom;
+  line-height: 1.25;
+}
+.fv-tbl.te-stable td:first-child {
+  white-space: normal;
+  min-width: 150px;
+}
+.te-avg {
+  display: block;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.te-self {
+  display: block;
+  font-size: var(--fv-xs);
+  color: var(--fv-muted);
+}
+.fv-tbl.te-tbl .te-teamrow td {
+  padding: 7px 10px;
+  font-size: var(--fv-xs);
+}
+.te-person {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.te-when {
+  font-size: var(--fv-xs);
+}
+.te-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--fv-neutral-300);
+  font: inherit;
+  font-size: var(--fv-xs);
+  cursor: pointer;
+}
+.te-flag:hover:not(:disabled) {
+  color: var(--fv-amber);
+  border-color: var(--fv-neutral-200);
+}
+.te-flag:disabled {
+  cursor: default;
+}
+.te-flag.on {
+  color: var(--fv-amber);
+  background: var(--fv-cream-400);
+  border-color: transparent;
+  font-weight: 600;
+}
+
+/* ------------------------------------------------------------- comments */
+
+.te-prompt {
+  display: block;
+  font-size: var(--fv-xs);
+  font-weight: 600;
+  color: var(--fv-muted);
+}
+
+/* ------------------------------------------------------------- student */
+
+.te-stu .lq-sscroll > * {
+  max-width: 720px;
+}
+.te-pill {
+  flex: none;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: var(--fv-xs);
+  font-weight: 600;
+  background: #e9eef3;
+  color: var(--fv-navy-700);
+}
+.te-pill.submitted,
+.te-pill.results {
+  background: var(--te-accent-100);
+  color: var(--te-accent);
+}
+.te-pill.late {
+  background: var(--fv-cream-400);
+  color: var(--fv-amber);
+}
+.te-intro .lq-h2 {
+  margin-bottom: 4px;
+}
+.te-brief {
+  margin: 12px 0 0;
+  line-height: 1.5;
+  /* Instructions are often several paragraphs, or a list typed with dashes. */
+  white-space: pre-wrap;
+}
+
+.te-donebox {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-top: 14px;
+  padding: 10px 12px;
+  border-radius: var(--fv-r-md);
+  background: var(--te-accent-50);
+  color: var(--te-accent);
+  font-size: var(--fv-sm);
+}
+.te-donebox b {
+  color: var(--fv-navy);
+}
+
+.te-start {
+  margin-top: 16px;
+  width: 100%;
+  justify-content: center;
+  height: 42px;
+}
+
+.te-who {
+  margin-bottom: 14px;
+}
+.te-who .fv-sub {
+  margin-top: 4px;
+}
+.te-boxtitle {
+  margin: 0 0 12px;
+  font-family: var(--fv-serif);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.te-qfield {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 10px;
+  font-size: var(--fv-sm);
+}
+.te-qfield > span {
+  font-weight: 600;
+}
+.te-ta {
+  width: 100%;
+  height: auto;
+  min-height: 52px;
+  resize: vertical;
+  padding: 8px 10px;
+  line-height: 1.4;
+  font: inherit;
+  font-size: var(--fv-sm);
+  background: #fff;
+}
+.te-sfoot .te-savestate {
+  flex: 1;
+  text-align: center;
+  font-size: var(--fv-xs);
+}
+
+/* results */
+
+.te-cq ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.te-by {
+  color: var(--fv-muted);
+  font-size: var(--fv-xs);
+}
+.te-cq + .te-cq {
+  margin-top: 14px;
+}
+.te-cq li {
+  padding: 8px 10px;
+  border-radius: var(--fv-r-md);
+  background: var(--fv-cream-300);
+}
+.te-cq p {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.45;
+  font-size: var(--fv-sm);
+}
+.te-mine .te-cq p {
+  margin-top: 4px;
+}
+
+/* ------------------------------------------- reused parts, at this scale */
+
+.te-fac .lq-bnote {
+  font-size: var(--fv-xs);
+  line-height: 1.45;
+}
+.te-fac .lq-bcardtitle {
+  font-size: 18px;
+}
+.te-fac .lq-pagetitle {
+  font-size: 34px;
+}
+.te-fac .lq-desc {
+  font-size: var(--fv-base);
+}
+.te-fac .lq-bigcount .fv-display {
+  font-size: 40px;
+}
+.te-fac .fv-steplabel {
+  font-size: var(--fv-sm);
+}
+.te-fac .fv-switch {
+  width: 42px;
+  height: 24px;
+}
+.te-fac .fv-switch::after {
+  width: 18px;
+  height: 18px;
+}
+.te-stu .lq-h2 {
+  font-size: 26px;
+}
+.te-stu .lq-sback {
+  font-size: var(--fv-sm);
+}
+.te-stu .lq-sname {
+  font-size: 19px;
+}
+.te-fac .fv-switch.on::after {
+  transform: translateX(18px);
+}
+.te-stu .fv-in.te-ta {
+  font-size: var(--fv-sm);
+}
+.te-fac .te-levelin {
+  font-size: 15px;
+}
+.te-fac .lq-linkish {
+  font-size: var(--fv-sm);
+}
+
+/* ------------------------------------------------------- long writing */
+
+/* Whatever they write wraps — a pasted link included — instead of pushing
+   the column wider. */
+
+.te-cq p,
+.te-ta {
+  overflow-wrap: anywhere;
+}
+
+.te-auto {
+  overflow-y: hidden;
+  resize: none;
+}
+.te-count {
+  display: block;
+  text-align: right;
+  margin-top: 4px;
+  font-size: var(--fv-xs);
+  color: var(--fv-amber);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ================================================================ redesign */
+
+/* ------------------------------------------------------- the 1–5 line */
+.te-track {
+  position: relative;
+  display: inline-block;
+  flex: none;
+  width: 160px;
+  height: 18px;
+}
+.te-track.sm {
+  width: 120px;
+  height: 14px;
+}
+.te-trackline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 999px;
+  background: var(--fv-neutral-200);
+}
+.te-trackfill {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 999px;
+  background: var(--te-accent);
+  opacity: 0.35;
+}
+.te-track.low .te-trackfill {
+  background: var(--fv-amber);
+}
+.te-tracktick {
+  position: absolute;
+  top: 50%;
+  width: 1px;
+  height: 10px;
+  margin: -5px 0 0 -0.5px;
+  background: var(--fv-neutral-300);
+}
+.te-trackteam {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  background: var(--te-accent);
+  transform: rotate(45deg);
+  border-radius: 2px;
+  box-shadow: 0 0 0 2px #fff;
+}
+.te-track.low .te-trackteam {
+  background: var(--fv-amber);
+}
+.te-trackself {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 999px;
+  background: var(--fv-navy-700);
+  box-shadow: 0 0 0 2px #fff;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+}
+.te-track.sm .te-trackteam {
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+}
+.te-track.sm .te-trackself {
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+}
+.te-key-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin: 0 4px 0 10px;
+  vertical-align: -1px;
+}
+.te-key-dot:first-child {
+  margin-left: 0;
+}
+.te-key-dot.team {
+  background: var(--te-accent);
+  transform: rotate(45deg);
+  border-radius: 2px;
+}
+.te-key-dot.self {
+  background: var(--fv-navy-700);
+  border-radius: 999px;
+}
+
+/* ------------------------------------------------------- flag chips */
+.te-chip-flag {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: var(--fv-2xs);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+.te-chip-flag.late { background: var(--fv-cream-400); color: var(--fv-amber); }
+.te-chip-flag.missing { background: var(--fv-neutral-100); color: var(--fv-muted); }
+
+/* ------------------------------------------------------- needs attention */
+
+.te-linkname {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+.te-linkname:hover {
+  text-decoration: underline;
+}
+
+/* ------------------------------------------------------- team cards */
+
+.te-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(460px, 1fr));
+  gap: 14px;
+}
+.te-teamcard {
+  padding: 14px 6px 8px;
+}
+.te-teamhead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 10px 8px;
+}
+.te-teamhead .te-h3 {
+  margin: 0;
+}
+
+.te-members {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.te-member {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) 160px 36px 112px;
+  gap: 12px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 0;
+  border-radius: var(--fv-r-md);
+  background: transparent;
+  font: inherit;
+  font-size: var(--fv-sm);
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+.te-member:hover {
+  background: var(--fv-cream-300);
+}
+.te-membername {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.te-memberavg {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.te-memberavg.low {
+  color: var(--fv-amber);
+}
+.te-memberflags {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+.te-cards .te-legend {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+/* ------------------------------------------------------- student panel */
+
+.te-by-name {
+  display: block;
+  margin-bottom: 2px;
+  font-size: var(--fv-xs);
+  font-weight: 700;
+  color: var(--fv-navy);
+}
+
+/* ------------------------------------------------------- builder */
+.te-outof {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.te-outof b {
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--fv-navy);
+  font-variant-numeric: tabular-nums;
+}
+.te-outof span {
+  font-size: var(--fv-sm);
+  color: var(--fv-neutral-500);
+}
+
+/* ------------------------------------------------------- student form */
+
+.te-progressline,
+.te-stephead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+.te-stephead {
+  margin: 0 0 14px;
+}
+.te-progress {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--fv-neutral-200);
+  overflow: hidden;
+}
+.te-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--te-accent);
+  transition: width 200ms ease;
+}
+.te-steptitle {
+  margin-bottom: 12px !important;
+}
+
+/* One category on a person's page: what each score means, best first. */
+.te-ratecard {
+  margin-bottom: 12px;
+}
+.te-ratename {
+  margin: 0 0 10px;
+  font-size: var(--fv-base);
+  font-weight: 700;
+  color: var(--fv-navy);
+}
+.te-opts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.te-opt {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px 8px 8px;
+  border: 1px solid var(--fv-neutral-200);
+  border-radius: var(--fv-r-md);
+  background: #fff;
+  font: inherit;
+  font-size: var(--fv-sm);
+  text-align: left;
+  color: var(--fv-ink, inherit);
+  cursor: pointer;
+}
+.te-opt .te-score {
+  margin-top: 0;
+}
+.te-opt:hover:not(:disabled) {
+  border-color: var(--te-accent);
+}
+.te-opt:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.te-opt.on {
+  font-weight: 600;
+}
+.te-opt.on.s1 { background: var(--te-s1-bg); border-color: var(--te-s1); }
+.te-opt.on.s2 { background: var(--te-s2-bg); border-color: var(--te-s2); }
+.te-opt.on.s3 { background: var(--te-s3-bg); border-color: var(--te-s3); }
+.te-opt.on.s4 { background: var(--te-s4-bg); border-color: var(--te-s4); }
+.te-opt.on.s5 { background: var(--te-s5-bg); border-color: var(--te-s5); }
+.te-opt.on .te-score {
+  background: #fff;
+}
+.te-privacy {
+  margin: 4px 0 0;
+}
+
+/* ------------------------------------------------------- student results */
+
+/* A category, CATME's way: two narrow columns of arrows — what they gave
+   themselves, where their teammates' average falls — beside what each score
+   from 5 down to 1 means. */
+.te-rcat {
+  margin-bottom: 14px;
+}
+.te-rgrid {
+  border: 1px solid var(--fv-neutral-200);
+  border-radius: var(--fv-r-lg);
+  background: #fff;
+}
+.te-rrow {
+  display: grid;
+  grid-template-columns: 60px 124px minmax(0, 1fr);
+}
+.te-rrow + .te-rrow:not(.te-rhead) > span {
+  border-top: 1px solid var(--fv-neutral-200);
+}
+.te-rhead + .te-rrow > span {
+  border-top: 0 !important;
+}
+.te-rhead > * {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 6px;
+  border-bottom: 1px solid var(--fv-neutral-200);
+  font-size: var(--fv-xs);
+  font-weight: 600;
+  line-height: 1.2;
+  color: var(--fv-muted);
+  white-space: nowrap;
+}
+.te-rhead > .te-ratename {
+  justify-content: flex-start;
+  margin: 0;
+  padding: 10px 14px 10px 12px;
+  font-size: var(--fv-base);
+  font-weight: 700;
+  color: var(--fv-navy);
+  white-space: normal;
+}
+.te-rhead > span:nth-child(-n + 2),
+.te-rmark {
+  background: var(--fv-cream-100);
+  border-right: 1px solid var(--fv-neutral-200);
+}
+.te-rhead > span:first-child {
+  border-top-left-radius: var(--fv-r-lg);
+}
+.te-rrow:last-child > .te-rmark:first-child {
+  border-bottom-left-radius: var(--fv-r-lg);
+}
+.te-rmark {
+  position: relative;
+}
+.te-rarrow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transform: translate(-50%, -50%);
+  font-size: var(--fv-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.te-rarrow.self {
+  color: var(--fv-navy-700);
+}
+.te-rarrow.team {
+  color: var(--te-accent);
+}
+.te-rarrow.team.low {
+  color: var(--te-s2);
+}
+.te-arrowsvg {
+  display: block;
+  flex: none;
+}
+.te-rdesc {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 10px 14px 10px 12px;
+  font-size: var(--fv-sm);
+}
+.te-rdesc .te-score {
+  margin-top: 0;
+}
+/* A phone: narrower arrow columns, so the descriptions keep room to read. */
+@container lqs (max-width: 520px) {
+  .te-rrow {
+    grid-template-columns: 40px 64px minmax(0, 1fr);
+  }
+  .te-rhead > span {
+    white-space: normal;
+    text-align: center;
+    padding: 8px 2px;
+    font-size: 11px;
+  }
+  .te-rdesc {
+    grid-template-columns: 26px minmax(0, 1fr);
+    gap: 8px;
+    padding: 9px 10px 9px 8px;
+  }
+  .te-rarrow {
+    gap: 3px;
+  }
+}
+
+/* ------------------------------------------------------- a student's page */
+.te-sgrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 32px;
+  align-items: start;
+}
+.te-h2.te-first {
+  margin-top: 0;
+}
+.te-stable td,
+.te-stable th {
+  white-space: nowrap;
+}
+/* Plain numbers: teammates' scores in ink, their average in bold — the
+   column that counts — and what they gave themselves in grey, apart. */
+.te-stable td.te-num {
+  font-variant-numeric: tabular-nums;
+}
+.fv-tbl.te-tbl .te-avgcol {
+  border-left: 2px solid var(--fv-neutral-200);
+  color: var(--fv-navy);
+}
+.te-stable th.te-muted {
+  opacity: 0.55;
+}
+
+.te-grade {
+  font-size: var(--fv-base);
+  margin: 0 6px;
+}
+@container lqf (max-width: 900px) {
+  .te-sgrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* A student's page: the total of their averages, and what lateness took. */
+.fv-tbl.te-tbl tfoot .te-totalrow td {
+  border-top: 2px solid var(--fv-neutral-200);
+  font-weight: 600;
+  color: var(--fv-navy);
+}
+.te-gradenote {
+  margin: 8px 2px 0;
+}
+
+/* The results table's heading over the averages. */
+.fv-tbl.te-tbl thead th.te-groupth {
+  text-align: center;
+  color: var(--fv-navy);
+  font-weight: 600;
+  border-bottom: 1px solid var(--fv-neutral-200);
+}
+.te-groupsub {
+  font-weight: 400;
+  color: var(--fv-muted);
+  margin-left: 4px;
+}
+
+/* A student's own score, set apart from the average it isn't part of. */
+.fv-tbl.te-tbl .te-selfcol {
+  border-left: 2px solid var(--fv-neutral-200);
+  color: var(--fv-muted);
+}
+
+/* Who's still to finish, in the dialog the last page's Submit opens. */
+.te-leftlist {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: var(--fv-sm, 14px);
+  line-height: 1.6;
+}

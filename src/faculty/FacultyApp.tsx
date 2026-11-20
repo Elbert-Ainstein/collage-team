@@ -53,6 +53,7 @@ import { RubricBuilder } from "./RubricBuilder";
 import { TeamsScreen, type Incoming } from "./TeamsScreen";
 import { TFsScreen } from "./TFsScreen";
 import { LiveDetail } from "./live/LiveDetail";
+import { TeamEvalDetail } from "./teameval/TeamEvalDetail";
 import { AssistantLauncher } from "./assistant/AssistantLauncher";
 import { AssistantPanel, SHEET_QUERY } from "./assistant/AssistantPanel";
 import "./faculty.css";
@@ -897,6 +898,23 @@ export function FacultyApp({
         if (selected?.type === "live") {
           return (
             <LiveDetail
+              key={selected.id}
+              data={data}
+              activity={selected}
+              fresh={fresh === selected.id}
+              onBack={() => {
+                setFresh(null);
+                setScreen("activities");
+              }}
+              onChanged={() => refresh().catch(fail)}
+              onError={fail}
+            />
+          );
+        }
+        // A team evaluation: its own builder, results and comments.
+        if (selected?.type === "teameval") {
+          return (
+            <TeamEvalDetail
               key={selected.id}
               data={data}
               activity={selected}

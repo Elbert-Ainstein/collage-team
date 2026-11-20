@@ -45,6 +45,7 @@ const ACCENT: Record<ActivityType, string> = {
   skills: "var(--sky-700)",
   amplify: "var(--lavender-600)",
   live: "#7c3aed",
+  teameval: "#0f766e",
 };
 
 const TYPE_BADGE: Record<ActivityType, string> = {
@@ -53,6 +54,7 @@ const TYPE_BADGE: Record<ActivityType, string> = {
   skills: "sky",
   amplify: "lavender",
   live: "lavender",
+  teameval: "sky",
 };
 
 /* ------------------------------------------------------------------- helpers */
