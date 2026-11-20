@@ -4,6 +4,7 @@
 // the student's own list, from their own tutorial_absences row (0031).
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { LIVE_ONLY_UNTIL } from "./liveOnlyDay";
 
 /** Rows each table answers with. Filters are not modelled; each test sets only what it reads. */
 let tables: Record<string, unknown[]> = {};
@@ -99,10 +100,17 @@ describe("the team half of a live activity", () => {
   });
 
   it("leaves other activities' team halves alone, absence rows or not", async () => {
-    tables.tutorial_absences = [{ activity_id: "ch1", team_id: "t1", student_id: "s1" }];
-    const a = await find("ch1");
-    expect(a.teamAbsent).toBeFalsy();
-    expect(a.teamGrade).toBe("7 / 10");
+    // The full list, as it is once the live-only day (liveOnlyDay.ts) is over.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(LIVE_ONLY_UNTIL));
+    try {
+      tables.tutorial_absences = [{ activity_id: "ch1", team_id: "t1", student_id: "s1" }];
+      const a = await find("ch1");
+      expect(a.teamAbsent).toBeFalsy();
+      expect(a.teamGrade).toBe("7 / 10");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("falls back to the team's number when the absence read fails, rather than losing the list", async () => {
