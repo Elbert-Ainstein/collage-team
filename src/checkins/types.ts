@@ -410,7 +410,7 @@ export const TYPE_ACCENT: Record<ActivityType, string> = {
   combo: "var(--fv-navy-700)",
   amplify: "var(--fv-lavender)",
   skills: "var(--fv-sky)",
-  live: "#7c3aed",
+  live: "var(--c-plum)",
 };
 
 /**

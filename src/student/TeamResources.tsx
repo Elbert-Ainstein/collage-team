@@ -44,7 +44,7 @@ const ACCENT: Record<ActivityType, string> = {
   combo: "var(--navy-700)",
   skills: "var(--sky-700)",
   amplify: "var(--lavender-600)",
-  live: "#7c3aed",
+  live: "var(--c-plum)",
 };
 
 const TYPE_BADGE: Record<ActivityType, string> = {
@@ -134,7 +134,7 @@ const CSS = `
 .sv-tr-field::placeholder { color:var(--muted-foreground); }
 .sv-tr-field:hover { border-color:var(--neutral-300); }
 .sv-tr-field:focus { outline:none; border-color:var(--navy-700);
-  box-shadow:0 0 0 3px rgba(0,48,88,.10); background:var(--cream-100); }
+  box-shadow:0 0 0 3px rgb(var(--c-shadow) / .10); background:var(--cream-100); }
 /* The whole naming control reads as one thing: an icon, the field, the verbs. */
 .sv-tr-namer { display:flex; align-items:center; gap:8px; padding:7px 9px;
   border:1px solid var(--neutral-200); border-radius:var(--radius-lg);
@@ -148,7 +148,7 @@ const CSS = `
 .sv-tr-name:focus { outline:none; border-color:var(--navy-700); background:var(--cream-200); }
 .sv-tr-lightbox { position:fixed; inset:0; z-index:60; display:flex;
   align-items:center; justify-content:center; padding:28px; border:0;
-  background:rgba(0,35,65,.72); cursor:zoom-out; }
+  background:rgb(var(--c-shadow) / .72); cursor:zoom-out; }
 .sv-tr-filetile { display:flex; flex-direction:column; align-items:center; justify-content:center;
   gap:6px; background:var(--cream-200); color:var(--muted-foreground);
   font-size:var(--text-xs); font-weight:var(--weight-semibold); letter-spacing:var(--tracking-wide);
@@ -159,7 +159,7 @@ const CSS = `
    scrolls — a PDF is several pages and a CSV is longer than the screen. */
 .sv-fv-frame { display:flex; flex-direction:column; width:min(1000px, 94vw);
   max-height:92vh; background:var(--cream-100); border-radius:var(--radius-lg);
-  box-shadow:0 24px 60px rgba(0,0,0,.35); overflow:hidden; }
+  box-shadow:0 24px 60px rgb(var(--c-shadow) / .35); overflow:hidden; }
 .sv-fv-bar { display:flex; align-items:center; gap:8px; padding:10px 12px;
   border-bottom:1px solid var(--neutral-200); background:var(--cream-200);
   font-size:var(--text-sm); color:var(--navy); flex:none; }

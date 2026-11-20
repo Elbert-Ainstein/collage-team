@@ -564,7 +564,7 @@ export async function voteLeader(activityId: string, candidateId: string): Promi
   return unwrap(await db().rpc("vote_live_leader", { aid: activityId, candidate: candidateId })) as LiveTeamSetup;
 }
 
-/** "Confirm <name>": settle on the one name every vote is for, once two have voted (0051). */
+/** "Confirm <name>": settle on the one name every vote is for (0051) — one vote is enough (0058). */
 export async function confirmLeader(activityId: string): Promise<LiveTeamSetup> {
   return unwrap(await db().rpc("confirm_live_leader", { aid: activityId })) as LiveTeamSetup;
 }

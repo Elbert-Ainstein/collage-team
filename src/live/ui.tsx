@@ -2,6 +2,7 @@
 // the live dot, and the stroked icon set (inline, so nothing is fetched).
 
 import { initials, tintFor } from "@/checkins/data";
+import { paletteTint } from "@/checkins/tints";
 import type { LiveModel } from "./model";
 
 interface Person {
@@ -14,7 +15,7 @@ export function Av({ p, size = 24, dim = false, ring = false }: { p: Person; siz
   return (
     <span
       className={`lq-av${dim ? " dim" : ""}${ring ? " ring" : ""}`}
-      style={{ width: size, height: size, background: p.avatar_tint ?? tintFor(p.name), fontSize: Math.max(9, Math.round(size * 0.4)) }}
+      style={{ width: size, height: size, background: p.avatar_tint ? paletteTint(p.avatar_tint) : tintFor(p.name), fontSize: Math.max(9, Math.round(size * 0.4)) }}
       title={p.name}
       aria-label={p.name}
     >

@@ -85,11 +85,9 @@ function leaderState(m: LiveModel, team: TeamWithMembers, meId: string, mine: st
   const sub = `${t.voted} of ${t.present} voted`;
   if (!mine) return { title: "Pick one", sub, confirm: false };
   if (t.split) return { title: "Votes are split — agree on one person", sub, confirm: false };
-  if (!t.agreed) return { title: "Voting…", sub, confirm: false };
+  if (!t.agreed || !t.canConfirm) return { title: "Voting…", sub, confirm: false };
   const who = callName(team, meId, t.agreed);
-  return t.canConfirm
-    ? { title: `All on ${who === "You" ? "you" : who}`, sub, confirm: t.picks[meId] !== undefined }
-    : { title: "Wait for one more vote", sub, confirm: false };
+  return { title: `All on ${who === "You" ? "you" : who}`, sub, confirm: t.picks[meId] !== undefined };
 }
 
 function LeaderVote({ m, team, meId, onError, onChanged }: SetupProps) {

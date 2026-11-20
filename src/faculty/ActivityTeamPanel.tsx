@@ -284,7 +284,7 @@ function Score({ value }: { value: number | null }) {
             width: `${(value / 5) * 100}%`,
             height: "100%",
             borderRadius: 3,
-            background: value === 5 ? "var(--fv-emerald, #059669)" : "var(--fv-navy-700)",
+            background: value === 5 ? "var(--fv-emerald)" : "var(--fv-navy-700)",
           }}
         />
       </span>

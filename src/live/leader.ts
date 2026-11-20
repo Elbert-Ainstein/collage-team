@@ -26,7 +26,11 @@ export interface LeaderTally {
   split: boolean;
   /** Everyone who is there has voted. */
   everyoneVoted: boolean;
-  /** "Confirm <name>" would be taken: agreed, and two have voted — or everyone has. */
+  /**
+   * "Confirm <name>" would be taken: every counted vote names one person. One
+   * vote is enough (0058) — a student whose teammates aren't there can't wait
+   * for a second, and the roll is where the rest get marked absent.
+   */
   canConfirm: boolean;
 }
 
@@ -77,7 +81,7 @@ export function leaderTally(snapshot: LiveSnapshot, teamId: string, memberIds: r
     agreed,
     split: names.length > 1,
     everyoneVoted,
-    canConfirm: agreed !== null && (voted >= 2 || everyoneVoted),
+    canConfirm: agreed !== null,
   };
 }
 

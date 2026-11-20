@@ -15,15 +15,8 @@ import type {
   TeamWithMembers,
 } from "./types";
 
-const TINTS = [
-  "#0382ed", "#8a3ffc", "#d1449c", "#e8710a", "#1f9d55",
-  "#0f9bb0", "#6b47dc", "#c2410c", "#0d7a6f", "#b4237a",
-];
-export function tintFor(name: string): string {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return TINTS[h % TINTS.length];
-}
+import { tintFor } from "./tints";
+export { paletteTint, tintFor } from "./tints";
 export function initials(name: string): string {
   return name.split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 }

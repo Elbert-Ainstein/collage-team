@@ -56,10 +56,9 @@ describe("leaderTally", () => {
     expect(t).toMatchObject({ voted: 0, present: 3, agreed: null, split: false, everyoneVoted: false, canConfirm: false });
   });
 
-  it("agrees on one vote, but one vote can't confirm", () => {
-    const t = leaderTally(snap({ leaderVotes: [vote("s1", "s2")] }), "t1", team);
-    expect(t.agreed).toBe("s2");
-    expect(t.canConfirm).toBe(false);
+  it("one vote is enough to confirm, so someone alone can pick a leader (0058)", () => {
+    const t = leaderTally(snap({ leaderVotes: [vote("s1", "s1")] }), "t1", team);
+    expect(t).toMatchObject({ agreed: "s1", voted: 1, present: 3, everyoneVoted: false, canConfirm: true });
   });
 
   it("two agreeing can confirm; everyone agreeing has voted", () => {

@@ -60,7 +60,7 @@ const ACCENT: Record<ActivityType, string> = {
   combo: "var(--navy-700)",
   skills: "var(--sky-700)",
   amplify: "var(--lavender-600)",
-  live: "#7c3aed",
+  live: "var(--c-plum)",
 };
 
 const TYPE_BADGE: Record<ActivityType, string> = {

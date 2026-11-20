@@ -18,6 +18,7 @@ import {
   type TFInvitation,
 } from "@/checkins/invites";
 import { initials, tintFor } from "@/checkins/data";
+import { paletteTint } from "@/checkins/tints";
 import { SCOPE_OF, type Student } from "@/checkins/types";
 import { SIcon } from "./icons";
 import { Assignments } from "./Assignments";
@@ -107,7 +108,7 @@ function StackAvatar({
   /** Higher sits on top; the stack counts down so earlier faces stay whole. */
   depth?: number;
 }) {
-  const tint = student.avatar_tint || tintFor(student.name);
+  const tint = student.avatar_tint ? paletteTint(student.avatar_tint) : tintFor(student.name);
   return (
     <span
       className={"sv-stack-av" + (isMe ? " me" : "")}

@@ -9,40 +9,40 @@
 
 .lq-fac,
 .lq-stu {
-  --lq-team: #7c3aed;
-  --lq-team-100: #f3e8ff;
-  --lq-team-300: #dcc5fb;
-  --lq-own: rgb(31, 102, 163);
-  --lq-live: #ff6713;
-  --lq-right: #059669;
-  --lq-right-ink: #046c4e;
-  --lq-right-100: #e3f5ec;
-  --lq-wrong: #b91c1c;
-  --lq-wrong-100: #fdecec;
-  --lq-warn-100: #fff4e5;
+  --lq-team: var(--c-plum);
+  --lq-team-100: var(--c-plum-bg);
+  --lq-team-300: var(--c-plum-edge);
+  --lq-own: var(--c-slate);
+  --lq-live: var(--c-orange);
+  --lq-right: var(--c-sage);
+  --lq-right-ink: var(--c-sage-deep);
+  --lq-right-100: var(--c-sage-bg);
+  --lq-wrong: var(--c-red);
+  --lq-wrong-100: var(--c-red-bg);
+  --lq-warn-100: var(--c-ochre-bg);
 }
 
 .lq-stu {
-  --fv-cream-100: rgb(255, 252, 242); /* cards */
-  --fv-cream-200: rgb(255, 250, 236); /* main panel */
-  --fv-cream-300: rgb(252, 248, 236); /* page bg, header strips, inset tiles */
-  --fv-cream-400: rgb(239, 223, 173); /* active nav, selected rows, late cells */
-  --fv-navy: rgb(0, 35, 65);
-  --fv-navy-700: rgb(31, 102, 163);
-  --fv-muted: rgb(93, 114, 136);
-  --fv-neutral-100: rgb(245, 245, 245);
-  --fv-neutral-200: rgb(229, 229, 229);
-  --fv-neutral-300: rgb(212, 212, 212);
-  --fv-neutral-400: rgb(163, 163, 163);
-  --fv-orange: #ff6713;
-  --fv-sky: #0e7490;
-  --fv-sky-100: #e3f6fd;
-  --fv-lavender: #9405e6;
-  --fv-lavender-300: #e5cbfa;
-  --fv-emerald: #059669;
-  --fv-emerald-500: #10b981;
-  --fv-amber: #b45309;
-  --fv-destructive: #dc2626;
+  --fv-cream-100: var(--c-paper-card); /* cards */
+  --fv-cream-200: var(--c-paper-panel); /* main panel */
+  --fv-cream-300: var(--c-paper); /* page bg, header strips, inset tiles */
+  --fv-cream-400: var(--c-paper-sel); /* active nav, selected rows, late cells */
+  --fv-navy: var(--c-ink);
+  --fv-navy-700: var(--c-slate);
+  --fv-muted: var(--c-ink-2);
+  --fv-neutral-100: var(--c-neutral-100);
+  --fv-neutral-200: var(--c-neutral-200);
+  --fv-neutral-300: var(--c-neutral-300);
+  --fv-neutral-400: var(--c-neutral-400);
+  --fv-orange: var(--c-orange);
+  --fv-sky: var(--c-verdigris);
+  --fv-sky-100: var(--c-verdigris-bg);
+  --fv-lavender: var(--c-mulberry);
+  --fv-lavender-300: var(--c-mulberry-edge);
+  --fv-emerald: var(--c-sage);
+  --fv-emerald-500: var(--c-sage-fill);
+  --fv-amber: var(--c-ochre);
+  --fv-destructive: var(--c-red);
   --fv-sans: "Geist", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --fv-serif: "Copernicus Trial", "Iowan Old Style", Georgia, serif;
   --fv-2xs: 10px;
@@ -57,7 +57,7 @@
   --fv-r-md: 8px;
   --fv-r-lg: 10px;
   --fv-r-xl: 14px;
-  --fv-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --fv-shadow: 0 1px 2px 0 rgb(var(--c-shadow) / 0.05);
   font-family: var(--fv-sans);
   color: var(--fv-navy);
 }
@@ -89,7 +89,7 @@
   justify-content: center;
   border-radius: var(--fv-r-md, 10px);
   border: 1px solid var(--fv-neutral-200);
-  background: #fff;
+  background: var(--c-paper-white);
   overflow: hidden;
 }
 .lq-figimg img {
@@ -102,7 +102,7 @@
   display: block;
   width: 100%;
   height: 120px;
-  background: var(--fv-cream-300, #f1ece2);
+  background: var(--fv-cream-300);
 }
 .lq-bfigure {
   margin: 10px 0 0 var(--lq-bcol);
@@ -137,7 +137,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  color: #fff;
+  color: var(--c-on-fill);
   font-weight: 600;
   line-height: 1;
   letter-spacing: 0.01em;
@@ -183,12 +183,12 @@
 }
 .lq-pick.right {
   background: var(--lq-right-100);
-  border-color: #a5dcc3;
+  border-color: var(--c-sage-edge);
   color: var(--lq-right-ink);
 }
 .lq-pick.wrong {
   background: var(--lq-wrong-100);
-  border-color: #f2b8b8;
+  border-color: var(--c-red-edge);
   color: var(--lq-wrong);
 }
 .lq-pick.none {
@@ -347,7 +347,7 @@
   font-weight: 600;
 }
 .lq-statepill.individual {
-  background: #e9eef3;
+  background: var(--c-slate-bg);
   color: var(--fv-navy);
 }
 .lq-statepill.team {
@@ -390,11 +390,11 @@
   border-radius: 999px;
   font-size: 13px;
   font-weight: 600;
-  background: #fff0e6;
-  color: #c2410c;
+  background: var(--c-orange-bg);
+  color: var(--c-orange-ink);
 }
 .lq-clock.individual {
-  background: #e9eef3;
+  background: var(--c-slate-bg);
   color: var(--fv-navy);
   font-weight: 500;
 }
@@ -456,7 +456,7 @@
 }
 .lq-step.past .lq-stepnum {
   background: var(--fv-cream-400);
-  border-color: #e4cf8f;
+  border-color: var(--c-ochre-edge);
   color: var(--fv-navy);
 }
 .lq-step.now .lq-stepnum {
@@ -502,7 +502,7 @@
 }
 .fv-btn.primary.lq-advance.individual:hover,
 .fv-btn.primary.lq-teambtn:hover {
-  background: #6d28d9;
+  background: var(--c-plum-deep);
 }
 
 .lq-confirm {
@@ -512,11 +512,11 @@
   flex-wrap: wrap;
   padding: 10px 12px 10px 14px;
   margin: -2px 0 12px;
-  border: 1px solid #f3cf9b;
+  border: 1px solid var(--c-ochre-edge);
   background: var(--lq-warn-100);
   border-radius: var(--fv-r-lg);
   font-size: 13px;
-  color: #7c3a06;
+  color: var(--c-ochre-deep);
   animation: lq-rise 160ms ease;
 }
 .lq-confirm > span {
@@ -648,7 +648,7 @@
 .lq-opt.right .lq-optl {
   background: var(--lq-right);
   border-color: var(--lq-right);
-  color: #fff;
+  color: var(--c-on-fill);
 }
 .lq-opttext {
   font-size: 13px;
@@ -700,12 +700,12 @@
   background: var(--fv-cream-100);
 }
 .lq-tile.warn {
-  border-color: #f3cf9b;
-  background: #fffaf1;
+  border-color: var(--c-ochre-edge);
+  background: var(--c-ochre-wash);
 }
 .lq-tile.team {
   border-color: var(--lq-team-300);
-  background: #fbf7ff;
+  background: var(--c-plum-wash);
 }
 .lq-tilenum {
   font-family: var(--fv-serif);
@@ -776,7 +776,7 @@
 }
 .lq-tcard.warn {
   border-left-color: var(--fv-amber);
-  background: #fffaf1;
+  background: var(--c-ochre-wash);
 }
 .lq-tcard.done {
   border-left-color: var(--lq-right);
@@ -828,17 +828,17 @@
    these screens — not a solid block. Right and wrong only tint it. */
 .lq-pip.locked {
   border: 1px solid var(--fv-neutral-300);
-  background: #fff;
+  background: var(--c-paper-white);
   color: var(--fv-navy);
 }
 .lq-pip.locked.right {
   background: var(--lq-right-100);
-  border-color: #a5dcc3;
+  border-color: var(--c-sage-edge);
   color: var(--lq-right-ink);
 }
 .lq-pip.locked.wrong {
   background: var(--lq-wrong-100);
-  border-color: #f2b8b8;
+  border-color: var(--c-red-edge);
   color: var(--lq-wrong);
 }
 .lq-pip.now {
@@ -870,7 +870,7 @@
   height: 15px;
   padding: 0 3px;
   border-radius: 999px;
-  background: #fff;
+  background: var(--c-paper-white);
   border: 1px solid var(--fv-neutral-300);
   display: inline-flex;
   align-items: center;
@@ -1038,7 +1038,7 @@ button.lq-tr:hover {
   background: var(--lq-team-300);
 }
 .lq-dbspan.down {
-  background: #f3cf9b;
+  background: var(--c-ochre-edge);
 }
 .lq-dot {
   position: absolute;
@@ -1149,7 +1149,7 @@ button.lq-tr:hover {
 }
 .lq-stat.team {
   border-color: var(--lq-team-300);
-  background: #fbf7ff;
+  background: var(--c-plum-wash);
 }
 .lq-stat.team .lq-statnum {
   color: var(--lq-team);
@@ -1211,7 +1211,7 @@ button.lq-tr:hover {
 }
 .lq-clickrow:hover {
   border-color: var(--fv-neutral-300);
-  background: #fffdf5;
+  background: var(--c-paper-white);
 }
 .lq-clickrow:focus-visible {
   outline: 2px solid var(--fv-navy-700);
@@ -1378,7 +1378,7 @@ button.lq-tr:hover {
 }
 .lq-sqside.team {
   border-color: var(--lq-team-300);
-  background: #fbf7ff;
+  background: var(--c-plum-wash);
 }
 .lq-sqpick {
   display: flex;
@@ -1418,7 +1418,7 @@ button.lq-tr:hover {
   border-top: 1px solid var(--fv-neutral-200);
 }
 .lq-sqopt.team {
-  background: #fbf7ff;
+  background: var(--c-plum-wash);
 }
 .lq-sqopt .lq-optl {
   width: 26px;
@@ -1427,7 +1427,7 @@ button.lq-tr:hover {
 .lq-optl.right {
   background: var(--lq-right);
   border-color: var(--lq-right);
-  color: #fff;
+  color: var(--c-on-fill);
 }
 .lq-sqopt.own .lq-optl:not(.right) {
   border-color: var(--fv-navy);
@@ -1454,7 +1454,7 @@ button.lq-tr:hover {
   font-weight: 600;
 }
 .lq-tag.own {
-  background: #e9eef3;
+  background: var(--c-slate-bg);
   color: var(--fv-navy);
 }
 .lq-tag.team,
@@ -1637,7 +1637,7 @@ button.lq-tr:hover {
   font-weight: 600;
 }
 .lq-modepill.individual {
-  background: #e9eef3;
+  background: var(--c-slate-bg);
   color: var(--fv-navy);
 }
 .lq-modepill.team {
@@ -1692,7 +1692,7 @@ button.lq-tr:hover {
 }
 .lq-spip.filled {
   background: var(--fv-cream-400);
-  border-color: #e4cf8f;
+  border-color: var(--c-ochre-edge);
   color: var(--fv-navy);
 }
 .lq-spip.now {
@@ -1702,7 +1702,7 @@ button.lq-tr:hover {
 .lq-spip.team.filled {
   background: var(--lq-team);
   border-color: var(--lq-team);
-  color: #fff;
+  color: var(--c-on-fill);
 }
 .lq-spip.team.now {
   border-color: var(--lq-team);
@@ -1752,7 +1752,7 @@ button.lq-tr:hover {
 .lq-choice.on {
   border-color: var(--fv-navy);
   box-shadow: inset 0 0 0 1px var(--fv-navy);
-  background: #fffdf5;
+  background: var(--c-paper-white);
 }
 .lq-choice.team.on {
   border-color: var(--lq-team);
@@ -2104,7 +2104,7 @@ button.lq-reviewrow {
   border: 1px solid var(--fv-neutral-200);
   border-radius: var(--fv-r-lg);
   background: var(--fv-cream-100);
-  box-shadow: 0 12px 28px -10px rgba(0, 35, 65, 0.3);
+  box-shadow: 0 12px 28px -10px rgb(var(--c-shadow) / 0.3);
   animation: lq-rise 140ms ease;
 }
 .lq-newitem {
@@ -2141,7 +2141,7 @@ button.lq-reviewrow {
   width: 32px;
   height: 32px;
   border-radius: 8px;
-  background: #e9eef3;
+  background: var(--c-slate-bg);
   color: var(--fv-navy);
 }
 .lq-newicon.team {
@@ -2284,7 +2284,7 @@ button.lq-reviewrow {
   font-size: 13px;
 }
 .lq-bopt.right .fv-in {
-  border-color: #a5dcc3;
+  border-color: var(--c-sage-edge);
   background: var(--lq-right-100);
 }
 .lq-bcorrect {
@@ -2310,7 +2310,7 @@ button.lq-reviewrow {
 .lq-bopt.right .lq-bcorrect {
   background: var(--lq-right);
   border-color: var(--lq-right);
-  color: #fff;
+  color: var(--c-on-fill);
 }
 /* Select multiple's key is boxes to tick, so they look like boxes. */
 .lq-bcorrect.multi {
@@ -2437,7 +2437,7 @@ button.lq-reviewrow {
   height: 38px;
   border-radius: 999px;
   background: var(--lq-team);
-  color: #fff;
+  color: var(--c-on-fill);
 }
 .lq-jointext {
   flex: 1;
@@ -2500,7 +2500,7 @@ button.lq-reviewrow {
   cursor: pointer;
 }
 .lq-srow:hover:not(:disabled) {
-  background: #fffdf5;
+  background: var(--c-paper-white);
 }
 .lq-srow.inert {
   cursor: default;
@@ -2562,7 +2562,7 @@ button.lq-reviewrow {
   color: var(--fv-muted);
 }
 .lq-sbadge.warning {
-  background: #fdf1dc;
+  background: var(--c-ochre-bg);
   color: var(--fv-amber);
 }
 .lq-sbadge.sky {
@@ -2574,7 +2574,7 @@ button.lq-reviewrow {
   color: var(--lq-team);
 }
 .lq-sbadge.success {
-  background: #e7f6ef;
+  background: var(--c-sage-bg);
   color: var(--fv-emerald);
 }
 .lq-sh1 {
@@ -2652,7 +2652,7 @@ button.lq-reviewrow {
   margin-bottom: 22px;
   border: 1.5px dashed var(--lq-team-300);
   border-radius: var(--fv-r-xl);
-  background: #fbf7ff;
+  background: var(--c-plum-wash);
   transition: background 140ms ease, border-color 140ms ease;
 }
 .lq-import.over {
@@ -2669,7 +2669,7 @@ button.lq-reviewrow {
   height: 36px;
   border-radius: 10px;
   background: var(--lq-team);
-  color: #fff;
+  color: var(--c-on-fill);
 }
 .lq-agentmark.done {
   background: var(--lq-right);
@@ -2696,7 +2696,7 @@ button.lq-reviewrow {
   margin-bottom: 22px;
   border: 1px solid var(--lq-team-300);
   border-radius: var(--fv-r-xl);
-  background: #fbf7ff;
+  background: var(--c-plum-wash);
 }
 .lq-agenthead {
   display: flex;
@@ -2779,7 +2779,7 @@ button.lq-reviewrow {
 }
 
 .lq-bq.attention {
-  border-color: #f3cf9b;
+  border-color: var(--c-ochre-edge);
 }
 .lq-bqsrc {
   display: flex;
@@ -2895,7 +2895,7 @@ button.lq-reviewrow {
   vertical-align: -1px;
 }
 .lq-agentnote p.warn {
-  color: #7c3a06;
+  color: var(--c-ochre-deep);
 }
 .lq-leftout {
   display: flex;
@@ -3263,8 +3263,8 @@ button.lq-reviewrow {
   color: var(--lq-team);
 }
 .lq-chip.warn {
-  border-color: #f3cf9b;
-  background: #fffaf1;
+  border-color: var(--c-ochre-edge);
+  background: var(--c-ochre-wash);
 }
 .lq-chip.warn b {
   color: var(--fv-amber);
@@ -3661,7 +3661,7 @@ span.lq-spip {
 .lq-choice.wrong .lq-choicel {
   border-color: var(--lq-wrong);
   background: var(--lq-wrong);
-  color: #fff;
+  color: var(--c-on-fill);
 }
 .lq-choice.right,
 .lq-choice.right:hover {
@@ -3673,7 +3673,7 @@ span.lq-spip {
 .lq-choice.right .lq-choicel {
   border-color: var(--lq-right);
   background: var(--lq-right);
-  color: #fff;
+  color: var(--c-on-fill);
 }
 /* Results, a question at a time (ReviewQuestion): the choices as they were
    answered, read-only — green the right one, red theirs if it wasn't. */
@@ -3716,11 +3716,11 @@ span.lq-spip {
    red, and the way on — Next — on the right. */
 .lq-sfoot.fb.right {
   background: var(--lq-right-100);
-  border-top-color: #a5dcc3;
+  border-top-color: var(--c-sage-edge);
 }
 .lq-sfoot.fb.wrong {
   background: var(--lq-wrong-100);
-  border-top-color: #f2b8b8;
+  border-top-color: var(--c-red-edge);
 }
 .lq-fb {
   animation: lq-rise 200ms ease;
@@ -3737,12 +3737,12 @@ span.lq-spip {
 /* The student's question boxes: right and wrong win over the team purple. */
 .lq-spip.team.filled.right {
   background: var(--lq-right-100);
-  border-color: #a5dcc3;
+  border-color: var(--c-sage-edge);
   color: var(--lq-right-ink);
 }
 .lq-spip.team.filled.wrong {
   background: var(--lq-wrong-100);
-  border-color: #f2b8b8;
+  border-color: var(--c-red-edge);
   color: var(--lq-wrong);
 }
 .lq-donescore {

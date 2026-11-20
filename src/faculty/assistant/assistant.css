@@ -262,14 +262,14 @@
   font: inherit;
   font-size: var(--fv-sm);
   font-weight: 600;
-  box-shadow: 0 6px 20px rgba(0, 35, 65, 0.22);
+  box-shadow: 0 6px 20px rgb(var(--c-shadow) / 0.22);
   cursor: pointer;
   transition: transform 140ms ease, box-shadow 140ms ease;
 }
 @media (hover: hover) {
   .fv-as-launch:hover {
     transform: translateY(-1px);
-    box-shadow: 0 8px 24px rgba(0, 35, 65, 0.28);
+    box-shadow: 0 8px 24px rgb(var(--c-shadow) / 0.28);
   }
 }
 .fv-as-launch:focus-visible {
@@ -306,7 +306,7 @@
     padding: 12px;
   }
   .fv-assist-card {
-    box-shadow: 0 12px 40px rgba(0, 35, 65, 0.18);
+    box-shadow: 0 12px 40px rgb(var(--c-shadow) / 0.18);
   }
 }
 @media (max-width: 700px) {

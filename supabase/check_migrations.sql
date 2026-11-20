@@ -332,6 +332,13 @@ select '0057 live change leader',
        case when to_regprocedure('public.reopen_live_leader(uuid)') is not null
             then 'applied'
             else 'NOT APPLIED — run 0057_live_change_leader.sql' end
+union all
+select '0058 live leader on one vote',
+       case when exists (select 1 from pg_proc
+                          where oid = to_regprocedure('public.confirm_live_leader(uuid)')
+                            and prosrc not ilike '%one more vote%')
+            then 'applied'
+            else 'NOT APPLIED — run 0058_live_leader_one_vote.sql' end
 order by 1;
 
 -- ------------------------------------------------------- and the buckets

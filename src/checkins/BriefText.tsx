@@ -70,7 +70,7 @@ const TRAILING = ".,;:!?'\"";
  * either scope.
  */
 const LINK_STYLE = {
-  color: "var(--brief-link, rgb(31, 102, 163))",
+  color: "var(--brief-link, var(--c-slate))",
   textDecoration: "underline",
   textUnderlineOffset: 2,
 } as const;

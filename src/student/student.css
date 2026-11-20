@@ -4,34 +4,34 @@
 
 .sv {
   /* surfaces */
-  --cream-100: rgb(255, 252, 242); /* cards */
-  --cream-200: rgb(255, 250, 236); /* main panel */
-  --cream-300: rgb(252, 248, 236); /* page bg, inset tiles */
-  --cream-400: rgb(239, 223, 173); /* active / selected */
-  --cream-500: rgb(238, 216, 152); /* draft borders */
+  --cream-100: var(--c-paper-card); /* cards */
+  --cream-200: var(--c-paper-panel); /* main panel */
+  --cream-300: var(--c-paper); /* page bg, inset tiles */
+  --cream-400: var(--c-paper-sel); /* active / selected */
+  --cream-500: var(--c-paper-sel-edge); /* draft borders */
 
   /* ink */
-  --navy: rgb(0, 35, 65);
-  --navy-700: rgb(31, 102, 163);
+  --navy: var(--c-ink);
+  --navy-700: var(--c-slate);
   /* Links in a brief — see the same alias in faculty.css. */
-  --brief-link: rgb(31, 102, 163);
-  --muted-foreground: rgb(93, 114, 136);
+  --brief-link: var(--c-slate);
+  --muted-foreground: var(--c-ink-2);
 
   /* lines & neutrals */
-  --neutral-100: rgb(245, 245, 245);
-  --neutral-200: rgb(229, 229, 229);
-  --neutral-300: rgb(212, 212, 212);
-  --neutral-400: rgb(163, 163, 163);
+  --neutral-100: var(--c-neutral-100);
+  --neutral-200: var(--c-neutral-200);
+  --neutral-300: var(--c-neutral-300);
+  --neutral-400: var(--c-neutral-400);
 
   /* accents */
-  --orange-500: #ff6713;
-  --sky-700: #0e7490;
-  --sky-100: #e3f6fd;
-  --lavender-600: #9405e6;
-  --lavender-300: #e5cbfa;
-  --emerald-600: #059669;
-  --emerald-500: #10b981;
-  --amber-700: #b45309;
+  --orange-500: var(--c-orange);
+  --sky-700: var(--c-verdigris);
+  --sky-100: var(--c-verdigris-bg);
+  --lavender-600: var(--c-mulberry);
+  --lavender-300: var(--c-mulberry-edge);
+  --emerald-600: var(--c-sage);
+  --emerald-500: var(--c-sage-fill);
+  --amber-700: var(--c-ochre);
 
   /* type */
   --font-sans: "Geist", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -55,7 +55,7 @@
   --radius-lg: 10px;
   --radius-xl: 14px;
 
-  --shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow: 0 1px 2px 0 rgb(var(--c-shadow) / 0.05);
 
   font-family: var(--font-sans);
   font-size: var(--text-sm);
@@ -173,7 +173,7 @@
   cursor: pointer; transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
 }
 .sv-btn.primary { background: var(--navy); color: var(--cream-100); }
-.sv-btn.primary:hover { background: rgb(0, 48, 88); }
+.sv-btn.primary:hover { background: var(--c-ink-hover); }
 .sv-btn.outline { background: transparent; border-color: var(--neutral-200); color: var(--navy); }
 .sv-btn.outline:hover { background: var(--cream-300); }
 .sv-btn.ghost { background: transparent; color: var(--muted-foreground); }
@@ -194,11 +194,11 @@
 }
 .sv-badge.outline { border-color: var(--neutral-200); color: var(--muted-foreground); background: transparent; }
 .sv-badge.secondary { background: var(--neutral-100); color: var(--muted-foreground); }
-.sv-badge.success { background: #e7f6ef; color: var(--emerald-600); }
-.sv-badge.warning { background: #fdf1dc; color: var(--amber-700); }
+.sv-badge.success { background: var(--c-sage-bg); color: var(--emerald-600); }
+.sv-badge.warning { background: var(--c-ochre-bg); color: var(--amber-700); }
 .sv-badge.sky { background: var(--sky-100); color: var(--sky-700); }
-.sv-badge.orange { background: #ffe9dc; color: var(--orange-500); }
-.sv-badge.lavender { background: #f4e4fd; color: var(--lavender-600); }
+.sv-badge.orange { background: var(--c-orange-bg); color: var(--c-orange-ink); }
+.sv-badge.lavender { background: var(--c-mulberry-bg); color: var(--lavender-600); }
 /* For a badge carrying a sentence rather than a word. The due pill on the
    activity card says "Due Thu 9:00am · discussion Thu 5:00pm", which is wider
    than the card holding it once the phone is 320px — and nowrap with nowhere to
@@ -266,7 +266,7 @@
   min-width: 216px; max-width: 280px; text-align: left;
   padding: 10px 12px 9px;
   background: var(--cream-100); border: 1px solid var(--neutral-200);
-  border-radius: var(--radius-lg); box-shadow: 0 8px 24px rgba(0, 35, 65, 0.12);
+  border-radius: var(--radius-lg); box-shadow: 0 8px 24px rgb(var(--c-shadow) / 0.12);
 }
 .sv-stacklist { list-style: none; margin: 7px 0 0; padding: 0; }
 .sv-stacklist li {
@@ -605,7 +605,7 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(0, 35, 65, 0.34);
+  background: rgb(var(--c-shadow) / 0.34);
   animation: svFade 120ms ease;
 }
 .sv-dialog {
@@ -615,7 +615,7 @@
   border: 1px solid var(--neutral-200);
   border-radius: var(--radius-xl);
   background: var(--cream-100);
-  box-shadow: 0 20px 48px rgba(0, 35, 65, 0.22);
+  box-shadow: 0 20px 48px rgb(var(--c-shadow) / 0.22);
   animation: svRise 140ms ease;
 }
 .sv-dialogtitle {
@@ -784,7 +784,7 @@
   overflow: hidden;
   border: 1px solid var(--neutral-200);
   border-radius: 8px;
-  background: var(--cream-100, #fff);
+  background: var(--cream-100);
 }
 .sv-fimg-open {
   display: block;
@@ -796,7 +796,7 @@
   cursor: zoom-in;
 }
 .sv-fimg-open:focus-visible {
-  outline: 2px solid var(--navy-700, #1f66a3);
+  outline: 2px solid var(--navy-700);
   outline-offset: -2px;
 }
 .sv-fimg img {

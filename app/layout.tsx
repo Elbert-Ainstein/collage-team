@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "@/styles/base.css";
+import "@/styles/palette.css";
 
 export const metadata: Metadata = {
   title: "Collage-Team",

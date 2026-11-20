@@ -1,0 +1,106 @@
+/* Collage palette — Gouache.
+   Earth pigments on warm paper, with the marketing site's orange (#F06112)
+   kept for live, AI and Challenge so the app still reads as collage-ai.com.
+
+   This is the one place a colour is written down. Every surface (faculty .fv,
+   student .sv, live .lq-*, check-ins #tbl-app) names these under its own
+   variables, so swapping the palette is an edit to this file only.
+
+   Each pigment comes as a fill plus a darker ink that is safe for text: every
+   ink here clears 4.5:1 on --c-paper and --c-paper-card. --c-orange itself
+   does not (3.1:1) — use --c-orange-ink when the orange is the words. */
+
+:root {
+  /* paper */
+  --c-paper: #f3ede1; /* page */
+  --c-paper-panel: #f7f2e8; /* main panel */
+  --c-paper-card: #fbf8f1; /* cards */
+  --c-paper-white: #fffdf9; /* inputs, the brightest sheet */
+  --c-paper-sel: #e9dcbf; /* active nav, selected rows, late cells */
+  --c-paper-sel-edge: #d8c291; /* draft borders */
+
+  /* ink */
+  --c-ink: #201c17;
+  --c-ink-hover: #3a332b;
+  --c-ink-2: #6a6256; /* supporting text */
+  --c-ink-3: #8c8374; /* hints */
+  --c-on-fill: #fffdf9; /* words on a filled pigment */
+  --c-shadow: 32 28 23; /* channels, for rgb(var(--c-shadow) / a) */
+
+  /* warm neutrals: hairlines, tracks, disabled */
+  --c-neutral-100: #efe9dd;
+  --c-neutral-200: #e0d7c6;
+  --c-neutral-300: #cdc2ae;
+  --c-neutral-400: #a39988;
+
+  /* brand orange — live, AI, Challenge */
+  --c-orange: #f06112;
+  --c-orange-ink: #b5470b;
+  --c-orange-deep: #7a3510;
+  --c-orange-bg: #fbe5d6;
+
+  /* slate — links, Combo, your own answer */
+  --c-slate: #3e5a6c;
+  --c-slate-bg: #e1e7e8;
+
+  /* verdigris — Skills */
+  --c-verdigris: #2f6a66;
+  --c-verdigris-bg: #dde9e5;
+
+  /* mulberry — Amplify */
+  --c-mulberry: #7b4a5e;
+  --c-mulberry-bg: #f0e2e6;
+  --c-mulberry-edge: #dcc3cc;
+
+  /* plum — live questions, team mode */
+  --c-plum: #5e4a7c;
+  --c-plum-deep: #4a3964;
+  --c-plum-bg: #ece6f1;
+  --c-plum-edge: #d3c7df;
+  --c-plum-wash: #f6f3f7;
+
+  /* sage — right, complete, success */
+  --c-sage: #4a6a3a;
+  --c-sage-fill: #6e8a57;
+  --c-sage-deep: #3b5530;
+  --c-sage-bg: #e4ebda;
+  --c-sage-edge: #bccba9;
+
+  /* ochre — warning, late */
+  --c-ochre: #85600f;
+  --c-ochre-fill: #c9963a;
+  --c-ochre-deep: #6b4a0c;
+  --c-ochre-bg: #f4e8cb;
+  --c-ochre-edge: #e3cc94;
+  --c-ochre-wash: #faf3e2;
+
+  /* mustard — the numbered dot and picked step in check-ins */
+  --c-mustard: #ddb968;
+
+  /* oxblood — wrong, delete */
+  --c-red: #a8322a;
+  --c-red-hover: #8c2822;
+  --c-red-bg: #f4e1db;
+  --c-red-edge: #e2bbb1;
+
+  /* Dark set. Only check-ins has a dark mode, so these are separate names
+     rather than an override of the above — flipping --c-* would half-darken
+     the faculty and student apps, which have none. */
+  --cd-canvas: #16130f;
+  --cd-paper: #1b1814;
+  --cd-paper-2: #24201b;
+  --cd-paper-3: #2d2821;
+  --cd-active: #3a3228;
+  --cd-ink: #f3ede1;
+  --cd-ink-2: #c7bdac;
+  --cd-ink-3: #9a8f7e;
+  --cd-line: #3b342b;
+  --cd-line-2: #2e2821;
+  --cd-slate: #a9bcc8;
+  --cd-slate-bg: #27323a;
+  --cd-ochre: #e2b95e;
+  --cd-ochre-bg: #3a2f17;
+  --cd-sage: #a6bb90;
+  --cd-sage-bg: #27301f;
+  --cd-red: #e5897d;
+}

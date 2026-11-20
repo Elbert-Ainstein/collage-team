@@ -90,7 +90,7 @@ const KEY_INK: Partial<Record<CellState, CSSProperties>> = {
   turned_in: { color: "var(--fv-navy-700)", background: "var(--fv-sky-100)" },
   late: { color: "var(--fv-amber)", background: "var(--fv-cream-400)" },
   graded: { color: "var(--fv-navy)" },
-  complete: { color: "var(--fv-emerald)", background: "rgba(5, 150, 105, 0.1)" },
+  complete: { color: "var(--fv-emerald)", background: "color-mix(in srgb, var(--fv-emerald) 10%, transparent)" },
   not_complete: { color: "var(--fv-amber)", background: "var(--fv-cream-400)" },
   excused: { color: "var(--fv-muted)" },
 };
@@ -708,7 +708,7 @@ function WeekHead({
             fontSize: "var(--fv-2xs)",
             fontWeight: isLive ? 600 : 400,
             color: isLive ? "var(--fv-emerald)" : "var(--fv-neutral-400)",
-            background: isLive ? "rgba(5, 150, 105, 0.1)" : undefined,
+            background: isLive ? "color-mix(in srgb, var(--fv-emerald) 10%, transparent)" : undefined,
           }}
           aria-pressed={isLive}
           disabled={busy}

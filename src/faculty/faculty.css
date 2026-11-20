@@ -2,42 +2,43 @@
    Tokens transcribed from the handoff README; use the variables, never the
    literals.
 
-   These are the same tokens as src/student/student.css, deliberately repeated
-   under a different scope rather than hoisted: the two surfaces ship
-   independently and a shared block would make a change to one silently a change
-   to the other. If a third surface appears, hoist then. */
+   Colours are hoisted: every surface names src/styles/palette.css, so the
+   palette changes in one place. The --fv-* names are roles now, not hues —
+   --fv-navy is the ink and --fv-sky is Skills, whatever colour those are. Type
+   and spacing are still repeated per surface (same as student.css), because the
+   two ship independently. */
 
 .fv {
   /* surfaces */
-  --fv-cream-100: rgb(255, 252, 242); /* cards */
-  --fv-cream-200: rgb(255, 250, 236); /* main panel */
-  --fv-cream-300: rgb(252, 248, 236); /* page bg, header strips, inset tiles */
-  --fv-cream-400: rgb(239, 223, 173); /* active nav, selected rows, late cells */
+  --fv-cream-100: var(--c-paper-card); /* cards */
+  --fv-cream-200: var(--c-paper-panel); /* main panel */
+  --fv-cream-300: var(--c-paper); /* page bg, header strips, inset tiles */
+  --fv-cream-400: var(--c-paper-sel); /* active nav, selected rows, late cells */
 
   /* ink */
-  --fv-navy: rgb(0, 35, 65);
-  --fv-navy-700: rgb(31, 102, 163);
+  --fv-navy: var(--c-ink);
+  --fv-navy-700: var(--c-slate);
   /* Links in a brief. Aliased rather than used directly because the renderer is
      shared with the student app, which names the same blue differently. */
-  --brief-link: rgb(31, 102, 163);
-  --fv-muted: rgb(93, 114, 136);
+  --brief-link: var(--c-slate);
+  --fv-muted: var(--c-ink-2);
 
   /* lines & neutrals */
-  --fv-neutral-100: rgb(245, 245, 245);
-  --fv-neutral-200: rgb(229, 229, 229);
-  --fv-neutral-300: rgb(212, 212, 212);
-  --fv-neutral-400: rgb(163, 163, 163);
+  --fv-neutral-100: var(--c-neutral-100);
+  --fv-neutral-200: var(--c-neutral-200);
+  --fv-neutral-300: var(--c-neutral-300);
+  --fv-neutral-400: var(--c-neutral-400);
 
   /* accents */
-  --fv-orange: #ff6713;
-  --fv-sky: #0e7490;
-  --fv-sky-100: #e3f6fd;
-  --fv-lavender: #9405e6;
-  --fv-lavender-300: #e5cbfa;
-  --fv-emerald: #059669;
-  --fv-emerald-500: #10b981;
-  --fv-amber: #b45309;
-  --fv-destructive: #dc2626;
+  --fv-orange: var(--c-orange);
+  --fv-sky: var(--c-verdigris);
+  --fv-sky-100: var(--c-verdigris-bg);
+  --fv-lavender: var(--c-mulberry);
+  --fv-lavender-300: var(--c-mulberry-edge);
+  --fv-emerald: var(--c-sage);
+  --fv-emerald-500: var(--c-sage-fill);
+  --fv-amber: var(--c-ochre);
+  --fv-destructive: var(--c-red);
 
   /* type */
   --fv-sans: "Geist", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -55,7 +56,7 @@
   --fv-r-md: 8px;
   --fv-r-lg: 10px;
   --fv-r-xl: 14px;
-  --fv-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --fv-shadow: 0 1px 2px 0 rgb(var(--c-shadow) / 0.05);
 
   font-family: var(--fv-sans);
   font-size: var(--fv-sm);
@@ -109,7 +110,7 @@
   color: var(--fv-cream-100);
 }
 .fv-btn.primary:hover:not(:disabled) {
-  background: rgb(0, 50, 92);
+  background: var(--c-ink-hover);
 }
 .fv-btn.outline {
   border-color: var(--fv-neutral-200);
@@ -171,7 +172,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  color: #fff;
+  color: var(--c-on-fill);
   font-weight: 600;
   line-height: 1;
 }
@@ -240,7 +241,7 @@
   width: 16px;
   height: 16px;
   border-radius: 999px;
-  background: #fff;
+  background: var(--c-paper-white);
   transition: transform 140ms ease;
 }
 .fv-switch.on::after {
@@ -755,7 +756,7 @@
   color: var(--fv-amber);
 }
 .fv-cell.complete {
-  background: rgba(5, 150, 105, 0.1);
+  background: color-mix(in srgb, var(--fv-emerald) 10%, transparent);
   color: var(--fv-emerald);
 }
 /* Amber, not red. A missed completion check is a thing to go and fix, not a
@@ -903,7 +904,7 @@
   border-top: 0;
 }
 .fv-ladderrow.editing {
-  background: #fff;
+  background: var(--c-paper-white);
 }
 .fv-pts {
   width: 56px;
@@ -940,12 +941,12 @@
   width: 100%;
 }
 .fv-rrow.sel {
-  background: #fff;
+  background: var(--c-paper-white);
   border-color: var(--fv-neutral-300);
   box-shadow: var(--fv-shadow);
 }
 .fv-rrow.editing {
-  background: #fff;
+  background: var(--c-paper-white);
   border-color: var(--fv-navy);
 }
 .fv-check {
@@ -996,7 +997,7 @@
   max-width: 640px;
   width: 100%;
   align-self: flex-start;
-  background: #fff;
+  background: var(--c-paper-white);
   border: 1px solid var(--fv-neutral-200);
   border-radius: 4px;
   box-shadow: var(--fv-shadow);
@@ -1049,7 +1050,7 @@
   justify-content: center;
   border: 1px solid var(--fv-neutral-200);
   border-radius: var(--fv-r-md);
-  background: #fff;
+  background: var(--c-paper-white);
   color: var(--fv-navy);
   cursor: pointer;
   transition: background 140ms ease;
@@ -1100,7 +1101,7 @@
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(0, 35, 65, 0.34);
+  background: rgb(var(--c-shadow) / 0.34);
   animation: fvFade 120ms ease;
 }
 .fv-dialog {
@@ -1110,7 +1111,7 @@
   border: 1px solid var(--fv-neutral-200);
   border-radius: var(--fv-r-xl);
   background: var(--fv-cream-100);
-  box-shadow: 0 20px 48px rgba(0, 35, 65, 0.22);
+  box-shadow: 0 20px 48px rgb(var(--c-shadow) / 0.22);
   animation: fvRise 140ms ease;
 }
 .fv-dialogtitle {
@@ -1135,10 +1136,10 @@
 }
 .fv-btn.danger {
   background: var(--fv-destructive);
-  color: #fff;
+  color: var(--c-on-fill);
 }
 .fv-btn.danger:hover:not(:disabled) {
-  background: #b91c1c;
+  background: var(--c-red-hover);
 }
 @keyframes fvFade {
   from {
@@ -1348,7 +1349,7 @@
   background: var(--fv-cream-100);
   border: 1px solid var(--fv-neutral-200);
   border-radius: 10px;
-  box-shadow: 0 6px 20px rgb(0 35 65 / 12%);
+  box-shadow: 0 6px 20px rgb(var(--c-shadow) / 12%);
 }
 .fv-linkchip {
   display: flex;
@@ -2213,7 +2214,7 @@ button.fv-steplabel:hover { color: var(--fv-navy); }
   height: auto;
   border: 1px solid var(--fv-neutral-200);
   border-radius: var(--fv-r-md);
-  background: #fff;
+  background: var(--c-paper-white);
   box-shadow: var(--fv-shadow);
 }
 
@@ -2677,7 +2678,7 @@ button.fv-person-open:focus-visible {
   padding: 0;
   border: none;
   border-radius: 999px;
-  background: rgba(0, 31, 63, 0.72);
+  background: rgb(var(--c-shadow) / 0.72);
   color: var(--fv-cream-100);
   cursor: pointer;
 }

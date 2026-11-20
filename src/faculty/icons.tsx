@@ -1,5 +1,7 @@
 // The icons the faculty view draws, inline on a 24px grid so the app fetches
 // nothing at runtime. Same stroked style as the student set.
+import { paletteTint } from "@/checkins/tints";
+
 const P: Record<string, string> = {
   assignment:
     '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M8.5 10h7M8.5 13.5h7M8.5 17h4"/>',
@@ -101,7 +103,7 @@ export function FAvatar({
       style={{
         width: size,
         height: size,
-        background: tint ?? "var(--fv-navy-700)",
+        background: tint ? paletteTint(tint) : "var(--fv-navy-700)",
         fontSize: Math.max(9, Math.round(size * 0.42)),
       }}
       aria-hidden="true"

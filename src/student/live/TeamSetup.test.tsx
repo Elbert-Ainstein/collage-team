@@ -158,10 +158,13 @@ describe("picking a leader", () => {
     expect(button("Confirm")).toBeUndefined();
   });
 
-  it("waits for a second vote before anyone can confirm", async () => {
-    await session({ leaderVotes: [pick("s1", "s2")] });
-    expect(foot().textContent).toContain("Wait for one more vote");
-    expect(button("Confirm")).toBeUndefined();
+  it("lets someone alone confirm themselves on their own vote (0058)", async () => {
+    await session({ leaderVotes: [pick("s1", "s1")] });
+    expect(foot().textContent).toContain("All on you");
+    expect(foot().textContent).toContain("1 of 3 voted");
+    expect(foot().textContent).not.toContain("one more vote");
+    await act(async () => button("Confirm yourself")!.click());
+    expect(confirmLeader).toHaveBeenCalledWith("a");
   });
 
   it("doesn't offer Confirm to someone who hasn't voted", async () => {
