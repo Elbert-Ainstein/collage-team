@@ -8,6 +8,7 @@
 import { allowListFrom } from "@/assistant/server/allowList";
 import { anthropicModel } from "@/assistant/server/anthropic";
 import { geminiModel } from "@/assistant/server/gemini";
+import { googleDocFetcher } from "@/assistant/server/googleDoc";
 import { chooseProvider } from "@/assistant/server/provider";
 import { handleAssistant, type HandlerDeps } from "@/assistant/server/handle";
 import { createRateLimiter } from "@/assistant/server/rateLimit";
@@ -44,6 +45,7 @@ function getDeps(): HandlerDeps {
     verify: supabaseVerifier(url, anonKey),
     allowed: allowList.may,
     limiter,
+    fetchDoc: googleDocFetcher(),
     log: (message, detail) => console.error(message, detail ?? ""),
   };
   return deps;

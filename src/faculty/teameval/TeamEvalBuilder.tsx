@@ -8,8 +8,12 @@
 //
 // Opened again later it edits the same evaluation. Once anyone has submitted,
 // categories and questions can't be added or removed (0058) — wording can.
+//
+// While it is open the assistant can read and fill this form (formBridge.ts):
+// from a rubric or a Google Doc, or one setting at a time. A fill changes only
+// what is on screen; Finish or Save is still what writes.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { updateActivity } from "@/checkins/data";
 import type { Activity } from "@/checkins/types";
 import { saveTeamEvalShape, setTeamEvalSettings } from "@/teameval/data";
@@ -26,6 +30,8 @@ import { AutoTextarea } from "@/teameval/AutoTextarea";
 import { outOf } from "@/teameval/model";
 import type { QuestionAudience, TeamEvalSnapshot } from "@/teameval/types";
 import { Ic } from "@/live/ui";
+import { useFormBridge, type TeamEvalFormHandle } from "../assistant/formBridge";
+import type { TeamEvalForm } from "../assistant/teamEvalFill";
 import { fromLocalInput, toLocalInput } from "../ActivityDetail";
 import { DescriptionEditor } from "../DescriptionEditor";
 import type { FacultyData } from "../FacultyApp";
@@ -53,6 +59,11 @@ interface Props {
   /** Saved. `published` when this Finish is what put it in front of the class. */
   onDone: (published: boolean) => void;
   onError: (e: unknown) => void;
+}
+
+/** The first step's fields as the activity row stores them. */
+function basicsFrom(f: { week: number | null; due: string; desc: string }) {
+  return { week: f.week, due_at: fromLocalInput(f.due), source_text: f.desc.trim() ? f.desc.trim() : null };
 }
 
 function Switch({ on, label, disabled, title, onChange }: { on: boolean; label: string; disabled?: boolean; title?: string; onChange: (on: boolean) => void }) {
@@ -95,6 +106,8 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
   const [anon, setAnon] = useState(snapshot.settings.anonymize);
   const [penalty, setPenalty] = useState(String(snapshot.settings.late_penalty));
   const [busy, setBusy] = useState(false);
+  /** The first step's fields as last saved, so Finish writes only what changed since. */
+  const opening = useRef({ week, due, desc });
 
   const weeks = useMemo(() => [...data.weeks].sort((a, b) => a.week - b.week), [data.weeks]);
   const weekName = (w: number | null) => weeks.find((x) => x.week === w)?.title || (w === null ? "No week" : `Week ${w}`);
@@ -106,6 +119,54 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
     (!penalty.trim() || !Number.isFinite(pen) || pen < 0 || pen > 100 ? "Late penalty: 0–100%" : null);
   // Turning anonymity off after students wrote under it is refused (0058).
   const anonLocked = fixed && snapshot.settings.anonymize;
+  const saveLabel = firstTime ? "Finish" : "Save";
+
+  // The assistant's way in: what the form says now, and how to fill it.
+  const bridge = useFormBridge();
+  /** Bumped when a fill rewrites the instructions: their box reads its text only when it mounts. */
+  const [descVersion, setDescVersion] = useState(0);
+  /** One id for as long as this builder is open, so a fill's Undo outlives a change of lock. */
+  const [handleId] = useState(() => crypto.randomUUID());
+  const latest = useRef<TeamEvalForm | null>(null);
+  latest.current = {
+    title,
+    instructions: desc,
+    due,
+    categories,
+    questions,
+    peerComments: peer,
+    releaseComments: release,
+    anonymize: anon,
+    latePenalty: penalty,
+  };
+  useEffect(() => {
+    if (!bridge) return;
+    const handle: TeamEvalFormHandle = {
+      kind: "teameval",
+      id: handleId,
+      read: () => latest.current as TeamEvalForm,
+      fill: (next, { showForm }) => {
+        if (next.instructions !== latest.current?.instructions) setDescVersion((v) => v + 1);
+        setTitle(next.title);
+        setDesc(next.instructions);
+        setDue(next.due);
+        setCategories(next.categories);
+        setQuestions(next.questions);
+        setPeer(next.peerComments);
+        setRelease(next.releaseComments);
+        setAnon(next.anonymize);
+        setPenalty(next.latePenalty);
+        if (showForm) {
+          setStep(1);
+          setSawForm(true);
+        }
+      },
+      limits: { fixed, anonLocked },
+      saveLabel,
+    };
+    bridge.open(handle);
+    return () => bridge.close(handle);
+  }, [bridge, handleId, fixed, anonLocked, saveLabel]);
 
   const setCat = (id: string, change: Partial<CategoryDraft>) => setCategories((cs) => cs.map((c) => (c.id === id ? { ...c, ...change } : c)));
   const setLevel = (id: string, score: number, text: string) =>
@@ -115,12 +176,9 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
   const saveBasics = async () => {
     setBusy(true);
     try {
-      await updateActivity(activity.id, {
-        title: title.trim(),
-        week,
-        due_at: fromLocalInput(due),
-        source_text: desc.trim() ? desc.trim() : null,
-      });
+      await updateActivity(activity.id, { title: title.trim(), ...basicsFrom({ week, due, desc }) });
+      // Saved: Finish need not write these again unless they change after this.
+      opening.current = { week, due, desc };
       if (!firstTime && !sawForm) {
         onDone(false);
         return;
@@ -146,8 +204,17 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
         anonymize: anon,
         late_penalty: pen,
       });
+      // The first step's fields too, when they changed: the assistant can fill
+      // them while she is on this one, and Continue — which saves them
+      // otherwise — is behind her. Only what changed: a due date read from
+      // individual_due_at must not be copied into due_at by a Save.
+      const basics = basicsFrom({ week, due, desc });
+      const opened = opening.current;
       await updateActivity(activity.id, {
         title: title.trim() || activity.title,
+        ...(week !== opened.week ? { week: basics.week } : {}),
+        ...(due !== opened.due ? { due_at: basics.due_at } : {}),
+        ...(desc !== opened.desc ? { source_text: basics.source_text } : {}),
         points_total: total,
         ...(firstTime ? { opens_at: null } : {}),
       });
@@ -217,7 +284,7 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
           <>
             <span className="te-problem">{problem}</span>
             <button type="button" className="fv-btn primary sm" disabled={!!problem || busy} onClick={() => void finish()}>
-              {busy ? "Saving…" : firstTime ? "Finish" : "Save"}
+              {busy ? "Saving…" : saveLabel}
             </button>
           </>
         ) : null}
@@ -235,7 +302,7 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
               autoFocus
               onChange={(e) => setTitle(e.target.value)}
             />
-            <DescriptionEditor initial={desc} files={[]} onChange={setDesc} placeholder="Instructions" />
+            <DescriptionEditor key={descVersion} initial={desc} files={[]} onChange={setDesc} placeholder="Instructions" />
             <div className="fv-fields">
               <label className="fv-field">
                 <span className="fv-eyebrow">Week</span>
