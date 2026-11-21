@@ -7,6 +7,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AssistantReply } from "@/assistant/types";
 import type { FacultyData } from "../FacultyApp";
 import { ada, alan, roster, team1, team2, teams } from "./fixtures";
+import { createFormBridge, FormBridgeContext } from "./formBridge";
+import type { TeamEvalForm } from "./teamEvalFill";
 
 const askAssistant = vi.fn<(...a: unknown[]) => Promise<AssistantReply>>();
 vi.mock("./client", () => ({ askAssistant }));
@@ -327,5 +329,161 @@ describe("AssistantPanel", () => {
     const [second] = askAssistant.mock.calls[1] as [{ history: { role: string; text: string }[] }];
     expect(second.history).toEqual([{ role: "user", text: "Where is Ada?" }]);
     expect(host.textContent).toContain("Ada Lovelace is on Team 1.");
+  });
+});
+
+describe("AssistantPanel — the team evaluation builder", () => {
+  type Form = TeamEvalForm;
+
+  const start = (): Form => ({
+    title: "test",
+    instructions: "",
+    due: "",
+    categories: [{ id: "c1", name: "Contribution", levels: ["Rarely", "Some", "Share", "Well", "Beyond"] }],
+    questions: [{ id: "q1", audience: "peer", prompt: "One thing they do well" }],
+    peerComments: true,
+    releaseComments: true,
+    anonymize: true,
+    latePenalty: "10",
+  });
+
+  /** A stand-in builder: a form in a variable, registered the way TeamEvalBuilder registers. */
+  function builder(limits = { fixed: false, anonLocked: false }) {
+    const state = { form: start(), shown: false };
+    const bridge = createFormBridge();
+    const handle = {
+      kind: "teameval" as const,
+      id: "builder-1",
+      read: () => state.form,
+      fill: (next: Form, opts: { showForm: boolean }) => {
+        state.form = next;
+        state.shown = state.shown || opts.showForm;
+      },
+      limits,
+      saveLabel: "Save",
+    };
+    return { state, bridge, handle };
+  }
+
+  function mountWith(bridge: ReturnType<typeof createFormBridge>) {
+    act(() => {
+      root.render(
+        <FormBridgeContext.Provider value={bridge}>
+          <AssistantPanel data={data} hidden={false} onClose={() => undefined} onChanged={onChanged} onImport={onImport} />
+        </FormBridgeContext.Provider>,
+      );
+    });
+  }
+
+  const penalty20 = {
+    kind: "proposal" as const,
+    text: "Sets the late penalty to 20%.",
+    proposal: {
+      kind: "teameval" as const,
+      summary: "Sets the late penalty to 20%.",
+      title: null,
+      instructions: null,
+      due: null,
+      categories: null,
+      questions: null,
+      peerComments: null,
+      releaseComments: null,
+      anonymize: null,
+      latePenalty: 20,
+      notApplied: [],
+    },
+  };
+
+  it("sends the form on screen and fills the change straight in — with Undo, and no write", async () => {
+    const { state, bridge, handle } = builder();
+    bridge.open(handle);
+    askAssistant.mockResolvedValue(penalty20);
+    mountWith(bridge);
+    expect(host.textContent).toContain("Set the late penalty to 20%");
+
+    await ask("change the percentage of points you lose if you're late to 20");
+    const [req] = askAssistant.mock.calls[0] as [{ form: { latePenalty: string; categories: unknown[] } }];
+    expect(req.form).toMatchObject({ kind: "teameval", latePenalty: "10" });
+    expect(req.form.categories).toEqual([{ name: "Contribution", levels: ["Rarely", "Some", "Share", "Well", "Beyond"] }]);
+
+    expect(state.form.latePenalty).toBe("20");
+    expect(state.shown).toBe(true);
+    expect(host.textContent).toContain("Filled in · press Save to keep it");
+    expect(host.textContent).toContain("Late penalty 10% → 20%");
+    expect(moveStudents).not.toHaveBeenCalled();
+
+    await act(async () => button("Undo").click());
+    expect(state.form.latePenalty).toBe("10");
+    expect(host.textContent).toContain("Undone.");
+  });
+
+  it("tells the next request what became of the fill", async () => {
+    const { bridge, handle } = builder();
+    bridge.open(handle);
+    askAssistant.mockResolvedValueOnce(penalty20);
+    askAssistant.mockResolvedValueOnce({ kind: "message", text: "Done." });
+    mountWith(bridge);
+    await ask("late penalty 20");
+    await ask("thanks");
+    const [, second] = askAssistant.mock.calls as [unknown, [{ history: { text: string }[]; form: { latePenalty: string } }]];
+    expect(second[0].history.at(-1)?.text).toContain("Filled into the team evaluation form on screen");
+    // And the form it sends is the filled one.
+    expect(second[0].form.latePenalty).toBe("20");
+  });
+
+  it("offers Undo on the latest fill only", async () => {
+    const { bridge, handle } = builder();
+    bridge.open(handle);
+    askAssistant.mockResolvedValueOnce(penalty20);
+    askAssistant.mockResolvedValueOnce({
+      ...penalty20,
+      proposal: { ...penalty20.proposal, latePenalty: null, anonymize: false, summary: "Turns off anonymity." },
+    });
+    mountWith(bridge);
+    await ask("late penalty 20");
+    await ask("turn off anonymity");
+    expect([...host.querySelectorAll("button")].filter((b) => b.textContent === "Undo")).toHaveLength(1);
+  });
+
+  it("names what the form's locks kept out, and what the document asked for that has no place", async () => {
+    const { state, bridge, handle } = builder({ fixed: true, anonLocked: true });
+    bridge.open(handle);
+    askAssistant.mockResolvedValue({
+      ...penalty20,
+      proposal: { ...penalty20.proposal, anonymize: false, notApplied: ["A “Not enough information” choice"] },
+    });
+    mountWith(bridge);
+    await ask("fill it in from the doc");
+    expect(state.form.anonymize).toBe(true);
+    expect(host.textContent).toContain("Left out");
+    expect(host.textContent).toContain("Anonymize stays on: students wrote under it");
+    expect(host.textContent).toContain("A “Not enough information” choice");
+  });
+
+  it("waits with Fill in when the builder was closed while it thought", async () => {
+    const { state, bridge, handle } = builder();
+    bridge.open(handle);
+    let answer: (r: AssistantReply) => void = () => undefined;
+    askAssistant.mockReturnValue(new Promise((r) => (answer = r)));
+    mountWith(bridge);
+    await ask("late penalty 20");
+    act(() => bridge.close(handle));
+    await act(async () => answer(penalty20));
+    expect(state.form.latePenalty).toBe("10");
+    expect(host.textContent).toContain("Open the evaluation and press Edit to fill this in.");
+    expect(button("Fill in").disabled).toBe(true);
+
+    act(() => bridge.open({ ...handle, id: "builder-2" }));
+    await act(async () => button("Fill in").click());
+    expect(state.form.latePenalty).toBe("20");
+  });
+
+  it("sends no form, and offers team examples, when no builder is open", async () => {
+    askAssistant.mockResolvedValue({ kind: "message", text: "Open the evaluation and press Edit." });
+    mountWith(createFormBridge());
+    expect(host.textContent).not.toContain("Set the late penalty");
+    await ask("set the late penalty to 20");
+    const [req] = askAssistant.mock.calls[0] as [Record<string, unknown>];
+    expect(req).not.toHaveProperty("form");
   });
 });

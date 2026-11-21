@@ -64,6 +64,44 @@ export interface Turn {
   text: string;
 }
 
+/** One rating category of a team evaluation: levels[0] describes a 1, levels[4] a 5. */
+export interface FormCategory {
+  name: string;
+  levels: string[];
+}
+
+export interface FormQuestion {
+  audience: "peer" | "self";
+  prompt: string;
+}
+
+/**
+ * The team evaluation builder on her screen, as it stands — unsaved edits
+ * included. Sent only while the builder is open; it is what fill_team_eval
+ * changes, and the model can only change it by drafting a fill the browser
+ * puts into the form. Saving is still her press of Save.
+ */
+export interface TeamEvalFormContext {
+  kind: "teameval";
+  title: string;
+  instructions: string;
+  /** "YYYY-MM-DDTHH:mm" in her local time, or "" for no due date. */
+  due: string;
+  /** Her local time when she asked, the same format, for "due Friday at 5". */
+  now: string;
+  categories: FormCategory[];
+  questions: FormQuestion[];
+  peerComments: boolean;
+  releaseComments: boolean;
+  anonymize: boolean;
+  /** As typed in the box, so a half-typed "1" reads as what it is. */
+  latePenalty: string;
+  /** Someone has submitted: wording only — no categories or questions added or removed. */
+  fixed: boolean;
+  /** Students wrote under anonymity: it cannot be turned off. */
+  anonLocked: boolean;
+}
+
 export interface AssistantRequest {
   courseId: string;
   message: string;
@@ -71,6 +109,8 @@ export interface AssistantRequest {
   snapshot: Snapshot;
   /** The file attached to this message, summarised. */
   attachment?: AttachmentSummary;
+  /** The team evaluation builder, when it is the screen she is on. */
+  form?: TeamEvalFormContext;
 }
 
 /** One student moved onto a team: an existing one by ref, or a new one by name. */
@@ -147,7 +187,29 @@ export interface FileImportProposal {
   summary: string;
 }
 
-export type Proposal = SeatProposal | ImportProposal | FormProposal | FileImportProposal;
+/**
+ * Changes to the team evaluation form on screen. Every field is "leave as it
+ * is" when null; categories and questions, when given, are the whole new list.
+ * The browser fills them into the form, and the form's own Save is what writes.
+ */
+export interface TeamEvalProposal {
+  kind: "teameval";
+  summary: string;
+  title: string | null;
+  instructions: string | null;
+  /** "YYYY-MM-DDTHH:mm" local. */
+  due: string | null;
+  categories: FormCategory[] | null;
+  questions: FormQuestion[] | null;
+  peerComments: boolean | null;
+  releaseComments: boolean | null;
+  anonymize: boolean | null;
+  latePenalty: number | null;
+  /** What she asked for, or the document said, that the form has no place for. */
+  notApplied: string[];
+}
+
+export type Proposal = SeatProposal | ImportProposal | FormProposal | FileImportProposal | TeamEvalProposal;
 
 export type AssistantReply =
   | { kind: "message"; text: string }

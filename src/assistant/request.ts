@@ -9,9 +9,12 @@ import type {
   AssistantRequest,
   AttachmentColumn,
   AttachmentSummary,
+  FormCategory,
+  FormQuestion,
   Snapshot,
   SnapshotStudent,
   SnapshotTeam,
+  TeamEvalFormContext,
   Turn,
 } from "./types";
 
@@ -154,6 +157,57 @@ function attachment(v: unknown): AttachmentSummary | undefined {
   };
 }
 
+const LOCAL_TIME = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/;
+/** Generous over what the builder keeps (teamEvalTool.ts) — this only bounds the prompt. */
+const FORM_TEXT = 4_000;
+const FORM_ITEMS = 40;
+/** Twenty categories with every description at the builder's 2,000-character limit, and room to spare. */
+const MAX_FORM_CHARS = 300_000;
+
+function bool(v: unknown, what: string): boolean {
+  if (typeof v !== "boolean") bad(`${what} is not on or off`);
+  return v;
+}
+
+function formCategory(v: unknown): FormCategory {
+  if (!isObj(v)) bad("a form category is not an object");
+  const levels = arr(v.levels, "a category's levels", 5).map((l) => str(l, "a category level", FORM_TEXT));
+  return { name: str(v.name, "a category name", FORM_TEXT), levels };
+}
+
+function formQuestion(v: unknown): FormQuestion {
+  if (!isObj(v)) bad("a form question is not an object");
+  if (v.audience !== "peer" && v.audience !== "self") bad("a form question has no audience");
+  return { audience: v.audience, prompt: str(v.prompt, "a form question", FORM_TEXT) };
+}
+
+/** The team evaluation builder she has open — described to the model, never acted on here. */
+function form(v: unknown): TeamEvalFormContext | undefined {
+  if (v === undefined || v === null) return undefined;
+  if (!isObj(v) || v.kind !== "teameval") bad("the open form is not one the assistant knows");
+  const due = str(v.due, "the form's due date", 16);
+  if (due && !LOCAL_TIME.test(due)) bad("the form's due date is not a date and time");
+  const now = str(v.now, "the time", 16);
+  if (!LOCAL_TIME.test(now)) bad("the time is not a date and time");
+  const out: TeamEvalFormContext = {
+    kind: "teameval",
+    title: str(v.title, "the form's title", MAX_NAME),
+    instructions: str(v.instructions, "the form's instructions", 40_000),
+    due,
+    now,
+    categories: arr(v.categories, "the form's categories", FORM_ITEMS).map(formCategory),
+    questions: arr(v.questions, "the form's questions", FORM_ITEMS).map(formQuestion),
+    peerComments: bool(v.peerComments, "Evaluate peer to peer"),
+    releaseComments: bool(v.releaseComments, "Release to students"),
+    anonymize: bool(v.anonymize, "Anonymize"),
+    latePenalty: str(v.latePenalty, "the late penalty", 20),
+    fixed: bool(v.fixed, "the form's lock"),
+    anonLocked: bool(v.anonLocked, "the anonymity lock"),
+  };
+  if (JSON.stringify(out).length > MAX_FORM_CHARS) bad("the open form is too long to send");
+  return out;
+}
+
 export function parseRequest(body: unknown): ParsedRequest {
   try {
     if (!isObj(body)) bad("the request is not an object");
@@ -166,9 +220,17 @@ export function parseRequest(body: unknown): ParsedRequest {
       bad("the conversation is too long — start a new one");
     }
     const file = attachment(body.attachment);
+    const open = form(body.form);
     return {
       ok: true,
-      request: { courseId, message, history, snapshot: snapshot(body.snapshot), ...(file ? { attachment: file } : {}) },
+      request: {
+        courseId,
+        message,
+        history,
+        snapshot: snapshot(body.snapshot),
+        ...(file ? { attachment: file } : {}),
+        ...(open ? { form: open } : {}),
+      },
     };
   } catch (e) {
     if (e instanceof Bad) return { ok: false, error: e.message };

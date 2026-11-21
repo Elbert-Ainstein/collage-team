@@ -1,4 +1,4 @@
-// The two things the assistant may propose, and the check on what comes back.
+// The things the assistant may propose, and the check on what comes back.
 //
 // Both are PROPOSALS. Calling one writes nothing; it hands the browser a
 // draft, and the browser shows it and waits for the instructor. That is why
@@ -12,6 +12,8 @@
 // to another provider later. "Exactly one of to_team / to_new_team" is
 // therefore enforced here rather than in the schema.
 
+import { Refusal, refuse } from "./refusal";
+import { FILL_TEAM_EVAL, parseFillTeamEval } from "./teamEvalTool";
 import type { ImportRow, Leftovers, Proposal, SeatMove } from "./types";
 
 /** A tool as any provider needs it: a name, when to use it, and its input. */
@@ -252,11 +254,17 @@ export const IMPORT_ATTACHMENT: ToolSpec = {
   schema: { type: "object", properties: { summary: SUMMARY }, required: ["summary"] },
 };
 
-export const TOOLS: ToolSpec[] = [SEAT_STUDENTS, PREPARE_IMPORT, FORM_TEAMS, IMPORT_ATTACHMENT];
+export const TOOLS: ToolSpec[] = [SEAT_STUDENTS, PREPARE_IMPORT, FORM_TEAMS, IMPORT_ATTACHMENT, FILL_TEAM_EVAL];
 
-/** What to offer: import_attachment only means something when a file is attached. */
-export function toolsFor(hasAttachment: boolean): ToolSpec[] {
-  return hasAttachment ? TOOLS : TOOLS.filter((t) => t !== IMPORT_ATTACHMENT);
+/**
+ * What to offer: import_attachment only when a file is attached, and
+ * fill_team_eval only while a team evaluation's builder is the screen she is
+ * on — there is no form for it to fill anywhere else.
+ */
+export function toolsFor(open: { attachment: boolean; form: boolean }): ToolSpec[] {
+  return TOOLS.filter(
+    (t) => (t !== IMPORT_ATTACHMENT || open.attachment) && (t !== FILL_TEAM_EVAL || open.form),
+  );
 }
 
 export type ParsedCall = { ok: true; proposal: Proposal } | { ok: false; error: string };
@@ -270,12 +278,6 @@ function text(v: unknown): string | null {
   if (typeof v !== "string") return null;
   const t = v.trim();
   return t ? t : null;
-}
-
-class Refusal extends Error {}
-
-function refuse(why: string): never {
-  throw new Refusal(why);
 }
 
 function list(v: unknown, what: string, optional = false): unknown[] {
@@ -438,6 +440,7 @@ export function parseToolCall(name: string, input: unknown): ParsedCall {
     if (name === PREPARE_IMPORT.name) return { ok: true, proposal: parseImport(input) };
     if (name === FORM_TEAMS.name) return { ok: true, proposal: parseForm(input) };
     if (name === IMPORT_ATTACHMENT.name) return { ok: true, proposal: { kind: "import-file", summary: summaryOf(input) } };
+    if (name === FILL_TEAM_EVAL.name) return { ok: true, proposal: parseFillTeamEval(input) };
     return refuse(`it asked for "${name}", which the assistant cannot do`);
   } catch (e) {
     if (e instanceof Refusal) return { ok: false, error: e.message };

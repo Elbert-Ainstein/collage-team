@@ -4,15 +4,42 @@
 // rather than a half-read proposal the preview would then draw.
 
 import { describe, expect, it } from "vitest";
-import { parseToolCall, TOOLS } from "./tools";
+import { parseToolCall, TOOLS, toolsFor } from "./tools";
 
 describe("TOOLS", () => {
   it("declares the proposal tools with an object schema", () => {
-    expect(TOOLS.map((t) => t.name).sort()).toEqual(["form_teams", "import_attachment", "prepare_import", "seat_students"]);
+    expect(TOOLS.map((t) => t.name).sort()).toEqual([
+      "fill_team_eval",
+      "form_teams",
+      "import_attachment",
+      "prepare_import",
+      "seat_students",
+    ]);
     for (const t of TOOLS) {
       expect(t.schema.type).toBe("object");
       expect(t.description.length).toBeGreaterThan(40);
     }
+  });
+
+  it("offers each screen-bound tool only where it has something to work on", () => {
+    const names = (open: { attachment: boolean; form: boolean }) => toolsFor(open).map((t) => t.name);
+    expect(names({ attachment: false, form: false })).toEqual(["seat_students", "prepare_import", "form_teams"]);
+    expect(names({ attachment: true, form: false })).toContain("import_attachment");
+    expect(names({ attachment: false, form: true })).toEqual(["seat_students", "prepare_import", "form_teams", "fill_team_eval"]);
+  });
+});
+
+describe("parseToolCall — fill_team_eval", () => {
+  it("reads a fill as a teameval proposal", () => {
+    const out = parseToolCall("fill_team_eval", { summary: "Sets the late penalty to 20%.", late_penalty: 20 });
+    expect(out).toMatchObject({ ok: true, proposal: { kind: "teameval", latePenalty: 20 } });
+  });
+
+  it("turns an unreadable fill into a refusal in words, not a throw", () => {
+    expect(parseToolCall("fill_team_eval", { summary: "x", late_penalty: 400 })).toEqual({
+      ok: false,
+      error: "the late penalty must be 0–100%",
+    });
   });
 });
 
