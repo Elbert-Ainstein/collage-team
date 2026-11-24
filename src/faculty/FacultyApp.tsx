@@ -1,7 +1,7 @@
 "use client";
 
-// The faculty app: Activities / Teams / TFs, plus three full-screen views
-// reached by drilling into an activity.
+// The faculty app: Activities / Projects / Check-in / Review / Teams / TFs,
+// plus three full-screen views reached by drilling into an activity.
 //
 // Navigation is a single `screen` value, exactly as the handoff specifies. The
 // sidebar is hidden on the three full-screen views and a 12px spacer takes its
@@ -54,6 +54,8 @@ import { TeamsScreen, type Incoming } from "./TeamsScreen";
 import { TFsScreen } from "./TFsScreen";
 import { LiveDetail } from "./live/LiveDetail";
 import { TeamEvalDetail } from "./teameval/TeamEvalDetail";
+import { ProjectsScreen } from "./projects/ProjectsScreen";
+import { PROJECT_PARAMS } from "./projects/where";
 import { AssistantLauncher } from "./assistant/AssistantLauncher";
 import { AssistantPanel, SHEET_QUERY } from "./assistant/AssistantPanel";
 import { createFormBridge, FormBridgeContext } from "./assistant/formBridge";
@@ -61,6 +63,7 @@ import "./faculty.css";
 
 export type Screen =
   | "activities"
+  | "projects"
   | "checkin"
   | "review"
   | "teams"
@@ -221,6 +224,7 @@ const WITH_ACTIVITY: Screen[] = [...FULL_SCREEN, "checkin", "review"];
 
 const SCREENS: string[] = [
   "activities",
+  "projects",
   "checkin",
   "review",
   "teams",
@@ -270,6 +274,9 @@ export function writeWhere(
   // person copying it was not looking at.
   if (at.selId && WITH_ACTIVITY.includes(at.screen)) q.set("a", at.selId);
   else q.delete("a");
+  // The Projects tab keeps its own place (which project, team and grader) on
+  // the URL. Those keys mean nothing on any other screen.
+  if (at.screen !== "projects") for (const k of PROJECT_PARAMS) q.delete(k);
   if (at.courseId) q.set("c", at.courseId);
   else q.delete("c");
   const qs = q.toString();
@@ -341,6 +348,8 @@ export function FacultyApp({
   const [handoff, setHandoff] = useState<Incoming | null>(null);
   /** The activity that was just created, so its page can open ready to edit. */
   const [fresh, setFresh] = useState<string | null>(null);
+  /** Bumped by the Projects tab when it's pressed while open: back to the list. */
+  const [projectsHome, setProjectsHome] = useState(0);
 
   const [courses, setCourses] = useState<Course[]>([]);
   const [courseId, setCourseId] = useState<string | null>(null);
@@ -404,11 +413,24 @@ export function FacultyApp({
   // browser, because a reload here is nine round trips — the perf pass exists
   // to stop paying them and back must not quietly reintroduce the bill.
   const popped = useRef(false);
+  const courseNow = useRef(courseId);
+  courseNow.current = courseId;
   useEffect(() => {
     const onPop = () => {
       const at = readWhere();
-      popped.current = true;
-      setScreen(at.screen ?? (at.selId ? "detail" : "activities"));
+      const next = at.screen ?? (at.selId ? "detail" : "activities");
+      // Only a pop that changes something this app holds runs the URL sync
+      // below, and only that run clears the flag. A pop inside one screen —
+      // the Projects tab moving between its own pages — changes nothing here,
+      // and setting the flag for it left it set: the next tab pressed was
+      // never written to the URL, so a reload went back to Projects.
+      if (
+        `${next}|${at.selId ?? ""}` !== lastPage.current ||
+        (at.courseId !== null && at.courseId !== courseNow.current)
+      ) {
+        popped.current = true;
+      }
+      setScreen(next);
       setSelId(at.selId);
       if (at.courseId) setCourseId(at.courseId);
     };
@@ -772,6 +794,16 @@ export function FacultyApp({
     return n;
   }, [data]);
   const toReview = useMemo(() => (data ? reviewCount(data.results) : 0), [data]);
+  /**
+   * Who is signed in, by name, for the grader on a project grading they start.
+   * The instructor's name when she owns the course; a TF's from the roster
+   * when it can be read. "" when neither is known — they type it.
+   */
+  const me = useMemo(() => {
+    if (!data) return "";
+    if (data.can.isOwner) return data.instructor ?? "";
+    return data.tfs.find((t) => t.user_id && t.user_id === uid)?.name ?? "";
+  }, [data, uid]);
 
   /**
    * Whose work the grading page opens on, when it was reached from the Review
@@ -873,6 +905,8 @@ export function FacultyApp({
             onError={fail}
           />
         ) : null;
+      case "projects":
+        return <ProjectsScreen data={data} me={me} home={projectsHome} onError={fail} />;
       case "teams":
         return (
           <TeamsScreen
@@ -1172,6 +1206,10 @@ export function FacultyApp({
               {(
                 [
                   { id: "activities" as const, label: "Activities", icon: "assignment" },
+                  // Project fairs: a rubric graded team by team, nothing handed
+                  // in. After Activities because it is the other kind of work
+                  // the course sets.
+                  { id: "projects" as const, label: "Projects", icon: "trophy" },
                   // Between Activities and Teams: it is what happens in the room,
                   // and it reads off the teams below it.
                   { id: "checkin" as const, label: "Check-in", icon: "check" },
@@ -1203,6 +1241,9 @@ export function FacultyApp({
                     // — or its marks from one labelled "Review" — would be a
                     // page nobody chose.
                     if (t.id === "checkin" || t.id === "review") setSelId(null);
+                    // Pressed while open: back to the list of projects, the
+                    // way the other tabs are their own pickers.
+                    if (t.id === "projects" && screen === "projects") setProjectsHome((n) => n + 1);
                     setScreen(t.id);
                   }}
                   title={railed ? t.label : undefined}

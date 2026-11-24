@@ -633,10 +633,33 @@ export async function moveStudents(
  */
 /** Recorded results for ONE team — what a per-team delete would cascade away. */
 export async function countOneTeamResults(teamId: string): Promise<number> {
-  return countAll(
-    db().from("check_in_results").select("id", { count: "exact", head: true })
-      .eq("team_id", teamId).neq("status", "none"),
-  );
+  const [results, projects] = await Promise.all([
+    countAll(
+      db().from("check_in_results").select("id", { count: "exact", head: true })
+        .eq("team_id", teamId).neq("status", "none"),
+    ),
+    countProjectGradings([teamId]),
+  ]);
+  return results + projects;
+}
+
+/**
+ * Project grades (0059) on these teams — each grader's go at one, done or not.
+ * A deleted team takes them with it, so the counts that warn before a team
+ * delete include them, as recorded team scores. A database without 0059 has
+ * none to lose.
+ */
+async function countProjectGradings(teamIds: string[]): Promise<number> {
+  if (!teamIds.length) return 0;
+  try {
+    return await countAllIn(teamIds, (chunk) =>
+      db().from("project_gradings").select("slot", { count: "exact", head: true }).in("team_id", chunk),
+    );
+  } catch (e) {
+    const m = String((e as Error)?.message ?? e);
+    if (/project_gradings/.test(m) && /does not exist|schema cache|could not find/i.test(m)) return 0;
+    throw e;
+  }
 }
 
 /**
@@ -655,10 +678,15 @@ export async function countTeamResults(teamSetId: string): Promise<number> {
     db().from("teams").select("id").eq("team_set_id", teamSetId).order("id").range(from, to),
   );
   if (!teams.length) return 0;
-  return countAllIn(teams.map((t) => t.id), (chunk) =>
-    db().from("check_in_results").select("id", { count: "exact", head: true })
-      .in("team_id", chunk).neq("status", "none"),
-  );
+  const ids = teams.map((t) => t.id);
+  const [results, projects] = await Promise.all([
+    countAllIn(ids, (chunk) =>
+      db().from("check_in_results").select("id", { count: "exact", head: true })
+        .in("team_id", chunk).neq("status", "none"),
+    ),
+    countProjectGradings(ids),
+  ]);
+  return results + projects;
 }
 
 /** Replace a set's teams with evenly-sized ones built from the roster. */

@@ -340,6 +340,15 @@ select '0058 team evaluation',
             then 'applied'
             else 'NOT APPLIED — run 0058_team_evaluation.sql' end
 union all
+select '0059 projects',
+       case when to_regclass('public.project_scores') is not null
+             and to_regprocedure('public.guard_project_grading()') is not null
+             and exists (select 1 from information_schema.columns
+                          where table_schema = 'public' and table_name = 'project_scores'
+                            and column_name = 'score' and is_nullable = 'YES')
+            then 'applied'
+            else 'NOT APPLIED — run 0059_projects.sql' end
+union all
 select '0060 team evaluation final once submitted, notes to the instructor',
        case when to_regclass('public.te_notes') is not null
              and coalesce(pg_get_functiondef(to_regprocedure('public.save_team_eval(uuid, jsonb, jsonb, boolean)'))
