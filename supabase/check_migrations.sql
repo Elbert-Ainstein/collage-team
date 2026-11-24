@@ -348,6 +348,22 @@ select '0059 projects',
                             and column_name = 'score' and is_nullable = 'YES')
             then 'applied'
             else 'NOT APPLIED — run 0059_projects.sql' end
+union all
+select '0060 team evaluation final once submitted, notes to the instructor',
+       case when to_regclass('public.te_notes') is not null
+             and coalesce(pg_get_functiondef(to_regprocedure('public.save_team_eval(uuid, jsonb, jsonb, boolean)'))
+                            ilike '%already submitted%', false)
+            then 'applied'
+            else 'NOT APPLIED — run 0060_team_eval_final_and_notes.sql' end
+union all
+select '0061 team evaluation late penalty in points',
+       case when exists (select 1 from information_schema.columns
+                          where table_schema = 'public' and table_name = 'te_settings'
+                            and column_name = 'late_on')
+             and coalesce(pg_get_functiondef(to_regprocedure('public.score_team_eval(uuid)'))
+                            ilike '%late_points%', false)
+            then 'applied'
+            else 'NOT APPLIED — run 0061_team_eval_late_points.sql' end
 order by 1;
 
 -- ------------------------------------------------------- and the buckets

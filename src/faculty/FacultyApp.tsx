@@ -58,6 +58,7 @@ import { ProjectsScreen } from "./projects/ProjectsScreen";
 import { PROJECT_PARAMS } from "./projects/where";
 import { AssistantLauncher } from "./assistant/AssistantLauncher";
 import { AssistantPanel, SHEET_QUERY } from "./assistant/AssistantPanel";
+import { createFormBridge, FormBridgeContext } from "./assistant/formBridge";
 import "./faculty.css";
 
 export type Screen =
@@ -339,6 +340,8 @@ export function FacultyApp({
   const [view, setView] = useState<"rows" | "columns">("rows");
   const [selId, setSelId] = useState<string | null>(null);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  /** Lets the assistant reach the form on screen — today the team evaluation builder. */
+  const [formBridge] = useState(createFormBridge);
   /** Where focus goes back to when the panel closes, so a keyboard is not stranded. */
   const launcher = useRef<HTMLButtonElement | null>(null);
   /** A class list the assistant rewrote, on its way to the Teams importer. */
@@ -1087,238 +1090,240 @@ export function FacultyApp({
   const banner = <FacultyError error={error} onClear={() => setError(null)} />;
 
   return (
-    <div className={`fv${canAssist ? " fv-assisted" : ""}`}>
-      {full ? (
-        <div className="fv-gutter" />
-      ) : (
-        <aside className={`fv-sidebar${railed ? " collapsed" : ""}`}>
-          {/* Everything above the account row lives in here so it can scroll on
-              a short window, leaving Sign out anchored to the bottom instead of
-              pushed past it. */}
-          <div className="fv-sidetop">
-          <div className="fv-railtop">
-            <button
-              type="button"
-              className="fv-collapse"
-              aria-label={railed ? "Expand the sidebar" : "Collapse the sidebar"}
-              aria-expanded={!railed}
-              title={railed ? "Expand the sidebar" : "Collapse the sidebar"}
-              onClick={toggleRail}
-            >
-              <FIcon name={railed ? "panelLeftClosed" : "panelLeft"} size={17} />
-            </button>
-          </div>
-          {/* The course name is the way home. It reads like a masthead and people
-              click it like one — from four screens deep in grading there was
-              otherwise no single control that meant "back to the class". */}
-          {namingCourse && data ? (
-            <input
-              className="fv-in"
-              style={{ width: "100%", height: 34, fontFamily: "var(--fv-serif)", fontSize: 19 }}
-              value={courseDraft}
-              autoFocus
-              aria-label="Course name"
-              onChange={(e) => setCourseDraft(e.target.value)}
-              onBlur={commitCourseName}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") commitCourseName();
-                if (e.key === "Escape") setNamingCourse(false);
-              }}
-            />
-          ) : (
-            <button
-              type="button"
-              className="fv-coursehome"
-              title="Back to the class"
-              onClick={() => {
-                setScreen("activities");
-                setSelId(null);
-              }}
-            >
-              <span className="fv-coursetitle">{data?.course.name ?? "Applied Physics 50"}</span>
-              <span className="fv-meta">
-                <span>{data ? `${data.roster.length} students` : "—"}</span>
-                {data?.course.term ? <span>· {data.course.term}</span> : null}
-                {/* Rename lives inside the meta line rather than beside the
-                    title: the title is the way home, and a second control on it
-                    makes the target for that ambiguous. Owner only — a TF is a
-                    guest on somebody else's course. */}
-                {data?.can.isOwner ? (
-                  <span
-                    role="button"
-                    tabIndex={0}
-                    className="fv-courserename"
-                    title="Rename this course"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setCourseDraft(data.course.name);
-                      setNamingCourse(true);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key !== "Enter" && e.key !== " ") return;
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setCourseDraft(data.course.name);
-                      setNamingCourse(true);
+    <FormBridgeContext.Provider value={formBridge}>
+      <div className={`fv${canAssist ? " fv-assisted" : ""}`}>
+        {full ? (
+          <div className="fv-gutter" />
+        ) : (
+          <aside className={`fv-sidebar${railed ? " collapsed" : ""}`}>
+            {/* Everything above the account row lives in here so it can scroll on
+                a short window, leaving Sign out anchored to the bottom instead of
+                pushed past it. */}
+            <div className="fv-sidetop">
+            <div className="fv-railtop">
+              <button
+                type="button"
+                className="fv-collapse"
+                aria-label={railed ? "Expand the sidebar" : "Collapse the sidebar"}
+                aria-expanded={!railed}
+                title={railed ? "Expand the sidebar" : "Collapse the sidebar"}
+                onClick={toggleRail}
+              >
+                <FIcon name={railed ? "panelLeftClosed" : "panelLeft"} size={17} />
+              </button>
+            </div>
+            {/* The course name is the way home. It reads like a masthead and people
+                click it like one — from four screens deep in grading there was
+                otherwise no single control that meant "back to the class". */}
+            {namingCourse && data ? (
+              <input
+                className="fv-in"
+                style={{ width: "100%", height: 34, fontFamily: "var(--fv-serif)", fontSize: 19 }}
+                value={courseDraft}
+                autoFocus
+                aria-label="Course name"
+                onChange={(e) => setCourseDraft(e.target.value)}
+                onBlur={commitCourseName}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") commitCourseName();
+                  if (e.key === "Escape") setNamingCourse(false);
+                }}
+              />
+            ) : (
+              <button
+                type="button"
+                className="fv-coursehome"
+                title="Back to the class"
+                onClick={() => {
+                  setScreen("activities");
+                  setSelId(null);
+                }}
+              >
+                <span className="fv-coursetitle">{data?.course.name ?? "Applied Physics 50"}</span>
+                <span className="fv-meta">
+                  <span>{data ? `${data.roster.length} students` : "—"}</span>
+                  {data?.course.term ? <span>· {data.course.term}</span> : null}
+                  {/* Rename lives inside the meta line rather than beside the
+                      title: the title is the way home, and a second control on it
+                      makes the target for that ambiguous. Owner only — a TF is a
+                      guest on somebody else's course. */}
+                  {data?.can.isOwner ? (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      className="fv-courserename"
+                      title="Rename this course"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setCourseDraft(data.course.name);
+                        setNamingCourse(true);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key !== "Enter" && e.key !== " ") return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setCourseDraft(data.course.name);
+                        setNamingCourse(true);
+                      }}
+                    >
+                      · Rename
+                    </span>
+                  ) : null}
+                </span>
+              </button>
+            )}
+
+            {courses.length > 1 ? (
+              <div className="fv-seg fv-courseswitch">
+                {courses.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className={c.id === courseId ? "on" : ""}
+                    onClick={() => {
+                      setCourseId(c.id);
+                      setScreen("activities");
+                      setSelId(null);
                     }}
                   >
-                    · Rename
-                  </span>
-                ) : null}
-              </span>
-            </button>
-          )}
+                    {c.code ?? c.name}
+                    {/* Which of these is YOURS. The switcher can now hold both
+                        your own courses and ones you help teach, and those give
+                        you very different buttons on the screens behind them —
+                        finding that out by discovering a control is missing is
+                        the wrong way round. */}
+                    {uid && c.owner_id !== uid ? (
+                      <span className="fv-helping" title="You are a teaching fellow on this course">
+                        TF
+                      </span>
+                    ) : null}
+                  </button>
+                ))}
+              </div>
+            ) : null}
 
-          {courses.length > 1 ? (
-            <div className="fv-seg fv-courseswitch">
-              {courses.map((c) => (
+            <nav className="fv-nav">
+              {(
+                [
+                  { id: "activities" as const, label: "Activities", icon: "assignment" },
+                  // Project fairs: a rubric graded team by team, nothing handed
+                  // in. After Activities because it is the other kind of work
+                  // the course sets.
+                  { id: "projects" as const, label: "Projects", icon: "trophy" },
+                  // Between Activities and Teams: it is what happens in the room,
+                  // and it reads off the teams below it.
+                  { id: "checkin" as const, label: "Check-in", icon: "check" },
+                  // The instructor's in-tray: what the TFs have marked, waiting
+                  // to go out. Sits after the marking and before the roster.
+                  { id: "review" as const, label: "Review", icon: "assignment" },
+                  { id: "teams" as const, label: "Teams", icon: "groups" },
+                  { id: "tfs" as const, label: "TFs", icon: "school" },
+                ] as const
+              )
+                // A TF who can only grade reads NO rows from tutorial_marks
+                // (0016 gates reads on can_run_checkins_course), so the tab
+                // painted a complete, plausible, entirely blank sheet — which
+                // reads as "nothing has been marked yet" rather than "this is
+                // not yours to see". Showing a control that always fails is the
+                // thing worth avoiding.
+                .filter((t) => t.id !== "tfs" || (data?.can.manageTFs ?? true))
+                .filter((t) => t.id !== "checkin" || (data?.can.runCheckIns ?? true))
+                .filter((t) => t.id !== "review" || (data ? showReview(data) : true))
+                .map((t) => (
                 <button
-                  key={c.id}
+                  key={t.id}
                   type="button"
-                  className={c.id === courseId ? "on" : ""}
+                  className={`fv-navbtn${screen === t.id ? " on" : ""}`}
                   onClick={() => {
-                    setCourseId(c.id);
-                    setScreen("activities");
-                    setSelId(null);
+                    // The tab is the picker. The activity on the URL is
+                    // whichever one was last open on a full screen, and
+                    // arriving on its sheet from a tab labelled "Check-in"
+                    // — or its marks from one labelled "Review" — would be a
+                    // page nobody chose.
+                    if (t.id === "checkin" || t.id === "review") setSelId(null);
+                    // Pressed while open: back to the list of projects, the
+                    // way the other tabs are their own pickers.
+                    if (t.id === "projects" && screen === "projects") setProjectsHome((n) => n + 1);
+                    setScreen(t.id);
                   }}
+                  title={railed ? t.label : undefined}
                 >
-                  {c.code ?? c.name}
-                  {/* Which of these is YOURS. The switcher can now hold both
-                      your own courses and ones you help teach, and those give
-                      you very different buttons on the screens behind them —
-                      finding that out by discovering a control is missing is
-                      the wrong way round. */}
-                  {uid && c.owner_id !== uid ? (
-                    <span className="fv-helping" title="You are a teaching fellow on this course">
-                      TF
-                    </span>
+                  <FIcon name={t.icon} size={18} />
+                  <span className="fv-navlbl">{t.label}</span>
+                  {t.id === "activities" && toGrade > 0 ? (
+                    <>
+                      <span className="fv-navcount">{toGrade} to grade</span>
+                      {/* The count has nowhere to go on the rail, or on the top
+                          strip a phone gets, but "there is work waiting" is the
+                          part worth keeping. Both ship and CSS picks — the hidden
+                          one is display:none, so it leaves the accessibility tree
+                          with the pixels and nothing is announced twice. */}
+                      <span className="fv-navdot" aria-label={`${toGrade} to grade`} />
+                    </>
+                  ) : null}
+                  {t.id === "review" && toReview > 0 ? (
+                    <>
+                      <span className="fv-navcount">{toReview} waiting</span>
+                      <span className="fv-navdot" aria-label={`${toReview} waiting for review`} />
+                    </>
                   ) : null}
                 </button>
               ))}
-            </div>
-          ) : null}
+            </nav>
 
-          <nav className="fv-nav">
-            {(
-              [
-                { id: "activities" as const, label: "Activities", icon: "assignment" },
-                // Project fairs: a rubric graded team by team, nothing handed
-                // in. After Activities because it is the other kind of work
-                // the course sets.
-                { id: "projects" as const, label: "Projects", icon: "trophy" },
-                // Between Activities and Teams: it is what happens in the room,
-                // and it reads off the teams below it.
-                { id: "checkin" as const, label: "Check-in", icon: "check" },
-                // The instructor's in-tray: what the TFs have marked, waiting
-                // to go out. Sits after the marking and before the roster.
-                { id: "review" as const, label: "Review", icon: "assignment" },
-                { id: "teams" as const, label: "Teams", icon: "groups" },
-                { id: "tfs" as const, label: "TFs", icon: "school" },
-              ] as const
-            )
-              // A TF who can only grade reads NO rows from tutorial_marks
-              // (0016 gates reads on can_run_checkins_course), so the tab
-              // painted a complete, plausible, entirely blank sheet — which
-              // reads as "nothing has been marked yet" rather than "this is
-              // not yours to see". Showing a control that always fails is the
-              // thing worth avoiding.
-              .filter((t) => t.id !== "tfs" || (data?.can.manageTFs ?? true))
-              .filter((t) => t.id !== "checkin" || (data?.can.runCheckIns ?? true))
-              .filter((t) => t.id !== "review" || (data ? showReview(data) : true))
-              .map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                className={`fv-navbtn${screen === t.id ? " on" : ""}`}
-                onClick={() => {
-                  // The tab is the picker. The activity on the URL is
-                  // whichever one was last open on a full screen, and
-                  // arriving on its sheet from a tab labelled "Check-in"
-                  // — or its marks from one labelled "Review" — would be a
-                  // page nobody chose.
-                  if (t.id === "checkin" || t.id === "review") setSelId(null);
-                  // Pressed while open: back to the list of projects, the
-                  // way the other tabs are their own pickers.
-                  if (t.id === "projects" && screen === "projects") setProjectsHome((n) => n + 1);
-                  setScreen(t.id);
-                }}
-                title={railed ? t.label : undefined}
-              >
-                <FIcon name={t.icon} size={18} />
-                <span className="fv-navlbl">{t.label}</span>
-                {t.id === "activities" && toGrade > 0 ? (
-                  <>
-                    <span className="fv-navcount">{toGrade} to grade</span>
-                    {/* The count has nowhere to go on the rail, or on the top
-                        strip a phone gets, but "there is work waiting" is the
-                        part worth keeping. Both ship and CSS picks — the hidden
-                        one is display:none, so it leaves the accessibility tree
-                        with the pixels and nothing is announced twice. */}
-                    <span className="fv-navdot" aria-label={`${toGrade} to grade`} />
-                  </>
-                ) : null}
-                {t.id === "review" && toReview > 0 ? (
-                  <>
-                    <span className="fv-navcount">{toReview} waiting</span>
-                    <span className="fv-navdot" aria-label={`${toReview} waiting for review`} />
-                  </>
-                ) : null}
-              </button>
-            ))}
-          </nav>
-
-          {data && !data.can.isOwner ? (
-            <div className="fv-tfnote">
-              You are a teaching fellow on this course. {tfNote(data.can)}
-            </div>
-          ) : null}
-
-          </div>
-
-          <div className="fv-sidefoot">
-            <span className="fv-email" title={account}>
-              {account ?? "Signed in"}
-            </span>
-            {onSignOut ? (
-              <button
-                type="button"
-                className="fv-btn outline sm fv-signout"
-                onClick={() => void onSignOut()}
-                title={account ?? "Sign out"}
-              >
-                {railed ? "Out" : "Sign out"}
-              </button>
+            {data && !data.can.isOwner ? (
+              <div className="fv-tfnote">
+                You are a teaching fellow on this course. {tfNote(data.can)}
+              </div>
             ) : null}
-          </div>
-        </aside>
-      )}
 
-      <div className="fv-main">
-        {error ? (
-          <div style={{ position: "absolute", inset: "18px 24px auto 24px", zIndex: 20 }}>
-            {banner}
-          </div>
+            </div>
+
+            <div className="fv-sidefoot">
+              <span className="fv-email" title={account}>
+                {account ?? "Signed in"}
+              </span>
+              {onSignOut ? (
+                <button
+                  type="button"
+                  className="fv-btn outline sm fv-signout"
+                  onClick={() => void onSignOut()}
+                  title={account ?? "Sign out"}
+                >
+                  {railed ? "Out" : "Sign out"}
+                </button>
+              ) : null}
+            </div>
+          </aside>
+        )}
+
+        <div className="fv-main">
+          {error ? (
+            <div style={{ position: "absolute", inset: "18px 24px auto 24px", zIndex: 20 }}>
+              {banner}
+            </div>
+          ) : null}
+          {body()}
+        </div>
+
+        {/* Not a screen and not in the sidebar: a panel beside whichever screen
+            is open — the full-screen ones included — opened from the same corner
+            everywhere. See AssistantLauncher for why the corner. */}
+        {data && canAssist ? (
+          <>
+            <AssistantPanel
+              key={data.course.id}
+              data={data}
+              hidden={!assistantOpen}
+              onClose={closeAssistant}
+              onChanged={() => refresh().catch(fail)}
+              onImport={toImporter}
+            />
+            {assistantOpen ? null : <AssistantLauncher ref={launcher} onOpen={() => setAssistantOpen(true)} />}
+          </>
         ) : null}
-        {body()}
       </div>
-
-      {/* Not a screen and not in the sidebar: a panel beside whichever screen
-          is open — the full-screen ones included — opened from the same corner
-          everywhere. See AssistantLauncher for why the corner. */}
-      {data && canAssist ? (
-        <>
-          <AssistantPanel
-            key={data.course.id}
-            data={data}
-            hidden={!assistantOpen}
-            onClose={closeAssistant}
-            onChanged={() => refresh().catch(fail)}
-            onImport={toImporter}
-          />
-          {assistantOpen ? null : <AssistantLauncher ref={launcher} onOpen={() => setAssistantOpen(true)} />}
-        </>
-      ) : null}
-    </div>
+    </FormBridgeContext.Provider>
   );
 }
 

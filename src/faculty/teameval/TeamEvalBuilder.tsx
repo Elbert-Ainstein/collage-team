@@ -2,14 +2,20 @@
 
 // Making a team evaluation, in two steps: the activity (title, description,
 // week, due date), then what students fill in — the rating categories, each a
-// 1–5 scale with a sentence for every point, and the open-ended questions,
-// some about each teammate and some about themselves. Finish saves both and,
-// the first time, puts it in front of the class.
+// 1–5 scale with a sentence for every point, and the open-ended questions:
+// about each teammate, about themselves, and last an optional note to the
+// instructor that arrives without a name (0060). Each set says who reads the
+// answers. Finish saves both and, the first time, puts it in front of the
+// class.
 //
 // Opened again later it edits the same evaluation. Once anyone has submitted,
 // categories and questions can't be added or removed (0058) — wording can.
+//
+// While it is open the assistant can read and fill this form (formBridge.ts):
+// from a rubric or a Google Doc, or one setting at a time. A fill changes only
+// what is on screen; Finish or Save is still what writes.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { updateActivity } from "@/checkins/data";
 import type { Activity } from "@/checkins/types";
 import { saveTeamEvalShape, setTeamEvalSettings } from "@/teameval/data";
@@ -23,9 +29,11 @@ import {
   type QuestionDraft,
 } from "@/teameval/defaults";
 import { AutoTextarea } from "@/teameval/AutoTextarea";
-import { outOf } from "@/teameval/model";
+import { outOf, readersOf, type Readers } from "@/teameval/model";
 import type { QuestionAudience, TeamEvalSnapshot } from "@/teameval/types";
 import { Ic } from "@/live/ui";
+import { useFormBridge, type TeamEvalFormHandle } from "../assistant/formBridge";
+import type { TeamEvalForm } from "../assistant/teamEvalFill";
 import { fromLocalInput, toLocalInput } from "../ActivityDetail";
 import { DescriptionEditor } from "../DescriptionEditor";
 import type { FacultyData } from "../FacultyApp";
@@ -37,6 +45,14 @@ import { Steps } from "../Steps";
 const NAME_MAX = 120;
 const PROMPT_MAX = 1000;
 const LEVEL_MAX = 2000;
+
+/** Who reads a section's answers, as the instructor sees it said. */
+const READERS: Record<Readers, { icon: string; text: string }> = {
+  "teammate-anonymous": { icon: "eye", text: "Shown to that teammate · anonymous" },
+  "teammate-named": { icon: "eye", text: "Shown to that teammate · with names" },
+  instructor: { icon: "lock", text: "Instructor only" },
+  "instructor-anonymous": { icon: "eyeOff", text: "Anonymous · optional" },
+};
 
 const STEPS = [
   { key: "activity", label: "Activity" },
@@ -53,6 +69,11 @@ interface Props {
   /** Saved. `published` when this Finish is what put it in front of the class. */
   onDone: (published: boolean) => void;
   onError: (e: unknown) => void;
+}
+
+/** The first step's fields as the activity row stores them. */
+function basicsFrom(f: { week: number | null; due: string; desc: string }) {
+  return { week: f.week, due_at: fromLocalInput(f.due), source_text: f.desc.trim() ? f.desc.trim() : null };
 }
 
 function Switch({ on, label, disabled, title, onChange }: { on: boolean; label: string; disabled?: boolean; title?: string; onChange: (on: boolean) => void }) {
@@ -93,19 +114,74 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
   const [peer, setPeer] = useState(snapshot.settings.peer_comments);
   const [release, setRelease] = useState(snapshot.settings.release_comments);
   const [anon, setAnon] = useState(snapshot.settings.anonymize);
-  const [penalty, setPenalty] = useState(String(snapshot.settings.late_penalty));
+  const [lateOn, setLateOn] = useState(snapshot.settings.late_on);
+  /** Points off a late grade, as typed. */
+  const [penalty, setPenalty] = useState(String(snapshot.settings.late_points));
   const [busy, setBusy] = useState(false);
+  /** The first step's fields as last saved, so Finish writes only what changed since. */
+  const opening = useRef({ week, due, desc });
 
   const weeks = useMemo(() => [...data.weeks].sort((a, b) => a.week - b.week), [data.weeks]);
   const weekName = (w: number | null) => weeks.find((x) => x.week === w)?.title || (w === null ? "No week" : `Week ${w}`);
 
   const pen = Number(penalty);
   const total = outOf(categories);
-  const problem =
-    problemWith(categories, questions) ??
-    (!penalty.trim() || !Number.isFinite(pen) || pen < 0 || pen > 100 ? "Late penalty: 0–100%" : null);
+  // Points off can't be more than the whole grade. Off, the box isn't shown
+  // and what it last held is kept for when it's turned back on.
+  const penOk = penalty.trim() !== "" && Number.isFinite(pen) && pen >= 0 && pen <= total;
+  const problem = problemWith(categories, questions) ?? (lateOn && !penOk ? `Late penalty: 0–${total} pts` : null);
   // Turning anonymity off after students wrote under it is refused (0058).
   const anonLocked = fixed && snapshot.settings.anonymize;
+  const saveLabel = firstTime ? "Finish" : "Save";
+
+  // The assistant's way in: what the form says now, and how to fill it.
+  const bridge = useFormBridge();
+  /** Bumped when a fill rewrites the instructions: their box reads its text only when it mounts. */
+  const [descVersion, setDescVersion] = useState(0);
+  /** One id for as long as this builder is open, so a fill's Undo outlives a change of lock. */
+  const [handleId] = useState(() => crypto.randomUUID());
+  const latest = useRef<TeamEvalForm | null>(null);
+  latest.current = {
+    title,
+    instructions: desc,
+    due,
+    categories,
+    questions,
+    peerComments: peer,
+    releaseComments: release,
+    anonymize: anon,
+    lateOn,
+    latePoints: penalty,
+  };
+  useEffect(() => {
+    if (!bridge) return;
+    const handle: TeamEvalFormHandle = {
+      kind: "teameval",
+      id: handleId,
+      read: () => latest.current as TeamEvalForm,
+      fill: (next, { showForm }) => {
+        if (next.instructions !== latest.current?.instructions) setDescVersion((v) => v + 1);
+        setTitle(next.title);
+        setDesc(next.instructions);
+        setDue(next.due);
+        setCategories(next.categories);
+        setQuestions(next.questions);
+        setPeer(next.peerComments);
+        setRelease(next.releaseComments);
+        setAnon(next.anonymize);
+        setLateOn(next.lateOn);
+        setPenalty(next.latePoints);
+        if (showForm) {
+          setStep(1);
+          setSawForm(true);
+        }
+      },
+      limits: { fixed, anonLocked },
+      saveLabel,
+    };
+    bridge.open(handle);
+    return () => bridge.close(handle);
+  }, [bridge, handleId, fixed, anonLocked, saveLabel]);
 
   const setCat = (id: string, change: Partial<CategoryDraft>) => setCategories((cs) => cs.map((c) => (c.id === id ? { ...c, ...change } : c)));
   const setLevel = (id: string, score: number, text: string) =>
@@ -115,12 +191,9 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
   const saveBasics = async () => {
     setBusy(true);
     try {
-      await updateActivity(activity.id, {
-        title: title.trim(),
-        week,
-        due_at: fromLocalInput(due),
-        source_text: desc.trim() ? desc.trim() : null,
-      });
+      await updateActivity(activity.id, { title: title.trim(), ...basicsFrom({ week, due, desc }) });
+      // Saved: Finish need not write these again unless they change after this.
+      opening.current = { week, due, desc };
       if (!firstTime && !sawForm) {
         onDone(false);
         return;
@@ -144,10 +217,20 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
         peer_comments: peer,
         release_comments: release,
         anonymize: anon,
-        late_penalty: pen,
+        late_on: lateOn,
+        late_points: penOk ? pen : snapshot.settings.late_points,
       });
+      // The first step's fields too, when they changed: the assistant can fill
+      // them while she is on this one, and Continue — which saves them
+      // otherwise — is behind her. Only what changed: a due date read from
+      // individual_due_at must not be copied into due_at by a Save.
+      const basics = basicsFrom({ week, due, desc });
+      const opened = opening.current;
       await updateActivity(activity.id, {
         title: title.trim() || activity.title,
+        ...(week !== opened.week ? { week: basics.week } : {}),
+        ...(due !== opened.due ? { due_at: basics.due_at } : {}),
+        ...(desc !== opened.desc ? { source_text: basics.source_text } : {}),
         points_total: total,
         ...(firstTime ? { opens_at: null } : {}),
       });
@@ -158,13 +241,22 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
     }
   };
 
-  const questionColumn = (audience: QuestionAudience, heading: string, off: boolean) => {
+  /** One kind of question — about each teammate, or about themselves — and who reads the answers. */
+  const questionSection = (audience: QuestionAudience, heading: string, off: boolean) => {
     const list = questions.filter((q) => q.audience === audience);
+    const readers = READERS[readersOf(audience, { release_comments: release, anonymize: anon })];
     return (
-      <div className={`te-qcol${off ? " off" : ""}`}>
+      <section className={`te-qcol${off ? " off" : ""}`} aria-label={heading}>
         <div className="te-qcolhead">
-          <span className="fv-eyebrow">{heading}</span>
-          {off ? <span className="fv-sub">Off</span> : null}
+          <span className="te-qcoltitle">{heading}</span>
+          {off ? (
+            <span className="te-reads">Off</span>
+          ) : (
+            <span className={`te-reads ${audience}`}>
+              <Ic name={readers.icon} size={13} />
+              {readers.text}
+            </span>
+          )}
         </div>
         {list.map((q, i) => (
           <div key={q.id} className="te-qrow">
@@ -195,7 +287,7 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
             <Ic name="add" size={15} /> Add question
           </button>
         )}
-      </div>
+      </section>
     );
   };
 
@@ -217,7 +309,7 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
           <>
             <span className="te-problem">{problem}</span>
             <button type="button" className="fv-btn primary sm" disabled={!!problem || busy} onClick={() => void finish()}>
-              {busy ? "Saving…" : firstTime ? "Finish" : "Save"}
+              {busy ? "Saving…" : saveLabel}
             </button>
           </>
         ) : null}
@@ -235,7 +327,7 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
               autoFocus
               onChange={(e) => setTitle(e.target.value)}
             />
-            <DescriptionEditor initial={desc} files={[]} onChange={setDesc} placeholder="Instructions" />
+            <DescriptionEditor key={descVersion} initial={desc} files={[]} onChange={setDesc} placeholder="Instructions" />
             <div className="fv-fields">
               <label className="fv-field">
                 <span className="fv-eyebrow">Week</span>
@@ -329,8 +421,9 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
 
                 <h2 className="te-h2">Questions</h2>
                 <div className="te-qcols">
-                  {questionColumn("peer", "Each teammate", !peer)}
-                  {questionColumn("self", "Self reflection", false)}
+                  {questionSection("peer", "For each teammate", !peer)}
+                  {questionSection("self", "Self reflection", false)}
+                  {questionSection("instructor", "Note to the instructor", false)}
                 </div>
               </section>
 
@@ -354,13 +447,26 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
                     <span>points · 5 per category</span>
                   </div>
                   <p className="lq-bnote">Each student gets the sum of their teammates’ averages.</p>
-                  <label className="fv-field">
-                    <span className="fv-eyebrow">Late penalty</span>
-                    <span className="te-pct">
-                      <input className="fv-in" type="number" min={0} max={100} step="any" value={penalty} onChange={(e) => setPenalty(e.target.value)} />
-                      <span>%</span>
-                    </span>
-                  </label>
+                  <Switch on={lateOn} label="Late penalty" onChange={setLateOn} />
+                  {lateOn ? (
+                    <label className="fv-field">
+                      <span className="fv-eyebrow">Points off</span>
+                      <span className="te-pct">
+                        <input
+                          className="fv-in"
+                          type="number"
+                          min={0}
+                          max={total}
+                          step="any"
+                          value={penalty}
+                          aria-label="Late penalty, in points"
+                          onChange={(e) => setPenalty(e.target.value)}
+                        />
+                        <span>pts</span>
+                      </span>
+                    </label>
+                  ) : null}
+                  <p className="lq-bnote">{lateOn ? `Off a late student’s grade, out of ${total}.` : "Late students are still marked late."}</p>
                   <p className="lq-bnote">Not submitted: 0</p>
                 </div>
               </aside>

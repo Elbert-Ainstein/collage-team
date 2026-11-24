@@ -4,6 +4,11 @@
 // a class spreadsheet and describe the teams you want — and it drafts it. Nothing is written until the instructor presses the button on the
 // draft — see src/assistant/types.ts for why the server cannot write at all.
 //
+// On a team evaluation's builder it also fills in the form — from a rubric
+// pasted or a Google Doc linked, or one setting at a time. That draft goes
+// straight into the form (see TeamEvalCard for why), and the builder's own
+// Save is still the only thing that writes.
+//
 // Kept mounted while closed, so the conversation survives a trip to another
 // screen and back. A course switch starts a new one (FacultyApp keys this on
 // the course), because every ref in the old one points at the other class.
@@ -11,7 +16,7 @@
 import { useEffect, useRef, useState } from "react";
 import { decodeRosterFile, isSupportedRosterFile } from "@/checkins/rosterImport";
 import { MAX_MESSAGE } from "@/assistant/request";
-import type { AttachmentSummary } from "@/assistant/types";
+import type { AttachmentSummary, TeamEvalProposal } from "@/assistant/types";
 import type { FacultyData } from "../FacultyApp";
 import { FIcon } from "../icons";
 import { askAssistant } from "./client";
@@ -21,6 +26,9 @@ import { parseTable, summarize, type Table } from "./table";
 import { emailsNotIn, rowsToCsv } from "./importRows";
 import { SeatingCard } from "./SeatingCard";
 import { buildSnapshot } from "./snapshot";
+import { fillThrough, undoThrough, useFormBridge, useOpenForm } from "./formBridge";
+import { formContext } from "./teamEvalFill";
+import { TeamEvalCard } from "./TeamEvalCard";
 import { historyFor, type DraftStatus, type Entry } from "./thread";
 import "./assistant.css";
 
@@ -43,6 +51,9 @@ interface AssistantPanelProps {
   /** Hand a class list to the Teams screen's importer. */
   onImport: (text: string, source: string) => void;
 }
+
+/** On a team evaluation's builder: what it can do there. */
+const FORM_TRIES = ["Fill this in from my Google Doc: ", "Set the late penalty to 2 points", "Turn off anonymity"];
 
 function tries(data: FacultyData): string[] {
   const someone = data.roster[0]?.name.split(" ")[0];
@@ -76,6 +87,9 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
   /** Read when an answer lands, which may be after she has moved on. */
   const hiddenNow = useRef(hidden);
   hiddenNow.current = hidden;
+  /** The team evaluation builder, when it is the screen she is on. */
+  const bridge = useFormBridge();
+  const openForm = useOpenForm(bridge);
 
   useEffect(() => () => inFlight.current?.abort(), []);
   useEffect(() => {
@@ -106,6 +120,8 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
     const { snapshot, refs } = buildSnapshot({ course: data.course, roster: data.roster, teams: data.teams });
     const history = historyFor(entries);
     const file = attached;
+    const asked = bridge?.get() ?? null;
+    const form = asked ? formContext(asked.read(), asked.limits, new Date()) : undefined;
     setEntries((prev) => [...prev, { id: nextId.current++, role: "user", text, fileName: file?.table.name }]);
     setDraft("");
     setNote(null);
@@ -115,7 +131,14 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
     const id = nextId.current++;
     try {
       const reply = await askAssistant(
-        { courseId: data.course.id, message: text, history, snapshot, ...(file ? { attachment: file.summary } : {}) },
+        {
+          courseId: data.course.id,
+          message: text,
+          history,
+          snapshot,
+          ...(file ? { attachment: file.summary } : {}),
+          ...(form ? { form } : {}),
+        },
         controller.signal,
       );
       // Addresses she wrote, plus the ones already on the roster: anything else
@@ -126,10 +149,17 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
       const unseen = reply.kind === "proposal" && reply.proposal.kind === "import"
         ? emailsNotIn(reply.proposal.rows, known)
         : [];
-      const entry: Entry =
+      const asDrafted: Entry =
         reply.kind === "proposal"
           ? { id, role: "assistant", text: reply.text, proposal: reply.proposal, refs, status: "open", unseen, table: file?.table }
           : { id, role: "assistant", text: reply.text };
+      // Into the form at once — but only the form she asked about, and only
+      // while she is looking: closed, she may have changed her mind.
+      const sameForm = asked !== null && bridge?.get()?.id === asked.id;
+      const entry =
+        asDrafted.proposal?.kind === "teameval" && sameForm && !hiddenNow.current
+          ? filled(asDrafted, asDrafted.proposal)
+          : asDrafted;
       setEntries((prev) => [...prev, entry]);
       // A list goes straight to the importer: its preview is the next thing
       // she needs to see, and it writes nothing until she presses its button.
@@ -146,6 +176,19 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
       setBusy(false);
     }
   }
+
+  /** The entry with its draft put into the open form, or as it was if no form is open. */
+  function filled(entry: Entry, draft: TeamEvalProposal): Entry {
+    const fill = fillThrough(bridge, draft);
+    return fill ? { ...entry, status: "applied", fill } : entry;
+  }
+
+  function undoFill(entry: Entry) {
+    if (entry.fill && undoThrough(bridge, entry.fill)) setStatus(entry.id, "undone");
+  }
+
+  /** Only the latest fill can be undone: putting back an older one would lose the newer. */
+  const latestFill = entries.findLast((e) => e.proposal?.kind === "teameval" && e.status === "applied")?.id;
 
   async function attach(f: File | null | undefined) {
     if (!f) return;
@@ -200,11 +243,13 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
         <div className="fv-as-log" ref={log} aria-live="polite">
           {!entries.length ? (
             <div className="fv-as-intro">
-              Describe a change to the teams, paste a class list, or attach a class spreadsheet (gender, scores,
-              majors, year…) and describe the teams you want — I'll draft it. Nothing changes until you press
-              Apply on the draft.
+              {openForm
+                ? `Paste a rubric or a Google Doc link and I'll fill in this evaluation — or ask for one change. Nothing is saved until you press ${openForm.saveLabel}.`
+                : "Describe a change to the teams, paste a class list, or attach a class spreadsheet (gender, scores, " +
+                  "majors, year…) and describe the teams you want — I'll draft it. Nothing changes until you press " +
+                  "Apply on the draft."}
               <div className="fv-as-tries">
-                {tries(data).map((t) => (
+                {(openForm ? FORM_TRIES : tries(data)).map((t) => (
                   <button
                     key={t}
                     type="button"
@@ -221,6 +266,7 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
               <p style={{ marginTop: 14 }}>
                 Each request sends this course's student names and emails to the AI provider, so it can match
                 them. An attached spreadsheet stays in your browser: only its column names and totals are sent.
+                {openForm ? " A Google Doc is read only if anyone with the link can view it." : ""}
               </p>
             </div>
           ) : null}
@@ -270,6 +316,26 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
                 ) : null}
                 {e.proposal?.kind === "import-file" && e.table ? (
                   <FileImportCard table={e.table} status={e.status ?? "open"} onOpen={() => handOff(e)} />
+                ) : null}
+                {e.proposal?.kind === "teameval" ? (
+                  <TeamEvalCard
+                    proposal={e.proposal}
+                    status={e.status ?? "open"}
+                    changes={e.fill?.changes}
+                    skipped={e.fill?.skipped}
+                    saveLabel={e.fill?.saveLabel ?? openForm?.saveLabel}
+                    canApply={openForm !== null}
+                    canUndo={latestFill === e.id && openForm !== null && openForm.id === e.fill?.handleId}
+                    onApply={() => {
+                      if (e.proposal?.kind !== "teameval") return;
+                      // Filled here, not inside the state update: React may run an
+                      // updater twice, and a second fill would record the first as "before".
+                      const next = filled(e, e.proposal);
+                      setEntries((prev) => prev.map((x) => (x.id === e.id ? next : x)));
+                    }}
+                    onUndo={() => undoFill(e)}
+                    onDismiss={() => setStatus(e.id, "dismissed")}
+                  />
                 ) : null}
                 {e.proposal?.kind === "form" ? (
                   <FormTeamsCard
@@ -325,7 +391,11 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
             ref={box}
             className="fv-ta"
             rows={3}
-            placeholder="e.g. Move Ada to Team 3 — or paste a list with team numbers"
+            placeholder={
+              openForm
+                ? "e.g. Fill this in from a Google Doc link — or set the late penalty to 2 points"
+                : "e.g. Move Ada to Team 3 — or paste a list with team numbers"
+            }
             aria-label="Ask the assistant"
             value={draft}
             disabled={busy}

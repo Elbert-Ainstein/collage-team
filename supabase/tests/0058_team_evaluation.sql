@@ -281,8 +281,10 @@ begin
   perform pg_temp.ok(O, format('update te_categories set name = %L where id = %L', 'Talking', c1), 'but wording can still change');
 
   -- ---- after release, a submitted evaluation is fixed; A3 can still submit late
+  -- (No reason checked on these two refusals: 0060 refuses any change to a
+  -- submitted evaluation first, with its own message.)
   perform pg_temp.refused(A1, format(full_a, E, sA1, 4, c1, c2, sA1, sA2, sA3, qp, qs, 'true'),
-    'A1 can''t change theirs once results are out', 'Results are out');
+    'A1 can''t change theirs once results are out');
   perform pg_temp.ok(O, 'update te_settings set released_at = null where activity_id = ' || E, 'the owner takes results back');
   -- now() doesn't move inside one transaction, so A1 and A2 "submitted" two
   -- hours ago and the due date was one hour ago.
@@ -290,8 +292,15 @@ begin
    where activity_id = '50000000-0000-4000-8000-000000000001' and student_id in (sA1::uuid, sA2::uuid);
   perform pg_temp.ok(O, 'update activities set due_at = now() - interval ''1 hour'' where id = ' || E, 'the due date passes');
   perform pg_temp.ok(O, 'update te_settings set late_penalty = 20 where activity_id = ' || E, 'late costs 20%');
+  -- 0061 counts the penalty in points: 20% of A3's 8 is 1.6, so the grades
+  -- below come out the same either way.
+  if exists (select 1 from information_schema.columns
+              where table_schema = 'public' and table_name = 'te_settings' and column_name = 'late_points') then
+    perform pg_temp.ok(O, 'update te_settings set late_on = true, late_points = 1.6 where activity_id = ' || E,
+      'after 0061: late costs 1.6 points');
+  end if;
   perform pg_temp.refused(A2, format(full_a, E, sA2, 4, c1, c2, sA1, sA2, sA3, qp, qs, 'true'),
-    'A2 can''t change theirs after the due date', 'past the due date');
+    'A2 can''t change theirs after the due date');
   perform pg_temp.ok(A3, format(full_a, E, sA3, 1, c1, c2, sA1, sA2, sA3, qp, qs, 'true'), 'A3 submits late');
   perform pg_temp.ok(O, 'update te_settings set released_at = now() where activity_id = ' || E, 'released again');
   perform pg_temp.ok(O, 'update te_settings set released_at = null where activity_id = ' || E, 'results hidden again for B1''s turn');

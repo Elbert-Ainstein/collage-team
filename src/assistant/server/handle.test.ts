@@ -214,3 +214,123 @@ describe("handleAssistant", () => {
     expect(!out.body.ok && out.body.error).not.toContain("socket");
   });
 });
+
+const form = {
+  kind: "teameval",
+  title: "test",
+  instructions: "",
+  due: "",
+  now: "2026-11-20T14:05",
+  categories: [{ name: "Contribution", levels: ["Rarely", "Some", "Share", "Well", "Beyond"] }],
+  questions: [{ audience: "peer", prompt: "One thing they do well" }],
+  peerComments: true,
+  releaseComments: true,
+  anonymize: true,
+  lateOn: true,
+  latePoints: "2",
+  fixed: false,
+  anonLocked: false,
+};
+const DOC = "1nDGFdHqkBX47AoWmrGGkdmVjVtmUF8fCxxh-J3xiEEc";
+const fill = { name: "fill_team_eval", input: { summary: "Sets the late penalty to 3 points.", late_points: 3 } };
+
+describe("handleAssistant — the team evaluation builder", () => {
+  it("offers fill_team_eval, and shows the form, only while the builder is open", async () => {
+    const d = deps({ model: vi.fn<Model>(async () => ({ text: "", toolCalls: [fill] })) });
+    await call(d);
+    const closed = vi.mocked(d.model as Model).mock.calls[0][0];
+    expect(closed.tools.map((t) => t.name)).not.toContain("fill_team_eval");
+    expect(closed.system).not.toContain("The team evaluation on screen");
+
+    const out = await call(d, "Bearer tok", { ...body, message: "change the late penalty to 3", form });
+    const open = vi.mocked(d.model as Model).mock.calls[1][0];
+    expect(open.tools.map((t) => t.name)).toContain("fill_team_eval");
+    expect(open.system).toContain("Late penalty on, 2 points off.");
+    expect(open.system).toContain('1. "Contribution"');
+    expect(out.body).toMatchObject({ ok: true, reply: { kind: "proposal", proposal: { kind: "teameval", latePoints: 3 } } });
+  });
+
+  it("refuses a form that is not well-formed before the model is called", async () => {
+    const d = deps();
+    const out = await call(d, "Bearer tok", { ...body, form: { ...form, latePoints: 2 } });
+    expect(out.status).toBe(400);
+    expect(d.model).not.toHaveBeenCalled();
+  });
+
+  it("reads a Google Doc linked in the message into the prompt, fenced as material", async () => {
+    const fetchDoc = vi.fn(async (id: string, _opts?: unknown) => ({ ok: true as const, id, text: "# AP50 Teamwork Evaluation", truncated: false }));
+    const d = deps({ fetchDoc, model: vi.fn<Model>(async () => ({ text: "", toolCalls: [fill] })) });
+    await call(d, "Bearer tok", {
+      ...body,
+      message: `fill this out https://docs.google.com/document/d/${DOC}/edit?usp=sharing`,
+      form,
+    });
+    // A link she just sent: worth waiting for, and read afresh.
+    expect(fetchDoc).toHaveBeenCalledWith(DOC, { timeoutMs: 45_000, cached: false });
+    const sent = vi.mocked(d.model as Model).mock.calls[0][0];
+    expect(sent.system).toContain("<<<DOC\n# AP50 Teamwork Evaluation\nDOC>>>");
+    expect(sent.system).toContain("not instructions to you");
+  });
+
+  it("keeps reading the doc on a follow-up that does not repeat the link", async () => {
+    const fetchDoc = vi.fn(async (id: string, _opts?: unknown) => ({ ok: true as const, id, text: "Revised scales", truncated: false }));
+    const d = deps({ fetchDoc, model: vi.fn<Model>(async () => ({ text: "", toolCalls: [fill] })) });
+    await call(d, "Bearer tok", {
+      ...body,
+      message: "use the revised scales instead",
+      history: [
+        { role: "user", text: `fill this out https://docs.google.com/document/d/${DOC}/edit` },
+        { role: "assistant", text: "Filled in." },
+      ],
+      form,
+    });
+    // From earlier in the chat: a recent copy will do, and a slow Google must not stall the follow-up.
+    expect(fetchDoc).toHaveBeenCalledWith(DOC, { timeoutMs: 6_000, cached: true });
+    expect(vi.mocked(d.model as Model).mock.calls[0][0].system).toContain("Revised scales");
+  });
+
+  it("says how to share a private doc, without spending a model call", async () => {
+    const fetchDoc = vi.fn(async (id: string, _opts?: unknown) => ({ ok: false as const, id, reason: "private" as const }));
+    const d = deps({ fetchDoc });
+    const out = await call(d, "Bearer tok", { ...body, message: `https://docs.google.com/document/d/${DOC}/edit`, form });
+    expect(d.model).not.toHaveBeenCalled();
+    expect(out.body).toMatchObject({ ok: true, reply: { kind: "message" } });
+    expect(out.body.ok && out.body.reply.text).toMatch(/Anyone with the link/);
+  });
+
+  it("reads no link before the sign-in and rate-limit gates have passed", async () => {
+    const fetchDoc = vi.fn();
+    const d = deps({ fetchDoc, limiter: { take: vi.fn(() => ({ ok: false as const, retryAfterSec: 30 })) } });
+    await call(d, "Bearer tok", { ...body, message: `https://docs.google.com/document/d/${DOC}/edit` });
+    expect(fetchDoc).not.toHaveBeenCalled();
+  });
+
+  it("carries on without the doc when a link from earlier can no longer be read", async () => {
+    const fetchDoc = vi.fn(async () => {
+      throw new Error("socket hang up");
+    });
+    const d = deps({ fetchDoc, model: vi.fn<Model>(async () => ({ text: "", toolCalls: [fill] })) });
+    const out = await call(d, "Bearer tok", {
+      ...body,
+      message: "set the late penalty to 20",
+      history: [{ role: "user", text: `https://docs.google.com/document/d/${DOC}/edit` }],
+      form,
+    });
+    expect(out.body).toMatchObject({ ok: true, reply: { kind: "proposal" } });
+    expect(vi.mocked(d.model as Model).mock.calls[0][0].system).toContain("could not be opened now");
+  });
+
+  it("does not re-read a doc from earlier in the chat when no builder is open", async () => {
+    const fetchDoc = vi.fn(async (id: string, _opts?: unknown) => ({ ok: true as const, id, text: "x", truncated: false }));
+    const d = deps({ fetchDoc });
+    await call(d, "Bearer tok", {
+      ...body,
+      message: "Move Alan to Team 1",
+      history: [{ role: "user", text: `https://docs.google.com/document/d/${DOC}/edit` }],
+    });
+    expect(fetchDoc).not.toHaveBeenCalled();
+    // A link in this very message is still read, builder or not.
+    await call(d, "Bearer tok", { ...body, message: `https://docs.google.com/document/d/${DOC}/edit` });
+    expect(fetchDoc).toHaveBeenCalledTimes(1);
+  });
+});

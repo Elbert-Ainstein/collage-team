@@ -17,6 +17,7 @@ import type {
   TeamEvalCategory,
   TeamEvalComment,
   TeamEvalMember,
+  TeamEvalNote,
   TeamEvalQuestion,
   TeamEvalRating,
   TeamEvalResults,
@@ -33,7 +34,8 @@ const missing = (m: string) => /te_(settings|categories|questions|ratings|commen
 // numeric columns can come back as strings from PostgREST.
 const asSettings = (row: Record<string, unknown>): TeamEvalSettings => ({
   ...(row as unknown as TeamEvalSettings),
-  late_penalty: Number(row.late_penalty ?? 0),
+  late_points: Number(row.late_points ?? 0),
+  late_on: row.late_on === true,
 });
 const asCategory = (row: Record<string, unknown>): TeamEvalCategory => {
   const levels = Array.isArray(row.levels) ? (row.levels as unknown[]).map((l) => String(l ?? "")) : [];
@@ -66,18 +68,33 @@ async function shapeOf(activityId: string): Promise<{ categories: TeamEvalCatego
 
 // ------------------------------------------------------------- instructor
 
+/**
+ * The notes students left the instructor (0060), shuffled: they carry no
+ * author or time, and the order shouldn't give one away either. None on a
+ * database without 0060.
+ */
+async function notesOf(activityId: string): Promise<TeamEvalNote[]> {
+  try {
+    return await byActivity<TeamEvalNote>("te_notes", activityId, "id");
+  } catch (e) {
+    if (e instanceof Error && /te_notes|schema cache|does not exist/i.test(e.message)) return [];
+    throw e;
+  }
+}
+
 /** Everything the instructor's screens show. Null on a database without 0058. */
 export async function loadTeamEval(activityId: string): Promise<TeamEvalSnapshot | null> {
   try {
     const settings = await settingsOf(activityId);
     if (!settings) return null;
-    const [shape, ratings, comments, submissions] = await Promise.all([
+    const [shape, ratings, comments, submissions, notes] = await Promise.all([
       shapeOf(activityId),
       byActivity<TeamEvalRating>("te_ratings", activityId, "rater_id"),
       byActivity<TeamEvalComment>("te_comments", activityId, "author_id"),
       byActivity<TeamEvalSubmission>("te_submissions", activityId, "student_id"),
+      notesOf(activityId),
     ]);
-    return { settings, ...shape, ratings, comments, submissions };
+    return { settings, ...shape, ratings, comments, submissions, notes };
   } catch (e) {
     if (e instanceof Error && missing(e.message)) return null;
     throw e;
@@ -129,7 +146,7 @@ export async function saveTeamEvalShape(activityId: string, categories: Category
 }
 
 export type SettingsPatch = Partial<
-  Pick<TeamEvalSettings, "peer_comments" | "release_comments" | "anonymize" | "late_penalty">
+  Pick<TeamEvalSettings, "peer_comments" | "release_comments" | "anonymize" | "late_points" | "late_on">
 >;
 
 export async function setTeamEvalSettings(activityId: string, patch: SettingsPatch): Promise<void> {
@@ -168,8 +185,8 @@ export async function copyTeamEval(fromId: string, toId: string): Promise<number
     source.categories.map((c) => ({ id: crypto.randomUUID(), name: c.name, levels: c.levels })),
     source.questions.map((q) => ({ id: crypto.randomUUID(), audience: q.audience, prompt: q.prompt })),
   );
-  const { peer_comments, release_comments, anonymize, late_penalty } = source.settings;
-  await setTeamEvalSettings(toId, { peer_comments, release_comments, anonymize, late_penalty });
+  const { peer_comments, release_comments, anonymize, late_points, late_on } = source.settings;
+  await setTeamEvalSettings(toId, { peer_comments, release_comments, anonymize, late_points, late_on });
   return source.categories.length + source.questions.length;
 }
 

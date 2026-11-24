@@ -6,8 +6,10 @@
 
 import { conversation, systemPrompt } from "../prompt";
 import { parseRequest } from "../request";
+import type { LinkedDoc } from "../teamEvalPrompt";
 import { parseToolCall, toolsFor } from "../tools";
-import type { AssistantReply, AssistantResponse } from "../types";
+import type { AssistantReply, AssistantRequest, AssistantResponse } from "../types";
+import { BRIEF_MS, linkedDoc, PATIENT_MS, type DocFetch, type FetchDoc } from "./googleDoc";
 import { ModelError, type Model, type ModelResult } from "./model";
 import type { RateLimiter } from "./rateLimit";
 
@@ -23,6 +25,8 @@ export interface HandlerDeps {
   /** Whether this account may spend the key at all — see allowList.ts. */
   allowed: (email: string | null) => boolean;
   limiter: RateLimiter;
+  /** Read a Google Doc anyone with the link can view. Absent: links are not read. */
+  fetchDoc?: FetchDoc;
   /** Server-side only. Never shown to the instructor. */
   log: (message: string, detail?: unknown) => void;
 }
@@ -79,6 +83,43 @@ function toReply(result: ModelResult, log: HandlerDeps["log"]): AssistantReply {
   return { kind: "proposal", text: said || parsed.proposal.summary, proposal: parsed.proposal };
 }
 
+const DOC_PRIVATE =
+  "I couldn't open that Google Doc — it isn't shared with anyone who has the link. In the doc, choose " +
+  "Share, set General access to \"Anyone with the link\", and send the link again. Or paste the doc's text here.";
+const DOC_UNREACHABLE = "I couldn't reach Google to read that doc just now. Try again, or paste the doc's text here.";
+
+/**
+ * The Google Doc this conversation links to, read now — or, when the link is
+ * in THIS message and cannot be read, the reply to give instead of asking the
+ * model to work from a document it cannot see.
+ *
+ * A link from earlier in the chat is read again only while a team evaluation
+ * builder is open, where "use the revised scales instead" needs it. Anywhere
+ * else it would cost every later turn a trip to Google for nothing.
+ */
+async function readLinkedDoc(
+  request: AssistantRequest,
+  deps: HandlerDeps,
+): Promise<{ doc?: LinkedDoc; reply?: AssistantReply }> {
+  const linked = deps.fetchDoc ? linkedDoc(request.message, request.history) : null;
+  if (!linked || !deps.fetchDoc) return {};
+  if (!linked.inMessage && !request.form) return {};
+  let got: DocFetch;
+  try {
+    got = await deps.fetchDoc(
+      linked.id,
+      linked.inMessage ? { timeoutMs: PATIENT_MS, cached: false } : { timeoutMs: BRIEF_MS, cached: true },
+    );
+  } catch (e) {
+    deps.log("assistant: reading a linked Google Doc threw", e);
+    got = { ok: false, id: linked.id, reason: "unreachable" };
+  }
+  if (got.ok) return { doc: { ok: true, text: got.text, truncated: got.truncated } };
+  deps.log("assistant: linked Google Doc could not be read", { reason: got.reason, inMessage: linked.inMessage });
+  if (!linked.inMessage) return { doc: { ok: false, reason: got.reason } };
+  return { reply: { kind: "message", text: got.reason === "private" ? DOC_PRIVATE : DOC_UNREACHABLE } };
+}
+
 function providerFailure(e: unknown, log: HandlerDeps["log"]): HandlerResult {
   log("assistant: model call failed", e);
   if (e instanceof ModelError && e.kind === "auth") {
@@ -120,12 +161,15 @@ export async function handleAssistant(
     return refuse(429, `That is a lot of requests in a short time. Try again in ${wait(taken.retryAfterSec)}.`);
   }
 
+  const { doc, reply } = await readLinkedDoc(request, deps);
+  if (reply) return { status: 200, body: { ok: true, reply } };
+
   let result: ModelResult;
   try {
     result = await deps.model({
-      system: systemPrompt(request.snapshot, request.attachment),
+      system: systemPrompt(request.snapshot, { attachment: request.attachment, form: request.form, doc }),
       turns: conversation(request.history, request.message),
-      tools: toolsFor(Boolean(request.attachment)),
+      tools: toolsFor({ attachment: Boolean(request.attachment), form: Boolean(request.form) }),
     });
   } catch (e) {
     return providerFailure(e, deps.log);

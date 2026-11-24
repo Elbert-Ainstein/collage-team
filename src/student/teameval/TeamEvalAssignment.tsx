@@ -5,8 +5,12 @@
 // Filling it in goes a person at a time: a page for each teammate — every
 // category, each with what a 5 down to a 1 means, then the questions about
 // them — and last a page for themselves, with their reflection, where they
-// submit. It saves as they go (save_team_eval, as a draft); Submit asks once
-// before handing it in, or says who's still to finish.
+// submit. Each set of questions says who reads the answers: the teammate
+// they're about, or the instructor alone. Last of all, an optional note to
+// the instructor that reaches them without the student's name (0060). It
+// saves as they go (save_team_eval, as a draft); Submit asks once before
+// handing it in, or says who's still to finish. Once submitted it is read
+// only (0060).
 //
 // Once the instructor releases results: a card per category, laid out the
 // way CATME does it — what each score from 5 down to 1 means, with an arrow
@@ -19,7 +23,7 @@ import type { Assignment, Enrolment } from "@/checkins/studentData";
 import { BriefText } from "@/checkins/BriefText";
 import { ConfirmDialog } from "@/student/ConfirmDialog";
 import { loadMyTeamEvalResults, loadStudentTeamEval, saveMyTeamEval } from "@/teameval/data";
-import { draftFrom, draftPayload, fmtAvg, leftFor, pagesFor, questionsFor, type EvalDraft } from "@/teameval/model";
+import { draftFrom, draftPayload, fmtAvg, leftFor, notesFor, pagesFor, questionsFor, readersOf, type EvalDraft } from "@/teameval/model";
 import { AutoTextarea } from "@/teameval/AutoTextarea";
 import { COMMENT_MAX, type StudentTeamEval, type TeamEvalCategory, type TeamEvalMember, type TeamEvalResults } from "@/teameval/types";
 import { Ic } from "@/live/ui";
@@ -52,11 +56,12 @@ function fmtWhen(iso: string | null): string | null {
   return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
-/** Who reads what they write about teammates, in one line. */
-function privacyNote(ev: StudentTeamEval): string {
-  const s = ev.settings;
-  if (!s.release_comments) return "Only your instructor sees your comments";
-  return s.anonymize ? "Anonymous to teammates" : "Teammates see your name";
+/** Who reads the answers on one person's page, in one line. */
+function readersNote(ev: StudentTeamEval, person: TeamEvalMember): { icon: string; text: string; shared: boolean } {
+  const readers = readersOf(person.is_me ? "self" : "peer", ev.settings);
+  if (readers === "instructor") return { icon: "lock", text: "Only your instructor sees this", shared: false };
+  const how = readers === "teammate-anonymous" ? "without your name" : "with your name";
+  return { icon: "eye", text: `Shared with ${person.name} · ${how}`, shared: true };
 }
 
 const pageName = (p: TeamEvalMember) => (p.is_me ? "Yourself" : p.name);
@@ -104,8 +109,8 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
   const pastDue = dueAt ? Date.parse(dueAt) < Date.now() : false;
   const submitted = Boolean(ev?.submission);
   const released = Boolean(ev?.settings.released_at);
-  /** A submitted one can still change until the due date, and not once results are out. */
-  const editable = !submitted || (!released && !pastDue);
+  /** Once handed in it's read only: no changes after Submit, before the due date or after (0060). */
+  const editable = !submitted;
   const team = useMemo(() => ev?.team ?? [], [ev]);
   /** A page per teammate, then themselves. */
   const pages = useMemo(() => pagesFor(team), [team]);
@@ -118,8 +123,8 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
     return ratings.length > 0 || comments.length > 0;
   }, [draft]);
 
-  // Drafts save as they go. A submitted evaluation saves only whole, on
-  // Save — the database won't take an incomplete one (0058).
+  // Drafts save as they go. A submitted evaluation doesn't save at all — the
+  // database refuses any change to one (0060).
   const flush = useCallback(
     async (d: EvalDraft) => {
       if (!ev || submitted) return;
@@ -186,12 +191,8 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
       setAsk(null);
     }
   };
-  /** The last page's button: hand it in (after asking), save a change to one already in, or say what's left. */
-  const finish = () => {
-    if (totalLeft > 0) setAsk("left");
-    else if (submitted) void submit();
-    else setAsk("submit");
-  };
+  /** The last page's button: hand it in (after asking), or say what's left. */
+  const finish = () => setAsk(totalLeft > 0 ? "left" : "submit");
 
   /** Where Overview and Done go: the results once they're out. */
   const home: Screen = loaded.kind === "ready" && loaded.results?.released ? "results" : submitted ? "done" : "intro";
@@ -249,7 +250,6 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
                 <Ic name="check" size={16} />
                 <span>
                   <b>Submitted {fmtWhen(ev.submission?.submitted_at ?? null)}</b>
-                  {editable && due ? ` · editable until ${due}` : ""}
                 </span>
               </div>
             ) : (
@@ -269,9 +269,9 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
                 type="button"
                 className="fv-btn primary te-start"
                 // All filled in but not handed in: the last page, where Submit is.
-                onClick={() => go(screen === "done" ? 0 : totalLeft === 0 ? pages.length - 1 : firstOpen)}
+                onClick={() => go(totalLeft === 0 ? pages.length - 1 : firstOpen)}
               >
-                {screen === "done" ? "Edit" : started ? "Continue" : "Start"}
+                {started ? "Continue" : "Start"}
                 <Ic name="arrowRight" size={15} />
               </button>
             ) : (
@@ -289,6 +289,8 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
     if (!person) return null;
     const ro = !editable;
     const qs = questionsFor(ev.questions, ev.settings, person.is_me);
+    const reads = readersNote(ev, person);
+    const notes = person.is_me ? notesFor(ev.questions) : [];
     return (
       <div className="lq-sscroll" ref={scrollRef}>
         <div className="te-stephead">
@@ -315,7 +317,13 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
 
         {qs.length ? (
           <section className={`lq-scard te-qbox${person.is_me ? " te-mine" : ""}`}>
-            {person.is_me ? <h3 className="te-boxtitle">Reflection</h3> : null}
+            <div className="te-qboxhead">
+              <h3 className="te-boxtitle">{person.is_me ? "Reflection" : `About ${person.name}`}</h3>
+              <span className={`te-reads${reads.shared ? " peer" : ""}`}>
+                <Ic name={reads.icon} size={13} />
+                {reads.text}
+              </span>
+            </div>
             {qs.map((q) => (
               <label key={q.id} className="te-qfield">
                 <span>{q.prompt}</span>
@@ -329,7 +337,35 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
                 />
               </label>
             ))}
-            {!person.is_me ? <p className="fv-sub te-privacy">{privacyNote(ev)}</p> : null}
+          </section>
+        ) : null}
+
+        {notes.length ? (
+          <section className="lq-scard te-qbox te-notebox">
+            <div className="te-qboxhead">
+              <h3 className="te-boxtitle">To your instructor</h3>
+              <span className="te-reads">
+                <Ic name="eyeOff" size={13} />
+                Anonymous · optional
+              </span>
+            </div>
+            {ro ? (
+              // Submitting took the student's name off it, so it can't be shown back to them.
+              <p className="fv-sub">Sent without your name, so it isn’t shown here.</p>
+            ) : (
+              notes.map((q) => (
+                <label key={q.id} className="te-qfield">
+                  <span>{q.prompt}</span>
+                  <AutoTextarea
+                    className="fv-in te-ta"
+                    rows={3}
+                    max={COMMENT_MAX}
+                    value={draft.comments[person.student_id]?.[q.id] ?? ""}
+                    onChange={(v) => setAnswer(person.student_id, q.id, v)}
+                  />
+                </label>
+              ))
+            )}
           </section>
         ) : null}
       </div>
@@ -347,12 +383,12 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
             <Ic name="chevronLeft" size={14} /> {at === 0 ? "Overview" : pageName(pages[at - 1])}
           </button>
           <span className="te-savestate fv-sub" aria-live="polite">
-            {!editable ? "Read only" : submitted ? "" : save === "saving" ? "Saving…" : save === "saved" ? "Saved" : save === "failed" ? "Not saved" : ""}
+            {!editable ? "Submitted · read only" : save === "saving" ? "Saving…" : save === "saved" ? "Saved" : save === "failed" ? "Not saved" : ""}
           </span>
           {last ? (
             editable ? (
               <button type="button" className="fv-btn primary sm" disabled={submitting} onClick={finish}>
-                {submitting ? "Saving…" : submitted ? "Save" : "Submit"}
+                {submitting ? "Submitting…" : "Submit"}
               </button>
             ) : (
               <button type="button" className="fv-btn primary sm" onClick={() => setScreen(home)}>
@@ -409,7 +445,7 @@ export function TeamEvalAssignment({ assignment, enrolment, onBack }: Props) {
       {ask === "submit" ? (
         <ConfirmDialog
           title="Submit your evaluation?"
-          body={editable && due ? `You can still change it until ${due}.` : null}
+          body="You can’t change it after you submit."
           confirmLabel="Submit"
           busyLabel="Submitting…"
           busy={submitting}

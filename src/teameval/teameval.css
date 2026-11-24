@@ -159,13 +159,12 @@ textarea.te-catname {
   font-weight: 700;
   margin: 0 0 8px;
 }
+/* The two kinds of question, one above the other: about each teammate, then
+   about themselves. Each says who reads the answers. */
 .te-qcols {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0;
-  border: 1px solid var(--fv-neutral-200);
-  border-radius: var(--fv-r-lg);
-  background: var(--fv-cream-100);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 .te-qcol {
   display: flex;
@@ -173,18 +172,36 @@ textarea.te-catname {
   gap: 8px;
   padding: 14px;
   min-width: 0;
-}
-.te-qcol + .te-qcol {
-  border-left: 1px solid var(--fv-neutral-200);
+  border: 1px solid var(--fv-neutral-200);
+  border-radius: var(--fv-r-lg);
+  background: var(--fv-cream-100);
 }
 .te-qcol.off .te-qrow {
   opacity: 0.45;
 }
 .te-qcolhead {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
   margin-bottom: 2px;
+}
+.te-qcoltitle {
+  font-weight: 700;
+  font-size: var(--fv-base);
+  color: var(--fv-navy);
+}
+/* Who reads the answers: teammates, or the instructor alone. */
+.te-reads {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--fv-xs);
+  color: var(--fv-muted);
+}
+.te-reads.peer {
+  color: var(--te-accent);
 }
 .te-qrow {
   display: grid;
@@ -233,15 +250,6 @@ textarea.te-catname {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-@container lqf (max-width: 620px) {
-  .te-qcols {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .te-qcol + .te-qcol {
-    border-left: 0;
-    border-top: 1px solid var(--fv-neutral-200);
-  }
 }
 
 /* ---------------------------------------------------------------- page */
@@ -487,6 +495,19 @@ textarea.te-catname {
   font-family: var(--fv-serif);
   font-size: 20px;
   font-weight: 700;
+}
+
+/* A set of questions' title, and who reads the answers beside it. */
+.te-qboxhead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin-bottom: 4px;
+}
+.te-qboxhead .te-boxtitle {
+  margin: 0;
 }
 
 .te-qfield {
@@ -936,9 +957,6 @@ textarea.te-catname {
 .te-opt.on .te-score {
   background: #fff;
 }
-.te-privacy {
-  margin: 4px 0 0;
-}
 
 /* ------------------------------------------------------- student results */
 
@@ -1129,4 +1147,14 @@ textarea.te-catname {
   padding-left: 18px;
   font-size: var(--fv-sm, 14px);
   line-height: 1.6;
+}
+
+/* ----------------------------------------- notes to the instructor (0060) */
+
+.te-notes {
+  margin-top: 8px;
+  max-width: 760px;
+}
+.te-notes .te-h2 {
+  margin-bottom: 6px;
 }

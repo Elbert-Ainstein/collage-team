@@ -4,6 +4,19 @@ import type { Proposal, Turn } from "@/assistant/types";
 import type { SeatRecord } from "./seating";
 import type { Table } from "./table";
 import type { Refs } from "./snapshot";
+import type { FormField, TeamEvalForm } from "./teamEvalFill";
+
+/** A team evaluation draft once it is in the form: what it replaced, so Undo can put it back. */
+export interface FormFill {
+  before: TeamEvalForm;
+  /** The builder it filled — see TeamEvalFormHandle.id. */
+  handleId: string;
+  /** The fields the fill changed — all its Undo puts back. */
+  fields: FormField[];
+  changes: string[];
+  skipped: string[];
+  saveLabel: string;
+}
 
 /** What became of a draft. Only the instructor moves it on from "open". */
 export type DraftStatus = "open" | "applied" | "undone" | "dismissed" | "handed-off";
@@ -28,6 +41,8 @@ export interface Entry {
   fileName?: string;
   /** The request failed; shown in place of an answer, never sent back. */
   error?: string;
+  /** For a team evaluation draft, once filled into the form. */
+  fill?: FormFill;
 }
 
 /** Enough to follow "and Alan too" without re-sending a whole term of chat. */
@@ -43,6 +58,20 @@ const NOTE: Record<DraftStatus, string> = {
     '"Undo this import" at the top of Roster & teams.',
 };
 
+/** A team evaluation draft goes into the form, not the database — so its outcome reads differently. */
+const FORM_NOTE: Record<DraftStatus, string> = {
+  open: "Shown to the instructor; not filled into the form yet.",
+  applied:
+    "Filled into the team evaluation form on screen. Nothing is saved until she presses the form's own Save; " +
+    "the card has Undo.",
+  undone: "The instructor undid this fill; what it changed in the form was put back.",
+  dismissed: "The instructor discarded this draft.",
+  "handed-off": "Shown to the instructor.",
+};
+
+const noteFor = (e: Entry): string =>
+  e.proposal?.kind === "teameval" && e.status ? FORM_NOTE[e.status] : NOTE[e.status ?? "open"];
+
 /**
  * The turns to send with the next message.
  *
@@ -55,7 +84,7 @@ export function historyFor(entries: Entry[]): Turn[] {
     .filter((e) => !e.error)
     .map((e) => ({
       role: e.role,
-      text: e.proposal && e.status ? `${e.text}\n[${NOTE[e.status]}]` : e.text,
+      text: e.proposal && e.status ? `${e.text}\n[${noteFor(e)}]` : e.text,
     }))
     .slice(-MAX_HISTORY);
 }

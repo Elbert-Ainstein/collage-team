@@ -10,13 +10,15 @@
 // the scores they decide.
 //
 // Staff always see names; anonymity is a promise to students about each
-// other, kept by team_eval_results (0058).
+// other, kept by team_eval_results (0058). The one exception is the notes
+// students leave the instructor: those arrive without names (0060), under
+// the scores.
 
 import { useEffect, useMemo, useState } from "react";
 import type { Activity } from "@/checkins/types";
 import { teamsOf } from "@/checkins/rosters";
 import { releaseTeamEval, scoreTeamEval, setTeamEvalLate } from "@/teameval/data";
-import { buildResults, fmtAvg, fmtPoints, outOf, type ResultRow, type TeamGroup } from "@/teameval/model";
+import { buildResults, fmtAvg, fmtPoints, outOf, type LatePenalty, type ResultRow, type TeamGroup } from "@/teameval/model";
 import { ScoreTrack } from "@/teameval/ScoreTrack";
 import type { TeamEvalSnapshot } from "@/teameval/types";
 import { Ic } from "@/live/ui";
@@ -205,9 +207,48 @@ export function TeamEvalResults({ data, activity, snap, onBack, reload, onChange
             )}
           </>
         )}
+        <NotesToYou snap={snap} />
       </div>
 
     </div>
+  );
+}
+
+// ------------------------------------------------------- notes to the instructor
+
+/** What students left the instructor: no names, in no order (0060). Nothing at all when the form asks for none. */
+function NotesToYou({ snap }: { snap: TeamEvalSnapshot }) {
+  const asked = snap.questions.filter((q) => q.audience === "instructor");
+  if (!asked.length) return null;
+  return (
+    <section className="te-notes" aria-label="Notes to you">
+      <div className="te-qboxhead">
+        <h2 className="te-h2">Notes to you</h2>
+        <span className="te-reads">
+          <Ic name="eyeOff" size={13} />
+          Anonymous
+        </span>
+      </div>
+      {asked.map((q) => {
+        const said = snap.notes.filter((n) => n.question_id === q.id);
+        return (
+          <div key={q.id} className="te-cq">
+            {asked.length > 1 ? <span className="te-prompt">{q.prompt}</span> : null}
+            {said.length ? (
+              <ul>
+                {said.map((n) => (
+                  <li key={n.id}>
+                    <p>{n.body}</p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="fv-sub">None yet</p>
+            )}
+          </div>
+        );
+      })}
+    </section>
   );
 }
 
@@ -329,7 +370,7 @@ function StudentPage({
               <Ic name="flag" size={13} /> {row.late ? "Late" : "Flag late"}
             </button>
           ) : null}
-          <span className="te-grade" title={gradeNote(row, snap.settings.late_penalty)}>
+          <span className="te-grade" title={gradeNote(row, snap.settings)}>
             <b className="fv-num">{row.grade === null ? "—" : fmtPoints(row.grade)}</b>
             <span className="fv-sub"> / {fmtPoints(pointsTotal)}</span>
           </span>
@@ -397,7 +438,9 @@ function StudentPage({
             </div>
             {row.late && row.points !== null && row.grade !== null ? (
               <p className="fv-sub te-gradenote">
-                Late: −{fmtPoints(snap.settings.late_penalty)}% → {fmtPoints(row.grade)}
+                {snap.settings.late_on
+                  ? `Late: −${fmtPoints(snap.settings.late_points)} pts → ${fmtPoints(row.grade)}`
+                  : "Late · no penalty"}
               </p>
             ) : null}
           </section>
@@ -496,7 +539,7 @@ function ResultsTable({
         </thead>
         <tbody>
           {groups.map((g) => (
-            <GroupRows key={g.team?.id ?? "none"} g={g} cats={cats} penalty={snap.settings.late_penalty} canFlag={canFlag} busy={busy} onFlag={onFlag} onOpen={onOpen} />
+            <GroupRows key={g.team?.id ?? "none"} g={g} cats={cats} late={snap.settings} canFlag={canFlag} busy={busy} onFlag={onFlag} onOpen={onOpen} />
           ))}
         </tbody>
       </table>
@@ -507,7 +550,7 @@ function ResultsTable({
 function GroupRows({
   g,
   cats,
-  penalty,
+  late,
   canFlag,
   busy,
   onFlag,
@@ -515,7 +558,7 @@ function GroupRows({
 }: {
   g: ReturnType<typeof buildResults>[number];
   cats: TeamEvalSnapshot["categories"];
-  penalty: number;
+  late: LatePenalty;
   canFlag: boolean;
   busy: string | null;
   onFlag: (r: ResultRow) => void;
@@ -554,7 +597,7 @@ function GroupRows({
                 disabled={!canFlag || busy !== null}
                 aria-pressed={r.late}
                 aria-label={r.late ? "Late — unflag" : "Flag late"}
-                title={r.late ? `−${fmtPoints(penalty)}%${r.late !== r.clockLate ? " · set by staff" : ""}` : "Flag late"}
+                title={r.late ? `${lateCost(late)}${r.late !== r.clockLate ? " · set by staff" : ""}` : "Flag late"}
                 onClick={() => onFlag(r)}
               >
                 <Ic name="flag" size={13} />
@@ -562,7 +605,7 @@ function GroupRows({
               </button>
             ) : null}
           </td>
-          <td className="te-num" title={gradeNote(r, penalty)}>
+          <td className="te-num" title={gradeNote(r, late)}>
             <span className="fv-num">{r.grade === null ? "—" : fmtPoints(r.grade)}</span>
           </td>
         </tr>
@@ -572,10 +615,16 @@ function GroupRows({
 }
 
 
+/** What being late costs here: points off, or nothing when the penalty is off. */
+function lateCost(late: LatePenalty): string {
+  return late.late_on ? `−${fmtPoints(late.late_points)} pts` : "Late · no penalty";
+}
+
 /** How a grade came to be, for a tooltip. */
-function gradeNote(r: ResultRow, penalty: number): string {
+function gradeNote(r: ResultRow, late: LatePenalty): string {
   if (!r.submission) return "Didn’t submit: 0";
   if (r.points === null) return "No teammate has rated them yet";
   const sum = `Sum of averages ${fmtPoints(r.points)}`;
-  return r.late ? `${sum}, less ${fmtPoints(penalty)}% late` : sum;
+  if (!r.late) return sum;
+  return late.late_on ? `${sum}, less ${fmtPoints(late.late_points)} pts late` : `${sum} · late, no penalty`;
 }

@@ -7,10 +7,13 @@ import {
   fmtAvg,
   gradeFor,
   isLate,
+  lateLabel,
   leftFor,
+  notesFor,
   outOf,
   pagesFor,
   peerAverage,
+  readersOf,
 } from "./model";
 import type {
   TeamEvalCategory,
@@ -34,7 +37,7 @@ const cat = (id: string, position: number): TeamEvalCategory => ({
   levels: ["1", "2", "3", "4", "5"],
   created_at: "",
 });
-const q = (id: string, audience: "peer" | "self"): TeamEvalQuestion => ({ id, activity_id: "e", position: 0, audience, prompt: id, created_at: "" });
+const q = (id: string, audience: TeamEvalQuestion["audience"]): TeamEvalQuestion => ({ id, activity_id: "e", position: 0, audience, prompt: id, created_at: "" });
 const rate = (rater: string, ratee: string, category: string, score: number): TeamEvalRating => ({
   activity_id: "e",
   category_id: category,
@@ -80,14 +83,33 @@ describe("lateness and the grade", () => {
     expect(isLate(sub("a", "2026-11-10T18:00:00.000Z"), null)).toBe(false);
   });
 
-  it("is their points on time, less the penalty late, and 0 if they never submitted", () => {
-    expect(gradeFor(sub("a", "2026-11-10T16:00:00.000Z"), DUE, 12.5, 15)).toBe(12.5);
-    expect(gradeFor(sub("a", "2026-11-11T16:00:00.000Z"), DUE, 10, 15)).toBe(8.5);
-    expect(gradeFor(null, DUE, 20, 15)).toBe(0);
+  const on = { late_on: true, late_points: 1.5 };
+  const off = { late_on: false, late_points: 1.5 };
+  const onTime = sub("a", "2026-11-10T16:00:00.000Z");
+  const late = sub("a", "2026-11-11T16:00:00.000Z");
+
+  it("is their points on time, less the penalty's points late, and 0 if they never submitted", () => {
+    expect(gradeFor(onTime, DUE, 12.5, on)).toBe(12.5);
+    expect(gradeFor(late, DUE, 10, on)).toBe(8.5);
+    expect(gradeFor(null, DUE, 20, on)).toBe(0);
+  });
+
+  it("never goes below 0", () => {
+    expect(gradeFor(late, DUE, 1, on)).toBe(0);
+  });
+
+  it("takes nothing off with the penalty off — though they're still late", () => {
+    expect(gradeFor(late, DUE, 10, off)).toBe(10);
+    expect(isLate(late, DUE)).toBe(true);
   });
 
   it("waits when nobody has rated them yet", () => {
-    expect(gradeFor(sub("a", "2026-11-10T16:00:00.000Z"), DUE, null, 15)).toBeNull();
+    expect(gradeFor(onTime, DUE, null, on)).toBeNull();
+  });
+
+  it("says what late costs on the instructor's screens", () => {
+    expect(lateLabel(on)).toBe("−1.5 pts late");
+    expect(lateLabel(off)).toBe("No late penalty");
   });
 
   it("is out of 5 per category", () => {
@@ -102,7 +124,8 @@ describe("buildResults", () => {
       peer_comments: true,
       release_comments: true,
       anonymize: true,
-      late_penalty: 20,
+      late_points: 1.5,
+      late_on: true,
       released_at: null,
       scored_at: null,
       updated_at: "",
@@ -122,6 +145,7 @@ describe("buildResults", () => {
     ],
     comments: [],
     submissions: [sub("a", "2026-11-10T10:00:00.000Z"), sub("b", "2026-11-10T10:00:00.000Z"), sub("c", "2026-11-12T10:00:00.000Z")],
+    notes: [],
   };
   const groups = buildResults({ snapshot, teams: [TEAM], roster: [ana, bo, cy, di], dueAt: DUE });
   const rowOf = (id: string) => groups.flatMap((g) => g.rows).find((r) => r.student.id === id)!;
@@ -142,7 +166,7 @@ describe("buildResults", () => {
   it("flags the late submitter and takes the penalty off their own grade", () => {
     expect(rowOf("c").late).toBe(true);
     expect(rowOf("c").points).toBe(9); // 5 + 4 from Ana
-    expect(rowOf("c").grade).toBe(7.2); // 20% off
+    expect(rowOf("c").grade).toBe(7.5); // 1.5 points off
   });
 
   it("puts someone on no team in a group of their own, with 0 for not submitting", () => {
@@ -183,5 +207,34 @@ describe("the form, one page per person", () => {
     expect(leftFor(team[0], ev, draft)).toBe(0);
     // No questions about teammates: rating them is all there is.
     expect(leftFor(team[1], { ...ev, settings: { peer_comments: false } }, draft)).toBe(1);
+  });
+
+  it("never counts the note to the instructor as left: it's optional", () => {
+    const withNote = [...questions, q("qn", "instructor")];
+    const ev = { categories, questions: withNote, settings: { peer_comments: true } };
+    const draft = draftFrom([rate("a", "a", "c1", 4), rate("a", "a", "c2", 4)], []);
+    draft.comments.a = { qs: "done" };
+    expect(leftFor(team[0], ev, draft)).toBe(0);
+    expect(notesFor(withNote).map((x) => x.id)).toEqual(["qn"]);
+  });
+});
+
+describe("who reads the answers", () => {
+  it("sends answers about a teammate to that teammate, with or without the writer's name", () => {
+    expect(readersOf("peer", { release_comments: true, anonymize: true })).toBe("teammate-anonymous");
+    expect(readersOf("peer", { release_comments: true, anonymize: false })).toBe("teammate-named");
+  });
+
+  it("keeps them with the instructor when comments aren't released", () => {
+    expect(readersOf("peer", { release_comments: false, anonymize: true })).toBe("instructor");
+  });
+
+  it("never shows a self reflection to teammates", () => {
+    expect(readersOf("self", { release_comments: true, anonymize: false })).toBe("instructor");
+  });
+
+  it("sends a note to the instructor without a name, whatever the settings", () => {
+    expect(readersOf("instructor", { release_comments: false, anonymize: false })).toBe("instructor-anonymous");
+    expect(readersOf("instructor", { release_comments: true, anonymize: true })).toBe("instructor-anonymous");
   });
 });
