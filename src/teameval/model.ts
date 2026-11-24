@@ -15,6 +15,7 @@
 import type { Student, TeamWithMembers } from "@/checkins/types";
 import { POINTS_PER_CATEGORY } from "./types";
 import type {
+  QuestionAudience,
   TeamEvalComment,
   TeamEvalMember,
   TeamEvalQuestion,
@@ -59,6 +60,30 @@ export function gradeFor(
 /** What an evaluation with these categories is out of. */
 export function outOf(categories: readonly unknown[]): number {
   return POINTS_PER_CATEGORY * categories.length;
+}
+
+/**
+ * The most a late evaluation can lose, in points. The penalty is a share of
+ * what the student earns (gradeFor), so a full-marks grade loses this much
+ * and any lower one less.
+ */
+export function lateLossAtMost(total: number, latePenalty: number): number {
+  if (!Number.isFinite(total) || !Number.isFinite(latePenalty) || total <= 0 || latePenalty <= 0) return 0;
+  return round2((total * Math.min(latePenalty, 100)) / 100);
+}
+
+/**
+ * Who reads the answers to a question: one about a teammate goes to that
+ * teammate once results are out — with or without the writer's name — unless
+ * comments aren't released; a reflection only ever goes to the instructor;
+ * and a note to the instructor reaches them without the writer's name.
+ */
+export type Readers = "teammate-anonymous" | "teammate-named" | "instructor" | "instructor-anonymous";
+
+export function readersOf(audience: QuestionAudience, settings: Pick<TeamEvalSettings, "release_comments" | "anonymize">): Readers {
+  if (audience === "instructor") return "instructor-anonymous";
+  if (audience === "self" || !settings.release_comments) return "instructor";
+  return settings.anonymize ? "teammate-anonymous" : "teammate-named";
 }
 
 export interface Average {
@@ -212,7 +237,12 @@ export function draftPayload(draft: EvalDraft): {
   return { ratings, comments };
 }
 
-/** The questions asked on one person's page. */
+/** The notes to the instructor, last on the student's own page: optional, so never "left". */
+export function notesFor(questions: TeamEvalQuestion[]): TeamEvalQuestion[] {
+  return questions.filter((q) => q.audience === "instructor");
+}
+
+/** The questions asked on one person's page — every one of them to be answered. */
 export function questionsFor(
   questions: TeamEvalQuestion[],
   settings: Pick<TeamEvalSettings, "peer_comments">,

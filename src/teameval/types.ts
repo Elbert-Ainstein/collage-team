@@ -2,12 +2,15 @@
 //
 // One activity of type "teameval" has a settings row, its rating categories
 // (each a 1–5 scale with a sentence for every point), and its open-ended
-// questions — asked about each teammate ("peer") or of the student about
-// themselves ("self"). Students write ratings and comments only through
-// save_team_eval; staff read every row, a student only their own, and a
-// student's results come back from team_eval_results as averages.
+// questions — asked about each teammate ("peer"), of the student about
+// themselves ("self"), or left open for a note to the instructor
+// ("instructor", 0060: optional, and anonymous). Students write ratings and
+// comments only through save_team_eval; staff read every row but a note, a
+// student only their own, and a student's results come back from
+// team_eval_results as averages. A note loses its writer when they submit:
+// it moves to te_notes, which has no author at all.
 
-export type QuestionAudience = "peer" | "self";
+export type QuestionAudience = "peer" | "self" | "instructor";
 
 /** The longest answer to a question the database keeps (0058). */
 export const COMMENT_MAX = 10000;
@@ -74,6 +77,14 @@ export interface TeamEvalSubmission {
   late_override: boolean | null;
 }
 
+/** A submitted note to the instructor (0060): no author, no time — nothing to trace it back. */
+export interface TeamEvalNote {
+  id: string;
+  activity_id: string;
+  question_id: string;
+  body: string;
+}
+
 /** Everything one evaluation needs on the instructor's screens. */
 export interface TeamEvalSnapshot {
   settings: TeamEvalSettings;
@@ -82,6 +93,8 @@ export interface TeamEvalSnapshot {
   ratings: TeamEvalRating[];
   comments: TeamEvalComment[];
   submissions: TeamEvalSubmission[];
+  /** Notes to the instructor, in no order. Empty on a database without 0060. */
+  notes: TeamEvalNote[];
 }
 
 /** One person on the team a student evaluates (team_eval_team). */

@@ -1,6 +1,7 @@
 // What a new team evaluation starts with. Five categories on a five-point
-// scale, each point a behaviour rather than a number, and the two open
-// questions most peer evaluations ask — all of it editable in the builder.
+// scale, each point a behaviour rather than a number, the two open questions
+// most peer evaluations ask, a reflection, and last an optional note to the
+// instructor — all of it editable in the builder.
 
 import type { QuestionAudience } from "./types";
 
@@ -74,6 +75,7 @@ const DEFAULT_QUESTIONS: Omit<QuestionDraft, "id">[] = [
   { audience: "peer", prompt: "One thing they do well" },
   { audience: "peer", prompt: "One thing to work on" },
   { audience: "self", prompt: "How did you contribute, and what would you change?" },
+  { audience: "instructor", prompt: "Anything you’d like your instructor to know?" },
 ];
 
 export const defaultCategories = (): CategoryDraft[] =>

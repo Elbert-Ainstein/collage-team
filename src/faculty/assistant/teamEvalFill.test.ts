@@ -94,6 +94,23 @@ describe("fillForm", () => {
     ]);
   });
 
+  it("keeps the note to the instructor on its own row when the draft rewords it", () => {
+    const withNote = { ...form(), questions: [...form().questions, { id: "q4", audience: "instructor" as const, prompt: "Anything else?" }] };
+    const out = fillForm(
+      withNote,
+      draft({ questions: [...withNote.questions.map(({ audience, prompt }) => ({ audience, prompt })).slice(0, 3), { audience: "instructor", prompt: "Anything for me?" }] }),
+      open,
+      newId,
+    );
+    expect(out.next.questions.map((q) => [q.id, q.audience])).toEqual([
+      ["q1", "peer"],
+      ["q2", "peer"],
+      ["q3", "self"],
+      ["q4", "instructor"],
+    ]);
+    expect(out.changes).toEqual(["Notes to the instructor reworded"]);
+  });
+
   it("names a renamed category and counts reworded descriptions", () => {
     const before = form();
     const out = fillForm(

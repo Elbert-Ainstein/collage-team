@@ -69,6 +69,7 @@ const snapshot: TeamEvalSnapshot = {
   ratings: [],
   comments: [],
   submissions: [],
+  notes: [],
 };
 
 const levels = (k: string) => ["1", "2", "3", "4", "5"].map((s) => `${k} at ${s}`);
@@ -167,8 +168,8 @@ describe("TeamEvalBuilder with the assistant", () => {
     expect(field("Contributing to the Team's Work: what 5 means")?.value).toBe("Contributing at 5");
     expect(field("Contributing to the Team's Work: what 1 means")?.value).toBe("Contributing at 1");
     expect(field("Category 3 name")).toBeNull();
-    expect(field("Each teammate question 1")?.value).toContain("helped your team");
-    expect(field("Each teammate question 2")).toBeNull();
+    expect(field("For each teammate question 1")?.value).toContain("helped your team");
+    expect(field("For each teammate question 2")).toBeNull();
     expect(penaltyBox().value).toBe("20");
     expect(host.querySelector(".te-outof b")?.textContent).toBe("10");
     expect(host.textContent).toContain("Filled in · press Finish to keep it");

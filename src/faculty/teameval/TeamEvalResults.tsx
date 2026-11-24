@@ -10,7 +10,9 @@
 // the scores they decide.
 //
 // Staff always see names; anonymity is a promise to students about each
-// other, kept by team_eval_results (0058).
+// other, kept by team_eval_results (0058). The one exception is the notes
+// students leave the instructor: those arrive without names (0060), under
+// the scores.
 
 import { useEffect, useMemo, useState } from "react";
 import type { Activity } from "@/checkins/types";
@@ -205,9 +207,48 @@ export function TeamEvalResults({ data, activity, snap, onBack, reload, onChange
             )}
           </>
         )}
+        <NotesToYou snap={snap} />
       </div>
 
     </div>
+  );
+}
+
+// ------------------------------------------------------- notes to the instructor
+
+/** What students left the instructor: no names, in no order (0060). Nothing at all when the form asks for none. */
+function NotesToYou({ snap }: { snap: TeamEvalSnapshot }) {
+  const asked = snap.questions.filter((q) => q.audience === "instructor");
+  if (!asked.length) return null;
+  return (
+    <section className="te-notes" aria-label="Notes to you">
+      <div className="te-qboxhead">
+        <h2 className="te-h2">Notes to you</h2>
+        <span className="te-reads">
+          <Ic name="eyeOff" size={13} />
+          Anonymous
+        </span>
+      </div>
+      {asked.map((q) => {
+        const said = snap.notes.filter((n) => n.question_id === q.id);
+        return (
+          <div key={q.id} className="te-cq">
+            {asked.length > 1 ? <span className="te-prompt">{q.prompt}</span> : null}
+            {said.length ? (
+              <ul>
+                {said.map((n) => (
+                  <li key={n.id}>
+                    <p>{n.body}</p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="fv-sub">None yet</p>
+            )}
+          </div>
+        );
+      })}
+    </section>
   );
 }
 

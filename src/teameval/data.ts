@@ -17,6 +17,7 @@ import type {
   TeamEvalCategory,
   TeamEvalComment,
   TeamEvalMember,
+  TeamEvalNote,
   TeamEvalQuestion,
   TeamEvalRating,
   TeamEvalResults,
@@ -66,18 +67,33 @@ async function shapeOf(activityId: string): Promise<{ categories: TeamEvalCatego
 
 // ------------------------------------------------------------- instructor
 
+/**
+ * The notes students left the instructor (0060), shuffled: they carry no
+ * author or time, and the order shouldn't give one away either. None on a
+ * database without 0060.
+ */
+async function notesOf(activityId: string): Promise<TeamEvalNote[]> {
+  try {
+    return await byActivity<TeamEvalNote>("te_notes", activityId, "id");
+  } catch (e) {
+    if (e instanceof Error && /te_notes|schema cache|does not exist/i.test(e.message)) return [];
+    throw e;
+  }
+}
+
 /** Everything the instructor's screens show. Null on a database without 0058. */
 export async function loadTeamEval(activityId: string): Promise<TeamEvalSnapshot | null> {
   try {
     const settings = await settingsOf(activityId);
     if (!settings) return null;
-    const [shape, ratings, comments, submissions] = await Promise.all([
+    const [shape, ratings, comments, submissions, notes] = await Promise.all([
       shapeOf(activityId),
       byActivity<TeamEvalRating>("te_ratings", activityId, "rater_id"),
       byActivity<TeamEvalComment>("te_comments", activityId, "author_id"),
       byActivity<TeamEvalSubmission>("te_submissions", activityId, "student_id"),
+      notesOf(activityId),
     ]);
-    return { settings, ...shape, ratings, comments, submissions };
+    return { settings, ...shape, ratings, comments, submissions, notes };
   } catch (e) {
     if (e instanceof Error && missing(e.message)) return null;
     throw e;

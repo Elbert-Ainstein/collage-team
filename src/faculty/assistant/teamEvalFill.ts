@@ -115,10 +115,15 @@ function categoryChanges(before: CategoryDraft[], after: CategoryDraft[]): strin
   return [...words, ...renames];
 }
 
-const QUESTION_LABEL: Record<QuestionAudience, string> = { peer: "Teammate questions", self: "Self-reflection questions" };
+const QUESTION_LABEL: Record<QuestionAudience, string> = {
+  peer: "Teammate questions",
+  self: "Self-reflection questions",
+  instructor: "Notes to the instructor",
+};
+const AUDIENCES = Object.keys(QUESTION_LABEL) as QuestionAudience[];
 
 function questionChanges(before: QuestionDraft[], after: QuestionDraft[]): string[] {
-  return (["peer", "self"] as const).flatMap((audience) => {
+  return AUDIENCES.flatMap((audience) => {
     const was = before.filter((q) => q.audience === audience).map((q) => q.prompt);
     const now = after.filter((q) => q.audience === audience).map((q) => q.prompt);
     if (was.length !== now.length) return [`${QUESTION_LABEL[audience]} ${was.length} → ${now.length}`];
@@ -136,8 +141,9 @@ function placeQuestions(before: QuestionDraft[], wanted: FormQuestion[], newId: 
   const rows = {
     peer: before.filter((q) => q.audience === "peer").map((q) => q.id),
     self: before.filter((q) => q.audience === "self").map((q) => q.id),
+    instructor: before.filter((q) => q.audience === "instructor").map((q) => q.id),
   };
-  const used = { peer: 0, self: 0 };
+  const used = { peer: 0, self: 0, instructor: 0 };
   return wanted.map((q) => ({ id: rows[q.audience][used[q.audience]++] ?? newId(), audience: q.audience, prompt: q.prompt }));
 }
 

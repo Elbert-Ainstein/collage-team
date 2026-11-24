@@ -70,8 +70,13 @@ export interface FormCategory {
   levels: string[];
 }
 
+/** peer: about each teammate. self: about themselves. instructor: an optional, anonymous note to the instructor. */
+export type FormAudience = "peer" | "self" | "instructor";
+
+export const FORM_AUDIENCES: readonly FormAudience[] = ["peer", "self", "instructor"];
+
 export interface FormQuestion {
-  audience: "peer" | "self";
+  audience: FormAudience;
   prompt: string;
 }
 

@@ -17,7 +17,7 @@
 
 import { refuse } from "./refusal";
 import type { ToolSpec } from "./tools";
-import type { FormCategory, FormQuestion, TeamEvalProposal } from "./types";
+import { FORM_AUDIENCES, type FormCategory, type FormQuestion, type TeamEvalProposal } from "./types";
 
 /** What the builder keeps (TeamEvalBuilder, and 0058 for names and prompts). */
 export const NAME_MAX = 120;
@@ -98,8 +98,10 @@ export const FILL_TEAM_EVAL: ToolSpec = {
           properties: {
             audience: {
               type: "string",
-              enum: ["peer", "self"],
-              description: "peer: asked about each teammate. self: asked of the student about themselves.",
+              enum: ["peer", "self", "instructor"],
+              description:
+                "peer: asked about each teammate. self: asked of the student about themselves. " +
+                "instructor: an optional note to the instructor, which reaches them without the student's name.",
             },
             prompt: { type: "string", description: "The question, with its one-line guidance if it has one." },
           },
@@ -216,10 +218,11 @@ function questionsOf(v: unknown): FormQuestion[] | null {
   if (list === null) return null;
   return list.map((q, i) => {
     if (!isObj(q)) refuse(`question ${i + 1} is not an object`);
-    if (q.audience !== "peer" && q.audience !== "self") refuse(`question ${i + 1} has no audience`);
+    const audience = FORM_AUDIENCES.find((a) => a === q.audience);
+    if (!audience) refuse(`question ${i + 1} has no audience`);
     const prompt = capped(q.prompt, `question ${i + 1}`, PROMPT_MAX);
     if (!prompt) refuse(`question ${i + 1} is empty`);
-    return { audience: q.audience, prompt };
+    return { audience, prompt };
   });
 }
 

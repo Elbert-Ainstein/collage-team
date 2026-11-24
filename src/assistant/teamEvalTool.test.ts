@@ -52,11 +52,13 @@ describe("parseFillTeamEval", () => {
       questions: [
         { audience: "peer", prompt: "  One thing that helped  " },
         { audience: "self", prompt: "One thing to improve" },
+        { audience: "instructor", prompt: "Anything for your instructor?" },
       ],
     });
     expect(out.questions).toEqual([
       { audience: "peer", prompt: "One thing that helped" },
       { audience: "self", prompt: "One thing to improve" },
+      { audience: "instructor", prompt: "Anything for your instructor?" },
     ]);
   });
 

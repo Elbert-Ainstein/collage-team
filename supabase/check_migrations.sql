@@ -339,6 +339,13 @@ select '0058 team evaluation',
              and to_regclass('public.te_ratings') is not null
             then 'applied'
             else 'NOT APPLIED — run 0058_team_evaluation.sql' end
+union all
+select '0060 team evaluation final once submitted, notes to the instructor',
+       case when to_regclass('public.te_notes') is not null
+             and coalesce(pg_get_functiondef(to_regprocedure('public.save_team_eval(uuid, jsonb, jsonb, boolean)'))
+                            ilike '%already submitted%', false)
+            then 'applied'
+            else 'NOT APPLIED — run 0060_team_eval_final_and_notes.sql' end
 order by 1;
 
 -- ------------------------------------------------------- and the buckets

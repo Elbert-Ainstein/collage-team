@@ -5,17 +5,18 @@
 // well-formed here — the server never acts on it, it only describes the class
 // to the model — but a malformed one would make a prompt the model misreads.
 
-import type {
-  AssistantRequest,
-  AttachmentColumn,
-  AttachmentSummary,
-  FormCategory,
-  FormQuestion,
-  Snapshot,
-  SnapshotStudent,
-  SnapshotTeam,
-  TeamEvalFormContext,
-  Turn,
+import {
+  FORM_AUDIENCES,
+  type AssistantRequest,
+  type AttachmentColumn,
+  type AttachmentSummary,
+  type FormCategory,
+  type FormQuestion,
+  type Snapshot,
+  type SnapshotStudent,
+  type SnapshotTeam,
+  type TeamEvalFormContext,
+  type Turn,
 } from "./types";
 
 /** Room for a 500-student class list pasted whole, with a header and notes. */
@@ -177,8 +178,9 @@ function formCategory(v: unknown): FormCategory {
 
 function formQuestion(v: unknown): FormQuestion {
   if (!isObj(v)) bad("a form question is not an object");
-  if (v.audience !== "peer" && v.audience !== "self") bad("a form question has no audience");
-  return { audience: v.audience, prompt: str(v.prompt, "a form question", FORM_TEXT) };
+  const audience = FORM_AUDIENCES.find((a) => a === v.audience);
+  if (!audience) bad("a form question has no audience");
+  return { audience, prompt: str(v.prompt, "a form question", FORM_TEXT) };
 }
 
 /** The team evaluation builder she has open — described to the model, never acted on here. */

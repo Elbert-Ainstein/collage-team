@@ -2,9 +2,11 @@
 
 // Making a team evaluation, in two steps: the activity (title, description,
 // week, due date), then what students fill in — the rating categories, each a
-// 1–5 scale with a sentence for every point, and the open-ended questions,
-// some about each teammate and some about themselves. Finish saves both and,
-// the first time, puts it in front of the class.
+// 1–5 scale with a sentence for every point, and the open-ended questions:
+// about each teammate, about themselves, and last an optional note to the
+// instructor that arrives without a name (0060). Each set says who reads the
+// answers. Finish saves both and, the first time, puts it in front of the
+// class.
 //
 // Opened again later it edits the same evaluation. Once anyone has submitted,
 // categories and questions can't be added or removed (0058) — wording can.
@@ -27,7 +29,7 @@ import {
   type QuestionDraft,
 } from "@/teameval/defaults";
 import { AutoTextarea } from "@/teameval/AutoTextarea";
-import { outOf } from "@/teameval/model";
+import { fmtPoints, lateLossAtMost, outOf, readersOf, type Readers } from "@/teameval/model";
 import type { QuestionAudience, TeamEvalSnapshot } from "@/teameval/types";
 import { Ic } from "@/live/ui";
 import { useFormBridge, type TeamEvalFormHandle } from "../assistant/formBridge";
@@ -43,6 +45,14 @@ import { Steps } from "../Steps";
 const NAME_MAX = 120;
 const PROMPT_MAX = 1000;
 const LEVEL_MAX = 2000;
+
+/** Who reads a section's answers, as the instructor sees it said. */
+const READERS: Record<Readers, { icon: string; text: string }> = {
+  "teammate-anonymous": { icon: "eye", text: "Shown to that teammate · anonymous" },
+  "teammate-named": { icon: "eye", text: "Shown to that teammate · with names" },
+  instructor: { icon: "lock", text: "Instructor only" },
+  "instructor-anonymous": { icon: "eyeOff", text: "Anonymous · optional" },
+};
 
 const STEPS = [
   { key: "activity", label: "Activity" },
@@ -114,9 +124,14 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
 
   const pen = Number(penalty);
   const total = outOf(categories);
-  const problem =
-    problemWith(categories, questions) ??
-    (!penalty.trim() || !Number.isFinite(pen) || pen < 0 || pen > 100 ? "Late penalty: 0–100%" : null);
+  const penOk = penalty.trim() !== "" && Number.isFinite(pen) && pen >= 0 && pen <= 100;
+  const problem = problemWith(categories, questions) ?? (penOk ? null : "Late penalty: 0–100%");
+  /** What it means, in points: a share of a late student's grade, so at most that share of the total. */
+  const penaltyNote = !penOk
+    ? null
+    : pen === 0
+      ? "Late evaluations lose nothing."
+      : `Off a late student’s grade: up to ${fmtPoints(lateLossAtMost(total, pen))} of ${total} pts.`;
   // Turning anonymity off after students wrote under it is refused (0058).
   const anonLocked = fixed && snapshot.settings.anonymize;
   const saveLabel = firstTime ? "Finish" : "Save";
@@ -225,13 +240,22 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
     }
   };
 
-  const questionColumn = (audience: QuestionAudience, heading: string, off: boolean) => {
+  /** One kind of question — about each teammate, or about themselves — and who reads the answers. */
+  const questionSection = (audience: QuestionAudience, heading: string, off: boolean) => {
     const list = questions.filter((q) => q.audience === audience);
+    const readers = READERS[readersOf(audience, { release_comments: release, anonymize: anon })];
     return (
-      <div className={`te-qcol${off ? " off" : ""}`}>
+      <section className={`te-qcol${off ? " off" : ""}`} aria-label={heading}>
         <div className="te-qcolhead">
-          <span className="fv-eyebrow">{heading}</span>
-          {off ? <span className="fv-sub">Off</span> : null}
+          <span className="te-qcoltitle">{heading}</span>
+          {off ? (
+            <span className="te-reads">Off</span>
+          ) : (
+            <span className={`te-reads ${audience}`}>
+              <Ic name={readers.icon} size={13} />
+              {readers.text}
+            </span>
+          )}
         </div>
         {list.map((q, i) => (
           <div key={q.id} className="te-qrow">
@@ -262,7 +286,7 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
             <Ic name="add" size={15} /> Add question
           </button>
         )}
-      </div>
+      </section>
     );
   };
 
@@ -396,8 +420,9 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
 
                 <h2 className="te-h2">Questions</h2>
                 <div className="te-qcols">
-                  {questionColumn("peer", "Each teammate", !peer)}
-                  {questionColumn("self", "Self reflection", false)}
+                  {questionSection("peer", "For each teammate", !peer)}
+                  {questionSection("self", "Self reflection", false)}
+                  {questionSection("instructor", "Note to the instructor", false)}
                 </div>
               </section>
 
@@ -428,6 +453,11 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
                       <span>%</span>
                     </span>
                   </label>
+                  {penaltyNote ? (
+                    <p className="lq-bnote" aria-live="polite">
+                      {penaltyNote}
+                    </p>
+                  ) : null}
                   <p className="lq-bnote">Not submitted: 0</p>
                 </div>
               </aside>

@@ -7,7 +7,7 @@
 // before it can tell her what it could not apply.
 
 import { flat } from "./text";
-import type { TeamEvalFormContext } from "./types";
+import type { FormAudience, TeamEvalFormContext } from "./types";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -42,7 +42,7 @@ export function renderTeamEvalForm(form: TeamEvalFormContext): string {
     lines.push(`${i + 1}. "${flat(c.name) || "(no name)"}"`);
     c.levels.forEach((l, s) => lines.push(`   ${s + 1}: ${flat(l) || "(empty)"}`));
   });
-  const asked = (a: "peer" | "self") => form.questions.filter((q) => q.audience === a);
+  const asked = (a: FormAudience) => form.questions.filter((q) => q.audience === a);
   const list = (qs: { prompt: string }[]) => (qs.length ? qs.map((q) => `- "${flat(q.prompt) || "(empty)"}"`) : ["- (none)"]);
   lines.push(
     "",
@@ -50,6 +50,8 @@ export function renderTeamEvalForm(form: TeamEvalFormContext): string {
     ...list(asked("peer")),
     "Self-reflection questions:",
     ...list(asked("self")),
+    "Note to the instructor (optional, and anonymous — last on the form):",
+    ...list(asked("instructor")),
     "",
     `Settings: Evaluate peer to peer ${onOff(form.peerComments)}. Release to students ${onOff(form.releaseComments)}. ` +
       `Anonymize ${onOff(form.anonymize)}. Late penalty ${form.latePenalty.trim() || "(empty)"}%.`,
@@ -73,8 +75,9 @@ export const TEAM_EVAL_RULES = `Filling in the team evaluation (fill_team_eval):
   - Each dimension students are rated on becomes a category, in the document's order. Name it as the document does, in title case and without its number ("1. CONTRIBUTING TO THE TEAM'S WORK" becomes "Contributing to the Team's Work").
   - Give every score the document describes its text word for word — "Demonstrates a pattern of behavior between levels 3 and 5" included. Leave out a score the document does not describe; never write one yourself.
   - If the document has more than one version of the scales or questions (a draft and a revised one), use the latest, revised one, and say so in the summary.
-  - Its written-feedback prompts become questions: those about each teammate are peer, those about themselves are self. Copy each as written, with its one line of guidance if it has one.
-  - A question meant only for course staff cannot stay private here — once results are released, students see what teammates wrote about them. Leave it out and say so in not_applied.
+  - Its written-feedback prompts become questions: those about each teammate are peer, those about themselves are self, and an open comment box for the instructor is instructor. Copy each as written, with its one line of guidance if it has one.
+  - An instructor question is optional for students and reaches her without their name. Keep the one the form has, last, unless she or the document says to drop it.
+  - A question about a teammate meant only for course staff cannot stay private here — once results are released, students see what teammates wrote about them. Leave it out and say so in not_applied.
   - Put its instructions for students in instructions, as written, with "- " bullets. Leave out what is for instructors: notes, research, draft status, scoring rationale. Also leave out any line telling students to use something this form does not have — such as choosing "Not enough information" — since they would look for a choice that is not there.
   - The grade already works as described above. If the document scores the same way (the sum of teammates' averages per dimension), it needs nothing; any other scoring rule goes in not_applied.
   - Leave the due date and settings alone unless the document or she says otherwise. Change the title only if she asks or the form has none.
