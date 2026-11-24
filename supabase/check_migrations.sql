@@ -339,6 +339,15 @@ select '0058 team evaluation',
              and to_regclass('public.te_ratings') is not null
             then 'applied'
             else 'NOT APPLIED — run 0058_team_evaluation.sql' end
+union all
+select '0059 projects',
+       case when to_regclass('public.project_scores') is not null
+             and to_regprocedure('public.guard_project_grading()') is not null
+             and exists (select 1 from information_schema.columns
+                          where table_schema = 'public' and table_name = 'project_scores'
+                            and column_name = 'score' and is_nullable = 'YES')
+            then 'applied'
+            else 'NOT APPLIED — run 0059_projects.sql' end
 order by 1;
 
 -- ------------------------------------------------------- and the buckets
