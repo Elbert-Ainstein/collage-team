@@ -114,7 +114,12 @@ export function TeamPage({
                                 <span className="pj-nil">—</span>
                               )}
                             </td>
-                            <td className="pj-why">{s?.reason.trim() || <span className="pj-nil">No reason yet</span>}</td>
+                            {/* "No reason yet" only beside a score: an unscored
+                                row's dash already says nothing's there. */}
+                            <td className="pj-why">
+                              {s?.reason.trim() ||
+                                (s?.score ? <span className="pj-nil">No reason yet</span> : null)}
+                            </td>
                           </tr>
                         );
                       })}

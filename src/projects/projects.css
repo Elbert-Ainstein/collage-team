@@ -6,6 +6,9 @@
    iPad, so targets are big and rows stack early. */
 
 .pj {
+  /* Team evaluation's accent, for the list page, which isn't inside .te-fac. */
+  --te-accent: #0f766e;
+  --te-accent-50: #f0fdfa;
   --pj-done: #047857;
   --pj-started: #d97706;
   --pj-empty: var(--fv-neutral-300);
@@ -13,7 +16,9 @@
 
 /* --------------------------------------------------------------- chrome */
 
-.pj-topbar {
+/* Two classes wherever this file adjusts an fv- part: faculty.css can load
+   after it, and on a tie the later file wins. */
+.fv-topbar.pj-topbar {
   flex-wrap: wrap;
   align-items: flex-start;
 }
@@ -37,7 +42,7 @@
   gap: 8px;
   margin-left: auto;
 }
-.pj-head {
+.fv-head.pj-head {
   align-items: center;
 }
 .pj-note {
@@ -375,10 +380,13 @@
   text-align: left;
   vertical-align: top;
 }
+/* A fixed column, so the scores sit next to what they score rather than
+   across a gap; a long category name wraps inside it. */
 .pj-detail th {
-  width: 26%;
+  width: 180px;
   font-weight: 600;
   padding-left: 16px;
+  overflow-wrap: anywhere;
 }
 .pj-detail td:nth-child(2) {
   width: 44px;
@@ -443,12 +451,16 @@
   gap: 12px;
   margin-bottom: 14px;
 }
-.pj-namein {
+.fv-in.pj-namein {
   width: min(320px, 100%);
   font-size: var(--fv-sm);
 }
-.pj-namein[aria-invalid="true"],
-.pj-whyin[aria-invalid="true"] {
+.pj-nameread {
+  font-size: var(--fv-sm);
+  font-weight: 600;
+}
+.fv-in.pj-namein[aria-invalid="true"],
+.fv-in.pj-whyin[aria-invalid="true"] {
   border-color: var(--te-s1);
 }
 .pj-cat {
@@ -533,7 +545,7 @@
   font-size: var(--fv-xs);
   font-weight: 700;
 }
-.pj-whyin {
+.fv-in.pj-whyin {
   width: 100%;
   min-height: 60px;
   height: auto;

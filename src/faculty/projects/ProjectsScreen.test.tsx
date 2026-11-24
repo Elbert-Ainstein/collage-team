@@ -322,9 +322,9 @@ describe("the Projects tab", () => {
     expect(button("Reopen to edit")).toBeTruthy();
     expect((section("Time").querySelector(".pj-opt.s5") as HTMLButtonElement).disabled).toBe(true);
 
-    // And on the way back the team list says so.
-    await click(host.querySelector(".fv-back") as Element);
-    await click(host.querySelector(".fv-back") as Element);
+    // One press back to the team list, which says so.
+    await click(button(/All teams/));
+    expect(window.location.search).toBe("?s=projects&proj=p1");
     const row = host.querySelector(".pj-teamrow") as HTMLElement;
     expect(row.querySelector(".pj-chip")?.getAttribute("aria-label")).toBe("Team 1, Will: done");
     expect(row.querySelector(".pj-teamscore")?.textContent).toBe("7 / 10");

@@ -279,6 +279,7 @@ export function ProjectsScreen({
           me={me}
           canGrade={can.grade}
           onBack={() => go({ ...AT_LIST, project: snap.project.id, team: team.id })}
+          onTeams={() => go({ ...AT_LIST, project: snap.project.id })}
           onGrading={patchGrading}
           onScore={patchScore}
           onError={fail}
@@ -340,15 +341,21 @@ function ProjectList({
 }) {
   const notInstalled = error === new ProjectsNotInstalledError().message;
   const teamIds = data.teams.map((t) => t.id);
+  // The empty state has its own button; one on the header too is the same
+  // button twice.
+  const none = overview !== null && overview.projects.length === 0;
+  // The app's own type scale, like the tabs beside it. Inside a project the
+  // screens go a step larger (te-fac), as team evaluation's do: they're read
+  // standing up, on a phone or an iPad.
   return (
-    <div className="fv-panel te-fac pj">
+    <div className="fv-panel pj">
       <div className="fv-head pj-head">
         <div>
           <h1 className="fv-h1">Projects</h1>
           <div className="fv-sub">Grade a project fair team by team, against a rubric.</div>
         </div>
         <div style={{ flex: 1 }} />
-        {data.can.author && !notInstalled ? (
+        {data.can.author && !notInstalled && !none ? (
           <button type="button" className="fv-btn primary sm" onClick={onNew}>
             <FIcon name="add" size={15} /> New project
           </button>
@@ -411,7 +418,12 @@ function ProjectList({
                           <b>{prog.done}</b> {prog.done === 1 ? "grading" : "gradings"} done
                         </>
                       )}
-                      {prog.started ? <span className="fv-sub"> · {prog.started} in progress</span> : null}
+                      {prog.started ? (
+                        <span className="fv-sub">
+                          {" "}
+                          · {prog.started} {prog.started === 1 ? "grading" : "gradings"} in progress
+                        </span>
+                      ) : null}
                     </span>
                     {current && teamIds.length ? (
                       <span className="pj-bar" aria-hidden="true">

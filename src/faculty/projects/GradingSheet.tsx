@@ -67,6 +67,7 @@ export function GradingSheet({
   me,
   canGrade,
   onBack,
+  onTeams,
   onGrading,
   onScore,
   onError,
@@ -78,6 +79,8 @@ export function GradingSheet({
   me: string;
   canGrade: boolean;
   onBack: () => void;
+  /** Straight to the project's team list: where a grader goes next once done. */
+  onTeams: () => void;
   /** A grading row saved — or, with null, thrown away. */
   onGrading: (row: ProjectGrading | null, key?: { team_id: string; slot: number }) => void;
   onScore: (row: ProjectScore) => void;
@@ -340,6 +343,13 @@ export function GradingSheet({
           </div>
         ) : null}
 
+        {readOnly ? (
+          // Nothing to type into: the name is a fact about the sheet.
+          <div className="pj-namerow">
+            <span className="fv-eyebrow">Name</span>
+            <span className="pj-nameread">{name.trim() || "—"}</span>
+          </div>
+        ) : (
         <label className="pj-namerow">
           <span className="fv-eyebrow">Name</span>
           <input
@@ -348,7 +358,6 @@ export function GradingSheet({
             maxLength={NAME_MAX}
             placeholder="Who's grading?"
             list={`pj-graders-${slot}`}
-            disabled={readOnly}
             aria-invalid={tried && left.name}
             onChange={(e) => rename(e.target.value)}
             onBlur={() => now("name")}
@@ -359,6 +368,7 @@ export function GradingSheet({
             ))}
           </datalist>
         </label>
+        )}
 
         {categories.length === 0 ? (
           <div className="fv-card pj-empty">
@@ -417,9 +427,16 @@ export function GradingSheet({
           ) : null}
           {canGrade ? (
             done ? (
-              <button type="button" className="fv-btn outline sm" disabled={busy !== null} onClick={() => void reopen()}>
-                {busy === "reopen" ? "Reopening…" : "Reopen to edit"}
-              </button>
+              <>
+                <button type="button" className="fv-btn outline sm" disabled={busy !== null} onClick={() => void reopen()}>
+                  {busy === "reopen" ? "Reopening…" : "Reopen to edit"}
+                </button>
+                {/* The next team is two backs away otherwise, and at a fair
+                    the next team is the whole point of being done. */}
+                <button type="button" className="fv-btn primary sm" disabled={busy !== null} onClick={onTeams}>
+                  All teams <FIcon name="chevronRight" size={15} />
+                </button>
+              </>
             ) : (
               <button
                 type="button"
