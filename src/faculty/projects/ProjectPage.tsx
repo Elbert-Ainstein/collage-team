@@ -66,26 +66,21 @@ export function ProjectPage({
         onBack={onBack}
         label="Back to projects"
         title={project.title}
-        sub={
-          <>
-            {categories.length} {categories.length === 1 ? "category" : "categories"} · out of {total} ·{" "}
-            {project.graders_per_team} {project.graders_per_team === 1 ? "grader" : "graders"} per team
-          </>
-        }
+        sub={`Out of ${total}`}
       >
         <button type="button" className="fv-btn outline sm" onClick={exportCsv} disabled={!teams.length}>
           Download results
         </button>
         {canEdit ? (
           <button type="button" className="fv-btn outline sm" onClick={onEdit}>
-            <FIcon name="edit" size={14} /> Edit rubric
+            <FIcon name="edit" size={14} /> Edit
           </button>
         ) : null}
       </TopBar>
 
       <div className="pj-summary">
         <span>
-          <b>{prog.teamsComplete}</b> of {teams.length} teams fully graded
+          <b>{prog.teamsComplete}</b> of {teams.length} teams done
         </span>
         <span className="pj-legend" aria-hidden="true">
           <span className="pj-dot done" /> done
@@ -93,11 +88,6 @@ export function ProjectPage({
           <span className="pj-dot empty" /> not started
         </span>
       </div>
-      {teams.length ? (
-        <span className="pj-bar pj-barwide" aria-hidden="true">
-          <span style={{ width: `${(100 * prog.teamsComplete) / teams.length}%` }} />
-        </span>
-      ) : null}
 
       {fixedToOtherSet ? (
         <div className="pj-note" role="note">
@@ -157,10 +147,16 @@ export function ProjectPage({
                   </div>
                   <span
                     className={`pj-teamscore${r.total === null ? " none" : ""}`}
-                    title={r.total === null ? "No grading marked done yet" : `Averaged over ${r.graders}`}
+                    title={r.total === null ? "No grader is done yet" : `Average of ${r.graders}`}
                   >
-                    {r.total === null ? "—" : fmt(r.total)}
-                    <span className="pj-outof"> / {total}</span>
+                    {r.total === null ? (
+                      "—"
+                    ) : (
+                      <>
+                        {fmt(r.total)}
+                        <span className="pj-outof"> / {total}</span>
+                      </>
+                    )}
                   </span>
                   <FIcon name="chevronRight" size={16} />
                 </li>

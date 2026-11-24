@@ -3,6 +3,7 @@
 // Making a project, or changing one: its title, how many graders each team
 // gets, and the rubric — categories, each a 1–5 scale with a sentence saying
 // what every point looks like. The grader sees those sentences in the room.
+// Categories are in the order they were added.
 //
 // Once teams have been graded the rubric can still change. Taking a category
 // out deletes its scores; adding one reopens every done grading (0059), so the
@@ -89,16 +90,6 @@ export function ProjectEditor({
     setCategories((cs) =>
       cs.map((c) => (c.id === id ? { ...c, levels: c.levels.map((l, i) => (i === score - 1 ? text : l)) } : c)),
     );
-  const move = (id: string, by: -1 | 1) =>
-    setCategories((cs) => {
-      const i = cs.findIndex((c) => c.id === id);
-      const j = i + by;
-      if (i < 0 || j < 0 || j >= cs.length) return cs;
-      const next = [...cs];
-      [next[i], next[j]] = [next[j], next[i]];
-      return next;
-    });
-
   const save = async () => {
     if (problem || busy) return;
     setAsking(null);
@@ -146,7 +137,7 @@ export function ProjectEditor({
         onBack={onCancel}
         label={fresh ? "Back to projects" : "Back to the project"}
         title={fresh ? "New project" : "Edit project"}
-        sub={`Out of ${outOf(categories)} · 5 points per category`}
+        sub={`Out of ${outOf(categories)}`}
       >
         <span className="te-problem">{problem}</span>
         <button type="button" className="fv-btn ghost sm" onClick={onCancel}>
@@ -190,18 +181,11 @@ export function ProjectEditor({
             />
           </label>
         </div>
-        <p className="fv-sub pj-editnote">
-          Each team shows this many grader slots; a grader can still add another on the team&rsquo;s
-          page. A team&rsquo;s score is each category averaged over the graders who marked theirs done.
-        </p>
 
         {snap && given > 0 ? (
           <div className="pj-note" role="status">
             <FIcon name="assignment" size={15} />
-            <span>
-              {given} {given === 1 ? "score has" : "scores have"} been given. You can still reword the
-              rubric; removing a category deletes its scores.
-            </span>
+            <span>Teams have been graded. Removing a category deletes its scores.</span>
           </div>
         ) : null}
 
@@ -220,26 +204,6 @@ export function ProjectEditor({
                   onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
                   onChange={(v) => setCat(c.id, { name: v.replace(/\s*\n\s*/g, " ") })}
                 />
-                <button
-                  type="button"
-                  className="fv-iconbtn"
-                  aria-label={`Move ${c.name || `category ${i + 1}`} earlier`}
-                  title="Move earlier"
-                  disabled={i === 0}
-                  onClick={() => move(c.id, -1)}
-                >
-                  <FIcon name="chevronLeft" size={14} />
-                </button>
-                <button
-                  type="button"
-                  className="fv-iconbtn"
-                  aria-label={`Move ${c.name || `category ${i + 1}`} later`}
-                  title="Move later"
-                  disabled={i === categories.length - 1}
-                  onClick={() => move(c.id, 1)}
-                >
-                  <FIcon name="chevronRight" size={14} />
-                </button>
                 <button
                   type="button"
                   className="fv-iconbtn"

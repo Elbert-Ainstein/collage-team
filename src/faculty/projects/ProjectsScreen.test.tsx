@@ -232,7 +232,7 @@ describe("the Projects tab", () => {
   it("goes from the list to a project's teams, each with a dot per grader", async () => {
     await mount();
     expect(host.textContent).toContain("Projects");
-    expect(host.textContent).toContain("0 of 2 teams fully graded");
+    expect(host.textContent).toContain("0 of 2 teams done");
 
     await click(button(/Project fair/));
     expect(window.location.search).toBe("?s=projects&proj=p1");
@@ -245,7 +245,7 @@ describe("the Projects tab", () => {
     expect(chips(rows[0])).toEqual(["Team 1, Grader 1: not started", "Team 1, Grader 2: not started"]);
     expect(chips(rows[1])).toEqual(["Team 2, Will: done", "Team 2, Kelly: in progress"]);
     expect(rows[1].querySelector(".pj-teamscore")?.textContent).toBe("9 / 10");
-    expect(rows[0].querySelector(".pj-teamscore")?.textContent).toBe("— / 10");
+    expect(rows[0].querySelector(".pj-teamscore")?.textContent).toBe("—");
   });
 
   it("opens a team's graders, then a grader's sheet with the rubric", async () => {
@@ -255,7 +255,8 @@ describe("the Projects tab", () => {
     expect(window.location.search).toBe("?s=projects&proj=p1&team=t1");
     expect(host.textContent).toContain("Grader 1");
     expect(host.textContent).toContain("Grader 2");
-    expect(host.textContent).toContain("Not started");
+    // An empty slot is an invitation, for someone who can grade.
+    expect(host.querySelector(".pj-grader.empty")?.textContent).toContain("Grade");
 
     await click(button(/Grader 1/));
     expect(window.location.search).toBe("?s=projects&proj=p1&team=t1&slot=1");
@@ -290,6 +291,7 @@ describe("the Projects tab", () => {
     expect(saveGraderName.mock.invocationCallOrder[0]).toBeLessThan(saveScore.mock.invocationCallOrder[0]);
 
     // Mark done too early: nothing is sent, and the sheet says what's missing.
+    expect(host.querySelector(".pj-left")?.textContent).toBe("0 of 2 categories complete");
     await click(button(/Mark done/));
     expect(setGradingDone).not.toHaveBeenCalled();
     expect(section("Robustness").textContent).toContain("Say why before marking it done.");
@@ -304,6 +306,9 @@ describe("the Projects tab", () => {
       score: 4,
       reason: "7 parts, cool pulley that actuates",
     });
+    // With a reason written, the earlier ones step aside.
+    expect(section("Robustness").querySelector(".pj-reuse")).toBeNull();
+    expect(host.querySelector(".pj-left")?.textContent).toBe("1 of 2 categories complete");
 
     // Typing saves when they move on.
     await click(section("Time").querySelector(".pj-opt.s3") as Element);
@@ -319,11 +324,11 @@ describe("the Projects tab", () => {
 
     // Done: locked, with a way back in.
     expect(host.textContent).toContain("Done at");
-    expect(button("Reopen to edit")).toBeTruthy();
+    expect(button("Edit")).toBeTruthy();
     expect((section("Time").querySelector(".pj-opt.s5") as HTMLButtonElement).disabled).toBe(true);
 
     // One press back to the team list, which says so.
-    await click(button(/All teams/));
+    await click(button("Back to teams"));
     expect(window.location.search).toBe("?s=projects&proj=p1");
     const row = host.querySelector(".pj-teamrow") as HTMLElement;
     expect(row.querySelector(".pj-chip")?.getAttribute("aria-label")).toBe("Team 1, Will: done");

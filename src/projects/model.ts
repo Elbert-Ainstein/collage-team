@@ -81,18 +81,6 @@ export function whatsLeft(
 export const nothingLeft = (left: Left): boolean =>
   !left.name && left.unscored.length === 0 && left.unexplained.length === 0;
 
-/** "Add your name · Score Time · Say why for Robustness", or null when done-able. */
-export function leftText(left: Left, categories: Pick<ProjectCategory, "id" | "name">[]): string | null {
-  const name = (id: string) => categories.find((c) => c.id === id)?.name || "a category";
-  const list = (ids: string[]) =>
-    ids.length > 2 ? `${ids.length} categories` : ids.map(name).join(" and ");
-  const parts: string[] = [];
-  if (left.name) parts.push("Add your name");
-  if (left.unscored.length) parts.push(`Score ${list(left.unscored)}`);
-  if (left.unexplained.length) parts.push(`Say why for ${list(left.unexplained)}`);
-  return parts.length ? parts.join(" · ") : null;
-}
-
 /** The sum of the scores given. */
 export function total(scores: Pick<ProjectScore, "score">[]): number {
   return scores.reduce((n, s) => n + (s.score ?? 0), 0);

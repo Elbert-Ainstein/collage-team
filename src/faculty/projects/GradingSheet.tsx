@@ -20,7 +20,6 @@ import { clearGrading, saveGraderName, saveScore, setGradingDone } from "@/proje
 import {
   earlierReasons,
   gradingOf,
-  leftText,
   nothingLeft,
   outOf,
   scoresOf,
@@ -253,9 +252,26 @@ export function GradingSheet({
   const unscored = new Set(left.unscored);
   const unexplained = new Set(left.unexplained);
 
+  /** Bring the first thing still missing into view, and into focus. */
+  const showMissing = () => {
+    const c = categories.find((x) => unscored.has(x.id) || unexplained.has(x.id));
+    const target = left.name ? "pj-name" : c ? `pj-cat-${c.id}` : null;
+    const el = target ? document.getElementById(target) : null;
+    if (!el) return;
+    el.scrollIntoView?.({ block: "center", behavior: "smooth" });
+    const field = left.name ? el : c && unexplained.has(c.id) ? document.getElementById(`pj-why-${c.id}`) : null;
+    (field as HTMLElement | null)?.focus({ preventScroll: true });
+  };
+
   const markDone = async () => {
     setTried(true);
-    if (!ready || busy) return;
+    if (!ready) {
+      // Pressing it early is how a grader finds out what's missing: take them
+      // to it rather than describe it.
+      showMissing();
+      return;
+    }
+    if (busy) return;
     setBusy("done");
     try {
       flushAll();
@@ -322,7 +338,7 @@ export function GradingSheet({
   }, [data.instructor, data.tfs, snap.gradings]);
 
   const totalNow = [...drafts.values()].reduce((n, d) => n + (d.score ?? 0), 0);
-  const leftWords = leftText(left, categories);
+  const complete = categories.length - left.unscored.length - left.unexplained.length;
 
   return (
     <div className="fv-panel te-fac pj">
@@ -333,6 +349,12 @@ export function GradingSheet({
         sub={team.members.length ? team.members.map((m) => m.name).join(", ") : undefined}
       >
         <SaveNote save={save} />
+        {/* Up here, away from Mark done: it throws the sheet away. */}
+        {canGrade && !done && grading ? (
+          <button type="button" className="fv-btn ghost sm" disabled={busy !== null} onClick={() => setAsking(true)}>
+            Clear
+          </button>
+        ) : null}
       </TopBar>
 
       <div className="fv-scroll pj-sheet">
@@ -353,6 +375,7 @@ export function GradingSheet({
         <label className="pj-namerow">
           <span className="fv-eyebrow">Name</span>
           <input
+            id="pj-name"
             className="fv-in pj-namein"
             value={name}
             maxLength={NAME_MAX}
@@ -395,6 +418,7 @@ export function GradingSheet({
                     graderName: name,
                     score: drafts.get(c.id)?.score ?? null,
                     current: drafts.get(c.id)?.reason ?? "",
+                    limit: 3,
                   })
             }
             onPick={(n) => pick(c.id, n)}
@@ -416,25 +440,21 @@ export function GradingSheet({
             </span>
           ) : (
             <span className={`pj-left${tried && !ready ? " warn" : ""}`} aria-live="polite">
-              {leftWords ?? "Every category is scored and explained."}
+              {complete} of {categories.length} {categories.length === 1 ? "category" : "categories"} complete
+              {left.name ? " · add your name" : ""}
             </span>
           )}
           <div style={{ flex: 1 }} />
-          {canGrade && !done && grading ? (
-            <button type="button" className="fv-btn ghost sm" disabled={busy !== null} onClick={() => setAsking(true)}>
-              Clear
-            </button>
-          ) : null}
           {canGrade ? (
             done ? (
               <>
                 <button type="button" className="fv-btn outline sm" disabled={busy !== null} onClick={() => void reopen()}>
-                  {busy === "reopen" ? "Reopening…" : "Reopen to edit"}
+                  {busy === "reopen" ? "Opening…" : "Edit"}
                 </button>
                 {/* The next team is two backs away otherwise, and at a fair
                     the next team is the whole point of being done. */}
                 <button type="button" className="fv-btn primary sm" disabled={busy !== null} onClick={onTeams}>
-                  All teams <FIcon name="chevronRight" size={15} />
+                  Back to teams
                 </button>
               </>
             ) : (
@@ -509,7 +529,11 @@ function CategoryRow({
   const reason = draft?.reason ?? "";
   const id = `pj-why-${category.id}`;
   return (
-    <section className={`fv-card pj-cat${missingScore || missingReason ? " missing" : ""}`} aria-label={category.name}>
+    <section
+      id={`pj-cat-${category.id}`}
+      className={`fv-card pj-cat${missingScore || missingReason ? " missing" : ""}`}
+      aria-label={category.name}
+    >
       <h3 className="pj-catname">{category.name}</h3>
       <div className="pj-opts" role="radiogroup" aria-label={`${category.name} score`}>
         {SCORES.map((n) => (
@@ -549,7 +573,9 @@ function CategoryRow({
       )}
       {missingReason ? <p className="pj-miss">Say why before marking it done.</p> : null}
 
-      {earlier.length ? (
+      {/* Reasons given before in this category, while the box is empty:
+          once something is written, they'd only be in the way. */}
+      {!readOnly && !reason.trim() && earlier.length ? (
         <div className="pj-earlier">
           <span className="pj-earlierlbl">Used before</span>
           {earlier.map((e) => (
@@ -557,10 +583,9 @@ function CategoryRow({
               key={e.reason}
               type="button"
               className={`pj-reuse${e.mine ? " mine" : ""}`}
-              title={`${e.mine ? "You gave" : "Given"}${e.score ? ` with a ${e.score}` : ""}: ${e.reason}`}
+              title={e.reason}
               onClick={() => onReuse(e.reason)}
             >
-              {e.score ? <span className={`pj-reusescore s${e.score}`}>{e.score}</span> : null}
               <span className="pj-reusetext">{e.reason}</span>
             </button>
           ))}

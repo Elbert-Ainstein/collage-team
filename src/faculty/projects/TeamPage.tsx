@@ -1,21 +1,11 @@
 "use client";
 
-// One team on a project: its graders, each with how far they've got, and —
-// once they've started — what they gave in every category and why. The
-// team's score sits at the top: each category averaged over the done
-// gradings. Press a grader to open their sheet, or add another grader.
+// One team on a project: its score, then its graders — a row each with a dot
+// for how far they've got. Press a grader to open their sheet, which is where
+// their scores and reasons are; or add another grader.
 
 import type { TeamWithMembers } from "@/checkins/types";
-import {
-  fmt,
-  gradingOf,
-  outOf,
-  scoresOf,
-  slotsFor,
-  stateOf,
-  teamResult,
-  total,
-} from "@/projects/model";
+import { fmt, gradingOf, outOf, scoresOf, slotsFor, stateOf, teamResult, total } from "@/projects/model";
 import { MAX_SLOTS, type ProjectSnapshot } from "@/projects/types";
 import { FIcon } from "../icons";
 import { TopBar } from "./TopBar";
@@ -57,8 +47,8 @@ export function TeamPage({
             </div>
             <div className="fv-sub">
               {result.graders
-                ? `Averaged over ${result.graders} done ${result.graders === 1 ? "grading" : "gradings"}`
-                : "No grading marked done yet"}
+                ? `Average of ${result.graders} ${result.graders === 1 ? "grader" : "graders"}`
+                : "No grader is done yet"}
             </div>
           </div>
           {result.graders ? (
@@ -77,62 +67,33 @@ export function TeamPage({
           {slots.map((slot) => {
             const g = gradingOf(snap.gradings, team.id, slot);
             const state = stateOf(g);
-            const mine = scoresOf(snap.scores, team.id, slot);
-            const scored = mine.filter((s) => s.score !== null).length;
+            const name = g?.grader_name.trim();
             return (
-              <li key={slot} className={`fv-card pj-grader ${state}`}>
-                <button type="button" className="pj-graderhead" onClick={() => onOpen(slot)}>
+              <li key={slot}>
+                <button type="button" className={`fv-card pj-grader ${state}`} onClick={() => onOpen(slot)}>
                   <span className={`pj-dot ${state}`} aria-hidden="true" />
                   <span className="pj-gradername">
                     <span className="pj-slot">Grader {slot}</span>
-                    {g?.grader_name.trim() ? <span> · {g.grader_name.trim()}</span> : null}
+                    {name ? <span> · {name}</span> : null}
                   </span>
                   <span className="pj-graderstate">
                     {state === "done"
-                      ? `Done · ${total(mine)} / ${max}`
+                      ? `Done · ${total(scoresOf(snap.scores, team.id, slot))} / ${max}`
                       : state === "started"
-                        ? `In progress · ${scored} of ${categories.length} scored`
-                        : "Not started"}
+                        ? "In progress"
+                        : canGrade
+                          ? "Grade"
+                          : "Not started"}
                   </span>
-                  <span className="pj-graderact">
-                    {!canGrade ? "View" : state === "empty" ? "Grade" : state === "done" ? "Open" : "Continue"}
-                    <FIcon name="chevronRight" size={15} />
-                  </span>
+                  <FIcon name="chevronRight" size={16} />
                 </button>
-                {state !== "empty" && mine.length ? (
-                  <table className="pj-detail">
-                    <tbody>
-                      {categories.map((c) => {
-                        const s = mine.find((x) => x.category_id === c.id);
-                        return (
-                          <tr key={c.id}>
-                            <th scope="row">{c.name}</th>
-                            <td>
-                              {s?.score ? (
-                                <span className={`te-score s${s.score}`}>{s.score}</span>
-                              ) : (
-                                <span className="pj-nil">—</span>
-                              )}
-                            </td>
-                            {/* "No reason yet" only beside a score: an unscored
-                                row's dash already says nothing's there. */}
-                            <td className="pj-why">
-                              {s?.reason.trim() ||
-                                (s?.score ? <span className="pj-nil">No reason yet</span> : null)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                ) : null}
               </li>
             );
           })}
         </ul>
 
         {canGrade && slots.length < MAX_SLOTS ? (
-          <button type="button" className="fv-btn outline sm pj-addgrader" onClick={() => onOpen(slots.length + 1)}>
+          <button type="button" className="fv-btn ghost sm pj-addgrader" onClick={() => onOpen(slots.length + 1)}>
             <FIcon name="add" size={15} /> Add a grader
           </button>
         ) : null}

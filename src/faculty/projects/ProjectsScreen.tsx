@@ -404,32 +404,22 @@ function ProjectList({
                 <li key={p.id}>
                   <button type="button" className="fv-card pj-card" onClick={() => onOpen(p.id)}>
                     <span className="pj-cardtitle">{p.title}</span>
-                    <span className="fv-sub">
-                      {cats} {cats === 1 ? "category" : "categories"} · {p.graders_per_team}{" "}
-                      {p.graders_per_team === 1 ? "grader" : "graders"} per team
-                    </span>
-                    <span className="pj-cardprog">
-                      {current && teamIds.length ? (
-                        <>
-                          <b>{prog.teamsComplete}</b> of {teamIds.length} teams fully graded
-                        </>
-                      ) : (
-                        <>
-                          <b>{prog.done}</b> {prog.done === 1 ? "grading" : "gradings"} done
-                        </>
-                      )}
-                      {prog.started ? (
-                        <span className="fv-sub">
-                          {" "}
-                          · {prog.started} {prog.started === 1 ? "grading" : "gradings"} in progress
+                    {!cats ? (
+                      <span className="fv-sub">No rubric yet</span>
+                    ) : current && teamIds.length ? (
+                      <>
+                        <span className="pj-cardprog">
+                          <b>{prog.teamsComplete}</b> of {teamIds.length} teams done
                         </span>
-                      ) : null}
-                    </span>
-                    {current && teamIds.length ? (
-                      <span className="pj-bar" aria-hidden="true">
-                        <span style={{ width: `${(100 * prog.teamsComplete) / teamIds.length}%` }} />
+                        <span className="pj-bar" aria-hidden="true">
+                          <span style={{ width: `${(100 * prog.teamsComplete) / teamIds.length}%` }} />
+                        </span>
+                      </>
+                    ) : (
+                      <span className="pj-cardprog">
+                        <b>{prog.done}</b> {prog.done === 1 ? "grader" : "graders"} done
                       </span>
-                    ) : null}
+                    )}
                   </button>
                 </li>
               );

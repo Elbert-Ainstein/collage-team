@@ -110,10 +110,6 @@
   background: var(--pj-done);
   transition: width 200ms ease;
 }
-.pj-barwide {
-  margin: 0 0 14px;
-  flex: none;
-}
 .pj-outof {
   color: var(--fv-muted);
   font-weight: 400;
@@ -166,7 +162,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 18px;
-  margin-bottom: 8px;
+  margin-bottom: 14px;
   font-size: var(--fv-xs);
   flex: none;
 }
@@ -323,7 +319,20 @@
   gap: 10px;
 }
 .pj-grader {
-  overflow: hidden;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  min-height: 56px;
+  padding: 12px 14px 12px 16px;
+  font: inherit;
+  text-align: left;
+  color: var(--fv-muted);
+  cursor: pointer;
+}
+.pj-grader:hover {
+  border-color: var(--te-accent);
 }
 .pj-grader.done {
   border-left: 4px solid var(--pj-done);
@@ -331,25 +340,12 @@
 .pj-grader.started {
   border-left: 4px solid var(--pj-started);
 }
-.pj-graderhead {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 6px 12px;
-  padding: 14px 16px;
-  border: 0;
-  background: transparent;
-  font: inherit;
-  text-align: left;
-  color: inherit;
-  cursor: pointer;
-}
-.pj-graderhead:hover {
-  background: var(--fv-cream-300);
-}
 .pj-gradername {
+  flex: 1;
+  min-width: 0;
   font-size: var(--fv-sm);
+  color: var(--fv-ink, var(--fv-navy));
+  overflow-wrap: anywhere;
 }
 .pj-slot {
   font-weight: 700;
@@ -357,52 +353,6 @@
 }
 .pj-graderstate {
   font-size: var(--fv-xs);
-  color: var(--fv-muted);
-}
-.pj-graderact {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  font-size: var(--fv-xs);
-  font-weight: 600;
-  color: var(--te-accent);
-}
-.pj-detail {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--fv-xs);
-}
-.pj-detail th,
-.pj-detail td {
-  padding: 7px 10px;
-  border-top: 1px solid var(--fv-neutral-200);
-  text-align: left;
-  vertical-align: top;
-}
-/* A fixed column, so the scores sit next to what they score rather than
-   across a gap; a long category name wraps inside it. */
-.pj-detail th {
-  width: 180px;
-  font-weight: 600;
-  padding-left: 16px;
-  overflow-wrap: anywhere;
-}
-.pj-detail td:nth-child(2) {
-  width: 44px;
-}
-.pj-detail .te-score {
-  margin-top: 0;
-  width: 26px;
-  height: 26px;
-}
-.pj-why {
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-  white-space: pre-wrap;
-}
-.pj-nil {
-  color: var(--fv-muted);
 }
 .pj-addgrader {
   flex: none;
@@ -415,6 +365,7 @@
   flex-wrap: wrap;
   gap: 12px 16px;
   align-items: flex-end;
+  margin-bottom: 16px;
 }
 .pj-titlefield {
   flex: 1 1 320px;
@@ -425,11 +376,6 @@
 }
 .pj-gradersfield .fv-in {
   width: 110px;
-}
-.pj-editnote {
-  margin: 8px 0 14px;
-  line-height: 1.5;
-  max-width: 70ch;
 }
 .pj-h2 {
   margin-top: 8px;
@@ -583,10 +529,9 @@
 .pj-reuse {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
   max-width: min(100%, 340px);
-  min-height: 30px;
-  padding: 3px 10px 3px 4px;
+  min-height: 32px;
+  padding: 3px 12px;
   border: 1px dashed var(--fv-neutral-300);
   border-radius: 999px;
   background: transparent;
@@ -608,23 +553,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.pj-reusescore {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 5px;
-  font-weight: 700;
-  font-size: 11px;
-}
-.pj-reusescore.s1 { color: var(--te-s1); background: var(--te-s1-bg); }
-.pj-reusescore.s2 { color: var(--te-s2); background: var(--te-s2-bg); }
-.pj-reusescore.s3 { color: var(--te-s3); background: var(--te-s3-bg); }
-.pj-reusescore.s4 { color: var(--te-s4); background: var(--te-s4-bg); }
-.pj-reusescore.s5 { color: var(--te-s5); background: var(--te-s5-bg); }
-
 /* The bar under the sheet: what's left, and Mark done. */
 .pj-sheetfoot {
   flex: none;
@@ -693,9 +621,6 @@
   .pj-teamscore {
     grid-row: 1;
     grid-column: 2;
-  }
-  .pj-detail th {
-    width: 34%;
   }
 }
 

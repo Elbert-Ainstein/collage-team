@@ -3,7 +3,6 @@ import {
   earlierReasons,
   fmt,
   graderLabel,
-  leftText,
   nothingLeft,
   progressOf,
   resultsRows,
@@ -84,7 +83,6 @@ describe("what's left before done", () => {
     const left = whatsLeft(cats, drafts([["r", { score: 5, reason: "" }]]), "");
     expect(left).toEqual({ name: true, unscored: ["t", "d"], unexplained: ["r"] });
     expect(nothingLeft(left)).toBe(false);
-    expect(leftText(left, cats)).toBe("Add your name · Score Time and Design · Say why for Robustness");
   });
 
   it("counts a reason with no score as unscored, and whitespace as nothing", () => {
@@ -104,11 +102,6 @@ describe("what's left before done", () => {
     const all = drafts(cats.map((c) => [c.id, { score: 4, reason: "fine" }]));
     const left = whatsLeft(cats, all, "Will");
     expect(nothingLeft(left)).toBe(true);
-    expect(leftText(left, cats)).toBeNull();
-  });
-
-  it("names a long list by its length", () => {
-    expect(leftText(whatsLeft(cats, new Map(), "Will"), cats)).toBe("Score 3 categories");
   });
 });
 
