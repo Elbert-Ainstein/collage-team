@@ -1,0 +1,704 @@
+/* Projects (0059), the faculty side.
+
+   Inside .fv's panel, beside .te-fac — team evaluation's type scale and its
+   1–5 colours (red to green) — so a rubric reads the same in both. Everything
+   this feature adds is prefixed pj-. It is used standing up, on a phone or an
+   iPad, so targets are big and rows stack early. */
+
+.pj {
+  --pj-done: #047857;
+  --pj-started: #d97706;
+  --pj-empty: var(--fv-neutral-300);
+}
+
+/* --------------------------------------------------------------- chrome */
+
+.pj-topbar {
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+/* Room for the title before the buttons beside it wrap onto their own line,
+   rather than the title being squeezed to a letter a line on a phone. */
+.pj-titles {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.pj-h1 {
+  overflow-wrap: anywhere;
+}
+.pj-sub {
+  margin-top: 4px;
+  line-height: 1.45;
+}
+.pj-topacts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+.pj-head {
+  align-items: center;
+}
+.pj-note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: var(--fv-r-md);
+  background: var(--fv-cream-300);
+  border: 1px solid var(--fv-neutral-200);
+  font-size: var(--fv-xs);
+  line-height: 1.5;
+  color: var(--fv-muted);
+  flex: none;
+}
+.pj-empty {
+  padding: 24px;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.pj-empty .fv-sub {
+  line-height: 1.55;
+  margin: 0;
+}
+.pj-emptytitle {
+  font-family: var(--fv-serif);
+  font-size: var(--fv-lg);
+  font-weight: 700;
+}
+
+/* A grader's state: green done, amber in progress, hollow not started. */
+.pj-dot {
+  display: inline-block;
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+.pj-dot.done {
+  background: var(--pj-done);
+}
+.pj-dot.started {
+  background: var(--pj-started);
+}
+.pj-dot.empty {
+  border: 1.5px solid var(--pj-empty);
+  background: transparent;
+}
+
+.pj-bar {
+  display: block;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--fv-neutral-200);
+  overflow: hidden;
+}
+.pj-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--pj-done);
+  transition: width 200ms ease;
+}
+.pj-barwide {
+  margin: 0 0 14px;
+  flex: none;
+}
+.pj-outof {
+  color: var(--fv-muted);
+  font-weight: 400;
+  font-size: 0.8em;
+}
+
+/* ---------------------------------------------------------- the list */
+
+.pj-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  gap: 12px;
+}
+.pj-card {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 16px 18px;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.pj-card:hover {
+  border-color: var(--te-accent);
+}
+.pj-card .pj-bar {
+  width: 100%;
+  margin-top: 4px;
+}
+.pj-cardtitle {
+  font-family: var(--fv-serif);
+  font-size: var(--fv-lg);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.pj-cardprog {
+  font-size: var(--fv-xs);
+}
+
+/* -------------------------------------------------------- one project */
+
+.pj-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  margin-bottom: 8px;
+  font-size: var(--fv-xs);
+  flex: none;
+}
+.pj-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--fv-muted);
+}
+.pj-legend .pj-dot:not(:first-child) {
+  margin-left: 8px;
+}
+.pj-teams {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pj-teamrow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto 16px;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px 10px 4px;
+  color: var(--fv-muted);
+}
+.pj-teamopen {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  padding: 4px 10px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  border-radius: var(--fv-r-md);
+}
+.pj-teamopen:hover .pj-teamname {
+  text-decoration: underline;
+}
+.pj-teamname {
+  font-weight: 700;
+  font-size: var(--fv-sm);
+  color: var(--fv-navy);
+}
+.pj-members {
+  font-size: var(--fv-2xs);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pj-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.pj-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  max-width: 150px;
+  padding: 0 10px;
+  border: 1px solid var(--fv-neutral-200);
+  border-radius: 999px;
+  background: #fff;
+  font: inherit;
+  font-size: var(--fv-2xs);
+  color: var(--fv-ink, inherit);
+  cursor: pointer;
+}
+.pj-chip:hover {
+  border-color: var(--te-accent);
+}
+.pj-chip.done {
+  background: #e7f6ef;
+  border-color: #b7e2cd;
+}
+.pj-chip.started {
+  background: #fff6e6;
+  border-color: #f3d6a2;
+}
+.pj-chipname {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pj-teamscore {
+  min-width: 72px;
+  text-align: right;
+  font-weight: 700;
+  font-size: var(--fv-sm);
+  color: var(--fv-navy);
+  font-variant-numeric: tabular-nums;
+}
+.pj-teamscore.none {
+  color: var(--fv-muted);
+  font-weight: 400;
+}
+
+/* ----------------------------------------------------------- one team */
+
+.pj-teamtotal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 16px 32px;
+  padding: 16px 18px;
+  margin-bottom: 14px;
+}
+.pj-big {
+  font-family: var(--fv-serif);
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.1;
+  margin: 4px 0 2px;
+  font-variant-numeric: tabular-nums;
+}
+.pj-avgs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  margin: 0;
+}
+.pj-avgs > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pj-avgs dt {
+  font-size: var(--fv-2xs);
+  color: var(--fv-muted);
+}
+.pj-avgs dd {
+  margin: 0;
+  font-weight: 700;
+  font-size: var(--fv-base);
+  font-variant-numeric: tabular-nums;
+}
+.pj-graders {
+  list-style: none;
+  margin: 0 0 12px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pj-grader {
+  overflow: hidden;
+}
+.pj-grader.done {
+  border-left: 4px solid var(--pj-done);
+}
+.pj-grader.started {
+  border-left: 4px solid var(--pj-started);
+}
+.pj-graderhead {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  padding: 14px 16px;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+}
+.pj-graderhead:hover {
+  background: var(--fv-cream-300);
+}
+.pj-gradername {
+  font-size: var(--fv-sm);
+}
+.pj-slot {
+  font-weight: 700;
+  color: var(--fv-navy);
+}
+.pj-graderstate {
+  font-size: var(--fv-xs);
+  color: var(--fv-muted);
+}
+.pj-graderact {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: var(--fv-xs);
+  font-weight: 600;
+  color: var(--te-accent);
+}
+.pj-detail {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fv-xs);
+}
+.pj-detail th,
+.pj-detail td {
+  padding: 7px 10px;
+  border-top: 1px solid var(--fv-neutral-200);
+  text-align: left;
+  vertical-align: top;
+}
+.pj-detail th {
+  width: 26%;
+  font-weight: 600;
+  padding-left: 16px;
+}
+.pj-detail td:nth-child(2) {
+  width: 44px;
+}
+.pj-detail .te-score {
+  margin-top: 0;
+  width: 26px;
+  height: 26px;
+}
+.pj-why {
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.pj-nil {
+  color: var(--fv-muted);
+}
+.pj-addgrader {
+  flex: none;
+}
+
+/* ------------------------------------------------------- the editor */
+
+.pj-editbasics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  align-items: flex-end;
+}
+.pj-titlefield {
+  flex: 1 1 320px;
+}
+.pj-titlefield .fv-in {
+  width: 100%;
+  font-size: var(--fv-base);
+}
+.pj-gradersfield .fv-in {
+  width: 110px;
+}
+.pj-editnote {
+  margin: 8px 0 14px;
+  line-height: 1.5;
+  max-width: 70ch;
+}
+.pj-h2 {
+  margin-top: 8px;
+}
+.pj-danger {
+  margin: 28px 0 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--fv-neutral-200);
+}
+
+/* ------------------------------------------------- one grader's sheet */
+
+.pj-sheet {
+  container-type: inline-size;
+}
+.pj-namerow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.pj-namein {
+  width: min(320px, 100%);
+  font-size: var(--fv-sm);
+}
+.pj-namein[aria-invalid="true"],
+.pj-whyin[aria-invalid="true"] {
+  border-color: var(--te-s1);
+}
+.pj-cat {
+  padding: 14px 16px 16px;
+  margin-bottom: 12px;
+}
+.pj-cat.missing {
+  border-color: var(--te-s1);
+}
+.pj-catname {
+  margin: 0 0 10px;
+  font-size: var(--fv-base);
+  font-weight: 700;
+  color: var(--fv-navy);
+}
+
+/* 5 4 3 2 1 across, each with what it means — the rubric as it's printed.
+   Stacked when the sheet is too narrow for five columns of sentences. */
+.pj-opts {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+}
+.pj-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  min-height: 92px;
+  padding: 10px;
+  border: 1px solid var(--fv-neutral-200);
+  border-radius: var(--fv-r-md);
+  background: #fff;
+  font: inherit;
+  font-size: var(--fv-xs);
+  line-height: 1.4;
+  text-align: left;
+  color: var(--fv-ink, inherit);
+  cursor: pointer;
+}
+.pj-opt .te-score {
+  margin-top: 0;
+}
+.pj-opt:hover:not(:disabled) {
+  border-color: var(--te-accent);
+}
+.pj-opt:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.pj-opt.on {
+  font-weight: 600;
+  border-width: 2px;
+  padding: 9px;
+}
+.pj-opt.on.s1 { background: var(--te-s1-bg); border-color: var(--te-s1); }
+.pj-opt.on.s2 { background: var(--te-s2-bg); border-color: var(--te-s2); }
+.pj-opt.on.s3 { background: var(--te-s3-bg); border-color: var(--te-s3); }
+.pj-opt.on.s4 { background: var(--te-s4-bg); border-color: var(--te-s4); }
+.pj-opt.on.s5 { background: var(--te-s5-bg); border-color: var(--te-s5); }
+.pj-opt.on .te-score {
+  background: #fff;
+}
+.pj-optdesc {
+  overflow-wrap: anywhere;
+}
+@container (max-width: 640px) {
+  .pj-opts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pj-opt {
+    flex-direction: row;
+    align-items: center;
+    min-height: 48px;
+    gap: 12px;
+  }
+}
+
+.pj-whylabel {
+  display: block;
+  margin: 14px 0 6px;
+  font-size: var(--fv-xs);
+  font-weight: 700;
+}
+.pj-whyin {
+  width: 100%;
+  min-height: 60px;
+  height: auto;
+  padding: 8px 10px;
+  font-size: var(--fv-sm);
+  line-height: 1.45;
+  resize: vertical;
+}
+.pj-whyread {
+  margin: 0;
+  font-size: var(--fv-sm);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.pj-miss {
+  margin: 6px 0 0;
+  font-size: var(--fv-xs);
+  color: var(--te-s1);
+}
+
+/* Reasons given before in this category: press one to use it again. */
+.pj-earlier {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+.pj-earlierlbl {
+  font-size: var(--fv-2xs);
+  color: var(--fv-muted);
+  margin-right: 2px;
+}
+.pj-reuse {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(100%, 340px);
+  min-height: 30px;
+  padding: 3px 10px 3px 4px;
+  border: 1px dashed var(--fv-neutral-300);
+  border-radius: 999px;
+  background: transparent;
+  font: inherit;
+  font-size: var(--fv-2xs);
+  color: var(--fv-ink, inherit);
+  cursor: pointer;
+}
+.pj-reuse.mine {
+  border-style: solid;
+  background: #fff;
+}
+.pj-reuse:hover {
+  border-color: var(--te-accent);
+  background: var(--te-accent-50);
+}
+.pj-reusetext {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pj-reusescore {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  font-weight: 700;
+  font-size: 11px;
+}
+.pj-reusescore.s1 { color: var(--te-s1); background: var(--te-s1-bg); }
+.pj-reusescore.s2 { color: var(--te-s2); background: var(--te-s2-bg); }
+.pj-reusescore.s3 { color: var(--te-s3); background: var(--te-s3-bg); }
+.pj-reusescore.s4 { color: var(--te-s4); background: var(--te-s4-bg); }
+.pj-reusescore.s5 { color: var(--te-s5); background: var(--te-s5-bg); }
+
+/* The bar under the sheet: what's left, and Mark done. */
+.pj-sheetfoot {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin: 10px -30px -20px;
+  padding: 12px 30px 14px;
+  border-top: 1px solid var(--fv-neutral-200);
+  background: var(--fv-cream-100);
+  border-radius: 0 0 var(--fv-r-xl) var(--fv-r-xl);
+}
+.pj-running {
+  font-size: var(--fv-sm);
+  font-variant-numeric: tabular-nums;
+}
+.pj-left {
+  font-size: var(--fv-xs);
+  color: var(--fv-muted);
+}
+.pj-left.warn {
+  color: var(--te-s1);
+}
+.pj-doneword {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fv-xs);
+  font-weight: 600;
+  color: var(--pj-done);
+}
+.fv-btn.primary.pj-donebtn {
+  background: var(--pj-done);
+  border-color: var(--pj-done);
+}
+.fv-btn.primary.pj-donebtn.notready {
+  opacity: 0.6;
+}
+.pj-save {
+  font-size: var(--fv-2xs);
+}
+.pj-save.failed {
+  color: var(--te-s1);
+}
+
+@media (max-width: 900px) {
+  .pj-sheetfoot {
+    margin: 10px -16px -14px;
+    padding: 10px 16px 12px;
+  }
+}
+@media (max-width: 700px) {
+  .pj-teamrow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 10px;
+  }
+  .pj-teamrow > svg {
+    display: none;
+  }
+  .pj-chips {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    padding-left: 10px;
+  }
+  .pj-teamscore {
+    grid-row: 1;
+    grid-column: 2;
+  }
+  .pj-detail th {
+    width: 34%;
+  }
+}
+
+/* The assistant's launcher sits in the bottom-right corner of the window,
+   which is exactly where Mark done would be. Keep the bar's buttons clear of
+   it. A phone has no room beside it, and nobody edits the roster mid-grading,
+   so there the launcher steps aside while a sheet is open. */
+.fv-assisted .pj-sheetfoot {
+  padding-right: 184px;
+}
+@media (max-width: 700px) {
+  .fv-assisted .pj-sheetfoot {
+    padding-right: 16px;
+  }
+  .fv-assisted:has(.pj-sheetfoot) .fv-as-launch {
+    display: none;
+  }
+}

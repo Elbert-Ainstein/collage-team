@@ -2315,15 +2315,18 @@ button.fv-steplabel:hover { color: var(--fv-navy); }
     flex-direction: row;
     gap: 6px;
     margin-top: 0;
-    /* The four labels fit across 320px with the icons dropped. This is the
-       backstop for a longer word or a fifth destination — a scroll inside the
-       strip, not the page going two-dimensional, and never a clip. */
+    /* The labels fit across most phones with the icons dropped. This is the
+       backstop for a narrow one or a longer word — a scroll inside the strip,
+       not the page going two-dimensional, and never a clip. */
     overflow-x: auto;
   }
   .fv-navbtn,
   .fv-sidebar.collapsed .fv-navbtn {
     position: relative;
     flex: 0 0 auto;
+    /* As wide as its label. The sidebar's width: 100% made every tab as wide
+       as the strip, so a phone showed one tab and hid the rest past a scroll. */
+    width: auto;
     justify-content: flex-start;
     height: 44px;
     gap: 0;

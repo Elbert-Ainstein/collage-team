@@ -13,6 +13,8 @@ const P: Record<string, string> = {
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
   die: '<rect x="4" y="4" width="16" height="16" rx="3.5"/><circle cx="8.6" cy="8.6" r="1.2" fill="currentColor" stroke="none"/><circle cx="15.4" cy="8.6" r="1.2" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="8.6" cy="15.4" r="1.2" fill="currentColor" stroke="none"/><circle cx="15.4" cy="15.4" r="1.2" fill="currentColor" stroke="none"/>',
   check: '<path d="M4.5 12.5l5 5L20 6.5"/>',
+  // A cup, for Projects: a fair is judged.
+  trophy: '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4"/><path d="M12 13v4M8.5 20h7"/>',
   // The sidebar toggle. A bare chevron here read as "back" — it is the same
   // glyph every back button in the app uses, sitting in the top-left corner
   // where a back button lives. These draw the PANEL instead, so the button
