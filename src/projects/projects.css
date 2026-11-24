@@ -426,72 +426,90 @@
 .pj-cat.missing .pj-catname {
   color: var(--te-s1);
 }
-.pj-cathead {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-}
-.pj-catname {
-  margin: 0;
-  font-size: var(--fv-base);
-  font-weight: 700;
-  color: var(--fv-navy);
-}
-
-/* 5 4 3 2 1, best first, the way the rubric is read. Finger-sized. */
+/* The rubric row, as on paper: one box split into 5 down to 1, each saying
+   what it means. Pressing one is the score. */
 .pj-opts {
-  display: flex;
-  gap: 6px;
-}
-.pj-opt {
-  width: 46px;
-  height: 44px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   border: 1px solid var(--fv-neutral-300);
   border-radius: var(--fv-r-md);
   background: #fff;
+  overflow: hidden;
+}
+.pj-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 78px;
+  padding: 9px 11px 10px;
+  border: 0;
+  border-left: 1px solid var(--fv-neutral-200);
+  background: transparent;
   font: inherit;
+  text-align: left;
+  color: var(--fv-ink, var(--fv-navy));
+  cursor: pointer;
+}
+.pj-opt:first-child {
+  border-left: 0;
+}
+.pj-opt:hover:not(:disabled) {
+  background: var(--te-accent-50);
+}
+.pj-opt:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.pj-optnum {
   font-size: var(--fv-sm);
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  color: var(--fv-navy);
-  cursor: pointer;
 }
-.pj-opt:hover:not(:disabled) {
-  border-color: var(--te-accent);
+.s1 > .pj-optnum { color: var(--te-s1); }
+.s2 > .pj-optnum { color: var(--te-s2); }
+.s3 > .pj-optnum { color: var(--te-s3); }
+.s4 > .pj-optnum { color: var(--te-s4); }
+.s5 > .pj-optnum { color: var(--te-s5); }
+.pj-optdesc {
+  font-size: var(--fv-xs);
+  line-height: 1.35;
+  color: var(--fv-muted);
+  overflow-wrap: anywhere;
 }
-.pj-opt:disabled {
-  opacity: 0.35;
-  cursor: default;
+/* The picked level: filled in its score's colour, outlined, its words dark. */
+.pj-opt.on.s1 { background: var(--te-s1-bg); box-shadow: inset 0 0 0 2px var(--te-s1); }
+.pj-opt.on.s2 { background: var(--te-s2-bg); box-shadow: inset 0 0 0 2px var(--te-s2); }
+.pj-opt.on.s3 { background: var(--te-s3-bg); box-shadow: inset 0 0 0 2px var(--te-s3); }
+.pj-opt.on.s4 { background: var(--te-s4-bg); box-shadow: inset 0 0 0 2px var(--te-s4); }
+.pj-opt.on.s5 { background: var(--te-s5-bg); box-shadow: inset 0 0 0 2px var(--te-s5); }
+.pj-opt.on .pj-optdesc {
+  color: var(--fv-ink, var(--fv-navy));
+  font-weight: 600;
 }
-.pj-opt.on {
-  border-width: 2px;
-}
-.pj-opt.on.s1 { background: var(--te-s1-bg); border-color: var(--te-s1); color: var(--te-s1); }
-.pj-opt.on.s2 { background: var(--te-s2-bg); border-color: var(--te-s2); color: var(--te-s2); }
-.pj-opt.on.s3 { background: var(--te-s3-bg); border-color: var(--te-s3); color: var(--te-s3); }
-.pj-opt.on.s4 { background: var(--te-s4-bg); border-color: var(--te-s4); color: var(--te-s4); }
-.pj-opt.on.s5 { background: var(--te-s5-bg); border-color: var(--te-s5); color: var(--te-s5); }
 .pj-opt.on:disabled {
   opacity: 1;
 }
-/* What the picked score means: the rubric's sentence for it, once. */
-.pj-meaning {
-  margin: 8px 0 0;
-  font-size: var(--fv-xs);
-  line-height: 1.45;
-  color: var(--fv-muted);
-}
-/* A phone: the scores take the whole width under the name. */
-@container (max-width: 520px) {
-  .pj-cathead {
-    flex-direction: column;
-    align-items: stretch;
+/* Too narrow for five columns of sentences: the same levels, one per line. */
+@container (max-width: 640px) {
+  .pj-opts {
+    grid-template-columns: minmax(0, 1fr);
   }
   .pj-opt {
-    flex: 1;
-    width: auto;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 12px;
+    min-height: 46px;
+    padding: 11px 12px;
+    border-left: 0;
+    border-top: 1px solid var(--fv-neutral-200);
+  }
+  .pj-opt:first-child {
+    border-top: 0;
+  }
+  .pj-optnum {
+    flex: none;
+    width: 14px;
   }
 }
 

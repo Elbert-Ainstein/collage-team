@@ -292,19 +292,22 @@ describe("the Projects tab", () => {
     expect(window.location.search).toBe("?s=projects&proj=p1&team=t1&slot=1");
     expect(host.querySelector("h1")?.textContent).toBe("Team 1 — Grader 1");
 
-    // Every category, 5 down to 1; each button carries what its score means,
-    // and the picked one's meaning shows under the row.
+    // Every category's rubric row, 5 down to 1, each saying what it means.
     const rob = section("Robustness");
-    expect([...rob.querySelectorAll(".pj-opt")].map((o) => o.textContent)).toEqual(["5", "4", "3", "2", "1"]);
-    expect(rob.querySelector(".pj-opt.s5")?.getAttribute("aria-label")).toBe("5: Robust 5");
-    expect(rob.querySelector(".pj-meaning")).toBeNull();
+    expect([...rob.querySelectorAll(".pj-opt")].map((o) => o.textContent)).toEqual([
+      "5Robust 5",
+      "4Robust 4",
+      "3Robust 3",
+      "2Robust 2",
+      "1Robust 1",
+    ]);
     expect(section("Time")).toBeTruthy();
     // The name is theirs, filled in, and not saved just for looking.
     expect((host.querySelector(".pj-namein") as HTMLInputElement).value).toBe("Will");
     expect(saveGraderName).not.toHaveBeenCalled();
 
     await click(rob.querySelector(".pj-opt.s4") as Element);
-    expect(section("Robustness").querySelector(".pj-meaning")?.textContent).toBe("Robust 4");
+    expect(section("Robustness").querySelector(".pj-opt.s4")?.getAttribute("aria-checked")).toBe("true");
     expect(saveGraderName).toHaveBeenCalledTimes(1);
   });
 

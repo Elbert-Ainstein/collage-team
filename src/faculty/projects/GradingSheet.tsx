@@ -614,9 +614,8 @@ function SaveNote({ save, onRetry }: { save: SaveState; onRetry: () => void }) {
 }
 
 /**
- * One category: a row of scores, 5 to 1, what the picked one means, and why.
- * Each score's meaning is on the button too (its label and tooltip), so it's
- * there for anyone who wants it before they pick without filling the page.
+ * One category: its rubric row — what a 5 looks like down to a 1, side by
+ * side as on paper — then why. Pressing a level is the score.
  */
 function CategoryRow({
   category,
@@ -644,37 +643,29 @@ function CategoryRow({
 }) {
   const score = draft?.score ?? null;
   const reason = draft?.reason ?? "";
-  const meaning = score ? (category.levels[score - 1] ?? "").trim() : "";
   return (
     <section
       id={`pj-cat-${category.id}`}
       className={`pj-cat${missingScore || missingReason ? " missing" : ""}`}
       aria-label={category.name}
     >
-      <div className="pj-cathead">
-        <h3 className="pj-catname">{category.name}</h3>
-        <div className="pj-opts" role="radiogroup" aria-label={`${category.name} score`}>
-          {SCORES.map((n) => {
-            const says = (category.levels[n - 1] ?? "").trim();
-            return (
-              <button
-                key={n}
-                type="button"
-                role="radio"
-                aria-checked={score === n}
-                aria-label={says ? `${n}: ${says}` : String(n)}
-                title={says || undefined}
-                className={`pj-opt s${n}${score === n ? " on" : ""}`}
-                disabled={readOnly && score !== n}
-                onClick={() => onPick(n)}
-              >
-                {n}
-              </button>
-            );
-          })}
-        </div>
+      <h3 className="pj-catname">{category.name}</h3>
+      <div className="pj-opts" role="radiogroup" aria-label={`${category.name} score`}>
+        {SCORES.map((n) => (
+          <button
+            key={n}
+            type="button"
+            role="radio"
+            aria-checked={score === n}
+            className={`pj-opt s${n}${score === n ? " on" : ""}`}
+            disabled={readOnly && score !== n}
+            onClick={() => onPick(n)}
+          >
+            <span className="pj-optnum">{n}</span>
+            <span className="pj-optdesc">{(category.levels[n - 1] ?? "").trim() || "—"}</span>
+          </button>
+        ))}
       </div>
-      {meaning ? <p className="pj-meaning">{meaning}</p> : null}
       {missingScore ? <p className="pj-miss">Pick a score.</p> : null}
 
       {readOnly ? (
