@@ -7,7 +7,7 @@ import {
   fmtAvg,
   gradeFor,
   isLate,
-  lateLossAtMost,
+  lateLabel,
   leftFor,
   notesFor,
   outOf,
@@ -83,24 +83,33 @@ describe("lateness and the grade", () => {
     expect(isLate(sub("a", "2026-11-10T18:00:00.000Z"), null)).toBe(false);
   });
 
-  it("is their points on time, less the penalty late, and 0 if they never submitted", () => {
-    expect(gradeFor(sub("a", "2026-11-10T16:00:00.000Z"), DUE, 12.5, 15)).toBe(12.5);
-    expect(gradeFor(sub("a", "2026-11-11T16:00:00.000Z"), DUE, 10, 15)).toBe(8.5);
-    expect(gradeFor(null, DUE, 20, 15)).toBe(0);
+  const on = { late_on: true, late_points: 1.5 };
+  const off = { late_on: false, late_points: 1.5 };
+  const onTime = sub("a", "2026-11-10T16:00:00.000Z");
+  const late = sub("a", "2026-11-11T16:00:00.000Z");
+
+  it("is their points on time, less the penalty's points late, and 0 if they never submitted", () => {
+    expect(gradeFor(onTime, DUE, 12.5, on)).toBe(12.5);
+    expect(gradeFor(late, DUE, 10, on)).toBe(8.5);
+    expect(gradeFor(null, DUE, 20, on)).toBe(0);
+  });
+
+  it("never goes below 0", () => {
+    expect(gradeFor(late, DUE, 1, on)).toBe(0);
+  });
+
+  it("takes nothing off with the penalty off — though they're still late", () => {
+    expect(gradeFor(late, DUE, 10, off)).toBe(10);
+    expect(isLate(late, DUE)).toBe(true);
   });
 
   it("waits when nobody has rated them yet", () => {
-    expect(gradeFor(sub("a", "2026-11-10T16:00:00.000Z"), DUE, null, 15)).toBeNull();
+    expect(gradeFor(onTime, DUE, null, on)).toBeNull();
   });
 
-  it("loses at most the penalty's share of the total", () => {
-    expect(lateLossAtMost(20, 10)).toBe(2);
-    expect(lateLossAtMost(15, 12.5)).toBe(1.88);
-    expect(lateLossAtMost(20, 0)).toBe(0);
-    expect(lateLossAtMost(0, 10)).toBe(0);
-    expect(lateLossAtMost(20, Number.NaN)).toBe(0);
-    // And never more than the whole grade, whatever was typed.
-    expect(lateLossAtMost(20, 150)).toBe(20);
+  it("says what late costs on the instructor's screens", () => {
+    expect(lateLabel(on)).toBe("−1.5 pts late");
+    expect(lateLabel(off)).toBe("No late penalty");
   });
 
   it("is out of 5 per category", () => {
@@ -115,7 +124,8 @@ describe("buildResults", () => {
       peer_comments: true,
       release_comments: true,
       anonymize: true,
-      late_penalty: 20,
+      late_points: 1.5,
+      late_on: true,
       released_at: null,
       scored_at: null,
       updated_at: "",
@@ -156,7 +166,7 @@ describe("buildResults", () => {
   it("flags the late submitter and takes the penalty off their own grade", () => {
     expect(rowOf("c").late).toBe(true);
     expect(rowOf("c").points).toBe(9); // 5 + 4 from Ana
-    expect(rowOf("c").grade).toBe(7.2); // 20% off
+    expect(rowOf("c").grade).toBe(7.5); // 1.5 points off
   });
 
   it("puts someone on no team in a group of their own, with 0 for not submitting", () => {

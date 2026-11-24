@@ -53,7 +53,7 @@ interface AssistantPanelProps {
 }
 
 /** On a team evaluation's builder: what it can do there. */
-const FORM_TRIES = ["Fill this in from my Google Doc: ", "Set the late penalty to 20%", "Turn off anonymity"];
+const FORM_TRIES = ["Fill this in from my Google Doc: ", "Set the late penalty to 2 points", "Turn off anonymity"];
 
 function tries(data: FacultyData): string[] {
   const someone = data.roster[0]?.name.split(" ")[0];
@@ -393,7 +393,7 @@ export function AssistantPanel(props: AssistantPanelProps): JSX.Element {
             rows={3}
             placeholder={
               openForm
-                ? "e.g. Fill this in from a Google Doc link — or set the late penalty to 20%"
+                ? "e.g. Fill this in from a Google Doc link — or set the late penalty to 2 points"
                 : "e.g. Move Ada to Team 3 — or paste a list with team numbers"
             }
             aria-label="Ask the assistant"

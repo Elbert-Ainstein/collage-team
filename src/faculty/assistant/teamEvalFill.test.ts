@@ -24,7 +24,8 @@ const form = (): TeamEvalForm => ({
   peerComments: true,
   releaseComments: true,
   anonymize: true,
-  latePenalty: "10",
+  lateOn: true,
+  latePoints: "2",
 });
 
 const draft = (over: Partial<TeamEvalProposal>): TeamEvalProposal => ({
@@ -38,7 +39,8 @@ const draft = (over: Partial<TeamEvalProposal>): TeamEvalProposal => ({
   peerComments: null,
   releaseComments: null,
   anonymize: null,
-  latePenalty: null,
+  lateOn: null,
+  latePoints: null,
   notApplied: [],
   ...over,
 });
@@ -48,17 +50,32 @@ const open = { fixed: false, anonLocked: false };
 describe("fillForm", () => {
   it("changes only the late penalty when that is all the draft says", () => {
     const before = form();
-    const out = fillForm(before, draft({ latePenalty: 20 }), open, newId);
-    expect(out.next).toEqual({ ...before, latePenalty: "20" });
-    expect(out.changes).toEqual(["Late penalty 10% → 20%"]);
+    const out = fillForm(before, draft({ latePoints: 3 }), open, newId);
+    expect(out.next).toEqual({ ...before, latePoints: "3" });
+    expect(out.changes).toEqual(["Late penalty 2 → 3 pts"]);
     expect(out.skipped).toEqual([]);
     expect(out.showForm).toBe(true);
     // The form it was given is left as it was.
-    expect(before.latePenalty).toBe("10");
+    expect(before.latePoints).toBe("2");
+  });
+
+  it("turns the late penalty off, keeping its points for when it's back on", () => {
+    const out = fillForm(form(), draft({ lateOn: false }), open, newId);
+    expect(out.next).toMatchObject({ lateOn: false, latePoints: "2" });
+    expect(out.changes).toEqual(["Late penalty off"]);
+  });
+
+  it("turns the penalty on when she asks for points off while it's off", () => {
+    const off = { ...form(), lateOn: false };
+    const out = fillForm(off, draft({ latePoints: 4 }), open, newId);
+    expect(out.next).toMatchObject({ lateOn: true, latePoints: "4" });
+    expect(out.changes).toEqual(["Late penalty on", "Late penalty 2 → 4 pts"]);
+    // Zero points off isn't asking for a penalty.
+    expect(fillForm(off, draft({ latePoints: 0 }), open, newId).next.lateOn).toBe(false);
   });
 
   it("says nothing changed when the draft repeats what the form already says", () => {
-    const out = fillForm(form(), draft({ latePenalty: 10, anonymize: true }), open, newId);
+    const out = fillForm(form(), draft({ latePoints: 2, lateOn: true, anonymize: true }), open, newId);
     expect(out.changes).toEqual([]);
   });
 
@@ -146,9 +163,9 @@ describe("fillForm", () => {
   });
 
   it("keeps anonymity on once students have written under it", () => {
-    const out = fillForm(form(), draft({ anonymize: false, latePenalty: 20 }), { fixed: true, anonLocked: true }, newId);
+    const out = fillForm(form(), draft({ anonymize: false, latePoints: 3 }), { fixed: true, anonLocked: true }, newId);
     expect(out.next.anonymize).toBe(true);
-    expect(out.next.latePenalty).toBe("20");
+    expect(out.next.latePoints).toBe("3");
     expect(out.skipped).toEqual(["Anonymize stays on: students wrote under it"]);
   });
 
@@ -200,7 +217,7 @@ describe("fillForm", () => {
 describe("formContext", () => {
   it("describes the form to the model without its row ids, with her local time", () => {
     const ctx = formContext(form(), { fixed: false, anonLocked: false }, new Date(2026, 10, 20, 9, 5));
-    expect(ctx).toMatchObject({ kind: "teameval", now: "2026-11-20T09:05", latePenalty: "10", fixed: false });
+    expect(ctx).toMatchObject({ kind: "teameval", now: "2026-11-20T09:05", lateOn: true, latePoints: "2", fixed: false });
     expect(ctx.categories[0]).toEqual({ name: "Contribution", levels: ["Rarely", "Some", "Share", "Well", "Beyond"] });
     expect(JSON.stringify(ctx)).not.toContain('"id"');
   });
@@ -214,12 +231,12 @@ describe("revertFill", () => {
   it("puts back only what the fill changed, keeping what she typed since", async () => {
     const { revertFill } = await import("./teamEvalFill");
     const before = form();
-    const fill = fillForm(before, draft({ latePenalty: 20, anonymize: true }), open, newId);
-    expect(fill.fields).toEqual(["latePenalty"]);
+    const fill = fillForm(before, draft({ latePoints: 3, anonymize: true }), open, newId);
+    expect(fill.fields).toEqual(["latePoints"]);
     // She renames a category after the fill…
     const since = { ...fill.next, categories: [{ ...fill.next.categories[0], name: "Contributing" }, fill.next.categories[1]] };
     const undone = revertFill(since, before, fill.fields);
-    expect(undone.latePenalty).toBe("10");
+    expect(undone.latePoints).toBe("2");
     expect(undone.categories[0].name).toBe("Contributing");
   });
 

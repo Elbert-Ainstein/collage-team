@@ -1,6 +1,6 @@
 // fill_team_eval: filling in the team evaluation builder she has open — from
 // a document (a rubric pasted in, or a linked Google Doc), or one setting at a
-// time ("make the late penalty 20%").
+// time ("make the late penalty 2 points").
 //
 // Like every tool here it is a draft. The browser puts it into the builder's
 // form, where she sees it and can undo it, and nothing reaches the database
@@ -40,7 +40,7 @@ export const FILL_TEAM_EVAL: ToolSpec = {
     "Fill in or change the team evaluation form the instructor has open: its rating categories (each a " +
     "1–5 scale with a description for every point), its open-ended questions, its settings, title, " +
     "instructions and due date. Use it to set up the whole evaluation from a document — a rubric she " +
-    "pasted or a Google Doc she linked — and for single changes like 'make the late penalty 20%' or " +
+    "pasted or a Google Doc she linked — and for single changes like 'make the late penalty 2 points' or " +
     "'turn off anonymity'. Send ONLY what changes; leave every other field out. categories and questions " +
     "each replace the whole list when sent. The form is filled at once and she presses Save to keep it.",
   schema: {
@@ -50,7 +50,7 @@ export const FILL_TEAM_EVAL: ToolSpec = {
         type: "string",
         description:
           "One or two plain sentences saying what this fills in or changes, e.g. \"Sets the late penalty " +
-          "to 20%.\" or \"Fills in the five revised AP50 teamwork dimensions and five feedback questions.\"",
+          "to 2 points.\" or \"Fills in the five revised AP50 teamwork dimensions and five feedback questions.\"",
       },
       title: { type: "string", description: "The evaluation's title. Only when she asks, or the form has none." },
       instructions: {
@@ -114,9 +114,17 @@ export const FILL_TEAM_EVAL: ToolSpec = {
         description: "\"Release to students\": show students what teammates wrote about them once results are out.",
       },
       anonymize: { type: "boolean", description: "Show those comments without who wrote them." },
-      late_penalty: {
+      late_penalty_on: {
+        type: "boolean",
+        description:
+          "\"Late penalty\": take late_points off a student whose own evaluation is late. Off, nothing is " +
+          "taken off — late students are still marked late.",
+      },
+      late_points: {
         type: "number",
-        description: "Percent of the grade taken off a student whose own evaluation is late, 0 to 100.",
+        description:
+          "Points (not a percent) taken off a late student's grade, 0 up to the evaluation's total. " +
+          "Setting it to more than 0 means she wants the penalty, so send late_penalty_on true with it.",
       },
       not_applied: {
         type: "array",
@@ -176,9 +184,14 @@ function dueOf(v: unknown): string | null {
   return t;
 }
 
-function penaltyOf(v: unknown): number | null {
+/** Past any evaluation's total: 5 points for each of at most MAX_CATEGORIES. */
+const LATE_POINTS_MAX = 5 * MAX_CATEGORIES;
+
+function latePointsOf(v: unknown): number | null {
   if (v === undefined || v === null) return null;
-  if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 100) refuse("the late penalty must be 0–100%");
+  if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > LATE_POINTS_MAX) {
+    refuse(`the late penalty must be 0–${LATE_POINTS_MAX} points`);
+  }
   return Math.round(v * 100) / 100;
 }
 
@@ -251,7 +264,8 @@ export function parseFillTeamEval(input: Obj): TeamEvalProposal {
     peerComments: optBool(input.peer_comments, "\"Evaluate peer to peer\""),
     releaseComments: optBool(input.release_comments, "\"Release to students\""),
     anonymize: optBool(input.anonymize, "\"Anonymize\""),
-    latePenalty: penaltyOf(input.late_penalty),
+    lateOn: optBool(input.late_penalty_on, "\"Late penalty\""),
+    latePoints: latePointsOf(input.late_points),
     notApplied: notesOf(input.not_applied),
   };
   const { kind: _k, summary: _s, notApplied, ...fields } = proposal;

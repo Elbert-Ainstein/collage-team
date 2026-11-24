@@ -9,8 +9,9 @@
 //   - Late is the staff's word when they've given one, else submitted after
 //     the due date.
 //   - The grade is the sum of a student's category averages (each out of 5),
-//     less the late penalty if their own evaluation was late, and 0 if they
-//     never submitted one. Nobody rated them yet: no grade.
+//     less the late penalty's points (never below 0) if their own evaluation
+//     was late and the penalty is on, and 0 if they never submitted one.
+//     Nobody rated them yet: no grade. Late is late either way (0061).
 
 import type { Student, TeamWithMembers } from "@/checkins/types";
 import { POINTS_PER_CATEGORY } from "./types";
@@ -42,6 +43,8 @@ export function lateByClock(sub: Pick<TeamEvalSubmission, "submitted_at"> | null
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+export type LatePenalty = Pick<TeamEvalSettings, "late_on" | "late_points">;
+
 /**
  * The gradebook score: what score_team_eval writes. `points` is the sum of
  * their category averages, null when nobody has rated them.
@@ -50,26 +53,22 @@ export function gradeFor(
   sub: Pick<TeamEvalSubmission, "submitted_at" | "late_override"> | null | undefined,
   dueAt: string | null,
   points: number | null,
-  latePenalty: number,
+  late: LatePenalty,
 ): number | null {
   if (!sub) return 0;
   if (points === null) return null;
-  return round2(isLate(sub, dueAt) ? points * (1 - latePenalty / 100) : points);
+  const off = late.late_on && isLate(sub, dueAt) ? late.late_points : 0;
+  return Math.max(0, round2(points - off));
+}
+
+/** "−2 pts late", or that there's no penalty — how the instructor's screens put it. */
+export function lateLabel(late: LatePenalty): string {
+  return late.late_on ? `−${fmtPoints(late.late_points)} pts late` : "No late penalty";
 }
 
 /** What an evaluation with these categories is out of. */
 export function outOf(categories: readonly unknown[]): number {
   return POINTS_PER_CATEGORY * categories.length;
-}
-
-/**
- * The most a late evaluation can lose, in points. The penalty is a share of
- * what the student earns (gradeFor), so a full-marks grade loses this much
- * and any lower one less.
- */
-export function lateLossAtMost(total: number, latePenalty: number): number {
-  if (!Number.isFinite(total) || !Number.isFinite(latePenalty) || total <= 0 || latePenalty <= 0) return 0;
-  return round2((total * Math.min(latePenalty, 100)) / 100);
 }
 
 /**
@@ -142,7 +141,7 @@ export interface ResultRow {
   overall: number | null;
   /** The sum of the category averages; null when nobody rated them. */
   points: number | null;
-  /** What goes in the gradebook: points less any late penalty, 0 for no submission. */
+  /** What goes in the gradebook: points less the late penalty when it's on, 0 for no submission. */
   grade: number | null;
 }
 
@@ -182,7 +181,7 @@ export function buildResults(args: {
       categories,
       overall: points === null ? null : points / avgs.length,
       points,
-      grade: gradeFor(submission, dueAt, points, snapshot.settings.late_penalty),
+      grade: gradeFor(submission, dueAt, points, snapshot.settings),
     };
   };
 

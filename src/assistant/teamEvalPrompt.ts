@@ -54,9 +54,11 @@ export function renderTeamEvalForm(form: TeamEvalFormContext): string {
     ...list(asked("instructor")),
     "",
     `Settings: Evaluate peer to peer ${onOff(form.peerComments)}. Release to students ${onOff(form.releaseComments)}. ` +
-      `Anonymize ${onOff(form.anonymize)}. Late penalty ${form.latePenalty.trim() || "(empty)"}%.`,
+      `Anonymize ${onOff(form.anonymize)}. Late penalty ${onOff(form.lateOn)}` +
+      (form.lateOn ? `, ${form.latePoints.trim() || "(empty)"} points off.` : " (late students are still marked late)."),
     `Grade: out of ${n * 5} (5 per category). Each student gets the sum of their teammates' average rating in every ` +
-      "category; their rating of themselves does not count. A late evaluation loses the late penalty; none at all scores 0.",
+      "category; their rating of themselves does not count. With the late penalty on, a late evaluation loses its " +
+      "points (never below 0); none at all scores 0.",
   );
   if (form.fixed) {
     lines.push(
@@ -70,7 +72,7 @@ export function renderTeamEvalForm(form: TeamEvalFormContext): string {
 export const TEAM_EVAL_RULES = `Filling in the team evaluation (fill_team_eval):
 - She has its builder open, so "set this up", "fill this out from my doc", "change the late penalty to 20", "turn off anonymity" or "add a question about…" all mean fill_team_eval. It fills the form at once and she presses Save to keep it, so do it straight away — do not ask her to confirm.
 - Send only the fields that change. categories and questions each replace the whole list: to change one category or question, send the full list with every other one copied exactly as the form shows it.
-- "Late penalty", "points off if late", "the percentage you lose for being late" are all late_penalty, a percent.
+- "Late penalty", "points off if late", "what you lose for being late" are late_points: points off a late student's grade, not a percent. If she gives a percent, work out the points from the total above and say so in the summary. "No late penalty" or "turn off the late penalty" is late_penalty_on false — late students are still marked late; "turn it back on" is late_penalty_on true.
 - From a document — pasted into her message, or a Google Doc she linked (below):
   - Each dimension students are rated on becomes a category, in the document's order. Name it as the document does, in title case and without its number ("1. CONTRIBUTING TO THE TEAM'S WORK" becomes "Contributing to the Team's Work").
   - Give every score the document describes its text word for word — "Demonstrates a pattern of behavior between levels 3 and 5" included. Leave out a score the document does not describe; never write one yourself.

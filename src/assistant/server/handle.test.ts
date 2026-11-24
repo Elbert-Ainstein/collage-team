@@ -226,12 +226,13 @@ const form = {
   peerComments: true,
   releaseComments: true,
   anonymize: true,
-  latePenalty: "10",
+  lateOn: true,
+  latePoints: "2",
   fixed: false,
   anonLocked: false,
 };
 const DOC = "1nDGFdHqkBX47AoWmrGGkdmVjVtmUF8fCxxh-J3xiEEc";
-const fill = { name: "fill_team_eval", input: { summary: "Sets the late penalty to 20%.", late_penalty: 20 } };
+const fill = { name: "fill_team_eval", input: { summary: "Sets the late penalty to 3 points.", late_points: 3 } };
 
 describe("handleAssistant — the team evaluation builder", () => {
   it("offers fill_team_eval, and shows the form, only while the builder is open", async () => {
@@ -241,17 +242,17 @@ describe("handleAssistant — the team evaluation builder", () => {
     expect(closed.tools.map((t) => t.name)).not.toContain("fill_team_eval");
     expect(closed.system).not.toContain("The team evaluation on screen");
 
-    const out = await call(d, "Bearer tok", { ...body, message: "change the late penalty to 20", form });
+    const out = await call(d, "Bearer tok", { ...body, message: "change the late penalty to 3", form });
     const open = vi.mocked(d.model as Model).mock.calls[1][0];
     expect(open.tools.map((t) => t.name)).toContain("fill_team_eval");
-    expect(open.system).toContain("Late penalty 10%");
+    expect(open.system).toContain("Late penalty on, 2 points off.");
     expect(open.system).toContain('1. "Contribution"');
-    expect(out.body).toMatchObject({ ok: true, reply: { kind: "proposal", proposal: { kind: "teameval", latePenalty: 20 } } });
+    expect(out.body).toMatchObject({ ok: true, reply: { kind: "proposal", proposal: { kind: "teameval", latePoints: 3 } } });
   });
 
   it("refuses a form that is not well-formed before the model is called", async () => {
     const d = deps();
-    const out = await call(d, "Bearer tok", { ...body, form: { ...form, latePenalty: 10 } });
+    const out = await call(d, "Bearer tok", { ...body, form: { ...form, latePoints: 2 } });
     expect(out.status).toBe(400);
     expect(d.model).not.toHaveBeenCalled();
   });

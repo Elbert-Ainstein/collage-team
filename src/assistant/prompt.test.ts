@@ -112,7 +112,8 @@ describe("systemPrompt — team evaluation builder", () => {
     peerComments: false,
     releaseComments: true,
     anonymize: true,
-    latePenalty: "10",
+    lateOn: false,
+    latePoints: "2",
     fixed: true,
     anonLocked: true,
   };
@@ -127,6 +128,7 @@ describe("systemPrompt — team evaluation builder", () => {
     expect(out).toContain("   1: Rarely\n   2: (empty)\n   3: Share");
     expect(out).toContain("Questions about each teammate (not asked — Evaluate peer to peer is off):\n- (none)");
     expect(out).toContain("Grade: out of 5 (5 per category)");
+    expect(out).toContain("Late penalty off (late students are still marked late).");
     expect(out).toContain("LOCKED: students have submitted");
     expect(out).toContain("Anonymize cannot be turned off");
   });

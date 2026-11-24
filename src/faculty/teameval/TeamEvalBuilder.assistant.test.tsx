@@ -59,7 +59,8 @@ const snapshot: TeamEvalSnapshot = {
     peer_comments: true,
     release_comments: true,
     anonymize: true,
-    late_penalty: 10,
+    late_points: 2,
+    late_on: true,
     released_at: null,
     scored_at: null,
     updated_at: "",
@@ -91,7 +92,8 @@ const fromDoc: TeamEvalProposal = {
   peerComments: null,
   releaseComments: null,
   anonymize: null,
-  latePenalty: 20,
+  lateOn: null,
+  latePoints: 3,
   notApplied: ["A “Not enough information” choice"],
 };
 
@@ -159,9 +161,9 @@ describe("TeamEvalBuilder with the assistant", () => {
     await ask("fill all this out for me: https://docs.google.com/document/d/1nDGFdHqkBX47AoWmrGGkdmVjVtmUF8fCxxh-J3xiEEc/edit");
 
     // What the panel sent is the builder's own form.
-    const [req] = askAssistant.mock.calls[0] as [{ form: { categories: { name: string }[]; latePenalty: string } }];
+    const [req] = askAssistant.mock.calls[0] as [{ form: { categories: { name: string }[]; latePoints: string; lateOn: boolean } }];
     expect(req.form.categories.map((c) => c.name)).toEqual(["Contribution", "Communication", "Reliability", "Quality of work", "Respect"]);
-    expect(req.form.latePenalty).toBe("10");
+    expect(req.form).toMatchObject({ lateOn: true, latePoints: "2" });
 
     // In the builder's inputs now.
     expect(field("Category 1 name")?.value).toBe("Contributing to the Team's Work");
@@ -170,7 +172,7 @@ describe("TeamEvalBuilder with the assistant", () => {
     expect(field("Category 3 name")).toBeNull();
     expect(field("For each teammate question 1")?.value).toContain("helped your team");
     expect(field("For each teammate question 2")).toBeNull();
-    expect(penaltyBox().value).toBe("20");
+    expect(penaltyBox().value).toBe("3");
     expect(host.querySelector(".te-outof b")?.textContent).toBe("10");
     expect(host.textContent).toContain("Filled in · press Finish to keep it");
     expect(host.textContent).toContain("A “Not enough information” choice");
@@ -183,7 +185,7 @@ describe("TeamEvalBuilder with the assistant", () => {
     expect(cats.map((c) => c.name)).toEqual(["Contributing to the Team's Work", "Interacting with Teammates"]);
     expect(cats[1].levels).toEqual(levels("Interacting"));
     expect(qs.map((q) => q.audience)).toEqual(["peer", "self"]);
-    expect(setTeamEvalSettings).toHaveBeenCalledWith("a1", expect.objectContaining({ late_penalty: 20 }));
+    expect(setTeamEvalSettings).toHaveBeenCalledWith("a1", expect.objectContaining({ late_on: true, late_points: 3 }));
     expect(updateActivity).toHaveBeenCalledWith(
       "a1",
       expect.objectContaining({ points_total: 10, source_text: fromDoc.instructions }),
@@ -193,17 +195,42 @@ describe("TeamEvalBuilder with the assistant", () => {
   it("changes one setting on request and Undo puts it back", async () => {
     askAssistant.mockResolvedValue({
       kind: "proposal",
-      text: "Sets the late penalty to 20%.",
+      text: "Sets the late penalty to 3 points.",
       proposal: { ...fromDoc, instructions: null, categories: null, questions: null, notApplied: [] },
     });
     mount();
-    await ask("change the percentage of points you lose if you're late to 20");
-    expect(penaltyBox().value).toBe("20");
+    await ask("change the points you lose if you're late to 3");
+    expect(penaltyBox().value).toBe("3");
     expect(field("Category 1 name")?.value).toBe("Contribution");
-    expect(host.textContent).toContain("Late penalty 10% → 20%");
+    expect(host.textContent).toContain("Late penalty 2 → 3 pts");
 
     await act(async () => button("Undo").click());
-    expect(penaltyBox().value).toBe("10");
+    expect(penaltyBox().value).toBe("2");
+  });
+
+  it("turns the late penalty off — no points box, late still marked — and saves it off", async () => {
+    mount();
+    expect(host.textContent).toContain("Off a late student’s grade, out of 25.");
+    const lateSwitch = host.querySelector('[role="switch"][aria-label="Late penalty"]') as HTMLButtonElement;
+    await act(async () => lateSwitch.click());
+    expect(lateSwitch.getAttribute("aria-checked")).toBe("false");
+    expect(penaltyBox()).toBeNull();
+    expect(host.textContent).toContain("Late students are still marked late.");
+
+    await act(async () => button("Finish").click());
+    expect(setTeamEvalSettings).toHaveBeenCalledWith("a1", expect.objectContaining({ late_on: false, late_points: 2 }));
+  });
+
+  it("won't save more points off than the evaluation is worth", async () => {
+    mount();
+    await act(async () => {
+      const box = penaltyBox();
+      const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      set?.call(box, "30");
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(host.textContent).toContain("Late penalty: 0–25 pts");
+    expect(button("Finish").disabled).toBe(true);
   });
 
   it("saves no first-step field she did not change — a due date read from individual_due_at stays out of due_at", async () => {

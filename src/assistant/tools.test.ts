@@ -31,14 +31,14 @@ describe("TOOLS", () => {
 
 describe("parseToolCall — fill_team_eval", () => {
   it("reads a fill as a teameval proposal", () => {
-    const out = parseToolCall("fill_team_eval", { summary: "Sets the late penalty to 20%.", late_penalty: 20 });
-    expect(out).toMatchObject({ ok: true, proposal: { kind: "teameval", latePenalty: 20 } });
+    const out = parseToolCall("fill_team_eval", { summary: "Sets the late penalty to 3 points.", late_points: 3 });
+    expect(out).toMatchObject({ ok: true, proposal: { kind: "teameval", latePoints: 3 } });
   });
 
   it("turns an unreadable fill into a refusal in words, not a throw", () => {
-    expect(parseToolCall("fill_team_eval", { summary: "x", late_penalty: 400 })).toEqual({
+    expect(parseToolCall("fill_team_eval", { summary: "x", late_points: 400 })).toEqual({
       ok: false,
-      error: "the late penalty must be 0–100%",
+      error: "the late penalty must be 0–100 points",
     });
   });
 });

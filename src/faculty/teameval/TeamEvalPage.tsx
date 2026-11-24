@@ -12,7 +12,7 @@ import { isOpenToStudents } from "@/checkins/studentData";
 import { HIDDEN_INSTANT, type Activity } from "@/checkins/types";
 import { teamsOf } from "@/checkins/rosters";
 import { BriefText } from "@/checkins/BriefText";
-import { buildResults, fmtPoints, outOf } from "@/teameval/model";
+import { buildResults, lateLabel, outOf } from "@/teameval/model";
 import type { TeamEvalSnapshot } from "@/teameval/types";
 import { Ic } from "@/live/ui";
 import { ConfirmDialog } from "../ConfirmDialog";
@@ -134,7 +134,7 @@ export function TeamEvalPage(props: Props) {
             ) : null}
             <div className="lq-badges">
               <span className="fv-badge secondary">{outOf(snap.categories)} pts</span>
-              <span className="fv-badge secondary">−{fmtPoints(snap.settings.late_penalty)}% late</span>
+              <span className="fv-badge secondary">{lateLabel(snap.settings)}</span>
               {snap.settings.anonymize ? <span className="fv-badge secondary">Anonymous</span> : null}
               {!snap.settings.peer_comments ? <span className="fv-badge secondary">No peer comments</span> : null}
               {snap.settings.peer_comments && !snap.settings.release_comments ? (

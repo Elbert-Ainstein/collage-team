@@ -25,8 +25,10 @@ export interface TeamEvalSettings {
   release_comments: boolean;
   /** Show those comments without who wrote them. */
   anonymize: boolean;
-  /** Percent of the grade taken off a student whose own evaluation was late. */
-  late_penalty: number;
+  /** Points taken off a late student's grade, never below 0 (0061). Only when late_on. */
+  late_points: number;
+  /** Take late_points off at all. Off, a late evaluation is still marked late — it just loses nothing. */
+  late_on: boolean;
   released_at: string | null;
   scored_at: string | null;
   updated_at: string;

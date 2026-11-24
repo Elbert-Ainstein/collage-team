@@ -29,7 +29,7 @@ import {
   type QuestionDraft,
 } from "@/teameval/defaults";
 import { AutoTextarea } from "@/teameval/AutoTextarea";
-import { fmtPoints, lateLossAtMost, outOf, readersOf, type Readers } from "@/teameval/model";
+import { outOf, readersOf, type Readers } from "@/teameval/model";
 import type { QuestionAudience, TeamEvalSnapshot } from "@/teameval/types";
 import { Ic } from "@/live/ui";
 import { useFormBridge, type TeamEvalFormHandle } from "../assistant/formBridge";
@@ -114,7 +114,9 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
   const [peer, setPeer] = useState(snapshot.settings.peer_comments);
   const [release, setRelease] = useState(snapshot.settings.release_comments);
   const [anon, setAnon] = useState(snapshot.settings.anonymize);
-  const [penalty, setPenalty] = useState(String(snapshot.settings.late_penalty));
+  const [lateOn, setLateOn] = useState(snapshot.settings.late_on);
+  /** Points off a late grade, as typed. */
+  const [penalty, setPenalty] = useState(String(snapshot.settings.late_points));
   const [busy, setBusy] = useState(false);
   /** The first step's fields as last saved, so Finish writes only what changed since. */
   const opening = useRef({ week, due, desc });
@@ -124,14 +126,10 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
 
   const pen = Number(penalty);
   const total = outOf(categories);
-  const penOk = penalty.trim() !== "" && Number.isFinite(pen) && pen >= 0 && pen <= 100;
-  const problem = problemWith(categories, questions) ?? (penOk ? null : "Late penalty: 0–100%");
-  /** What it means, in points: a share of a late student's grade, so at most that share of the total. */
-  const penaltyNote = !penOk
-    ? null
-    : pen === 0
-      ? "Late evaluations lose nothing."
-      : `Off a late student’s grade: up to ${fmtPoints(lateLossAtMost(total, pen))} of ${total} pts.`;
+  // Points off can't be more than the whole grade. Off, the box isn't shown
+  // and what it last held is kept for when it's turned back on.
+  const penOk = penalty.trim() !== "" && Number.isFinite(pen) && pen >= 0 && pen <= total;
+  const problem = problemWith(categories, questions) ?? (lateOn && !penOk ? `Late penalty: 0–${total} pts` : null);
   // Turning anonymity off after students wrote under it is refused (0058).
   const anonLocked = fixed && snapshot.settings.anonymize;
   const saveLabel = firstTime ? "Finish" : "Save";
@@ -152,7 +150,8 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
     peerComments: peer,
     releaseComments: release,
     anonymize: anon,
-    latePenalty: penalty,
+    lateOn,
+    latePoints: penalty,
   };
   useEffect(() => {
     if (!bridge) return;
@@ -170,7 +169,8 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
         setPeer(next.peerComments);
         setRelease(next.releaseComments);
         setAnon(next.anonymize);
-        setPenalty(next.latePenalty);
+        setLateOn(next.lateOn);
+        setPenalty(next.latePoints);
         if (showForm) {
           setStep(1);
           setSawForm(true);
@@ -217,7 +217,8 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
         peer_comments: peer,
         release_comments: release,
         anonymize: anon,
-        late_penalty: pen,
+        late_on: lateOn,
+        late_points: penOk ? pen : snapshot.settings.late_points,
       });
       // The first step's fields too, when they changed: the assistant can fill
       // them while she is on this one, and Continue — which saves them
@@ -446,18 +447,26 @@ export function TeamEvalBuilder({ data, activity, snapshot, startStep, onLeave, 
                     <span>points · 5 per category</span>
                   </div>
                   <p className="lq-bnote">Each student gets the sum of their teammates’ averages.</p>
-                  <label className="fv-field">
-                    <span className="fv-eyebrow">Late penalty</span>
-                    <span className="te-pct">
-                      <input className="fv-in" type="number" min={0} max={100} step="any" value={penalty} onChange={(e) => setPenalty(e.target.value)} />
-                      <span>%</span>
-                    </span>
-                  </label>
-                  {penaltyNote ? (
-                    <p className="lq-bnote" aria-live="polite">
-                      {penaltyNote}
-                    </p>
+                  <Switch on={lateOn} label="Late penalty" onChange={setLateOn} />
+                  {lateOn ? (
+                    <label className="fv-field">
+                      <span className="fv-eyebrow">Points off</span>
+                      <span className="te-pct">
+                        <input
+                          className="fv-in"
+                          type="number"
+                          min={0}
+                          max={total}
+                          step="any"
+                          value={penalty}
+                          aria-label="Late penalty, in points"
+                          onChange={(e) => setPenalty(e.target.value)}
+                        />
+                        <span>pts</span>
+                      </span>
+                    </label>
                   ) : null}
+                  <p className="lq-bnote">{lateOn ? `Off a late student’s grade, out of ${total}.` : "Late students are still marked late."}</p>
                   <p className="lq-bnote">Not submitted: 0</p>
                 </div>
               </aside>

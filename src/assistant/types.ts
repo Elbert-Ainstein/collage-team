@@ -99,8 +99,10 @@ export interface TeamEvalFormContext {
   peerComments: boolean;
   releaseComments: boolean;
   anonymize: boolean;
-  /** As typed in the box, so a half-typed "1" reads as what it is. */
-  latePenalty: string;
+  /** "Late penalty" switch: take points off a late grade at all. Late is still late when off. */
+  lateOn: boolean;
+  /** Points off a late grade, as typed in the box, so a half-typed "1" reads as what it is. */
+  latePoints: string;
   /** Someone has submitted: wording only — no categories or questions added or removed. */
   fixed: boolean;
   /** Students wrote under anonymity: it cannot be turned off. */
@@ -209,7 +211,9 @@ export interface TeamEvalProposal {
   peerComments: boolean | null;
   releaseComments: boolean | null;
   anonymize: boolean | null;
-  latePenalty: number | null;
+  lateOn: boolean | null;
+  /** Points off a late grade. */
+  latePoints: number | null;
   /** What she asked for, or the document said, that the form has no place for. */
   notApplied: string[];
 }

@@ -11,10 +11,10 @@ const levels = (name: string) => [5, 4, 3, 2, 1].map((score) => ({ score, text: 
 
 describe("parseFillTeamEval", () => {
   it("reads a one-setting change as that change and nothing else", () => {
-    const out = parseFillTeamEval({ summary: "Sets the late penalty to 20%.", late_penalty: 20 });
+    const out = parseFillTeamEval({ summary: "Sets the late penalty to 3 points.", late_points: 3 });
     expect(out).toEqual({
       kind: "teameval",
-      summary: "Sets the late penalty to 20%.",
+      summary: "Sets the late penalty to 3 points.",
       title: null,
       instructions: null,
       due: null,
@@ -23,7 +23,8 @@ describe("parseFillTeamEval", () => {
       peerComments: null,
       releaseComments: null,
       anonymize: null,
-      latePenalty: 20,
+      lateOn: null,
+      latePoints: 3,
       notApplied: [],
     });
   });
@@ -85,13 +86,21 @@ describe("parseFillTeamEval", () => {
   });
 
   it("treats blank optional fields as left alone", () => {
-    const out = parseFillTeamEval({ summary: "x", title: "  ", instructions: "", due: "", late_penalty: null, anonymize: false });
-    expect(out).toMatchObject({ title: null, instructions: null, due: null, latePenalty: null, anonymize: false });
+    const out = parseFillTeamEval({ summary: "x", title: "  ", instructions: "", due: "", late_points: null, anonymize: false });
+    expect(out).toMatchObject({ title: null, instructions: null, due: null, latePoints: null, anonymize: false });
+  });
+
+  it("reads the late penalty switch on its own", () => {
+    expect(parseFillTeamEval({ summary: "Turns off the late penalty.", late_penalty_on: false })).toMatchObject({
+      lateOn: false,
+      latePoints: null,
+    });
   });
 
   it.each([
-    [{ late_penalty: 140 }, "late penalty"],
-    [{ late_penalty: -5 }, "late penalty"],
+    [{ late_points: 140 }, "late penalty"],
+    [{ late_points: -5 }, "late penalty"],
+    [{ late_penalty_on: "off" }, "late penalty"],
     [{ due: "next Friday" }, "due date"],
     [{ due: "2026-02-31T17:00" }, "due date"],
     [{ categories: [] }, "category"],
@@ -106,7 +115,7 @@ describe("parseFillTeamEval", () => {
   });
 
   it("refuses a draft with no summary", () => {
-    expect(() => parseFillTeamEval({ late_penalty: 20 })).toThrow(/summary/);
+    expect(() => parseFillTeamEval({ late_points: 3 })).toThrow(/summary/);
   });
 
   it("refuses a draft that changes nothing", () => {

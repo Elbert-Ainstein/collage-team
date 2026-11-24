@@ -202,7 +202,8 @@ function form(v: unknown): TeamEvalFormContext | undefined {
     peerComments: bool(v.peerComments, "Evaluate peer to peer"),
     releaseComments: bool(v.releaseComments, "Release to students"),
     anonymize: bool(v.anonymize, "Anonymize"),
-    latePenalty: str(v.latePenalty, "the late penalty", 20),
+    lateOn: bool(v.lateOn, "the late penalty switch"),
+    latePoints: str(v.latePoints, "the late penalty", 20),
     fixed: bool(v.fixed, "the form's lock"),
     anonLocked: bool(v.anonLocked, "the anonymity lock"),
   };

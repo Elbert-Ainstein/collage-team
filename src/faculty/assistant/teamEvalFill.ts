@@ -23,8 +23,10 @@ export interface TeamEvalForm {
   peerComments: boolean;
   releaseComments: boolean;
   anonymize: boolean;
-  /** As typed. */
-  latePenalty: string;
+  /** "Late penalty" switch. */
+  lateOn: boolean;
+  /** Points off a late grade, as typed. */
+  latePoints: string;
 }
 
 /** What the database will refuse, so the fill never offers it. */
@@ -58,7 +60,8 @@ const FIELDS: readonly FormField[] = [
   "peerComments",
   "releaseComments",
   "anonymize",
-  "latePenalty",
+  "lateOn",
+  "latePoints",
 ];
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -81,7 +84,8 @@ export function formContext(form: TeamEvalForm, limits: FormLimits, now: Date): 
     peerComments: form.peerComments,
     releaseComments: form.releaseComments,
     anonymize: form.anonymize,
-    latePenalty: form.latePenalty,
+    lateOn: form.lateOn,
+    latePoints: form.latePoints,
     fixed: limits.fixed,
     anonLocked: limits.anonLocked,
   };
@@ -150,9 +154,9 @@ function placeQuestions(before: QuestionDraft[], wanted: FormQuestion[], newId: 
 const sameShape = (before: QuestionDraft[], wanted: FormQuestion[]) =>
   before.length === wanted.length && before.every((q, i) => q.audience === wanted[i].audience);
 
-const fmtPct = (n: number) => String(Math.round(n * 100) / 100);
+const fmtPts = (n: number) => String(Math.round(n * 100) / 100);
 
-/** "10" and 10 are the same penalty; an empty or half-typed box is not. */
+/** "2" and 2 are the same penalty; an empty or half-typed box is not. */
 const penaltyChanged = (typed: string, wanted: number | null) =>
   wanted !== null && (!typed.trim() || Number(typed) !== wanted);
 
@@ -198,7 +202,10 @@ export function fillForm(
     peerComments: draft.peerComments ?? form.peerComments,
     releaseComments: draft.releaseComments ?? form.releaseComments,
     anonymize,
-    latePenalty: draft.latePenalty === null ? form.latePenalty : fmtPct(draft.latePenalty),
+    // Points off with the penalty switched off would change nothing she can
+    // see: asking for points means asking for the penalty.
+    lateOn: draft.lateOn ?? (draft.latePoints !== null && draft.latePoints > 0 ? true : form.lateOn),
+    latePoints: draft.latePoints === null ? form.latePoints : fmtPts(draft.latePoints),
   };
 
   const changes = [
@@ -210,7 +217,8 @@ export function fillForm(
     next.peerComments !== form.peerComments ? `Evaluate peer to peer ${next.peerComments ? "on" : "off"}` : "",
     next.releaseComments !== form.releaseComments ? `Release to students ${next.releaseComments ? "on" : "off"}` : "",
     next.anonymize !== form.anonymize ? `Anonymize ${next.anonymize ? "on" : "off"}` : "",
-    penaltyChanged(form.latePenalty, draft.latePenalty) ? `Late penalty ${form.latePenalty.trim() || "—"}% → ${next.latePenalty}%` : "",
+    next.lateOn !== form.lateOn ? `Late penalty ${next.lateOn ? "on" : "off"}` : "",
+    penaltyChanged(form.latePoints, draft.latePoints) ? `Late penalty ${form.latePoints.trim() || "—"} → ${next.latePoints} pts` : "",
   ].filter(Boolean);
 
   const showForm =
@@ -219,7 +227,8 @@ export function fillForm(
     draft.peerComments !== null ||
     draft.releaseComments !== null ||
     draft.anonymize !== null ||
-    draft.latePenalty !== null;
+    draft.lateOn !== null ||
+    draft.latePoints !== null;
 
   const fields = FIELDS.filter((f) => JSON.stringify(next[f]) !== JSON.stringify(form[f]));
   return { next, changes, skipped, showForm, fields };
