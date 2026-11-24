@@ -440,6 +440,39 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* Who is signed in, and under it the one account change short of leaving. */
+.fv-acct {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+}
+.fv-acct .fv-email {
+  flex: none;
+  max-width: 100%;
+}
+.fv-pwlink {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: var(--fv-2xs);
+  color: var(--fv-muted);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.fv-pwlink:hover {
+  color: var(--fv-navy);
+  text-decoration-color: currentColor;
+}
+.fv-pwlink:focus-visible {
+  outline: 2px solid var(--fv-navy-700);
+  outline-offset: 2px;
+}
 
 .fv-main {
   flex: 1;
@@ -1136,6 +1169,60 @@
 .fv-btn.danger {
   background: var(--fv-destructive);
   color: #fff;
+}
+
+/* The change-password form inside a dialog (src/lib/ChangePasswordDialog). */
+.fv-pwform {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+.fv-pwfld {
+  display: grid;
+  gap: 4px;
+  font-size: var(--fv-2xs);
+  font-weight: 600;
+  color: var(--fv-muted);
+}
+.fv-pw {
+  position: relative;
+  display: grid;
+}
+.fv-pw .fv-in {
+  padding-right: 56px;
+  font-size: var(--fv-sm);
+}
+.fv-pwbtn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  min-width: 44px;
+  min-height: 24px;
+  border: 0;
+  border-radius: var(--fv-r-md);
+  background: transparent;
+  padding: 4px 6px;
+  font: inherit;
+  font-size: var(--fv-2xs);
+  font-weight: 600;
+  color: var(--fv-muted);
+  cursor: pointer;
+}
+.fv-pwbtn:hover {
+  color: var(--fv-navy);
+}
+.fv-pwbtn:focus-visible {
+  outline: 2px solid var(--fv-navy-700);
+  outline-offset: 1px;
+}
+.fv-pwerr {
+  margin-top: 10px;
+  font-size: var(--fv-xs);
+  color: var(--fv-amber);
+}
+.fv-pwerr:empty {
+  margin-top: 0;
 }
 .fv-btn.danger:hover:not(:disabled) {
   background: #b91c1c;
@@ -2066,6 +2153,7 @@ button.fv-steplabel:hover { color: var(--fv-navy); }
 .fv-sidebar.collapsed .fv-seg,
 .fv-sidebar.collapsed .fv-navcount,
 .fv-sidebar.collapsed .fv-email,
+.fv-sidebar.collapsed .fv-acct,
 .fv-sidebar.collapsed .fv-tfnote {
   display: none;
 }
@@ -2299,6 +2387,16 @@ button.fv-steplabel:hover { color: var(--fv-navy); }
   .fv-btn.fv-signout {
     height: 40px;
     padding: 0 14px;
+    font-size: var(--fv-xs);
+  }
+  /* The address is gone from the strip; the link stays, sized for a thumb. */
+  .fv-acct,
+  .fv-sidebar.collapsed .fv-acct {
+    display: flex;
+    flex: 0 0 auto;
+  }
+  .fv-pwlink {
+    min-height: 40px;
     font-size: var(--fv-xs);
   }
 
