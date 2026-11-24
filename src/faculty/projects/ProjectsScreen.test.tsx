@@ -57,6 +57,7 @@ const setGradingDone = vi.fn(
     updated_at: "2026-11-01T10:05:00Z",
   }),
 );
+const clearGrading = vi.fn(async () => undefined);
 
 vi.mock("@/projects/data", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/projects/data")>();
@@ -73,7 +74,7 @@ vi.mock("@/projects/data", async (importOriginal) => {
         live = null;
       };
     }),
-    clearGrading: vi.fn(async () => undefined),
+    clearGrading,
   };
 });
 
@@ -484,11 +485,148 @@ describe("the Projects tab", () => {
     }
   });
 
+  it("the running total counts only the rubric's categories", async () => {
+    window.history.replaceState(null, "", "/ck?s=projects&proj=p1&team=t1&slot=1");
+    await mount();
+    await click(section("Robustness").querySelector(".pj-opt.s5") as Element);
+    await click(section("Time").querySelector(".pj-opt.s4") as Element);
+    expect(host.querySelector(".pj-running")?.textContent).toBe("9 / 10");
+
+    // The instructor takes Time out of the rubric while this sheet is open.
+    await elsewhere((s) => {
+      s.categories = s.categories.filter((c) => c.id !== "time");
+    });
+    expect(section("Time")).toBeNull();
+    expect(host.querySelector(".pj-running")?.textContent).toBe("5 / 5");
+  });
+
   it("sends a TF who opens the editor's link to the project instead", async () => {
     window.history.replaceState(null, "", "/ck?s=projects&proj=p1&edit=edit");
     await mount(facultyData(true, false));
     expect(window.location.search).toBe("?s=projects&proj=p1");
     expect(host.querySelector(".pj-teamrow")).toBeTruthy();
     expect(buttons().some((b) => b.textContent?.trim() === "Edit")).toBe(false);
+  });
+});
+
+// A grader at a fair on bad wifi: what they entered is never lost without
+// them being told.
+describe("leaving a sheet that isn't saved", () => {
+  const SHEET = "?s=projects&proj=p1&team=t1&slot=1";
+  const backButton = () => host.querySelector('[aria-label="Back to Team 1"]') as Element;
+  const dialog = () => host.querySelector(".fv-dialog") as HTMLElement | null;
+  let real: NonNullable<ReturnType<typeof saveScore.getMockImplementation>>;
+
+  beforeEach(async () => {
+    window.history.replaceState(null, "", `/ck${SHEET}`);
+    real = saveScore.getMockImplementation()!;
+    await mount();
+  });
+  afterEach(() => {
+    saveScore.mockImplementation(real);
+  });
+  const networkDown = () =>
+    saveScore.mockImplementation(async () => {
+      throw new Error("Network down");
+    });
+
+  it("stays on the sheet, with the score still there, and says what didn't save", async () => {
+    networkDown();
+    await click(section("Robustness").querySelector(".pj-opt.s4") as Element);
+    await click(backButton());
+
+    expect(window.location.search).toBe(SHEET);
+    expect(section("Robustness").querySelector(".pj-opt.s4")?.getAttribute("aria-checked")).toBe("true");
+    expect(dialog()?.textContent).toContain("Robustness");
+    expect(dialog()?.textContent).toContain("Network down");
+
+    // Stay, the network comes back, Retry, and Back goes.
+    await click(button("Stay"));
+    expect(dialog()).toBeNull();
+    saveScore.mockImplementation(real);
+    await click(button("Retry"));
+    expect(host.querySelector(".pj-save")?.textContent).toBe("Saved");
+    await click(backButton());
+    expect(window.location.search).toBe("?s=projects&proj=p1&team=t1");
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("leaves without it when they say so, and doesn't nag afterwards", async () => {
+    networkDown();
+    await click(section("Robustness").querySelector(".pj-opt.s4") as Element);
+    await click(backButton());
+    const tries = saveScore.mock.calls.length;
+
+    await click(button("Leave anyway"));
+    expect(window.location.search).toBe("?s=projects&proj=p1&team=t1");
+    expect(saveScore.mock.calls.length).toBe(tries);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("says so when a save fails after the sheet is gone", async () => {
+    networkDown();
+    await click(section("Robustness").querySelector(".pj-opt.s4") as Element);
+    // The browser's own Back, which doesn't go through the sheet's button.
+    await act(async () => {
+      window.history.pushState(null, "", "/ck?s=projects&proj=p1&team=t1");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    await settle();
+
+    expect(host.querySelector("h1")?.textContent).toBe("Team 1");
+    expect(onError).toHaveBeenCalledTimes(1);
+    const message = String((onError.mock.calls.at(-1)?.[0] as Error | undefined)?.message);
+    expect(message).toContain("Team 1");
+    expect(message).toContain("Robustness");
+    expect(message).toContain("Network down");
+  });
+
+  describe("when a save never answers", () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+    const hang = () => saveScore.mockImplementation(() => new Promise<ProjectScore>(() => undefined));
+
+    it("waits a while, then goes", async () => {
+      hang();
+      await click(section("Robustness").querySelector(".pj-opt.s4") as Element);
+      await click(backButton());
+      expect(window.location.search).toBe(SHEET);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+      await settle();
+      expect(window.location.search).toBe("?s=projects&proj=p1&team=t1");
+      expect(dialog()).toBeNull();
+    });
+
+    it("still asks when something had already failed", async () => {
+      networkDown();
+      await click(section("Robustness").querySelector(".pj-opt.s4") as Element);
+      hang();
+      await click(backButton());
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5000);
+      });
+      await settle();
+      expect(window.location.search).toBe(SHEET);
+      expect(dialog()?.textContent).toContain("Robustness");
+    });
+  });
+
+  it("doesn't bring a cleared grading back by saving on the way out", async () => {
+    networkDown();
+    await click(section("Robustness").querySelector(".pj-opt.s4") as Element);
+    await click(button("Clear"));
+    const tries = saveScore.mock.calls.length;
+
+    await click(button("Clear grading"));
+    expect(clearGrading).toHaveBeenCalledWith({ projectId: "p1", teamId: "t1", slot: 1 });
+    expect(window.location.search).toBe("?s=projects&proj=p1&team=t1");
+    expect(saveScore.mock.calls.length).toBe(tries);
   });
 });
