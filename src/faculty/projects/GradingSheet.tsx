@@ -458,12 +458,12 @@ export function GradingSheet({
         {readOnly ? (
           // Nothing to type into: the name is a fact about the sheet.
           <div className="pj-namerow">
-            <span className="fv-eyebrow">Name</span>
+            <span className="fv-eyebrow">Graded by</span>
             <span className="pj-nameread">{(readOnly ? serverName : name).trim() || "—"}</span>
           </div>
         ) : (
         <label className="pj-namerow">
-          <span className="fv-eyebrow">Name</span>
+          <span className="fv-eyebrow">Graded by</span>
           <input
             id="pj-name"
             className="fv-in pj-namein"
@@ -502,6 +502,8 @@ export function GradingSheet({
           </div>
         ) : null}
 
+        {categories.length ? (
+        <div className="fv-card pj-rubric">
         {categories.map((c) => (
           <CategoryRow
             key={c.id}
@@ -510,18 +512,18 @@ export function GradingSheet({
             readOnly={readOnly}
             missingScore={tried && unscored.has(c.id)}
             missingReason={tried && unexplained.has(c.id)}
-            earlier={
+            suggestion={
               readOnly
-                ? []
-                : earlierReasons(snap.scores, snap.gradings, {
+                ? null
+                : (earlierReasons(snap.scores, snap.gradings, {
                     categoryId: c.id,
                     teamId: team.id,
                     slot,
                     graderName: name,
                     score: drafts.get(c.id)?.score ?? null,
                     current: drafts.get(c.id)?.reason ?? "",
-                    limit: 3,
-                  })
+                    limit: 1,
+                  })[0]?.reason ?? null)
             }
             onPick={(n) => pick(c.id, n)}
             onWrite={(v) => write(c.id, v)}
@@ -529,6 +531,8 @@ export function GradingSheet({
             onReuse={(r) => reuse(c.id, r)}
           />
         ))}
+        </div>
+        ) : null}
       </div>
 
       {categories.length ? (
@@ -609,14 +613,18 @@ function SaveNote({ save, onRetry }: { save: SaveState; onRetry: () => void }) {
   );
 }
 
-/** One category: what each score means, which one, and why. */
+/**
+ * One category: a row of scores, 5 to 1, what the picked one means, and why.
+ * Each score's meaning is on the button too (its label and tooltip), so it's
+ * there for anyone who wants it before they pick without filling the page.
+ */
 function CategoryRow({
   category,
   draft,
   readOnly,
   missingScore,
   missingReason,
-  earlier,
+  suggestion,
   onPick,
   onWrite,
   onBlur,
@@ -627,7 +635,8 @@ function CategoryRow({
   readOnly: boolean;
   missingScore: boolean;
   missingReason: boolean;
-  earlier: { reason: string; score: number | null; mine: boolean }[];
+  /** A reason given before in this category, to use again. */
+  suggestion: string | null;
   onPick: (n: number) => void;
   onWrite: (v: string) => void;
   onBlur: () => void;
@@ -635,45 +644,50 @@ function CategoryRow({
 }) {
   const score = draft?.score ?? null;
   const reason = draft?.reason ?? "";
-  const id = `pj-why-${category.id}`;
+  const meaning = score ? (category.levels[score - 1] ?? "").trim() : "";
   return (
     <section
       id={`pj-cat-${category.id}`}
-      className={`fv-card pj-cat${missingScore || missingReason ? " missing" : ""}`}
+      className={`pj-cat${missingScore || missingReason ? " missing" : ""}`}
       aria-label={category.name}
     >
-      <h3 className="pj-catname">{category.name}</h3>
-      <div className="pj-opts" role="radiogroup" aria-label={`${category.name} score`}>
-        {SCORES.map((n) => (
-          <button
-            key={n}
-            type="button"
-            role="radio"
-            aria-checked={score === n}
-            className={`pj-opt s${n}${score === n ? " on" : ""}`}
-            disabled={readOnly && score !== n}
-            onClick={() => onPick(n)}
-          >
-            <span className={`te-score s${n}`}>{n}</span>
-            <span className="pj-optdesc">{category.levels[n - 1] || "—"}</span>
-          </button>
-        ))}
+      <div className="pj-cathead">
+        <h3 className="pj-catname">{category.name}</h3>
+        <div className="pj-opts" role="radiogroup" aria-label={`${category.name} score`}>
+          {SCORES.map((n) => {
+            const says = (category.levels[n - 1] ?? "").trim();
+            return (
+              <button
+                key={n}
+                type="button"
+                role="radio"
+                aria-checked={score === n}
+                aria-label={says ? `${n}: ${says}` : String(n)}
+                title={says || undefined}
+                className={`pj-opt s${n}${score === n ? " on" : ""}`}
+                disabled={readOnly && score !== n}
+                onClick={() => onPick(n)}
+              >
+                {n}
+              </button>
+            );
+          })}
+        </div>
       </div>
+      {meaning ? <p className="pj-meaning">{meaning}</p> : null}
       {missingScore ? <p className="pj-miss">Pick a score.</p> : null}
 
-      <label className="pj-whylabel" htmlFor={id}>
-        Why{score ? ` a ${score}` : ""}?
-      </label>
       {readOnly ? (
-        <p className="pj-whyread">{reason.trim() || "—"}</p>
+        reason.trim() ? <p className="pj-whyread">{reason}</p> : null
       ) : (
         <AutoTextarea
-          id={id}
+          id={`pj-why-${category.id}`}
           className="fv-in pj-whyin"
-          rows={2}
+          rows={1}
           max={REASON_MAX}
           value={reason}
-          placeholder="What you saw that earned this score"
+          placeholder={score ? `Why a ${score}?` : "Why?"}
+          aria-label={`Why ${category.name} ${score ? `got a ${score}` : "got its score"}`}
           aria-invalid={missingReason}
           onChange={onWrite}
           onBlur={onBlur}
@@ -681,23 +695,12 @@ function CategoryRow({
       )}
       {missingReason ? <p className="pj-miss">Say why before marking it done.</p> : null}
 
-      {/* Reasons given before in this category, while the box is empty:
-          once something is written, they'd only be in the way. */}
-      {!readOnly && !reason.trim() && earlier.length ? (
-        <div className="pj-earlier">
-          <span className="pj-earlierlbl">Used before</span>
-          {earlier.map((e) => (
-            <button
-              key={e.reason}
-              type="button"
-              className={`pj-reuse${e.mine ? " mine" : ""}`}
-              title={e.reason}
-              onClick={() => onReuse(e.reason)}
-            >
-              <span className="pj-reusetext">{e.reason}</span>
-            </button>
-          ))}
-        </div>
+      {/* A reason given before, while the box is empty: one tap to use it. */}
+      {!readOnly && !reason.trim() && suggestion ? (
+        <button type="button" className="pj-reuse" title={suggestion} onClick={() => onReuse(suggestion)}>
+          <span className="pj-reuselbl">Reuse:</span>
+          <span className="pj-reusetext">{suggestion}</span>
+        </button>
       ) : null}
     </section>
   );

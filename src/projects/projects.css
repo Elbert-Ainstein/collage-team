@@ -397,6 +397,10 @@
   gap: 12px;
   margin-bottom: 14px;
 }
+.pj-namerow .fv-eyebrow {
+  flex: none;
+  white-space: nowrap;
+}
 .fv-in.pj-namein {
   width: min(320px, 100%);
   font-size: var(--fv-sm);
@@ -409,99 +413,101 @@
 .fv-in.pj-whyin[aria-invalid="true"] {
   border-color: var(--te-s1);
 }
-.pj-cat {
-  padding: 14px 16px 16px;
-  margin-bottom: 12px;
+/* Every category in one card, a line between each. */
+.fv-card.pj-rubric {
+  padding: 0 18px;
 }
-.pj-cat.missing {
-  border-color: var(--te-s1);
+.pj-cat {
+  padding: 16px 0;
+}
+.pj-cat + .pj-cat {
+  border-top: 1px solid var(--fv-neutral-200);
+}
+.pj-cat.missing .pj-catname {
+  color: var(--te-s1);
+}
+.pj-cathead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
 }
 .pj-catname {
-  margin: 0 0 10px;
+  margin: 0;
   font-size: var(--fv-base);
   font-weight: 700;
   color: var(--fv-navy);
 }
 
-/* 5 4 3 2 1 across, each with what it means — the rubric as it's printed.
-   Stacked when the sheet is too narrow for five columns of sentences. */
+/* 5 4 3 2 1, best first, the way the rubric is read. Finger-sized. */
 .pj-opts {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  display: flex;
   gap: 6px;
 }
 .pj-opt {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  min-height: 92px;
-  padding: 10px;
-  border: 1px solid var(--fv-neutral-200);
+  width: 46px;
+  height: 44px;
+  border: 1px solid var(--fv-neutral-300);
   border-radius: var(--fv-r-md);
   background: #fff;
   font: inherit;
-  font-size: var(--fv-xs);
-  line-height: 1.4;
-  text-align: left;
-  color: var(--fv-ink, inherit);
+  font-size: var(--fv-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--fv-navy);
   cursor: pointer;
-}
-.pj-opt .te-score {
-  margin-top: 0;
 }
 .pj-opt:hover:not(:disabled) {
   border-color: var(--te-accent);
 }
 .pj-opt:disabled {
-  opacity: 0.45;
+  opacity: 0.35;
   cursor: default;
 }
 .pj-opt.on {
-  font-weight: 600;
   border-width: 2px;
-  padding: 9px;
 }
-.pj-opt.on.s1 { background: var(--te-s1-bg); border-color: var(--te-s1); }
-.pj-opt.on.s2 { background: var(--te-s2-bg); border-color: var(--te-s2); }
-.pj-opt.on.s3 { background: var(--te-s3-bg); border-color: var(--te-s3); }
-.pj-opt.on.s4 { background: var(--te-s4-bg); border-color: var(--te-s4); }
-.pj-opt.on.s5 { background: var(--te-s5-bg); border-color: var(--te-s5); }
-.pj-opt.on .te-score {
-  background: #fff;
+.pj-opt.on.s1 { background: var(--te-s1-bg); border-color: var(--te-s1); color: var(--te-s1); }
+.pj-opt.on.s2 { background: var(--te-s2-bg); border-color: var(--te-s2); color: var(--te-s2); }
+.pj-opt.on.s3 { background: var(--te-s3-bg); border-color: var(--te-s3); color: var(--te-s3); }
+.pj-opt.on.s4 { background: var(--te-s4-bg); border-color: var(--te-s4); color: var(--te-s4); }
+.pj-opt.on.s5 { background: var(--te-s5-bg); border-color: var(--te-s5); color: var(--te-s5); }
+.pj-opt.on:disabled {
+  opacity: 1;
 }
-.pj-optdesc {
-  overflow-wrap: anywhere;
+/* What the picked score means: the rubric's sentence for it, once. */
+.pj-meaning {
+  margin: 8px 0 0;
+  font-size: var(--fv-xs);
+  line-height: 1.45;
+  color: var(--fv-muted);
 }
-@container (max-width: 640px) {
-  .pj-opts {
-    grid-template-columns: minmax(0, 1fr);
+/* A phone: the scores take the whole width under the name. */
+@container (max-width: 520px) {
+  .pj-cathead {
+    flex-direction: column;
+    align-items: stretch;
   }
   .pj-opt {
-    flex-direction: row;
-    align-items: center;
-    min-height: 48px;
-    gap: 12px;
+    flex: 1;
+    width: auto;
   }
 }
 
-.pj-whylabel {
-  display: block;
-  margin: 14px 0 6px;
-  font-size: var(--fv-xs);
-  font-weight: 700;
-}
 .fv-in.pj-whyin {
+  display: block;
   width: 100%;
-  min-height: 60px;
+  margin-top: 10px;
+  min-height: 42px;
   height: auto;
-  padding: 8px 10px;
+  padding: 9px 12px;
   font-size: var(--fv-sm);
-  line-height: 1.45;
-  resize: vertical;
+  line-height: 1.4;
+  resize: none;
 }
 .pj-whyread {
-  margin: 0;
+  margin: 10px 0 0;
   font-size: var(--fv-sm);
   line-height: 1.5;
   white-space: pre-wrap;
@@ -513,46 +519,35 @@
   color: var(--te-s1);
 }
 
-/* Reasons given before in this category: press one to use it again. */
-.pj-earlier {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-}
-.pj-earlierlbl {
-  font-size: var(--fv-2xs);
-  color: var(--fv-muted);
-  margin-right: 2px;
-}
+/* A reason given before, one tap to use again. */
 .pj-reuse {
-  display: inline-flex;
-  align-items: center;
-  max-width: min(100%, 340px);
-  min-height: 32px;
-  padding: 3px 12px;
-  border: 1px dashed var(--fv-neutral-300);
-  border-radius: 999px;
-  background: transparent;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  max-width: 100%;
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
   font: inherit;
-  font-size: var(--fv-2xs);
-  color: var(--fv-ink, inherit);
+  font-size: var(--fv-xs);
+  text-align: left;
+  color: var(--te-accent);
   cursor: pointer;
 }
-.pj-reuse.mine {
-  border-style: solid;
-  background: #fff;
-}
-.pj-reuse:hover {
-  border-color: var(--te-accent);
-  background: var(--te-accent-50);
+.pj-reuselbl {
+  flex: none;
+  color: var(--fv-muted);
 }
 .pj-reusetext {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-decoration: underline;
+  text-decoration-color: rgba(15, 118, 110, 0.35);
+  text-underline-offset: 3px;
 }
+
 /* The bar under the sheet: what's left, and Mark done. */
 .pj-sheetfoot {
   flex: none;
