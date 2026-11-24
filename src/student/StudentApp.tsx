@@ -26,6 +26,7 @@ import { assignmentKey, TeamResources } from "./TeamResources";
 import { GradedView } from "./GradedView";
 import { SubmitScreen } from "./SubmitScreen";
 import "./student.css";
+import { ChangePasswordDialog } from "@/lib/ChangePasswordDialog";
 import { LiveAssignment } from "./live/LiveAssignment";
 import { TeamEvalAssignment } from "./teameval/TeamEvalAssignment";
 import { watchLive } from "@/live/data";
@@ -765,6 +766,7 @@ export function StudentApp({
   const [notice, setNotice] = useState<string | null>(null);
   /** The code box, opened from the sidebar rather than only by having nothing. */
   const [joining, setJoining] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   // Returns the enrolment it found, because redeeming a code has to know
   // whether this app now has anything to show — a TF code leaves it null and
@@ -946,13 +948,18 @@ export function StudentApp({
           Join another class
         </button>
         <div className="sv-foot">
-          <span
-            className="sv-ellip"
-            style={{ flex: 1, minWidth: 0, fontSize: "var(--text-xs)", color: "var(--muted-foreground)" }}
-            title={account}
-          >
-            {account}
-          </span>
+          <div className="sv-acct">
+            <span
+              className="sv-ellip"
+              style={{ maxWidth: "100%", fontSize: "var(--text-xs)", color: "var(--muted-foreground)" }}
+              title={account}
+            >
+              {account}
+            </span>
+            <button type="button" className="sv-pwlink" onClick={() => setChangingPassword(true)}>
+              Change password
+            </button>
+          </div>
           <button
             className="sv-btn outline sm"
             style={{ height: 26, padding: "0 10px", fontSize: "var(--text-2xs)" }}
@@ -1001,6 +1008,10 @@ export function StudentApp({
           {body}
         </div>
       </main>
+
+      {changingPassword ? (
+        <ChangePasswordDialog skin="sv" account={account} onClose={() => setChangingPassword(false)} />
+      ) : null}
     </div>
   );
 

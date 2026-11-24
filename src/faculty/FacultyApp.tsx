@@ -9,6 +9,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { isSupabaseConfigured } from "@/lib/supabaseClient";
+import { ChangePasswordDialog } from "@/lib/ChangePasswordDialog";
 import {
   currentSetOf,
   ensureSessions,
@@ -340,6 +341,7 @@ export function FacultyApp({
   const [view, setView] = useState<"rows" | "columns">("rows");
   const [selId, setSelId] = useState<string | null>(null);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [changingPassword, setChangingPassword] = useState(false);
   /** Lets the assistant reach the form on screen — today the team evaluation builder. */
   const [formBridge] = useState(createFormBridge);
   /** Where focus goes back to when the panel closes, so a keyboard is not stranded. */
@@ -1280,9 +1282,16 @@ export function FacultyApp({
             </div>
 
             <div className="fv-sidefoot">
-              <span className="fv-email" title={account}>
-                {account ?? "Signed in"}
-              </span>
+              <div className="fv-acct">
+                <span className="fv-email" title={account}>
+                  {account ?? "Signed in"}
+                </span>
+                {onSignOut ? (
+                  <button type="button" className="fv-pwlink" onClick={() => setChangingPassword(true)}>
+                    Change password
+                  </button>
+                ) : null}
+              </div>
               {onSignOut ? (
                 <button
                   type="button"
@@ -1321,6 +1330,10 @@ export function FacultyApp({
             />
             {assistantOpen ? null : <AssistantLauncher ref={launcher} onOpen={() => setAssistantOpen(true)} />}
           </>
+        ) : null}
+
+        {changingPassword ? (
+          <ChangePasswordDialog skin="fv" account={account} onClose={() => setChangingPassword(false)} />
         ) : null}
       </div>
     </FormBridgeContext.Provider>
