@@ -134,6 +134,13 @@ describe("systemPrompt — team evaluation builder", () => {
   it("leaves the team evaluation rules out when no builder is open", () => {
     expect(systemPrompt(snapshot)).not.toContain("fill_team_eval");
   });
+
+  it("points her to the builder, rather than a dead end, when none is open", () => {
+    const out = systemPrompt(snapshot);
+    // "late penalty" is named, so the model connects it to a team evaluation.
+    expect(out).toContain("late penalty, anonymity, comment release or due date");
+    expect(out).toContain("do not say it cannot be done: tell her to open the evaluation from Activities and press Edit");
+  });
 });
 
 describe("systemPrompt — a linked Google Doc", () => {
