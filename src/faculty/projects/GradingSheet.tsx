@@ -45,6 +45,8 @@ import { TopBar } from "./TopBar";
 const SCORES = [5, 4, 3, 2, 1] as const;
 const TYPING_MS = 700;
 const NAME_MAX = 120;
+/** How long Back waits for saves still on their way before going anyway. */
+const BACK_WAIT_MS = 5000;
 
 type SaveState = { kind: "idle" } | { kind: "saving" } | { kind: "saved" } | { kind: "failed"; message: string };
 
@@ -122,6 +124,8 @@ export function GradingSheet({
   const [busy, setBusy] = useState<"done" | "reopen" | "clear" | null>(null);
   const [tried, setTried] = useState(false);
   const [asking, setAsking] = useState(false);
+  /** What didn't save, while Back is asking whether to leave without it. */
+  const [unsaved, setUnsaved] = useState<string | null>(null);
 
   // ------------------------------------------------------------- saving
   /** One queue per category (and one for the name), so writes land in order. */
@@ -136,6 +140,23 @@ export function GradingSheet({
    */
   const failed = useRef(new Set<string>());
   const lastError = useRef("That didn't save.");
+  /** False once the sheet is gone, and its "Not saved" with it. */
+  const alive = useRef(true);
+  /** Lanes already reported after it went (or let go by Leave anyway): said once, not per retry. */
+  const reported = useRef(new Set<string>());
+
+  /** A lane as a person would name it. */
+  const categoriesRef = useRef(categories);
+  categoriesRef.current = categories;
+  const laneName = useCallback(
+    (lane: string) =>
+      lane === "name" ? "The grader's name" : (categoriesRef.current.find((c) => c.id === lane)?.name ?? "A score"),
+    [],
+  );
+  /** A save that failed after the sheet closed: said in the app's banner, which is still there. */
+  const lostRef = useRef<(lane: string) => void>(() => undefined);
+  lostRef.current = (lane) =>
+    onError(new Error(`${team.name}, Grader ${slot}: ${laneName(lane)} didn't save. ${lastError.current}`));
 
   const report = useCallback(() => {
     if (failed.current.size) setSave({ kind: "failed", message: lastError.current });
@@ -154,6 +175,10 @@ export function GradingSheet({
         } catch (e) {
           failed.current.add(lane);
           lastError.current = e instanceof Error ? e.message : "That didn't save.";
+          if (!alive.current && !reported.current.has(lane)) {
+            reported.current.add(lane);
+            lostRef.current(lane);
+          }
         } finally {
           inFlight.current -= 1;
           report();
@@ -221,18 +246,21 @@ export function GradingSheet({
   retryRef.current = retryFailed;
 
   // Leaving with something still waiting to be typed out, or not yet saved:
-  // save it on the way.
-  useEffect(
-    () => () => {
+  // save it on the way. This is every way out that isn't the sheet's own Back
+  // (the sidebar, the browser's Back, another slot), so a save that fails
+  // from here on is reported, not shown.
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
       for (const { t, run } of timers.current.values()) {
         clearTimeout(t);
         run();
       }
       timers.current.clear();
       retryRef.current();
-    },
-    [],
-  );
+    };
+  }, []);
 
   // ---------------------------------------------- what others have written
   // Take in what's saved for each category this grader has nothing unsaved
@@ -398,6 +426,8 @@ export function GradingSheet({
       timers.current.clear();
       await settled();
       await clearGrading(key);
+      // A failed save retried on the way out would write the grading back.
+      failed.current.clear();
       onGrading(null, { team_id: team.id, slot });
       onBack();
     } catch (e) {
@@ -407,9 +437,46 @@ export function GradingSheet({
     }
   };
 
-  const back = () => {
-    flushAll();
-    retryFailed();
+  /** True once every save has landed, false if `ms` runs out first. */
+  const settledWithin = (ms: number) =>
+    new Promise<boolean>((resolve) => {
+      const t = setTimeout(() => resolve(false), ms);
+      void settled().then(() => {
+        clearTimeout(t);
+        resolve(true);
+      });
+    });
+
+  const backing = useRef(false);
+  /**
+   * Back waits for what's on its way, which is usually already in. Anything
+   * that has failed keeps them here, with it still on screen to retry. A
+   * request that just never answers doesn't: past the wait they go, and a
+   * failure after that is reported.
+   */
+  const back = async () => {
+    if (backing.current) return;
+    backing.current = true;
+    try {
+      flushAll();
+      retryFailed();
+      await settledWithin(BACK_WAIT_MS);
+      if (!alive.current) return;
+      if (failed.current.size) {
+        setUnsaved(`${[...failed.current].map(laneName).join(", ")} didn't save: ${lastError.current}`);
+        return;
+      }
+      onBack();
+    } finally {
+      backing.current = false;
+    }
+  };
+
+  /** Their call: what didn't save stays unsaved, and isn't tried again on the way out. */
+  const leaveAnyway = () => {
+    for (const lane of failed.current) reported.current.add(lane);
+    failed.current.clear();
+    setUnsaved(null);
     onBack();
   };
 
@@ -427,13 +494,14 @@ export function GradingSheet({
 
   // A read-only sheet has nothing of its own to keep: it shows what's saved.
   const shown = readOnly ? draftsFrom(serverRows) : drafts;
-  const totalNow = [...shown.values()].reduce((n, d) => n + (d.score ?? 0), 0);
+  // Over the rubric as it is now: a category taken out keeps its draft here.
+  const totalNow = categories.reduce((n, c) => n + (shown.get(c.id)?.score ?? 0), 0);
   const complete = categories.length - left.unscored.length - left.unexplained.length;
 
   return (
     <div className="fv-panel te-fac pj">
       <TopBar
-        onBack={back}
+        onBack={() => void back()}
         label={`Back to ${team.name}`}
         title={`${team.name} — Grader ${slot}`}
         sub={team.members.length ? team.members.map((m) => m.name).join(", ") : undefined}
@@ -588,6 +656,16 @@ export function GradingSheet({
           busyLabel="Clearing…"
           onConfirm={() => void discard()}
           onCancel={() => setAsking(false)}
+        />
+      ) : null}
+      {unsaved !== null ? (
+        <ConfirmDialog
+          title="Leave without saving?"
+          body={unsaved}
+          confirmLabel="Leave anyway"
+          cancelLabel="Stay"
+          onConfirm={leaveAnyway}
+          onCancel={() => setUnsaved(null)}
         />
       ) : null}
     </div>
