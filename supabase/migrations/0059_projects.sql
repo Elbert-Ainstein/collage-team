@@ -22,13 +22,17 @@
 --     categories; whoever may grade the course writes the gradings.
 --   - A grading is marked done only when it names its grader and every
 --     category has a score and a reason. While it is done, no score can be
---     cleared and no reason blanked: reopen it first.
+--     cleared, no reason blanked and the grading can't be thrown away: reopen
+--     it first.
 --   - A category added to a project reopens every done grading on it, because
---     none of them has scored it yet.
+--     none of them has scored it yet — including one being marked done at the
+--     same moment (the two wait for each other).
 --   - A project grades the teams of one team set. Until the first grade it
---     follows the course's current set; the first grade fixes the set the
---     graded team belongs to, and a team from any other set is refused after
---     that. Re-forming the class later does not move a project's grades.
+--     follows the course's current set; the first grade, which has to be on
+--     one of those teams, fixes it, and a team from any other set is refused
+--     after that. Grades stay with the teams that earned them: deleting a team
+--     (re-forming a set does) deletes its grades too, and the Teams tab counts
+--     them in the warning it gives first.
 
 -- ---------------------------------------------------------------- prereqs
 do $$
@@ -38,6 +42,11 @@ begin
   end if;
   if to_regclass('public.course_tfs') is null or to_regclass('public.team_sets') is null then
     raise exception 'Missing course_tfs or team_sets -- run every migration through 0058 before this file.';
+  end if;
+  if not exists (select 1 from information_schema.columns
+                  where table_schema = 'public' and table_name = 'courses'
+                    and column_name = 'current_team_set_id') then
+    raise exception 'Missing courses.current_team_set_id -- run 0045 before this file.';
   end if;
 end $$;
 
@@ -125,10 +134,38 @@ language sql stable security definer set search_path = public as $$
   select exists (select 1 from courses c where c.id = cid and c.owner_id = auth.uid());
 $$;
 
+/**
+ * The set the class is using now, the way the app's currentSetOf reads it: the
+ * one the course names, else the first whole-class set, else the newest.
+ */
+create or replace function project_current_set(cid uuid) returns uuid
+language sql stable security definer set search_path = public as $$
+  select coalesce(
+    (select s.id from courses c join team_sets s on s.id = c.current_team_set_id
+      where c.id = cid),
+    (select s.id from team_sets s where s.course_id = cid and s.activity_id is null
+      order by s.created_at, s.id limit 1),
+    (select s.id from team_sets s where s.course_id = cid
+      order by s.created_at desc, s.id desc limit 1));
+$$;
+
 -- ---------------------------------------------------------------- guards
 create or replace function guard_project() returns trigger
 language plpgsql security definer set search_path = public as $$
+declare
+  -- Written from inside another trigger or a foreign-key action: the first
+  -- grade fixing the teams, or the team set being deleted. Those carry their
+  -- own caller's permission, and a deleted set is not the project changing
+  -- its mind.
+  inner_write boolean := pg_trigger_depth() > 1;
 begin
+  -- RLS refuses anyone else too, but only after this trigger has run, and its
+  -- messages would tell a stranger things about a course they can't see. No
+  -- signed-in user at all is the SQL editor or the service role, which RLS
+  -- doesn't apply to either: maintenance, not a stranger.
+  if auth.uid() is not null and not inner_write and not project_owner(new.course_id) then
+    raise exception 'Only the instructor can change a project';
+  end if;
   if tg_op = 'UPDATE' and new.course_id is distinct from old.course_id then
     raise exception 'A project can''t move to another course';
   end if;
@@ -138,6 +175,7 @@ begin
     raise exception 'Those teams aren''t on this project''s course';
   end if;
   if tg_op = 'UPDATE'
+     and not inner_write
      and old.team_set_id is not null
      and new.team_set_id is distinct from old.team_set_id
      and exists (select 1 from project_gradings g where g.project_id = old.id) then
@@ -165,6 +203,11 @@ begin
   end if;
 
   select * into p from projects where id = new.project_id;
+  -- Before anything else, so the messages below are only ever read by staff
+  -- (or the SQL editor, which has no signed-in user and no RLS either).
+  if p.id is null or (auth.uid() is not null and not can_grade_course(p.course_id)) then
+    raise exception 'You can''t grade this project';
+  end if;
   select t.team_set_id into set_id
     from teams t join team_sets s on s.id = t.team_set_id
    where t.id = new.team_id and s.course_id = p.course_id;
@@ -172,7 +215,11 @@ begin
     raise exception 'That team isn''t on this project''s course';
   end if;
   if p.team_set_id is null then
-    -- The first grade fixes which teams this project grades.
+    -- The first grade fixes which teams this project grades — the class's
+    -- current ones, not whatever set a screen that loaded earlier was showing.
+    if set_id is distinct from project_current_set(p.course_id) then
+      raise exception 'That team isn''t one of the class''s current teams. Reload and try again.';
+    end if;
     update projects set team_set_id = set_id where id = p.id;
   elsif p.team_set_id <> set_id then
     raise exception 'That team isn''t one of the teams this project grades';
@@ -213,6 +260,25 @@ create trigger trg_guard_project_grading
   before insert or update on project_gradings
   for each row execute function guard_project_grading();
 
+-- Done locks a grading until it's reopened, and that includes throwing it
+-- away. A cascade — its team or project going — takes it whatever its state.
+create or replace function guard_project_grading_delete() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if pg_trigger_depth() > 1 then
+    return old;
+  end if;
+  if old.done_at is not null then
+    raise exception 'This grading is marked done — reopen it before clearing it';
+  end if;
+  return old;
+end $$;
+
+drop trigger if exists trg_guard_project_grading_delete on project_gradings;
+create trigger trg_guard_project_grading_delete
+  before delete on project_gradings
+  for each row execute function guard_project_grading_delete();
+
 create or replace function guard_project_score() returns trigger
 language plpgsql security definer set search_path = public as $$
 declare done timestamptz;
@@ -231,6 +297,9 @@ begin
     return old;
   end if;
 
+  if auth.uid() is not null and not can_grade_course(project_course(new.project_id)) then
+    raise exception 'You can''t grade this project';
+  end if;
   if tg_op = 'UPDATE' and (new.project_id, new.team_id, new.slot, new.category_id)
                           is distinct from (old.project_id, old.team_id, old.slot, old.category_id) then
     raise exception 'A score can''t move to another grading or category';
@@ -261,6 +330,12 @@ create trigger trg_guard_project_score
 create or replace function project_category_added() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
+  -- Wait for anyone marking one of these done right now. Without the lock a
+  -- done that hasn't committed is invisible here, this category is invisible
+  -- to its check, and it ends up done with a category it never scored. With
+  -- it, whichever is second sees the first: this update reopens their done,
+  -- or their check (waiting on the row) sees the new category and refuses.
+  perform 1 from project_gradings where project_id = new.project_id for update;
   update project_gradings set done_at = null
    where project_id = new.project_id and done_at is not null;
   return null;
@@ -324,8 +399,9 @@ create policy "graders write project_scores" on project_scores
 -- Policies run as the caller, so the caller needs the three helpers. The
 -- trigger functions are for nobody to call.
 revoke all on function
-  project_course(uuid), project_staff(uuid), project_owner(uuid),
-  guard_project(), guard_project_grading(), guard_project_score(), project_category_added()
+  project_course(uuid), project_staff(uuid), project_owner(uuid), project_current_set(uuid),
+  guard_project(), guard_project_grading(), guard_project_grading_delete(),
+  guard_project_score(), project_category_added()
   from public, anon, authenticated;
 grant execute on function project_course(uuid), project_staff(uuid), project_owner(uuid)
   to authenticated;

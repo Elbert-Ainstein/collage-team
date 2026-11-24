@@ -127,6 +127,8 @@ declare
   z  uuid := '00000000-0000-4000-8000-0000000000a9';
   pj text := '60000000-0000-4000-8000-0000000000f1';
   p2 text := '60000000-0000-4000-8000-0000000000f2';
+  p3 text := '60000000-0000-4000-8000-0000000000f3';
+  c4 text := '70000000-0000-4000-8000-000000000004';
   c1 text := '70000000-0000-4000-8000-000000000001';
   c2 text := '70000000-0000-4000-8000-000000000002';
   c3 text := '70000000-0000-4000-8000-000000000003';
@@ -175,6 +177,12 @@ begin
   -- Grading.
   perform pg_temp.eq((select team_set_id::text from projects where id = pj::uuid), null,
     'before any grade the project follows the current teams');
+  perform pg_temp.refused(t, format($q$insert into project_scores (project_id, team_id, slot, category_id, score)
+    values (%L, %L, 1, %L, 5)$q$, pj, old_team, c1),
+    'the first grade has to be on the class''s current teams', 'current teams');
+  perform pg_temp.refused(z, format($q$insert into project_scores (project_id, team_id, slot, category_id, score)
+    values (%L, %L, 1, %L, 5)$q$, pj, t1, c1),
+    'a stranger is told only that they can''t grade it', 'can''t grade this project');
   perform pg_temp.ok(t, format($q$insert into project_scores (project_id, team_id, slot, category_id, score)
     values (%L, %L, 1, %L, 5)$q$, pj, t1, c1), 'a TF who grades scores a category, no reason yet');
   perform pg_temp.sees(t, format('select * from project_gradings where project_id = %L', pj), 1,
@@ -245,6 +253,9 @@ begin
   perform pg_temp.refused(t, format($q$update project_gradings set grader_name = ''
     where project_id = %L and team_id = %L and slot = 1$q$, pj, t1),
     'and the name can''t go', 'who is grading');
+  perform pg_temp.refused(t, format($q$delete from project_gradings
+    where project_id = %L and team_id = %L and slot = 1$q$, pj, t1),
+    'nor can the grading be thrown away', 'reopen it before clearing');
 
   -- A read-only TF reads, and writes nothing.
   perform pg_temp.sees(r, 'select * from projects', 1, 'a TF who can''t grade still sees their course''s project');
@@ -295,6 +306,27 @@ begin
   perform pg_temp.ok(o, format('delete from projects where id = %L', pj), 'the owner deletes the project');
   perform pg_temp.eq((select count(*)::text from project_scores where project_id = pj::uuid), '0',
     'taking every grade with it');
+
+  -- Teams going: their grades go with them, and a graded project's team set
+  -- can still be deleted.
+  perform pg_temp.ok(o, format($q$insert into projects (id, course_id, title)
+    values (%L, '20000000-0000-4000-8000-0000000000c1', 'Second fair')$q$, p3), '(another project)');
+  perform pg_temp.ok(o, format($q$insert into project_categories (id, project_id, name) values (%L, %L, 'Only')$q$,
+    c4, p3), '(with one category)');
+  perform pg_temp.ok(t, format($q$insert into project_scores (project_id, team_id, slot, category_id, score, reason)
+    values (%L, %L, 1, %L, 4, 'Fine'), (%L, %L, 1, %L, 3, 'Okay')$q$, p3, t1, c4, p3, t2, c4),
+    '(two teams graded)');
+  perform pg_temp.ok(t, format($q$update project_gradings set grader_name = 'Will', done_at = now()
+    where project_id = %L$q$, p3), '(both done)');
+  perform pg_temp.ok(o, format('delete from teams where id = %L', t2), 'the owner deletes a graded team');
+  perform pg_temp.eq((select count(*)::text from project_gradings where team_id = t2::uuid), '0',
+    'its grades went with it');
+  perform pg_temp.ok(o, $q$delete from team_sets where id = '30000000-0000-4000-8000-0000000000d1'$q$,
+    'the owner deletes the set the project was graded on');
+  perform pg_temp.eq((select coalesce(team_set_id::text, 'none') from projects where id = p3::uuid), 'none',
+    'the project follows the class''s teams again');
+  perform pg_temp.eq((select count(*)::text from project_gradings where project_id = p3::uuid), '0',
+    'and the grades on those teams are gone');
 
   -- Helpers.
   perform pg_temp.refused(t, 'select guard_project_score()', 'the trigger functions aren''t callable');

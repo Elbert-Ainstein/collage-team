@@ -61,11 +61,18 @@ const asCategory = (row: Record<string, unknown>): ProjectCategory => {
   return { ...(row as unknown as ProjectCategory), levels: levels.slice(0, 5) };
 };
 
-const byProject = <Row>(table: string, projectId: string, columns = "*"): Promise<Row[]> =>
-  selectAll<Row>(
-    (from, to) =>
-      db().from(table).select(columns).eq("project_id", projectId).range(from, to) as unknown as Paged<Row>,
-  );
+/**
+ * Every row of one project's table, a page at a time. `order` is the table's
+ * whole key: pages are only stable when no two rows tie, and a tie at a page
+ * edge is a row read twice or not at all (see selectAll).
+ */
+function byProject<Row>(table: string, projectId: string, order: string[]): Promise<Row[]> {
+  return selectAll<Row>((from, to) => {
+    let q = db().from(table).select("*").eq("project_id", projectId);
+    for (const col of order) q = q.order(col);
+    return q.range(from, to) as unknown as Paged<Row>;
+  });
+}
 
 // ------------------------------------------------------------------ reads
 
@@ -80,6 +87,7 @@ export function listProjects(courseId: string): Promise<ProjectsOverview> {
           .eq("course_id", courseId)
           .order("position")
           .order("created_at")
+          .order("id")
           .range(from, to) as unknown as Paged<Project>,
     );
     const ids = projects.map((p) => p.id);
@@ -90,8 +98,10 @@ export function listProjects(courseId: string): Promise<ProjectsOverview> {
             (chunk, from, to) =>
               db()
                 .from("project_categories")
-                .select("project_id")
+                .select("project_id,id")
                 .in("project_id", chunk)
+                .order("project_id")
+                .order("id")
                 .range(from, to) as unknown as Paged<{ project_id: string }>,
           ),
           selectAllIn<ProjectsOverview["gradings"][number]>(
@@ -101,6 +111,9 @@ export function listProjects(courseId: string): Promise<ProjectsOverview> {
                 .from("project_gradings")
                 .select("project_id,team_id,slot,done_at")
                 .in("project_id", chunk)
+                .order("project_id")
+                .order("team_id")
+                .order("slot")
                 .range(from, to) as unknown as Paged<ProjectsOverview["gradings"][number]>,
           ),
         ])
@@ -118,9 +131,9 @@ export function loadProject(projectId: string): Promise<ProjectSnapshot | null> 
     if (error) throw dbError(error);
     if (!data) return null;
     const [categories, gradings, scores] = await Promise.all([
-      byProject<Record<string, unknown>>("project_categories", projectId),
-      byProject<ProjectGrading>("project_gradings", projectId),
-      byProject<ProjectScore>("project_scores", projectId),
+      byProject<Record<string, unknown>>("project_categories", projectId, ["position", "id"]),
+      byProject<ProjectGrading>("project_gradings", projectId, ["team_id", "slot"]),
+      byProject<ProjectScore>("project_scores", projectId, ["team_id", "slot", "category_id"]),
     ]);
     return {
       project: data as Project,
@@ -131,6 +144,24 @@ export function loadProject(projectId: string): Promise<ProjectSnapshot | null> 
       scores,
     };
   });
+}
+
+/**
+ * The signed-in TF's own name on this course's roster, or "". A TF can always
+ * read their own row (0007), even where the rest of the TF list is closed.
+ */
+export async function myTFName(courseId: string): Promise<string> {
+  const { data: auth } = await db().auth.getSession();
+  const uid = auth.session?.user.id;
+  if (!uid) return "";
+  const { data, error } = await db()
+    .from("course_tfs")
+    .select("name")
+    .eq("course_id", courseId)
+    .eq("user_id", uid)
+    .limit(1);
+  if (error) return "";
+  return ((data?.[0] as { name?: string | null } | undefined)?.name ?? "").trim();
 }
 
 // ------------------------------------------------------- the owner's rows

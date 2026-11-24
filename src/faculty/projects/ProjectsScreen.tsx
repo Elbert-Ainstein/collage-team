@@ -15,7 +15,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listTeams } from "@/checkins/data";
 import type { TeamWithMembers } from "@/checkins/types";
-import { listProjects, loadProject, watchProject, ProjectsNotInstalledError } from "@/projects/data";
+import { listProjects, loadProject, myTFName, watchProject, ProjectsNotInstalledError } from "@/projects/data";
 import { progressOf } from "@/projects/model";
 import type { ProjectGrading, ProjectScore, ProjectSnapshot, ProjectsOverview } from "@/projects/types";
 import type { FacultyData } from "../FacultyApp";
@@ -67,13 +67,52 @@ export function ProjectsScreen({
     setWhere(w);
     writeProjectWhere(w, mode);
   }, []);
+  const whereRef = useRef(where);
+  whereRef.current = where;
 
   const homeSeen = useRef(home);
   useEffect(() => {
     if (home === homeSeen.current) return;
     homeSeen.current = home;
-    go(AT_LIST);
+    // Already on the list: pressing the tab again isn't somewhere new to go.
+    const w = whereRef.current;
+    if (w.project || w.edit) go(AT_LIST);
   }, [home, go]);
+
+  /**
+   * The editor was opened from the page under it in this tab, so leaving it is
+   * going back — not a second copy of that page on top of the first, which
+   * made the next Back look like it did nothing.
+   */
+  const editOpened = useRef(false);
+  const openEditor = (w: ProjectWhere) => {
+    editOpened.current = true;
+    go(w);
+  };
+  const leaveEditor = (fallback: ProjectWhere) => {
+    if (editOpened.current) {
+      editOpened.current = false;
+      window.history.back();
+    } else {
+      go(fallback, "replace");
+    }
+  };
+
+  // Who the signed-in person is, for a grading they start. FacultyApp knows
+  // the instructor's name, and a TF's when it loaded the TF list; a TF it
+  // didn't load the list for asks for their own row.
+  const [myName, setMyName] = useState(me);
+  useEffect(() => {
+    setMyName(me);
+    if (me || data.can.isOwner) return;
+    let alive = true;
+    myTFName(data.course.id)
+      .then((n) => alive && n && setMyName(n))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [me, data.can.isOwner, data.course.id]);
 
   // ---------------------------------------------------------- the list
   const [overview, setOverview] = useState<ProjectsOverview | null>(null);
@@ -98,10 +137,22 @@ export function ProjectsScreen({
   const openRef = useRef<string | null>(null);
   openRef.current = where.project;
 
+  /**
+   * Which read, or local change, is newest. Reads overlap on a slow network,
+   * and an older one landing last would put a done dot back to amber with
+   * nothing to correct it — or undo a change this copy just made. Anything
+   * older than the newest is dropped; the write behind it brings another read.
+   */
+  const version = useRef(0);
+
   const reread = useCallback(async (projectId: string) => {
+    const v = ++version.current;
     try {
-      const s = await loadProject(projectId);
-      if (openRef.current !== projectId) return;
+      const found = await loadProject(projectId);
+      if (openRef.current !== projectId || v !== version.current) return;
+      // A link to another course's project is not one to open on this course:
+      // its teams, permissions and names would all be this course's.
+      const s = found && found.project.course_id === courseId ? found : null;
       if (!s) {
         // Deleted, or a link to another course's project: say so, go home.
         setSnap(null);
@@ -112,10 +163,10 @@ export function ProjectsScreen({
       setSnap(s);
       setSnapError(null);
     } catch (e) {
-      if (openRef.current !== projectId) return;
+      if (openRef.current !== projectId || v !== version.current) return;
       setSnapError(e instanceof Error ? e.message : String(e));
     }
-  }, [go, fail]);
+  }, [go, fail, courseId]);
 
   useEffect(() => {
     if (!where.project) {
@@ -145,6 +196,7 @@ export function ProjectsScreen({
   // A grading this copy just wrote goes straight into the snapshot, so the
   // dots and averages move without waiting for the round trip back.
   const patchGrading = useCallback((row: ProjectGrading | null, key?: { team_id: string; slot: number }) => {
+    version.current += 1;
     setSnap((s) => {
       if (!s) return s;
       const k = row ?? key;
@@ -155,6 +207,7 @@ export function ProjectsScreen({
     });
   }, []);
   const patchScore = useCallback((row: ProjectScore) => {
+    version.current += 1;
     setSnap((s) => {
       if (!s) return s;
       const rest = s.scores.filter(
@@ -215,7 +268,14 @@ export function ProjectsScreen({
 
   const can = data.can;
 
-  if (!ready) return <div className="fv-panel te-fac pj" />;
+  // Only the instructor edits a project. A TF arriving on the editor's URL —
+  // a pasted link — goes to what it was about instead.
+  const noEditing = Boolean(where.edit) && !can.author;
+  useEffect(() => {
+    if (noEditing) go({ ...AT_LIST, project: where.project }, "replace");
+  }, [noEditing, where.project, go]);
+
+  if (!ready || noEditing) return <div className="fv-panel te-fac pj" />;
 
   // ------------------------------------------------------------ render
   if (where.edit === "new") {
@@ -224,8 +284,11 @@ export function ProjectsScreen({
         data={data}
         snap={null}
         nextPosition={overview ? overview.projects.length : 0}
-        onCancel={() => go(AT_LIST)}
-        onSaved={(id) => go({ ...AT_LIST, project: id }, "replace")}
+        onCancel={() => leaveEditor(AT_LIST)}
+        onSaved={(id) => {
+          editOpened.current = false;
+          go({ ...AT_LIST, project: id }, "replace");
+        }}
         onDeleted={() => go(AT_LIST, "replace")}
         onError={fail}
       />
@@ -248,12 +311,15 @@ export function ProjectsScreen({
           data={data}
           snap={snap}
           nextPosition={0}
-          onCancel={() => go({ ...AT_LIST, project: snap.project.id })}
+          onCancel={() => leaveEditor({ ...AT_LIST, project: snap.project.id })}
           onSaved={() => {
             void reread(snap.project.id);
-            go({ ...AT_LIST, project: snap.project.id }, "replace");
+            leaveEditor({ ...AT_LIST, project: snap.project.id });
           }}
-          onDeleted={() => go(AT_LIST, "replace")}
+          onDeleted={() => {
+            editOpened.current = false;
+            go(AT_LIST, "replace");
+          }}
           onError={fail}
         />
       );
@@ -276,7 +342,7 @@ export function ProjectsScreen({
           snap={snap}
           team={team}
           slot={where.slot}
-          me={me}
+          me={myName}
           canGrade={can.grade}
           onBack={() => go({ ...AT_LIST, project: snap.project.id, team: team.id })}
           onTeams={() => go({ ...AT_LIST, project: snap.project.id })}
@@ -306,7 +372,7 @@ export function ProjectsScreen({
         canEdit={can.author}
         fixedToOtherSet={needsOther}
         onBack={() => go(AT_LIST)}
-        onEdit={() => go({ ...AT_LIST, project: snap.project.id, edit: "edit" })}
+        onEdit={() => openEditor({ ...AT_LIST, project: snap.project.id, edit: "edit" })}
         onTeam={(teamId) => go({ ...AT_LIST, project: snap.project.id, team: teamId })}
         onGrade={(teamId, slot) => go({ ...AT_LIST, project: snap.project.id, team: teamId, slot })}
       />
@@ -318,7 +384,7 @@ export function ProjectsScreen({
       data={data}
       overview={overview}
       error={listError}
-      onNew={() => go({ ...AT_LIST, edit: "new" })}
+      onNew={() => openEditor({ ...AT_LIST, edit: "new" })}
       onOpen={(id) => go({ ...AT_LIST, project: id })}
     />
   );
