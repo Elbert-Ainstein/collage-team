@@ -240,7 +240,7 @@ export function ProjectEditor({
           </button>
         </div>
 
-        {snap ? (
+        {snap && canEdit ? (
           <div className="pj-danger">
             <button type="button" className="fv-btn outline sm danger" disabled={busy} onClick={() => setAsking("delete")}>
               Delete project

@@ -598,6 +598,26 @@
 .pj-save.failed {
   color: var(--te-s1);
 }
+.pj-retry {
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  font-weight: 700;
+  color: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+/* Someone else on this slot: the one thing on the sheet that needs acting on
+   before anything else. */
+.pj-note.pj-clash {
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  background: #fff6e6;
+  border-color: #f3d6a2;
+  color: var(--fv-ink, var(--fv-navy));
+}
 
 @media (max-width: 900px) {
   .pj-sheetfoot {

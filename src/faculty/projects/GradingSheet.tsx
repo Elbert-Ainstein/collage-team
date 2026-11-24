@@ -8,10 +8,12 @@
 // reason in every category (0059 checks too); once done the sheet is locked
 // until it's reopened.
 //
-// What's on screen is this sheet's own copy. The project around it re-reads
-// whenever anyone writes, but a reason half-typed here is never replaced by
-// the server's older copy of it: every edit is saved from here, in order, per
-// category, and the parent is handed each saved row.
+// What's on screen is this sheet's own copy, saved from here in order, per
+// category. The project around it re-reads whenever anyone writes, and the
+// copy takes those changes in — except where this grader has something of
+// their own not yet saved, which wins until it is. A read-only sheet simply
+// shows what's saved. If someone else starts writing to the same slot (two
+// graders both took "Grader 1"), the sheet says so and offers a free one.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TeamWithMembers } from "@/checkins/types";
@@ -52,6 +54,8 @@ const same = (a: Draft | undefined, b: Draft | undefined) =>
 const draftsFrom = (rows: ProjectScore[]) =>
   new Map<string, Draft>(rows.map((r) => [r.category_id, { score: r.score, reason: r.reason }]));
 
+const norm = (s: string | null | undefined) => (s ?? "").trim().replace(/\s+/g, " ").toLowerCase();
+
 function fmtTime(iso: string | null | undefined): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -67,6 +71,7 @@ export function GradingSheet({
   canGrade,
   onBack,
   onTeams,
+  onSlot,
   onGrading,
   onScore,
   onError,
@@ -80,6 +85,8 @@ export function GradingSheet({
   onBack: () => void;
   /** Straight to the project's team list: where a grader goes next once done. */
   onTeams: () => void;
+  /** Open another slot on this team. */
+  onSlot: (slot: number) => void;
   /** A grading row saved — or, with null, thrown away. */
   onGrading: (row: ProjectGrading | null, key?: { team_id: string; slot: number }) => void;
   onScore: (row: ProjectScore) => void;
@@ -108,6 +115,9 @@ export function GradingSheet({
   /** Whether the grading row exists yet. */
   const opened = useRef(Boolean(grading));
 
+  /** What's saved for this grading, as the project last read it. */
+  const serverRows = useMemo(() => scoresOf(snap.scores, team.id, slot), [snap.scores, team.id, slot]);
+
   const [save, setSave] = useState<SaveState>({ kind: "idle" });
   const [busy, setBusy] = useState<"done" | "reopen" | "clear" | null>(null);
   const [tried, setTried] = useState(false);
@@ -118,23 +128,42 @@ export function GradingSheet({
   const chains = useRef(new Map<string, Promise<void>>());
   const inFlight = useRef(0);
   const timers = useRef(new Map<string, { t: ReturnType<typeof setTimeout>; run: () => void }>());
+  /**
+   * Lanes whose last save failed. They stay "Not saved" until a save of that
+   * same lane works — a later success somewhere else says nothing about them —
+   * and they're tried again on the next edit, on Retry, on leaving, and
+   * before Mark done.
+   */
+  const failed = useRef(new Set<string>());
+  const lastError = useRef("That didn't save.");
 
-  const enqueue = useCallback((lane: string, job: () => Promise<void>): Promise<void> => {
-    const next = (chains.current.get(lane) ?? Promise.resolve()).then(async () => {
-      inFlight.current += 1;
-      setSave({ kind: "saving" });
-      try {
-        await job();
-        if (inFlight.current === 1) setSave({ kind: "saved" });
-      } catch (e) {
-        setSave({ kind: "failed", message: e instanceof Error ? e.message : "That didn't save." });
-      } finally {
-        inFlight.current -= 1;
-      }
-    });
-    chains.current.set(lane, next);
-    return next;
+  const report = useCallback(() => {
+    if (failed.current.size) setSave({ kind: "failed", message: lastError.current });
+    else if (inFlight.current > 0) setSave({ kind: "saving" });
+    else setSave({ kind: "saved" });
   }, []);
+
+  const enqueue = useCallback(
+    (lane: string, job: () => Promise<void>): Promise<void> => {
+      const next = (chains.current.get(lane) ?? Promise.resolve()).then(async () => {
+        inFlight.current += 1;
+        report();
+        try {
+          await job();
+          failed.current.delete(lane);
+        } catch (e) {
+          failed.current.add(lane);
+          lastError.current = e instanceof Error ? e.message : "That didn't save.";
+        } finally {
+          inFlight.current -= 1;
+          report();
+        }
+      });
+      chains.current.set(lane, next);
+      return next;
+    },
+    [report],
+  );
 
   const writeName = useCallback(async () => {
     const want = nameRef.current.trim();
@@ -181,8 +210,18 @@ export function GradingSheet({
   };
   const flushAll = () => [...timers.current.keys()].forEach(now);
   const settled = () => Promise.all([...chains.current.values()]);
+  /** Try every failed lane again. */
+  const retryFailed = useCallback(() => {
+    for (const lane of [...failed.current]) {
+      if (timers.current.has(lane)) continue;
+      void (lane === "name" ? saveName() : saveCategory(lane));
+    }
+  }, [saveName, saveCategory]);
+  const retryRef = useRef(retryFailed);
+  retryRef.current = retryFailed;
 
-  // Leaving with something still waiting to be typed out: save it on the way.
+  // Leaving with something still waiting to be typed out, or not yet saved:
+  // save it on the way.
   useEffect(
     () => () => {
       for (const { t, run } of timers.current.values()) {
@@ -190,9 +229,51 @@ export function GradingSheet({
         run();
       }
       timers.current.clear();
+      retryRef.current();
     },
     [],
   );
+
+  // ---------------------------------------------- what others have written
+  // Take in what's saved for each category this grader has nothing unsaved
+  // in — someone grading the same slot elsewhere, or this grader on another
+  // device. A category with an edit still on its way keeps the edit.
+  useEffect(() => {
+    let next: Map<string, Draft> | null = null;
+    for (const row of serverRows) {
+      const server = { score: row.score, reason: row.reason };
+      const was = saved.current.get(row.category_id);
+      if (same(server, was)) continue;
+      const mine = draftsRef.current.get(row.category_id);
+      if (!same(mine, was) || timers.current.has(row.category_id) || failed.current.has(row.category_id)) continue;
+      saved.current.set(row.category_id, server);
+      next ??= new Map(draftsRef.current);
+      next.set(row.category_id, server);
+    }
+    if (next) {
+      draftsRef.current = next;
+      setDrafts(next);
+    }
+  }, [serverRows]);
+
+  /**
+   * Somebody else has put their name on this slot since this sheet last saved
+   * or loaded it: two graders on one slot write over each other. A name that
+   * matches this sheet's is the same person, and isn't anyone else.
+   */
+  const serverName = grading?.grader_name ?? "";
+  const clash =
+    canGrade &&
+    !done &&
+    norm(serverName) !== "" &&
+    norm(serverName) !== norm(savedName.current) &&
+    norm(serverName) !== norm(name);
+  const freeSlot = useMemo(() => {
+    const used = new Set(snap.gradings.filter((g) => g.team_id === team.id).map((g) => g.slot));
+    let n = 1;
+    while (used.has(n) || n === slot) n += 1;
+    return n;
+  }, [snap.gradings, team.id, slot]);
 
   // --------------------------------------------------------------- edits
   // The ref is updated here, synchronously, not inside a state updater: the
@@ -217,12 +298,14 @@ export function GradingSheet({
       timers.current.delete(categoryId);
     }
     void saveCategory(categoryId);
+    retryFailed();
   };
 
   const write = (categoryId: string, reason: string) => {
     if (readOnly) return;
     setDraft(categoryId, { reason });
     later(categoryId, () => void saveCategory(categoryId));
+    retryFailed();
   };
 
   const reuse = (categoryId: string, reason: string) => {
@@ -234,6 +317,7 @@ export function GradingSheet({
       timers.current.delete(categoryId);
     }
     void saveCategory(categoryId);
+    retryFailed();
   };
 
   const rename = (v: string) => {
@@ -271,7 +355,7 @@ export function GradingSheet({
       showMissing();
       return;
     }
-    if (busy) return;
+    if (busy || clash) return;
     setBusy("done");
     try {
       flushAll();
@@ -283,6 +367,9 @@ export function GradingSheet({
         if (!same(draftsRef.current.get(c.id), saved.current.get(c.id))) await saveCategory(c.id);
       }
       await settled();
+      // Still not saved: say why, rather than let the database refuse the
+      // done for a reason that isn't the real one.
+      if (failed.current.size) throw new Error(`Some of this sheet isn't saved: ${lastError.current}`);
       const row = await setGradingDone(key, true);
       onGrading(row);
       setSave({ kind: "saved" });
@@ -322,6 +409,7 @@ export function GradingSheet({
 
   const back = () => {
     flushAll();
+    retryFailed();
     onBack();
   };
 
@@ -337,7 +425,9 @@ export function GradingSheet({
     return [...new Set(names)];
   }, [data.instructor, data.tfs, snap.gradings]);
 
-  const totalNow = [...drafts.values()].reduce((n, d) => n + (d.score ?? 0), 0);
+  // A read-only sheet has nothing of its own to keep: it shows what's saved.
+  const shown = readOnly ? draftsFrom(serverRows) : drafts;
+  const totalNow = [...shown.values()].reduce((n, d) => n + (d.score ?? 0), 0);
   const complete = categories.length - left.unscored.length - left.unexplained.length;
 
   return (
@@ -348,7 +438,7 @@ export function GradingSheet({
         title={`${team.name} — Grader ${slot}`}
         sub={team.members.length ? team.members.map((m) => m.name).join(", ") : undefined}
       >
-        <SaveNote save={save} />
+        <SaveNote save={save} onRetry={retryFailed} />
         {/* Up here, away from Mark done: it throws the sheet away. */}
         {canGrade && !done && grading ? (
           <button type="button" className="fv-btn ghost sm" disabled={busy !== null} onClick={() => setAsking(true)}>
@@ -369,7 +459,7 @@ export function GradingSheet({
           // Nothing to type into: the name is a fact about the sheet.
           <div className="pj-namerow">
             <span className="fv-eyebrow">Name</span>
-            <span className="pj-nameread">{name.trim() || "—"}</span>
+            <span className="pj-nameread">{(readOnly ? serverName : name).trim() || "—"}</span>
           </div>
         ) : (
         <label className="pj-namerow">
@@ -393,6 +483,18 @@ export function GradingSheet({
         </label>
         )}
 
+        {clash ? (
+          <div className="pj-note pj-clash" role="alert">
+            <span>
+              <strong>{serverName.trim()}</strong> is grading this slot too, so you&rsquo;d write over each
+              other. Take another one.
+            </span>
+            <button type="button" className="fv-btn primary sm" onClick={() => onSlot(freeSlot)}>
+              Use Grader {freeSlot}
+            </button>
+          </div>
+        ) : null}
+
         {categories.length === 0 ? (
           <div className="fv-card pj-empty">
             <div className="pj-emptytitle">No rubric yet</div>
@@ -404,7 +506,7 @@ export function GradingSheet({
           <CategoryRow
             key={c.id}
             category={c}
-            draft={drafts.get(c.id)}
+            draft={shown.get(c.id)}
             readOnly={readOnly}
             missingScore={tried && unscored.has(c.id)}
             missingReason={tried && unexplained.has(c.id)}
@@ -462,7 +564,7 @@ export function GradingSheet({
                 type="button"
                 // Dimmed, not disabled, until it's ready: pressing it early is
                 // how a grader finds out what's still missing.
-                className={`fv-btn primary sm pj-donebtn${ready ? "" : " notready"}`}
+                className={`fv-btn primary sm pj-donebtn${ready && !clash ? "" : " notready"}`}
                 disabled={busy !== null}
                 onClick={() => void markDone()}
               >
@@ -488,15 +590,21 @@ export function GradingSheet({
   );
 }
 
-function SaveNote({ save }: { save: SaveState }) {
+function SaveNote({ save, onRetry }: { save: SaveState; onRetry: () => void }) {
   if (save.kind === "idle") return null;
+  if (save.kind === "failed") {
+    return (
+      <span className="fv-sub pj-save failed" role="alert" title={save.message}>
+        Not saved{" "}
+        <button type="button" className="pj-retry" onClick={onRetry}>
+          Retry
+        </button>
+      </span>
+    );
+  }
   return (
-    <span
-      className={`fv-sub pj-save${save.kind === "failed" ? " failed" : ""}`}
-      role="status"
-      title={save.kind === "failed" ? save.message : undefined}
-    >
-      {save.kind === "saving" ? "Saving…" : save.kind === "saved" ? "Saved" : `Not saved — ${save.message}`}
+    <span className="fv-sub pj-save" role="status">
+      {save.kind === "saving" ? "Saving…" : "Saved"}
     </span>
   );
 }

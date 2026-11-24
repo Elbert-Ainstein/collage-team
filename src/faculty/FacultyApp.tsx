@@ -410,11 +410,24 @@ export function FacultyApp({
   // browser, because a reload here is nine round trips — the perf pass exists
   // to stop paying them and back must not quietly reintroduce the bill.
   const popped = useRef(false);
+  const courseNow = useRef(courseId);
+  courseNow.current = courseId;
   useEffect(() => {
     const onPop = () => {
       const at = readWhere();
-      popped.current = true;
-      setScreen(at.screen ?? (at.selId ? "detail" : "activities"));
+      const next = at.screen ?? (at.selId ? "detail" : "activities");
+      // Only a pop that changes something this app holds runs the URL sync
+      // below, and only that run clears the flag. A pop inside one screen —
+      // the Projects tab moving between its own pages — changes nothing here,
+      // and setting the flag for it left it set: the next tab pressed was
+      // never written to the URL, so a reload went back to Projects.
+      if (
+        `${next}|${at.selId ?? ""}` !== lastPage.current ||
+        (at.courseId !== null && at.courseId !== courseNow.current)
+      ) {
+        popped.current = true;
+      }
+      setScreen(next);
       setSelId(at.selId);
       if (at.courseId) setCourseId(at.courseId);
     };

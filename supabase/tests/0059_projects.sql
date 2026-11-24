@@ -330,6 +330,13 @@ begin
 
   -- Helpers.
   perform pg_temp.refused(t, 'select guard_project_score()', 'the trigger functions aren''t callable');
+
+  -- The SQL editor has no signed-in user: maintenance, not a stranger.
+  perform pg_temp.as_admin();
+  insert into projects (id, course_id, title)
+  values ('60000000-0000-4000-8000-0000000000f9', '20000000-0000-4000-8000-0000000000c1', 'From the SQL editor');
+  perform pg_temp.eq((select title from projects where id = '60000000-0000-4000-8000-0000000000f9'),
+    'From the SQL editor', 'the SQL editor can still write a project');
 end $$;
 
 \echo 'All project checks passed.'

@@ -346,6 +346,7 @@ export function ProjectsScreen({
           canGrade={can.grade}
           onBack={() => go({ ...AT_LIST, project: snap.project.id, team: team.id })}
           onTeams={() => go({ ...AT_LIST, project: snap.project.id })}
+          onSlot={(n) => go({ ...AT_LIST, project: snap.project.id, team: team.id, slot: n }, "replace")}
           onGrading={patchGrading}
           onScore={patchScore}
           onError={fail}

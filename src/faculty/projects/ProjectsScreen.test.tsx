@@ -11,6 +11,8 @@ import type { GradingKey, ProjectGrading, ProjectScore, ProjectSnapshot, Project
 import type { FacultyData } from "../FacultyApp";
 
 let snapshot: ProjectSnapshot;
+/** The project's live channel, captured so a test can play "someone else wrote". */
+let live: (() => void) | null = null;
 
 const listProjects = vi.fn(
   async (): Promise<ProjectsOverview> => ({
@@ -19,7 +21,9 @@ const listProjects = vi.fn(
     gradings: snapshot.gradings,
   }),
 );
-const loadProject = vi.fn(async (): Promise<ProjectSnapshot | null> => snapshot);
+// A copy each time, as the real read is: handing back the same object would
+// look to React like nothing changed.
+const loadProject = vi.fn(async (): Promise<ProjectSnapshot | null> => structuredClone(snapshot));
 const saveGraderName = vi.fn(
   async (k: GradingKey, name: string): Promise<ProjectGrading> => ({
     project_id: k.projectId,
@@ -63,7 +67,12 @@ vi.mock("@/projects/data", async (importOriginal) => {
     saveGraderName,
     saveScore,
     setGradingDone,
-    watchProject: vi.fn(() => () => undefined),
+    watchProject: vi.fn((_: string, onChange: () => void) => {
+      live = onChange;
+      return () => {
+        live = null;
+      };
+    }),
     clearGrading: vi.fn(async () => undefined),
   };
 });
@@ -142,7 +151,28 @@ function freshSnapshot(): ProjectSnapshot {
   };
 }
 
-function facultyData(grade = true): FacultyData {
+/** Another phone wrote: change what the server holds, and tell the open copy. */
+async function elsewhere(change: (s: ProjectSnapshot) => void) {
+  change(snapshot);
+  await act(async () => {
+    live?.();
+    // The copy waits for a burst to settle before it re-reads.
+    await new Promise((r) => setTimeout(r, 350));
+  });
+  await settle();
+}
+
+const row = (team: string, slot: number, category: string, score: number | null, reason: string): ProjectScore => ({
+  project_id: "p1",
+  team_id: team,
+  slot,
+  category_id: category,
+  score,
+  reason,
+  updated_at: "2026-11-01T11:00:00Z",
+});
+
+function facultyData(grade = true, author = true): FacultyData {
   return {
     course: { id: "c1", name: "AP 50", code: "AP50" },
     weeks: [],
@@ -157,8 +187,8 @@ function facultyData(grade = true): FacultyData {
     instructor: "Kelly",
     stats: new Map(),
     can: {
-      isOwner: true,
-      author: true,
+      isOwner: author,
+      author,
       grade,
       release: true,
       rubric: true,
@@ -359,5 +389,103 @@ describe("the Projects tab", () => {
     await mount();
     expect(window.location.search).toBe("?s=projects&proj=p1");
     expect(host.querySelectorAll(".pj-teamrow")).toHaveLength(2);
+  });
+
+  it("takes in what another device saves, and keeps what this grader hasn't saved yet", async () => {
+    window.history.replaceState(null, "", "/ck?s=projects&proj=p1&team=t1&slot=1");
+    await mount();
+    await click(section("Robustness").querySelector(".pj-opt.s4") as Element);
+    const why = section("Time").querySelector("textarea") as HTMLTextAreaElement;
+    await typeInto(why, "still typing");
+
+    // The same grader, on their other phone, changes both categories.
+    await elsewhere((s) => {
+      s.gradings.push({ project_id: "p1", team_id: "t1", slot: 1, grader_name: "Will", done_at: null, updated_by: "u1", updated_at: "" });
+      s.scores.push(row("t1", 1, "rob", 2, "Fell over"), row("t1", 1, "time", 3, "From the other phone"));
+    });
+    // Robustness had nothing unsaved here, so it follows; Time is mid-edit, so it stays.
+    expect(section("Robustness").querySelector(".pj-opt.s2")?.getAttribute("aria-checked")).toBe("true");
+    expect((section("Robustness").querySelector("textarea") as HTMLTextAreaElement).value).toBe("Fell over");
+    expect((section("Time").querySelector("textarea") as HTMLTextAreaElement).value).toBe("still typing");
+    // Same name, same person: no warning.
+    expect(host.querySelector(".pj-clash")).toBeNull();
+  });
+
+  it("warns when someone else takes the same slot, and offers a free one", async () => {
+    window.history.replaceState(null, "", "/ck?s=projects&proj=p1&team=t1&slot=1");
+    await mount();
+    await elsewhere((s) => {
+      s.gradings.push({ project_id: "p1", team_id: "t1", slot: 1, grader_name: "Bo", done_at: null, updated_by: "u2", updated_at: "" });
+      s.scores.push(row("t1", 1, "rob", 2, "Bo's"));
+    });
+    const clash = host.querySelector(".pj-clash") as HTMLElement;
+    expect(clash.textContent).toContain("Bo is grading this slot too");
+
+    // Mark done does nothing while two people are on one slot.
+    await click(button(/Mark done/));
+    expect(setGradingDone).not.toHaveBeenCalled();
+
+    await click(button("Use Grader 2"));
+    expect(window.location.search).toBe("?s=projects&proj=p1&team=t1&slot=2");
+    expect(host.querySelector("h1")?.textContent).toBe("Team 1 — Grader 2");
+  });
+
+  it("shows a read-only sheet as it's saved, even when it's saved after opening", async () => {
+    window.history.replaceState(null, "", "/ck?s=projects&proj=p1&team=t1&slot=1");
+    await mount(facultyData(false));
+    expect(host.querySelector(".pj-running")?.textContent).toBe("0 / 10");
+    await elsewhere((s) => {
+      s.gradings.push({ project_id: "p1", team_id: "t1", slot: 1, grader_name: "Will", done_at: "2026-11-01T12:00:00Z", updated_by: "u1", updated_at: "" });
+      s.scores.push(row("t1", 1, "rob", 5, "Solid"), row("t1", 1, "time", 3, "Slow"));
+    });
+    expect(host.querySelector(".pj-running")?.textContent).toBe("8 / 10");
+    expect(section("Time").textContent).toContain("Slow");
+    expect(host.querySelector(".pj-nameread")?.textContent).toBe("Will");
+  });
+
+  it("says Not saved until a failed save goes through, and tries it again", async () => {
+    window.history.replaceState(null, "", "/ck?s=projects&proj=p1&team=t1&slot=1");
+    await mount();
+    saveScore.mockRejectedValueOnce(new Error("Network down"));
+    await click(section("Robustness").querySelector(".pj-opt.s4") as Element);
+    expect(host.querySelector(".pj-save")?.textContent).toContain("Not saved");
+
+    // Retry sends it again.
+    const before = saveScore.mock.calls.length;
+    await click(button("Retry"));
+    expect(saveScore.mock.calls.length).toBe(before + 1);
+    expect(saveScore).toHaveBeenLastCalledWith(expect.anything(), "rob", { score: 4, reason: "" });
+    expect(host.querySelector(".pj-save")?.textContent).toBe("Saved");
+  });
+
+  it("stops Mark done with the real reason when something won't save", async () => {
+    window.history.replaceState(null, "", "/ck?s=projects&proj=p1&team=t1&slot=1");
+    await mount();
+    for (const [cat, why] of [["Robustness", "Solid"], ["Time", "Fast"]] as const) {
+      await click(section(cat).querySelector(".pj-opt.s5") as Element);
+      const box = section(cat).querySelector("textarea") as HTMLTextAreaElement;
+      await typeInto(box, why);
+      await blur(box);
+    }
+    const real = saveScore.getMockImplementation()!;
+    saveScore.mockImplementation(async () => {
+      throw new Error("Network down");
+    });
+    try {
+      await typeInto(section("Time").querySelector("textarea") as HTMLTextAreaElement, "Fast, twice");
+      await click(button(/Mark done/));
+      expect(setGradingDone).not.toHaveBeenCalled();
+      expect(String(onError.mock.calls.at(-1)?.[0])).toContain("Network down");
+    } finally {
+      saveScore.mockImplementation(real);
+    }
+  });
+
+  it("sends a TF who opens the editor's link to the project instead", async () => {
+    window.history.replaceState(null, "", "/ck?s=projects&proj=p1&edit=edit");
+    await mount(facultyData(true, false));
+    expect(window.location.search).toBe("?s=projects&proj=p1");
+    expect(host.querySelector(".pj-teamrow")).toBeTruthy();
+    expect(buttons().some((b) => b.textContent?.trim() === "Edit")).toBe(false);
   });
 });
